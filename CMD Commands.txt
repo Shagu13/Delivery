@@ -1,0 +1,20 @@
+cd Udemy - კონკრეტულ ფოლდერში შესვლა
+mkdir Reactivities - ფოლდერის შექმნა
+cls - (clear)
+dir(ls) - ფოლდერში არსებული ფიალების ჩვენება(სადაც ვიმყოფებით)
+dotnet --info >> დოტნეტის შესახებ გამოაქვს ინფო თუ რა გვიწერია კომპიუტერში დოტნეტისთვის SDK
+dotnet new list >> list of the templates we can use in command line
+1. cd Reactivities
+ 1. dotnet new sln --- create solution for project
+ 2. dotnet new webapi -n API -controllers --- web api project -n> Name of the folder API, controller switch
+                                              -controllers add controllers folder in API
+ 3. dir API --- to see available files in API folder
+ 4. dotnet new classlib -n Domain  --- create new class libraries in Reactivities folder
+ 5. dotnet new classlib -n Application   ---- in Reactivities folder
+ 6. dotnet new classlib -n Persistence   ---- in Reactivities folder
+ 
+7. dotnet sln add API --- add API folder to sln,წაიკითხოს და დაინახოს სოლუშენმა
+8. dotnet sln add Domain ---
+9. dotnet sln add Persistence ---
+10. dotnet sln add Application ---
+now lets move to Visual Studio

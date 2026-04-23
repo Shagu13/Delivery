@@ -1,0 +1,15 @@
+using Domain;
+using Microsoft.EntityFrameworkCore;
+
+namespace Application.Common.Interfaces;
+
+public interface IAppDbContext
+{
+    DbSet<Courier>       Couriers       { get; }
+    DbSet<Customer>      Customers      { get; }
+    DbSet<Warehouse>     Warehouses     { get; }
+    DbSet<GroupOrder>    GroupOrders    { get; }
+    DbSet<Order>         Orders         { get; }
+    DbSet<TrackingEvent> TrackingEvents { get; }
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+}
