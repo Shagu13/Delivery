@@ -1,18 +1,23 @@
 using API.Models.Couriers;
 using Application.Couriers.Commands.CreateCourier;
 using Application.Couriers.DTOs;
+using Application.Common.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers;
 
 [Authorize(Roles = "Admin")]
 public sealed class CouriersController : BaseController
 {
-    /// <summary>
-    /// Create a new courier account. Admin only.
-    /// Creates both the Identity login (ApplicationUser) and the domain Courier entity.
-    /// </summary>
+    private readonly IAppDbContext _context;
+
+    public CouriersController(IAppDbContext context)
+    {
+        _context = context;
+    }
+
     [HttpPost]
     [ProducesResponseType(typeof(CreateCourierResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -47,7 +52,29 @@ public sealed class CouriersController : BaseController
             ));
     }
 
-    /// <summary>Get a single courier by ID. Full implementation coming in next step.</summary>
+    [HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(CancellationToken ct)
+    {
+        var couriers = await _context.Couriers
+            .AsNoTracking()
+            .OrderBy(c => c.AssignedCity)
+            .ThenBy(c => c.FirstName)
+            .Select(c => new
+            {
+                courierId = c.Id,
+                fullName = $"{c.FirstName} {c.LastName}",
+                username = c.ApplicationUser.UserName,
+                assignedCity = c.AssignedCity,
+                assignedDistrict = c.AssignedDistrict,
+                phoneNumber = c.PhoneNumber,
+                isAvailable = c.IsAvailable,
+            })
+            .ToListAsync(ct);
+
+        return Ok(couriers);
+    }
+
     [HttpGet("{id:guid}")]
     public IActionResult GetById(Guid id) => Ok(new { id });
 }

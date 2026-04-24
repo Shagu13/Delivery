@@ -12,16 +12,13 @@ import type { Courier } from '../../api/couriers';
 interface Props {
   groupOrder: AdminGroupOrder;
   couriers: Courier[];
+  token: string;
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
   onRefresh: () => void;
 }
 
-/**
- * Renders contextual action buttons for a GroupOrder row in the admin dashboard.
- * Shows only the button(s) valid for the current status.
- */
-export function AdminGroupOrderActions({ groupOrder, couriers, onSuccess, onError, onRefresh }: Props) {
+export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh }: Props) {
   const [busy, setBusy] = useState(false);
   const [showCourierPicker, setShowCourierPicker] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState('');
@@ -42,7 +39,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, onSuccess, onErro
   async function handleAssignGroupCourier() {
     if (!selectedCourierId) return;
     await run(
-      () => assignCourierToGroupOrder(groupOrder.id, selectedCourierId),
+      () => assignCourierToGroupOrder(token, groupOrder.id, selectedCourierId),
       'Courier assigned for pickup.'
     );
     setShowCourierPicker(false);
@@ -53,27 +50,28 @@ export function AdminGroupOrderActions({ groupOrder, couriers, onSuccess, onErro
 
   return (
     <div className="go-actions" onClick={e => e.stopPropagation()}>
-      {/* ── Step 1: Admin accepts or declines Pending order ── */}
+
+      {/* Step 1: Accept or Decline pending order */}
       {status === 'Pending' && (
         <>
           <button
             className="go-action-btn go-action-btn--accept"
             disabled={busy}
-            onClick={() => run(() => acceptGroupOrder(groupOrder.id), 'Group order accepted.')}
+            onClick={() => run(() => acceptGroupOrder(token, groupOrder.id), 'Group order accepted.')}
           >
             ✓ Accept
           </button>
           <button
             className="go-action-btn go-action-btn--decline"
             disabled={busy}
-            onClick={() => run(() => declineGroupOrder(groupOrder.id), 'Group order declined.')}
+            onClick={() => run(() => declineGroupOrder(token, groupOrder.id), 'Group order declined.')}
           >
             ✗ Decline
           </button>
         </>
       )}
 
-      {/* ── Step 2: Admin assigns pickup courier ── */}
+      {/* Step 2: Assign pickup courier */}
       {status === 'AcceptedGroupOrder' && !showCourierPicker && (
         <button
           className="go-action-btn go-action-btn--assign"
@@ -114,18 +112,17 @@ export function AdminGroupOrderActions({ groupOrder, couriers, onSuccess, onErro
         </div>
       )}
 
-      {/* ── Step 6: Admin accepts batch in warehouse ── */}
+      {/* Step 6: Accept batch in warehouse */}
       {status === 'DeliveredToWarehouse' && (
         <button
           className="go-action-btn go-action-btn--warehouse"
           disabled={busy}
-          onClick={() => run(() => acceptGroupOrderInWarehouse(groupOrder.id), 'Accepted in warehouse.')}
+          onClick={() => run(() => acceptGroupOrderInWarehouse(token, groupOrder.id), 'Accepted in warehouse.')}
         >
           ✓ Accept in Warehouse
         </button>
       )}
 
-      {/* ── Steps 7 + 9: Per-order buttons shown inline in the orders table ── */}
       {status === 'AdminAcceptedOrderInWareHouse' && (
         <span className="go-action-hint">↓ Assign each package below</span>
       )}
@@ -133,17 +130,18 @@ export function AdminGroupOrderActions({ groupOrder, couriers, onSuccess, onErro
   );
 }
 
-// ── Per-order action cell (rendered inside the orders table) ──────────────────
+// ── Per-order action cell ─────────────────────────────────────────────────────
 
 interface OrderActionProps {
   order: AdminGroupOrder['orders'][0];
   couriers: Courier[];
+  token: string;
   onSuccess: (msg: string) => void;
   onError:   (msg: string) => void;
   onRefresh: () => void;
 }
 
-export function AdminOrderRowActions({ order, couriers, onSuccess, onError, onRefresh }: OrderActionProps) {
+export function AdminOrderRowActions({ order, couriers, token, onSuccess, onError, onRefresh }: OrderActionProps) {
   const [busy, setBusy] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState('');
@@ -164,13 +162,13 @@ export function AdminOrderRowActions({ order, couriers, onSuccess, onError, onRe
   const { status, recipientCity } = order;
   const isTbilisi = recipientCity === 'თბილისი';
 
-  // Step 7: non-Tbilisi orders get "Send to [City]"
+  // Step 7: non-Tbilisi → Send to City
   if (status === 'AdminAcceptedOrderInWareHouse' && !isTbilisi) {
     return (
       <button
         className="go-action-btn go-action-btn--city"
         disabled={busy}
-        onClick={() => run(() => sendOrderToCity(order.id), `Sent to ${recipientCity}.`)}
+        onClick={() => run(() => sendOrderToCity(token, order.id), `Sent to ${recipientCity}.`)}
       >
         Send to {recipientCity}
       </button>
@@ -178,11 +176,11 @@ export function AdminOrderRowActions({ order, couriers, onSuccess, onError, onRe
   }
 
   // Step 9 (Tbilisi) or after city transit: assign last-mile courier
-  const canAssignDeliveryCourier =
+  const canAssign =
     (status === 'AdminAcceptedOrderInWareHouse' && isTbilisi) ||
     status === 'OrderIsOnItsWayToRecipientsCity';
 
-  if (canAssignDeliveryCourier && !showPicker) {
+  if (canAssign && !showPicker) {
     return (
       <button
         className="go-action-btn go-action-btn--assign"
@@ -194,7 +192,7 @@ export function AdminOrderRowActions({ order, couriers, onSuccess, onError, onRe
     );
   }
 
-  if (canAssignDeliveryCourier && showPicker) {
+  if (canAssign && showPicker) {
     return (
       <div className="go-courier-picker" onClick={e => e.stopPropagation()}>
         <select
@@ -214,7 +212,7 @@ export function AdminOrderRowActions({ order, couriers, onSuccess, onError, onRe
           disabled={!selectedCourierId || busy}
           onClick={async () => {
             await run(
-              () => assignCourierToOrder(order.id, selectedCourierId),
+              () => assignCourierToOrder(token, order.id, selectedCourierId),
               'Courier assigned for delivery.'
             );
             setShowPicker(false);

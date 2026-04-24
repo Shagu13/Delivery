@@ -20,7 +20,7 @@ import '../../styles/dashboard.css';
 type CourierView = 'pickups' | 'deliveries';
 
 export function CourierDashboard() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, token } = useAuth();
   const navigate = useNavigate();
   const [activeView, setActiveView] = useState<CourierView>('pickups');
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
@@ -96,10 +96,10 @@ export function CourierDashboard() {
         </div>
         <main className="dashboard__content">
           {activeView === 'pickups' && (
-            <CourierPickups onToast={showToast} />
+            <CourierPickups onToast={showToast} token={token ?? ''} />
           )}
           {activeView === 'deliveries' && (
-            <CourierDeliveries onToast={showToast} />
+            <CourierDeliveries onToast={showToast} token={token ?? ''} />
           )}
         </main>
       </div>
@@ -167,19 +167,9 @@ export function CourierDashboard() {
           transition: opacity 0.15s;
         }
         .c-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-        .c-btn--primary {
-          background: var(--color-accent);
-          color: #fff;
-        }
-        .c-btn--secondary {
-          background: var(--color-bg-3);
-          border: 1px solid var(--color-border);
-          color: var(--color-text);
-        }
-        .c-btn--success {
-          background: #10b981;
-          color: #fff;
-        }
+        .c-btn--primary  { background: var(--color-accent); color: #fff; }
+        .c-btn--secondary { background: var(--color-bg-3); border: 1px solid var(--color-border); color: var(--color-text); }
+        .c-btn--success  { background: #10b981; color: #fff; }
         .status-pill {
           display: inline-block;
           font-size: 0.68rem;
@@ -191,37 +181,47 @@ export function CourierDashboard() {
           white-space: nowrap;
         }
         .tn { font-family: 'Courier New', monospace; font-size: 0.78rem; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: 4px; padding: 1px 6px; }
-        .toast--error { background: #ef4444 !important; }
+        .toast--error { background: #ef4444 !important; color: #fff !important; }
       `}</style>
     </div>
   );
 }
 
 // ── Pickup list ───────────────────────────────────────────────────────────────
-function CourierPickups({ onToast }: { onToast: (msg: string, type?: 'ok' | 'err') => void }) {
+function CourierPickups({
+  onToast,
+  token,
+}: {
+  onToast: (msg: string, type?: 'ok' | 'err') => void;
+  token: string;
+}) {
   const [groups, setGroups] = useState<AdminGroupOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<string | null>(null); // groupOrderId being acted on
+  const [busy, setBusy] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setGroups(await fetchMyPickups());
-    } catch (e: unknown) {
-      onToast(e instanceof Error ? e.message : 'Failed to load.', 'err');
-    } finally {
-      setLoading(false);
-    }
-  }, [onToast]);
+    const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const data = await fetchMyPickups(token);
+                if (!cancelled) setGroups(data);
+            } catch (e: unknown) {
+                if (!cancelled) onToast(e instanceof Error ? e.message : 'Failed to load.', 'err');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [token, onToast, refreshKey]);
 
   async function act(id: string, fn: () => Promise<void>, msg: string) {
     setBusy(id);
     try {
       await fn();
       onToast(msg);
-      await load();
+        setRefreshKey(k => k + 1);
     } catch (e: unknown) {
       onToast(e instanceof Error ? e.message : 'Action failed.', 'err');
     } finally {
@@ -270,34 +270,29 @@ function CourierPickups({ onToast }: { onToast: (msg: string, type?: 'ok' | 'err
             </div>
 
             <div className="courier-card__actions">
-              {/* Step 3: CourierAssignedToPickUp → picking up */}
               {go.status === 'CourierAssignedToPickUp' && (
                 <button
                   className="c-btn c-btn--primary"
                   disabled={isBusy}
-                  onClick={() => act(go.id, () => markPickingUp(go.id), 'Marked as picking up.')}
+                  onClick={() => act(go.id, () => markPickingUp(token, go.id), 'Marked as picking up.')}
                 >
                   Picking Up
                 </button>
               )}
-
-              {/* Step 4: CourierOnTheWayToPickUp → picked up */}
               {go.status === 'CourierOnTheWayToPickUp' && (
                 <button
                   className="c-btn c-btn--primary"
                   disabled={isBusy}
-                  onClick={() => act(go.id, () => markPickedUp(go.id), 'Marked as picked up.')}
+                  onClick={() => act(go.id, () => markPickedUp(token, go.id), 'Marked as picked up.')}
                 >
                   Picked Up
                 </button>
               )}
-
-              {/* Step 5: CourierDeliveringToWarehouse → delivered to warehouse */}
               {go.status === 'CourierDeliveringToWarehouse' && (
                 <button
                   className="c-btn c-btn--success"
                   disabled={isBusy}
-                  onClick={() => act(go.id, () => markDeliveredToWarehouse(go.id), 'Delivered to warehouse.')}
+                  onClick={() => act(go.id, () => markDeliveredToWarehouse(token, go.id), 'Delivered to warehouse.')}
                 >
                   Delivered to Warehouse
                 </button>
@@ -311,35 +306,45 @@ function CourierPickups({ onToast }: { onToast: (msg: string, type?: 'ok' | 'err
 }
 
 // ── Delivery list ─────────────────────────────────────────────────────────────
-function CourierDeliveries({ onToast }: { onToast: (msg: string, type?: 'ok' | 'err') => void }) {
+function CourierDeliveries({
+  onToast,
+  token,
+}: {
+  onToast: (msg: string, type?: 'ok' | 'err') => void;
+  token: string;
+}) {
   const [orders, setOrders] = useState<CourierOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setOrders(await fetchMyDeliveries());
-    } catch (e: unknown) {
-      onToast(e instanceof Error ? e.message : 'Failed to load.', 'err');
-    } finally {
-      setLoading(false);
-    }
-  }, [onToast]);
+    const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const data = await fetchMyDeliveries(token);
+                if (!cancelled) setOrders(data);
+            } catch (e: unknown) {
+                if (!cancelled) onToast(e instanceof Error ? e.message : 'Failed to load.', 'err');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [token, onToast, refreshKey]);
 
-  async function act(id: string, fn: () => Promise<void>, msg: string) {
-    setBusy(id);
-    try {
-      await fn();
-      onToast(msg);
-      await load();
-    } catch (e: unknown) {
-      onToast(e instanceof Error ? e.message : 'Action failed.', 'err');
-    } finally {
-      setBusy(null);
-    }
+    async function act(id: string, fn: () => Promise<void>, msg: string) {
+        setBusy(id);
+        try {
+            await fn();
+            onToast(msg);
+            setRefreshKey(k => k + 1);
+        } catch (e: unknown) {
+            onToast(e instanceof Error ? e.message : 'Action failed.', 'err');
+        } finally {
+            setBusy(null);
+        }
   }
 
   if (loading) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-subtle)' }}>Loading…</div>;
@@ -375,34 +380,29 @@ function CourierDeliveries({ onToast }: { onToast: (msg: string, type?: 'ok' | '
             </div>
 
             <div className="courier-card__actions">
-              {/* Step 10/8: CourierAssignedToDeliver → received */}
               {order.status === 'CourierAssignedToDeliver' && (
                 <button
                   className="c-btn c-btn--secondary"
                   disabled={isBusy}
-                  onClick={() => act(order.id, () => markOrderReceived(order.id), 'Order received from warehouse.')}
+                  onClick={() => act(order.id, () => markOrderReceived(token, order.id), 'Order received from warehouse.')}
                 >
                   Received Order
                 </button>
               )}
-
-              {/* Step 11: CourierRecievedOrderToDeliver → delivering */}
               {order.status === 'CourierRecievedOrderToDeliver' && (
                 <button
                   className="c-btn c-btn--primary"
                   disabled={isBusy}
-                  onClick={() => act(order.id, () => markOrderDelivering(order.id), 'Marked as delivering.')}
+                  onClick={() => act(order.id, () => markOrderDelivering(token, order.id), 'Marked as delivering.')}
                 >
                   Delivering
                 </button>
               )}
-
-              {/* Step 12: OrderIsBeingDeliveredToRecipient → delivered */}
               {order.status === 'OrderIsBeingDeliveredToRecipient' && (
                 <button
                   className="c-btn c-btn--success"
                   disabled={isBusy}
-                  onClick={() => act(order.id, () => markOrderDelivered(order.id), 'Order delivered to recipient.')}
+                  onClick={() => act(order.id, () => markOrderDelivered(token, order.id), 'Order delivered to recipient.')}
                 >
                   Delivered ✓
                 </button>
