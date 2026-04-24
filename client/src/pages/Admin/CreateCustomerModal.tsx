@@ -11,18 +11,15 @@ interface Props {
 }
 
 interface FormState {
-  // Personal
   firstName:    string;
   lastName:     string;
-  idNumber:     string;          // optional — submitted as undefined if empty
+  idNumber:     string;
   businessName: string;
   phoneNumber:  string;
-  // Default pickup address
   city:         string;
   district:     string;
   address:      string;
-  // Login
-  username:     string;
+  email:        string;   // ← was username
   password:     string;
 }
 
@@ -35,7 +32,7 @@ const EMPTY: FormState = {
   city:         '',
   district:     '',
   address:      '',
-  username:     '',
+  email:        '',
   password:     '',
 };
 
@@ -63,8 +60,12 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
     if (!form.city.trim())         e.city         = 'City is required.';
     if (!form.district.trim())     e.district     = 'District is required.';
     if (!form.address.trim())      e.address      = 'Address is required.';
-    if (!form.username.trim())     e.username     = 'Username is required.';
-    if (form.password.length < 8)  e.password     = 'Password must be at least 8 characters.';
+    if (!form.email.trim()) {
+      e.email = 'Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      e.email = 'Please enter a valid email address.';
+    }
+    if (form.password.length < 8) e.password = 'Password must be at least 8 characters.';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -74,10 +75,7 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
     setLoading(true);
     try {
       const result = await createCustomer(
-        {
-          ...form,
-          idNumber: form.idNumber.trim() || undefined,
-        },
+        { ...form, idNumber: form.idNumber.trim() || undefined },
         token,
       );
       setForm(EMPTY);
@@ -102,7 +100,6 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
         </div>
 
         <div className="modal__body">
-          {/* ── Personal ── */}
           <p className="modal__section-label">Personal information</p>
           <div className="form-row">
             <FormField label="First name" value={form.firstName} onChange={set('firstName')} error={errors.firstName} />
@@ -113,56 +110,34 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
             value={form.businessName}
             onChange={set('businessName')}
             error={errors.businessName}
-            placeholder="e.g. My Online Shop, Nike Georgia"
+            placeholder="e.g. My Online Shop"
           />
           <div className="form-row">
-            <FormField
-              label="ID number"
-              value={form.idNumber}
-              onChange={set('idNumber')}
-              error={errors.idNumber}
-              placeholder="National ID / Passport (optional)"
-            />
-            <FormField
-              label="Phone number"
-              value={form.phoneNumber}
-              onChange={set('phoneNumber')}
-              error={errors.phoneNumber}
-              placeholder="5XX XXX XXX"
-            />
+            <FormField label="ID number"    value={form.idNumber}    onChange={set('idNumber')}    error={errors.idNumber}    placeholder="Optional" />
+            <FormField label="Phone number" value={form.phoneNumber} onChange={set('phoneNumber')} error={errors.phoneNumber} placeholder="5XX XXX XXX" />
           </div>
 
           <div className="modal__divider" />
 
-          {/* ── Default pickup address ── */}
           <p className="modal__section-label">Default pickup address</p>
           <div className="form-row">
             <FormField label="City"     value={form.city}     onChange={set('city')}     error={errors.city}     placeholder="e.g. Tbilisi" />
             <FormField label="District" value={form.district} onChange={set('district')} error={errors.district} placeholder="e.g. Vake" />
           </div>
-          <FormField
-            label="Street address"
-            value={form.address}
-            onChange={set('address')}
-            error={errors.address}
-            placeholder="e.g. 12 Rustaveli Avenue, Apt 4"
-          />
+          <FormField label="Street address" value={form.address} onChange={set('address')} error={errors.address} placeholder="e.g. 12 Rustaveli Ave" />
 
           <div className="modal__divider" />
 
-          {/* ── Login ── */}
           <p className="modal__section-label">Login credentials</p>
-          <FormField label="Username" value={form.username} onChange={set('username')} error={errors.username} />
-          <FormField label="Password" value={form.password} onChange={set('password')} error={errors.password} type="password" />
+          <FormField label="Email address" type="email" value={form.email}    onChange={set('email')}    error={errors.email}    placeholder="you@example.com" />
+          <FormField label="Password"      type="password" value={form.password} onChange={set('password')} error={errors.password} placeholder="At least 8 characters" />
 
-          {apiError && (
-            <div className="form-error-banner" role="alert">{apiError}</div>
-          )}
+          {apiError && <div className="form-error-banner" role="alert">{apiError}</div>}
         </div>
 
         <div className="modal__footer">
-          <button className="btn-ghost"    onClick={onClose}       disabled={loading}>Cancel</button>
-          <button className="btn-primary"  onClick={handleSubmit}  disabled={loading}>
+          <button className="btn-ghost"   onClick={onClose}      disabled={loading}>Cancel</button>
+          <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
             {loading ? 'Creating…' : 'Create Customer'}
           </button>
         </div>

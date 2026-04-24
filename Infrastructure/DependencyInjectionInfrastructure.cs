@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Infrastructure;
 
-public static class DependencyInjection
+public static class DependencyInjectionInfrastructure
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,

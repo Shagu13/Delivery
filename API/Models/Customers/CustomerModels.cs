@@ -2,49 +2,60 @@ using System.ComponentModel.DataAnnotations;
 
 namespace API.Models.Customers;
 
-// ── Requests ─────────────────────────────────────────────────────────────────
-
-public sealed record CreateCustomerRequest(
-    // Personal
+// ── Self-registration ─────────────────────────────────────────────────────────
+public sealed record RegisterCustomerRequest(
     [Required][MaxLength(100)]  string  FirstName,
     [Required][MaxLength(100)]  string  LastName,
-    [MaxLength(50)]             string? IdNumber,      // optional
+    [MaxLength(50)]             string? IdNumber,
     [Required][MaxLength(150)]  string  BusinessName,
     [Required][MaxLength(20)]   string  PhoneNumber,
-
-    // Default pickup address
     [Required][MaxLength(100)]  string  City,
     [Required][MaxLength(100)]  string  District,
     [Required][MaxLength(250)]  string  Address,
+    [Required][EmailAddress][MaxLength(256)] string Email,
+    [Required][MinLength(8)][MaxLength(100)] string Password,
+    [Required]                              string ConfirmPassword
+);
 
-    // Login
-    [Required][MaxLength(50)]   string  Username,
+// ── Admin-created ─────────────────────────────────────────────────────────────
+public sealed record CreateCustomerRequest(
+    [Required][MaxLength(100)]  string  FirstName,
+    [Required][MaxLength(100)]  string  LastName,
+    [MaxLength(50)]             string? IdNumber,
+    [Required][MaxLength(150)]  string  BusinessName,
+    [Required][MaxLength(20)]   string  PhoneNumber,
+    [Required][MaxLength(100)]  string  City,
+    [Required][MaxLength(100)]  string  District,
+    [Required][MaxLength(250)]  string  Address,
+    [Required][EmailAddress][MaxLength(256)] string Email,
     [Required][MinLength(8)][MaxLength(100)] string Password
 );
 
-// ── Responses ────────────────────────────────────────────────────────────────
-
-public sealed record CreateCustomerResponse(
-    Guid   CustomerId,
-    string Username,
-    string FullName
+// ── Profile update ────────────────────────────────────────────────────────────
+public sealed record UpdateCustomerRequest(
+    [Required][MaxLength(100)]  string  FirstName,
+    [Required][MaxLength(100)]  string  LastName,
+    [MaxLength(50)]             string? IdNumber,
+    [Required][MaxLength(150)]  string  BusinessName,
+    [Required][MaxLength(20)]   string  PhoneNumber,
+    [Required][MaxLength(100)]  string  City,
+    [Required][MaxLength(100)]  string  District,
+    [Required][MaxLength(250)]  string  Address
 );
 
-/// <summary>
-/// Returned by GET /api/customers and GET /api/customers/{id} and GET /api/customers/me.
-/// Field names intentionally mirror SenderSection props for direct form pre-fill.
-/// </summary>
+// ── Change password ───────────────────────────────────────────────────────────
+public sealed record ChangePasswordRequest(
+    [Required] string CurrentPassword,
+    [Required][MinLength(8)][MaxLength(100)] string NewPassword,
+    [Required] string ConfirmNewPassword
+);
+
+// ── Responses ─────────────────────────────────────────────────────────────────
+public sealed record CreateCustomerResponse(Guid CustomerId, string Email, string FullName);
+
 public sealed record CustomerListResponse(
-    Guid     Id,
-    string   FirstName,
-    string   LastName,
-    string?  IdNumber,
-    string   BusinessName,
-    string   PhoneNumber,
-    string   City,
-    string   District,
-    string   Address,
-    string   Username,
-    bool     IsActive,
-    DateTime CreatedAt
+    Guid Id, string FirstName, string LastName, string? IdNumber,
+    string BusinessName, string PhoneNumber,
+    string City, string District, string Address,
+    string Email, bool IsActive, DateTime CreatedAt
 );

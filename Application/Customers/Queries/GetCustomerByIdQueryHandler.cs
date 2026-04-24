@@ -71,7 +71,7 @@ internal static class CustomerProjection
         c.City,
         c.District,
         c.Address,
-        c.ApplicationUser.UserName!,
+        c.ApplicationUser.Email!,   // ← email is the login identifier
         c.IsActive,
         c.CreatedAt
     );

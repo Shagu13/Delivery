@@ -6,21 +6,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Customers.Queries;
 
-// ── Query ────────────────────────────────────────────────────────────────────
-
 public sealed record GetAllCustomersQuery(
     int    Page     = 1,
     int    PageSize = 20,
     string Search   = ""
 ) : IRequest<PagedResult<CustomerResponseDto>>;
 
-// ── Handler ──────────────────────────────────────────────────────────────────
-
 public sealed class GetAllCustomersQueryHandler
     : IRequestHandler<GetAllCustomersQuery, PagedResult<CustomerResponseDto>>
 {
     private readonly IAppDbContext _context;
-
     public GetAllCustomersQueryHandler(IAppDbContext context) => _context = context;
 
     public async Task<PagedResult<CustomerResponseDto>> Handle(
@@ -35,11 +30,11 @@ public sealed class GetAllCustomersQueryHandler
         {
             var term = request.Search.Trim().ToLower();
             query = query.Where(c =>
-                c.FirstName.ToLower().Contains(term)  ||
-                c.LastName.ToLower().Contains(term)   ||
-                c.BusinessName.ToLower().Contains(term) ||
-                c.City.ToLower().Contains(term)       ||
-                c.ApplicationUser.UserName!.ToLower().Contains(term));
+                c.FirstName.ToLower().Contains(term)           ||
+                c.LastName.ToLower().Contains(term)            ||
+                c.BusinessName.ToLower().Contains(term)        ||
+                c.City.ToLower().Contains(term)                ||
+                c.ApplicationUser.Email!.ToLower().Contains(term));
         }
 
         var total = await query.CountAsync(cancellationToken);
@@ -58,7 +53,7 @@ public sealed class GetAllCustomersQueryHandler
                 c.City,
                 c.District,
                 c.Address,
-                c.ApplicationUser.UserName!,
+                c.ApplicationUser.Email!,
                 c.IsActive,
                 c.CreatedAt
             ))

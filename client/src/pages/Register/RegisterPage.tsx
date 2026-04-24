@@ -5,29 +5,31 @@ import { FormField } from '../../components/ui/FormField';
 import './register.css';
 
 interface FormState {
-  firstName:    string;
-  lastName:     string;
-  idNumber:     string;
-  businessName: string;
-  phoneNumber:  string;
-  city:         string;
-  district:     string;
-  address:      string;
-  username:     string;
-  password:     string;
+  firstName:       string;
+  lastName:        string;
+  idNumber:        string;
+  businessName:    string;
+  phoneNumber:     string;
+  city:            string;
+  district:        string;
+  address:         string;
+  email:           string;   // ← replaces username
+  password:        string;
+  confirmPassword: string;   // ← new
 }
 
 const EMPTY: FormState = {
-  firstName:    '',
-  lastName:     '',
-  idNumber:     '',
-  businessName: '',
-  phoneNumber:  '',
-  city:         '',
-  district:     '',
-  address:      '',
-  username:     '',
-  password:     '',
+  firstName:       '',
+  lastName:        '',
+  idNumber:        '',
+  businessName:    '',
+  phoneNumber:     '',
+  city:            '',
+  district:        '',
+  address:         '',
+  email:           '',
+  password:        '',
+  confirmPassword: '',
 };
 
 export function RegisterPage() {
@@ -38,14 +40,14 @@ export function RegisterPage() {
   const [loading,  setLoading]  = useState(false);
 
   const set = (field: keyof FormState) => (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const value = ev.target.value;
-    setForm(f => ({ ...f, [field]: value }));
+    setForm(f => ({ ...f, [field]: ev.target.value }));
     setErrors(prev => ({ ...prev, [field]: undefined }));
     setApiError(null);
   };
 
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormState, string>> = {};
+
     if (!form.firstName.trim())    e.firstName    = 'First name is required.';
     if (!form.lastName.trim())     e.lastName     = 'Last name is required.';
     if (!form.businessName.trim()) e.businessName = 'Business or page name is required.';
@@ -53,8 +55,22 @@ export function RegisterPage() {
     if (!form.city.trim())         e.city         = 'City is required.';
     if (!form.district.trim())     e.district     = 'District is required.';
     if (!form.address.trim())      e.address      = 'Address is required.';
-    if (!form.username.trim())     e.username     = 'Username is required.';
-    if (form.password.length < 8)  e.password     = 'Password must be at least 8 characters.';
+
+    if (!form.email.trim()) {
+      e.email = 'Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      e.email = 'Please enter a valid email address.';
+    }
+
+    if (form.password.length < 8) {
+      e.password = 'Password must be at least 8 characters.';
+    }
+    if (!form.confirmPassword) {
+      e.confirmPassword = 'Please confirm your password.';
+    } else if (form.password !== form.confirmPassword) {
+      e.confirmPassword = 'Passwords do not match.';
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -65,8 +81,17 @@ export function RegisterPage() {
     setLoading(true);
     try {
       await registerCustomer({
-        ...form,
-        idNumber: form.idNumber.trim() || undefined,
+        firstName:       form.firstName.trim(),
+        lastName:        form.lastName.trim(),
+        idNumber:        form.idNumber.trim() || undefined,
+        businessName:    form.businessName.trim(),
+        phoneNumber:     form.phoneNumber.trim(),
+        city:            form.city.trim(),
+        district:        form.district.trim(),
+        address:         form.address.trim(),
+        email:           form.email.trim(),
+        password:        form.password,
+        confirmPassword: form.confirmPassword,
       });
       navigate('/login', { state: { registered: true } });
     } catch (err) {
@@ -101,17 +126,18 @@ export function RegisterPage() {
             </div>
           )}
 
+          {/* ── Personal ── */}
           <p className="register-form__section-label">Personal information</p>
           <div className="register-form__row">
-            <FormField label="First name"  value={form.firstName}  onChange={set('firstName')}  error={errors.firstName} />
-            <FormField label="Last name"   value={form.lastName}   onChange={set('lastName')}   error={errors.lastName} />
+            <FormField label="First name" value={form.firstName} onChange={set('firstName')} error={errors.firstName} />
+            <FormField label="Last name"  value={form.lastName}  onChange={set('lastName')}  error={errors.lastName} />
           </div>
           <FormField
             label="Business / page name"
             value={form.businessName}
             onChange={set('businessName')}
             error={errors.businessName}
-            placeholder="e.g. My Online Shop"
+            placeholder="e.g. My Online Shop, Nike Georgia"
           />
           <div className="register-form__row">
             <FormField
@@ -132,6 +158,7 @@ export function RegisterPage() {
 
           <div className="register-form__divider" />
 
+          {/* ── Pickup address ── */}
           <p className="register-form__section-label">Default pickup address</p>
           <div className="register-form__row">
             <FormField label="City"     value={form.city}     onChange={set('city')}     error={errors.city}     placeholder="e.g. Tbilisi" />
@@ -147,9 +174,35 @@ export function RegisterPage() {
 
           <div className="register-form__divider" />
 
+          {/* ── Login credentials — email only, no username ── */}
           <p className="register-form__section-label">Login credentials</p>
-          <FormField label="Username" value={form.username} onChange={set('username')} error={errors.username} />
-          <FormField label="Password" value={form.password} onChange={set('password')} error={errors.password} type="password" />
+          <FormField
+            label="Email address"
+            type="email"
+            autoComplete="email"
+            value={form.email}
+            onChange={set('email')}
+            error={errors.email}
+            placeholder="you@example.com"
+          />
+          <FormField
+            label="Password"
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={set('password')}
+            error={errors.password}
+            placeholder="At least 8 characters"
+          />
+          <FormField
+            label="Confirm password"
+            type="password"
+            autoComplete="new-password"
+            value={form.confirmPassword}
+            onChange={set('confirmPassword')}
+            error={errors.confirmPassword}
+            placeholder="Repeat your password"
+          />
 
           <button type="submit" className="register-form__submit" disabled={loading}>
             {loading ? 'Creating account…' : 'Create Account'}

@@ -1,15 +1,15 @@
 namespace Application.Customers.DTOs;
 
 /// <summary>
-/// Input DTO for creating a Customer along with their login credentials.
-/// All sender-info fields map directly onto SenderSection in the UI and
-/// are later used to pre-fill GroupOrder creation.
+/// Input DTO for creating a Customer.
+/// Email is used as both the login username (UserName) and the Identity email.
+/// ConfirmPassword is validated at the API/command level; only Password reaches the handler.
 /// </summary>
 public sealed record CreateCustomerDto(
     // Personal
     string  FirstName,
     string  LastName,
-    string? IdNumber,       // optional
+    string? IdNumber,
     string  BusinessName,
     string  PhoneNumber,
 
@@ -18,7 +18,7 @@ public sealed record CreateCustomerDto(
     string District,
     string Address,
 
-    // Login
-    string Username,
+    // Login — Email becomes UserName in Identity
+    string Email,
     string Password
 );

@@ -1,0 +1,644 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/useAuth';
+import { FormField } from '../../components/ui/FormField';
+import {
+  getMyProfile, getMyOrders,
+  updateMyProfile, changePassword,
+  CustomerApiError,
+} from '../../api/customers';
+import type { Customer, CustomerGroupOrder } from '../../api/customers';
+import '../../styles/dashboard.css';
+
+
+type View = 'overview' | 'shipments' | 'profile' | 'password';
+
+// ── Status helpers ─────────────────────────────────────────────────────────────
+
+const STATUS_LABEL: Record<string, string> = {
+  Pending:             'Pending',
+  Accepted:            'Accepted',
+  PickedUp:            'Picked up',
+  DeliveredToWarehouse:'At warehouse',
+  OutForDelivery:      'Out for delivery',
+  Delivered:           'Delivered',
+  Cancelled:           'Cancelled',
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  Pending:             '#6b7280',
+  Accepted:            '#3b82f6',
+  PickedUp:            '#8b5cf6',
+  DeliveredToWarehouse:'#f59e0b',
+  OutForDelivery:      '#f97316',
+  Delivered:           '#10b981',
+  Cancelled:           '#ef4444',
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const color = STATUS_COLOR[status] ?? '#6b7280';
+  return (
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 10px',
+      borderRadius: 100,
+      fontSize: '0.72rem',
+      fontWeight: 700,
+      background: color + '18',
+      color,
+    }}>
+      {STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
+
+// ── Main dashboard ─────────────────────────────────────────────────────────────
+
+export function CustomerDashboard() {
+  const { user, token, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [view, setView] = useState<View>('overview');
+
+  // shared state fetched once
+  const [profile,  setProfile]  = useState<Customer | null>(null);
+  const [orders,   setOrders]   = useState<CustomerGroupOrder[]>([]);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([getMyProfile(token), getMyOrders(token)])
+      .then(([p, o]) => { setProfile(p); setOrders(o); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const handleSignOut = () => { signOut(); navigate('/login', { replace: true }); };
+
+  const initials = profile
+    ? `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase()
+    : (user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : 'C');
+
+  // Stats derived from orders
+  const totalPackages  = orders.reduce((s, g) => s + g.numberOfPackages, 0);
+  const delivered      = orders.filter(g => g.status === 'Delivered').length;
+  const active         = orders.filter(g => !['Delivered','Cancelled'].includes(g.status)).length;
+
+  return (
+    <div className="dashboard">
+      {/* ── Sidebar ── */}
+      <aside className="sidebar">
+        <div className="sidebar__logo">
+          <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="6" fill="currentColor" />
+            <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          Delivery
+        </div>
+        <span className="sidebar__role-badge">Customer</span>
+
+        <div className="sidebar__divider" />
+        <p className="sidebar__section-label">My Account</p>
+
+        <nav className="sidebar__nav">
+          {([
+            ['overview',  'Overview',      overviewIcon],
+            ['shipments', 'My Shipments',  shipmentsIcon],
+            ['profile',   'Edit Profile',  profileIcon],
+            ['password',  'Password',      lockIcon],
+          ] as [View, string, React.ReactNode][]).map(([v, label, icon]) => (
+            <button
+              key={v}
+              className={`sidebar__link ${view === v ? 'sidebar__link--active' : ''}`}
+              onClick={() => setView(v)}
+            >
+              {icon}{label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar__footer">
+          <div className="sidebar__user">
+            <div className="sidebar__avatar">{initials}</div>
+            <div className="sidebar__user-info">
+              <div className="sidebar__user-name">
+                {profile?.firstName ?? user?.firstName} {profile?.lastName ?? user?.lastName}
+              </div>
+              <div className="sidebar__user-handle">{profile?.email ?? user?.username}</div>
+            </div>
+          </div>
+          <button className="sidebar__logout" onClick={handleSignOut}>
+            {logoutIcon} Sign out
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <div className="dashboard__body">
+        <div className="dashboard__topbar">
+          <span className="dashboard__topbar-title">
+            {view === 'overview'  && 'Overview'}
+            {view === 'shipments' && 'My Shipments'}
+            {view === 'profile'   && 'Edit Profile'}
+            {view === 'password'  && 'Change Password'}
+          </span>
+          {view === 'shipments' && (
+            <a href="/send" className="btn-primary">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              New Shipment
+            </a>
+          )}
+        </div>
+
+        <main className="dashboard__content">
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+              <div className="go-spinner" />
+            </div>
+          ) : (
+            <>
+              {view === 'overview'  && (
+                <OverviewView
+                  profile={profile}
+                  totalPackages={totalPackages}
+                  active={active}
+                  delivered={delivered}
+                  recentOrders={orders.slice(0, 3)}
+                  onViewAll={() => setView('shipments')}
+                />
+              )}
+              {view === 'shipments' && <ShipmentsView orders={orders} />}
+              {view === 'profile'   && profile && token && (
+                <EditProfileView
+                  profile={profile}
+                  token={token}
+                  onSaved={updated => setProfile(updated)}
+                />
+              )}
+              {view === 'password'  && token && (
+                <ChangePasswordView token={token} />
+              )}
+            </>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+
+function OverviewView({
+  profile, totalPackages, active, delivered, recentOrders, onViewAll,
+}: {
+  profile: Customer | null;
+  totalPackages: number; active: number; delivered: number;
+  recentOrders: CustomerGroupOrder[];
+  onViewAll: () => void;
+}) {
+  return (
+    <>
+      <div className="stat-grid">
+        {[
+          { label: 'Total Shipments',   value: totalPackages, sub: 'All time packages' },
+          { label: 'Active',            value: active,        sub: 'In transit' },
+          { label: 'Delivered',         value: delivered,     sub: 'Completed' },
+        ].map((s, i) => (
+          <div className="stat-card" key={s.label} style={{ animationDelay: `${i * 60}ms` }}>
+            <div className="stat-card__label">{s.label}</div>
+            <div className="stat-card__value">{s.value}</div>
+            <div className="stat-card__sub">{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="content-card">
+        <div className="content-card__header">
+          <span className="content-card__title">
+            Welcome back{profile ? `, ${profile.firstName}` : ''}
+          </span>
+          {recentOrders.length > 0 && (
+            <button className="btn-ghost" onClick={onViewAll} style={{ fontSize: '0.8rem' }}>
+              View all
+            </button>
+          )}
+        </div>
+
+        {recentOrders.length === 0 ? (
+          <div className="empty-state">
+            <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
+              <path d="M20 4L36 12V28L20 36L4 28V12L20 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+              <path d="M20 4v32M4 12l16 8 16-8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="empty-state__text">No shipments yet</span>
+            <a href="/send" className="btn-primary" style={{ marginTop: 12 }}>Send a Package</a>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <GroupOrderTable orders={recentOrders} />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Shipments ─────────────────────────────────────────────────────────────────
+
+function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  if (orders.length === 0) {
+    return (
+      <div className="content-card">
+        <div className="content-card__header">
+          <span className="content-card__title">My Shipments</span>
+        </div>
+        <div className="empty-state">
+          <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
+            <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M12 16h16M12 22h10M12 28h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <span className="empty-state__text">No shipments yet — send your first package</span>
+          <a href="/send" className="btn-primary" style={{ marginTop: 12 }}>Send a Package</a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {orders.map(go => (
+        <div key={go.id} className="content-card">
+          {/* Group order header */}
+          <div className="content-card__header" style={{ cursor: 'pointer' }}
+               onClick={() => setExpanded(expanded === go.id ? null : go.id)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+              <StatusBadge status={go.status} />
+              <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)' }}>
+                {go.senderBusinessName}
+              </span>
+              <span style={{ color: 'var(--color-text-subtle)', fontSize: '0.8rem' }}>
+                {go.numberOfPackages} package{go.numberOfPackages !== 1 ? 's' : ''}
+                {' · '}{go.pickUpCity}, {go.pickUpDistrict}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
+                {new Date(go.createdAt).toLocaleDateString()}
+              </span>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                   style={{ transform: expanded === go.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
+                <path d="M3 6l5 5 5-5" stroke="var(--color-text-subtle)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Expanded: individual packages */}
+          {expanded === go.id && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    {['Tracking #', 'Recipient', 'City', 'Address', 'Status', 'Paid'].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600,
+                        fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
+                        color: 'var(--color-text-subtle)' }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {go.orders.map(o => (
+                    <tr key={o.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: '0.8rem',
+                        color: 'var(--color-accent)', fontWeight: 600 }}>
+                        {o.trackingNumber}
+                      </td>
+                      <td style={{ padding: '10px 16px' }}>
+                        <div style={{ fontWeight: 500 }}>{o.recipientFirstName} {o.recipientLastName}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientPhone}</div>
+                      </td>
+                      <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
+                        {o.recipientCity}, {o.recipientDistrict}
+                      </td>
+                      <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
+                        {o.recipientAddress}
+                      </td>
+                      <td style={{ padding: '10px 16px' }}>
+                        <StatusBadge status={o.status} />
+                      </td>
+                      <td style={{ padding: '10px 16px' }}>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 100, fontSize: '0.72rem', fontWeight: 700,
+                          background: o.isPaid ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                          color: o.isPaid ? '#10b981' : '#ef4444',
+                        }}>
+                          {o.isPaid ? 'Paid' : 'Unpaid'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Small overview table ───────────────────────────────────────────────────────
+
+function GroupOrderTable({ orders }: { orders: CustomerGroupOrder[] }) {
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+      <thead>
+        <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+          {['Business', 'Packages', 'City / District', 'Status', 'Date'].map(h => (
+            <th key={h} style={{ padding: '10px 20px', textAlign: 'left', fontWeight: 600,
+              fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: 'var(--color-text-subtle)' }}>
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {orders.map(go => (
+          <tr key={go.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+            <td style={{ padding: '12px 20px', fontWeight: 500 }}>{go.senderBusinessName}</td>
+            <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)' }}>{go.numberOfPackages}</td>
+            <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)' }}>{go.pickUpCity}</td>
+            <td style={{ padding: '12px 20px' }}><StatusBadge status={go.status} /></td>
+            <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)', fontSize: '0.8rem' }}>
+              {new Date(go.createdAt).toLocaleDateString()}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// ── Edit Profile ──────────────────────────────────────────────────────────────
+
+interface ProfileForm {
+  firstName: string; lastName: string; idNumber: string;
+  businessName: string; phoneNumber: string;
+  city: string; district: string; address: string;
+}
+
+function EditProfileView({
+  profile, token, onSaved,
+}: {
+  profile: Customer;
+  token: string;
+  onSaved: (updated: Customer) => void;
+}) {
+  const [form, setForm] = useState<ProfileForm>({
+    firstName:    profile.firstName,
+    lastName:     profile.lastName,
+    idNumber:     profile.idNumber ?? '',
+    businessName: profile.businessName,
+    phoneNumber:  profile.phoneNumber,
+    city:         profile.city,
+    district:     profile.district,
+    address:      profile.address,
+  });
+  const [errors,   setErrors]   = useState<Partial<Record<keyof ProfileForm, string>>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [saving,   setSaving]   = useState(false);
+  const [saved,    setSaved]    = useState(false);
+
+  const set = (field: keyof ProfileForm) => (ev: React.ChangeEvent<HTMLInputElement>) => {
+    setForm(f => ({ ...f, [field]: ev.target.value }));
+    setErrors(e => ({ ...e, [field]: undefined }));
+    setApiError(null);
+    setSaved(false);
+  };
+
+  const validate = (): boolean => {
+    const e: Partial<Record<keyof ProfileForm, string>> = {};
+    if (!form.firstName.trim())    e.firstName    = 'Required.';
+    if (!form.lastName.trim())     e.lastName     = 'Required.';
+    if (!form.businessName.trim()) e.businessName = 'Required.';
+    if (!form.phoneNumber.trim())  e.phoneNumber  = 'Required.';
+    if (!form.city.trim())         e.city         = 'Required.';
+    if (!form.district.trim())     e.district     = 'Required.';
+    if (!form.address.trim())      e.address      = 'Required.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = useCallback(async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      await updateMyProfile(
+        { ...form, idNumber: form.idNumber.trim() || undefined },
+        token,
+      );
+      // Re-fetch profile to get the latest data back
+      const updated = await import('../../api/customers').then(m => m.getMyProfile(token));
+      onSaved(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setApiError(err instanceof CustomerApiError ? err.message : 'Failed to save changes.');
+    } finally {
+      setSaving(false);
+    }
+  }, [form, token, onSaved]);
+
+  return (
+    <div className="content-card" style={{ maxWidth: 640 }}>
+      <div className="content-card__header">
+        <span className="content-card__title">Edit Profile</span>
+        {saved && (
+          <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Saved
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {apiError && (
+          <div className="register-form__error" role="alert" style={{ marginBottom: 16 }}>{apiError}</div>
+        )}
+
+        <p style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 12 }}>
+          Personal Information
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          <FormField label="First name"  value={form.firstName}  onChange={set('firstName')}  error={errors.firstName} />
+          <FormField label="Last name"   value={form.lastName}   onChange={set('lastName')}   error={errors.lastName} />
+        </div>
+        <FormField label="Business / page name" value={form.businessName} onChange={set('businessName')} error={errors.businessName} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          <FormField label="ID number (optional)" value={form.idNumber}    onChange={set('idNumber')}    error={errors.idNumber} />
+          <FormField label="Phone number"          value={form.phoneNumber} onChange={set('phoneNumber')} error={errors.phoneNumber} />
+        </div>
+
+        <div style={{ height: 1, background: 'var(--color-border)', margin: '8px 0 20px' }} />
+
+        <p style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 12 }}>
+          Default Pickup Address
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          <FormField label="City"     value={form.city}     onChange={set('city')}     error={errors.city}     placeholder="e.g. Tbilisi" />
+          <FormField label="District" value={form.district} onChange={set('district')} error={errors.district} placeholder="e.g. Vake" />
+        </div>
+        <FormField label="Street address" value={form.address} onChange={set('address')} error={errors.address} placeholder="e.g. 12 Rustaveli Ave" />
+
+        <div style={{ marginTop: 8 }}>
+          <button className="btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Change Password ───────────────────────────────────────────────────────────
+
+function ChangePasswordView({ token }: { token: string }) {
+  const [form, setForm] = useState({
+    currentPassword: '', newPassword: '', confirmNewPassword: '',
+  });
+  const [errors,   setErrors]   = useState<Partial<typeof form>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [saving,   setSaving]   = useState(false);
+  const [done,     setDone]     = useState(false);
+
+  const set = (field: keyof typeof form) => (ev: React.ChangeEvent<HTMLInputElement>) => {
+    setForm(f => ({ ...f, [field]: ev.target.value }));
+    setErrors(e => ({ ...e, [field]: undefined }));
+    setApiError(null);
+    setDone(false);
+  };
+
+  const validate = (): boolean => {
+    const e: Partial<typeof form> = {};
+    if (!form.currentPassword)                         e.currentPassword    = 'Current password is required.';
+    if (form.newPassword.length < 8)                   e.newPassword        = 'At least 8 characters.';
+    else if (!/[A-Z]/.test(form.newPassword))          e.newPassword        = 'Must contain an uppercase letter.';
+    else if (!/[0-9]/.test(form.newPassword))          e.newPassword        = 'Must contain a number.';
+    if (form.newPassword !== form.confirmNewPassword)  e.confirmNewPassword = 'Passwords do not match.';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      await changePassword(form, token);
+      setForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
+      setDone(true);
+    } catch (err) {
+      setApiError(err instanceof CustomerApiError ? err.message : 'Failed to change password.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="content-card" style={{ maxWidth: 480 }}>
+      <div className="content-card__header">
+        <span className="content-card__title">Change Password</span>
+        {done && (
+          <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Password updated
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {apiError && (
+          <div className="register-form__error" role="alert" style={{ marginBottom: 16 }}>{apiError}</div>
+        )}
+
+        <FormField
+          label="Current password" type="password"
+          value={form.currentPassword} onChange={set('currentPassword')}
+          error={errors.currentPassword} autoComplete="current-password"
+        />
+        <FormField
+          label="New password" type="password"
+          value={form.newPassword} onChange={set('newPassword')}
+          error={errors.newPassword}
+          placeholder="Min 8 chars, 1 uppercase, 1 number"
+          autoComplete="new-password"
+        />
+        <FormField
+          label="Confirm new password" type="password"
+          value={form.confirmNewPassword} onChange={set('confirmNewPassword')}
+          error={errors.confirmNewPassword}
+          placeholder="Repeat new password"
+          autoComplete="new-password"
+        />
+
+        <div style={{ marginTop: 8 }}>
+          <button className="btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? 'Updating…' : 'Update Password'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SVG icons ─────────────────────────────────────────────────────────────────
+
+const overviewIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+);
+
+const shipmentsIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M8 1L14 4.5V11.5L8 15L2 11.5V4.5L8 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    <path d="M8 1v14M2 4.5l6 3.5 6-3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const profileIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const lockIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2.5" y="7" width="11" height="8" rx="2" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <circle cx="8" cy="11" r="1" fill="currentColor" />
+  </svg>
+);
+
+const logoutIcon = (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+    <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6"
+      stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);

@@ -245,6 +245,9 @@ namespace Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("DeliveredToWarehouseAt")
                         .HasColumnType("datetime2");
 
@@ -310,6 +313,8 @@ namespace Persistence.Migrations
                     b.HasIndex("CourierId");
 
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CustomerId");
 
                     b.HasIndex("Status");
 
@@ -632,12 +637,19 @@ namespace Persistence.Migrations
                         .HasForeignKey("CourierId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Domain.Warehouse", "Warehouse")
                         .WithMany()
                         .HasForeignKey("WarehouseId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Courier");
+
+                    b.Navigation("Customer");
 
                     b.Navigation("Warehouse");
                 });

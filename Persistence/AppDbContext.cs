@@ -20,10 +20,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // ── SQL Server SEQUENCE for Order tracking numbers ──────────────────
         modelBuilder.HasSequence<long>("TrackingNumberSeq", "dbo")
-            .StartsAt(1)
-            .IncrementsBy(1);
+            .StartsAt(1).IncrementsBy(1);
 
         // ── Courier ──────────────────────────────────────────────────────────
         modelBuilder.Entity<Courier>(e =>
@@ -32,12 +30,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(c => c.IdNumber).IsUnique();
             e.HasIndex(c => c.PhoneNumber).IsUnique();
             e.HasIndex(c => new { c.AssignedCity, c.AssignedDistrict });
-
-            e.HasOne(c => c.ApplicationUser)
-             .WithOne()
+            e.HasOne(c => c.ApplicationUser).WithOne()
              .HasForeignKey<Courier>(c => c.ApplicationUserId)
              .OnDelete(DeleteBehavior.Restrict);
-
             e.Property(c => c.FirstName).HasMaxLength(100).IsRequired();
             e.Property(c => c.LastName).HasMaxLength(100).IsRequired();
             e.Property(c => c.IdNumber).HasMaxLength(50).IsRequired();
@@ -50,25 +45,22 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
         modelBuilder.Entity<Customer>(e =>
         {
             e.HasKey(c => c.Id);
-
-            // Unique phone — one account per phone number
             e.HasIndex(c => c.PhoneNumber).IsUnique();
             e.HasIndex(c => c.City);
             e.HasIndex(c => c.CreatedAt);
-
-            e.HasOne(c => c.ApplicationUser)
-             .WithOne()
+            e.HasOne(c => c.ApplicationUser).WithOne()
              .HasForeignKey<Customer>(c => c.ApplicationUserId)
              .OnDelete(DeleteBehavior.Restrict);
-
-            // Personal
+            // Customer → GroupOrders (one customer can have many group orders)
+            e.HasMany<GroupOrder>()
+             .WithOne(g => g.Customer)
+             .HasForeignKey(g => g.CustomerId)
+             .OnDelete(DeleteBehavior.SetNull);
             e.Property(c => c.FirstName).HasMaxLength(100).IsRequired();
             e.Property(c => c.LastName).HasMaxLength(100).IsRequired();
-            e.Property(c => c.IdNumber).HasMaxLength(50);        // nullable
+            e.Property(c => c.IdNumber).HasMaxLength(50);
             e.Property(c => c.BusinessName).HasMaxLength(150).IsRequired();
             e.Property(c => c.PhoneNumber).HasMaxLength(20).IsRequired();
-
-            // Pickup address
             e.Property(c => c.City).HasMaxLength(100).IsRequired();
             e.Property(c => c.District).HasMaxLength(100).IsRequired();
             e.Property(c => c.Address).HasMaxLength(250).IsRequired();
@@ -90,23 +82,14 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasKey(g => g.Id);
             e.HasIndex(g => g.Status);
             e.HasIndex(g => g.CreatedAt);
+            e.HasIndex(g => g.CustomerId);
             e.HasIndex(g => new { g.PickUpCity, g.PickUpDistrict });
-
-            e.HasOne(g => g.Courier)
-             .WithMany(c => c.GroupOrders)
-             .HasForeignKey(g => g.CourierId)
-             .OnDelete(DeleteBehavior.SetNull);
-
-            e.HasOne(g => g.Warehouse)
-             .WithMany()
-             .HasForeignKey(g => g.WarehouseId)
-             .OnDelete(DeleteBehavior.SetNull);
-
-            e.HasMany(g => g.Orders)
-             .WithOne(o => o.GroupOrder)
-             .HasForeignKey(o => o.GroupOrderId)
-             .OnDelete(DeleteBehavior.Cascade);
-
+            e.HasOne(g => g.Courier).WithMany(c => c.GroupOrders)
+             .HasForeignKey(g => g.CourierId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(g => g.Warehouse).WithMany()
+             .HasForeignKey(g => g.WarehouseId).OnDelete(DeleteBehavior.SetNull);
+            e.HasMany(g => g.Orders).WithOne(o => o.GroupOrder)
+             .HasForeignKey(o => o.GroupOrderId).OnDelete(DeleteBehavior.Cascade);
             e.Property(g => g.SenderFirstName).HasMaxLength(100).IsRequired();
             e.Property(g => g.SenderLastName).HasMaxLength(100).IsRequired();
             e.Property(g => g.SenderIdNumber).HasMaxLength(50);
@@ -127,22 +110,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(o => o.CreatedAt);
             e.HasIndex(o => new { o.RecipientCity, o.RecipientDistrict });
             e.HasIndex(o => o.GroupOrderId);
-
-            e.HasOne(o => o.Courier)
-             .WithMany(c => c.Orders)
-             .HasForeignKey(o => o.CourierId)
-             .OnDelete(DeleteBehavior.SetNull);
-
-            e.HasOne(o => o.Warehouse)
-             .WithMany()
-             .HasForeignKey(o => o.WarehouseId)
-             .OnDelete(DeleteBehavior.SetNull);
-
-            e.HasMany(o => o.TrackingEvents)
-             .WithOne()
-             .HasForeignKey(t => t.OrderId)
-             .OnDelete(DeleteBehavior.Cascade);
-
+            e.HasOne(o => o.Courier).WithMany(c => c.Orders)
+             .HasForeignKey(o => o.CourierId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(o => o.Warehouse).WithMany()
+             .HasForeignKey(o => o.WarehouseId).OnDelete(DeleteBehavior.SetNull);
+            e.HasMany(o => o.TrackingEvents).WithOne()
+             .HasForeignKey(t => t.OrderId).OnDelete(DeleteBehavior.Cascade);
             e.Property(o => o.RecipientFirstName).HasMaxLength(100).IsRequired();
             e.Property(o => o.RecipientLastName).HasMaxLength(100).IsRequired();
             e.Property(o => o.RecipientPhone).HasMaxLength(20).IsRequired();

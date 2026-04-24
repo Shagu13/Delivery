@@ -1,6 +1,5 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
-using Application.Customers.DTOs;
 using Domain;
 using FluentValidation.Results;
 using MediatR;
@@ -25,13 +24,14 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
     {
         var dto = request.Dto;
 
-        // 1. Create the Identity user
+        // 1. Create the Identity user — email is used as UserName so login works with email
         var user = new ApplicationUser
         {
-            UserName  = dto.Username,
-            FirstName = dto.FirstName,
-            LastName  = dto.LastName,
-            Role      = "Customer"
+            Email         = dto.Email,
+            UserName      = dto.Email,       // ← Identity login key
+            FirstName     = dto.FirstName,
+            LastName      = dto.LastName,
+            Role          = "Customer"
         };
 
         var createResult = await _userManager.CreateAsync(user, dto.Password);
@@ -44,7 +44,7 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
 
         await _userManager.AddToRoleAsync(user, "Customer");
 
-        // 2. Create the domain Customer entity — all sender fields stored here
+        // 2. Create the domain Customer entity
         var customer = new Customer
         {
             FirstName         = dto.FirstName,

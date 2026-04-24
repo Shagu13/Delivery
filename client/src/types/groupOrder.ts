@@ -12,13 +12,14 @@ export interface CreateGroupOrderRequest {
     senderFirstName: string;
     senderLastName: string;
     senderIdNumber?: string;
-    senderBusinessName: string; 
+    senderBusinessName: string;
     senderPhone: string;
     pickUpCity: string;
     pickUpDistrict: string;
     pickUpAddress: string;
     note?: string;
     orders: OrderItemRequest[];
+    customerId?: string;   // ← set when a logged-in customer places the order
 }
 
 export interface OrderTrackingResponse {

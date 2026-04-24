@@ -1,6 +1,4 @@
-﻿using Domain.Enums;
-using Microsoft.EntityFrameworkCore;
-
+using Domain.Enums;
 
 namespace Domain
 {
@@ -8,10 +6,14 @@ namespace Domain
     {
         public Guid Id { get; set; } = Guid.NewGuid();
 
+        // ── Customer link (set when a logged-in customer places the order) ───
+        public Guid? CustomerId { get; set; }
+        public Customer? Customer { get; set; }
+
         // Sender / Pickup
         public required string SenderFirstName { get; set; }
         public required string SenderLastName { get; set; }
-        public string ?SenderIdNumber { get; set; }
+        public string? SenderIdNumber { get; set; }
         public required string SenderBusinessName { get; set; }
         public required string SenderPhone { get; set; }
         public required string PickUpCity { get; set; }

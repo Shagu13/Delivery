@@ -126,7 +126,7 @@ try
             }
 
             // Seed roles + default admin account
-            await Persistence.DependencyInjection.SeedAsync(services);
+            await Persistence.DependencyInjectionPersistence.SeedAsync(services);
 
         }
         catch (Exception ex)

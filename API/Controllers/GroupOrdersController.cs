@@ -2,6 +2,7 @@ using API.Models.GroupOrders;
 using Application.GroupOrders.Commands.CreateGroupOrder;
 using Application.GroupOrders.DTOs;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
+using Application.GroupOrders.Queries.GetCustomerGroupOrders;
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -24,15 +25,15 @@ public sealed class GroupOrdersController : BaseController
     {
         var command = new CreateGroupOrderCommand(
             new CreateGroupOrderDto(
-                SenderFirstName: request.SenderFirstName,
-                SenderLastName: request.SenderLastName,
-                SenderIdNumber: request.SenderIdNumber,
+                SenderFirstName:    request.SenderFirstName,
+                SenderLastName:     request.SenderLastName,
+                SenderIdNumber:     request.SenderIdNumber,
                 SenderBusinessName: request.SenderBusinessName,
-                SenderPhone: request.SenderPhone,
-                PickUpCity: request.PickUpCity,
-                PickUpDistrict: request.PickUpDistrict,
-                PickUpAddress: request.PickUpAddress,
-                Note: request.Note,
+                SenderPhone:        request.SenderPhone,
+                PickUpCity:         request.PickUpCity,
+                PickUpDistrict:     request.PickUpDistrict,
+                PickUpAddress:      request.PickUpAddress,
+                Note:               request.Note,
                 Orders: request.Orders
                     .Select(o => new CreateOrderDto(
                         o.RecipientFirstName,
@@ -42,7 +43,8 @@ public sealed class GroupOrdersController : BaseController
                         o.RecipientDistrict,
                         o.RecipientAddress,
                         o.Description))
-                    .ToList()
+                    .ToList(),
+                CustomerId: request.CustomerId   // ← pass through from frontend
             )
         );
 
@@ -260,5 +262,50 @@ public sealed class GroupOrdersController : BaseController
             return BadRequest(new { title = "No valid rows found." });
 
         return Ok(orders);
+    }
+
+    /// <summary>Returns all group orders belonging to the authenticated customer.</summary>
+    [HttpGet("my")]
+    [Authorize(Roles = "Customer")]
+    [ProducesResponseType(typeof(IReadOnlyList<AdminGroupOrderResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMine(CancellationToken ct)
+    {
+        var claim = User.FindFirst("customerId")?.Value;
+        if (!Guid.TryParse(claim, out var customerId))
+            return Unauthorized();
+
+        var result = await Sender.Send(new GetCustomerGroupOrdersQuery(customerId), ct);
+
+        var response = result.Select(go => new AdminGroupOrderResponse(
+            Id: go.Id,
+            CreatedAt: go.CreatedAt,
+            Status: go.Status.ToString(),
+            SenderFirstName: go.SenderFirstName,
+            SenderLastName: go.SenderLastName,
+            SenderIdNumber: go.SenderIdNumber,
+            SenderBusinessName: go.SenderBusinessName,
+            SenderPhone: go.SenderPhone,
+            PickUpCity: go.PickUpCity,
+            PickUpDistrict: go.PickUpDistrict,
+            PickUpAddress: go.PickUpAddress,
+            Note: go.Note,
+            NumberOfPackages: go.NumberOfPackages,
+            Orders: go.Orders.Select(o => new AdminOrderResponse(
+                Id: o.Id,
+                TrackingNumber: o.TrackingNumber,
+                RecipientFirstName: o.RecipientFirstName,
+                RecipientLastName: o.RecipientLastName,
+                RecipientPhone: o.RecipientPhone,
+                RecipientCity: o.RecipientCity,
+                RecipientDistrict: o.RecipientDistrict,
+                RecipientAddress: o.RecipientAddress,
+                Description: o.Description,
+                Status: o.Status.ToString(),
+                IsPaid: o.IsPaid,
+                CreatedAt: o.CreatedAt
+            )).ToList()
+        )).ToList();
+
+        return Ok(response);
     }
 }

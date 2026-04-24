@@ -8,7 +8,7 @@ using Persistence.Services;
 
 namespace Persistence;
 
-public static class DependencyInjection
+public static class DependencyInjectionPersistence
 {
     public static IServiceCollection AddPersistence(
         this IServiceCollection services,
@@ -36,7 +36,7 @@ public static class DependencyInjection
             options.Password.RequireNonAlphanumeric = false;
             options.Lockout.MaxFailedAccessAttempts = 5;
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-            options.User.RequireUniqueEmail = false;
+            options.User.RequireUniqueEmail = true;
         })
         .AddRoles<IdentityRole>()
         .AddEntityFrameworkStores<AppDbContext>()
@@ -53,7 +53,7 @@ public static class DependencyInjection
         var roleManager = sp.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
 
-        foreach (var role in new[] { "Admin", "Courier" })
+        foreach (var role in new[] { "Admin", "Courier", "Customer" })
         {
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));

@@ -10,7 +10,9 @@ public sealed class CreateGroupOrderCommandValidator : AbstractValidator<CreateG
         RuleFor(x => x.Dto).NotNull();
         RuleFor(x => x.Dto.SenderFirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.SenderLastName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Dto.SenderIdNumber).NotEmpty().MaximumLength(50);
+        RuleFor(x => x.Dto.SenderIdNumber).MaximumLength(50)           // optional — no NotEmpty
+            .When(x => x.Dto.SenderIdNumber is not null);
+        RuleFor(x => x.Dto.SenderBusinessName).NotEmpty().MaximumLength(150); // was missing
         RuleFor(x => x.Dto.SenderPhone).NotEmpty().MaximumLength(20);
         RuleFor(x => x.Dto.PickUpCity).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.PickUpDistrict).NotEmpty().MaximumLength(100);
@@ -23,10 +25,6 @@ public sealed class CreateGroupOrderCommandValidator : AbstractValidator<CreateG
     }
 }
 
-/// <summary>
-/// Reusable validator for CreateOrderDto.
-/// Can be used by any other command that accepts order input.
-/// </summary>
 public sealed class CreateOrderDtoValidator : AbstractValidator<CreateOrderDto>
 {
     public CreateOrderDtoValidator()

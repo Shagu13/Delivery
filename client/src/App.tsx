@@ -5,21 +5,33 @@ import { CreateGroupOrderPage } from './pages/CreateGroupOrder/CreateGroupOrderP
 import { LoginPage } from './pages/Login/LoginPage';
 import { AdminDashboard } from './pages/Admin/AdminDashboard';
 import { CourierDashboard } from './pages/Courier/CourierDashboard';
+import { CustomerDashboard } from './pages/Customer/CustomerDashboard';
 import { HomePage } from './pages/Home/HomePage';
 import { RegisterPage } from './pages/Register/RegisterPage';
-import { AppLayout } from './components/layout/AppLayout';   // ← add
+import { AppLayout } from './components/layout/AppLayout';
 
 export default function App() {
     return (
         <AuthProvider>
             <BrowserRouter>
-                <AppLayout>                                    {/* ← add */}
+                <AppLayout>
                     <Routes>
                         {/* Public */}
-                        <Route path="/" element={<HomePage />} />
-                        <Route path="/send" element={<CreateGroupOrderPage />} />
-                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="/"         element={<HomePage />} />
+                        <Route path="/login"    element={<LoginPage />} />
                         <Route path="/register" element={<RegisterPage />} />
+
+                        {/* Send packages — Customer only.
+                            Unauthenticated → redirected to /login (then back here after sign-in).
+                            Wrong role (Admin/Courier) → redirected to their own dashboard. */}
+                        <Route
+                            path="/send"
+                            element={
+                                <ProtectedRoute role="Customer">
+                                    <CreateGroupOrderPage />
+                                </ProtectedRoute>
+                            }
+                        />
 
                         {/* Admin only */}
                         <Route
@@ -41,10 +53,20 @@ export default function App() {
                             }
                         />
 
+                        {/* Customer only */}
+                        <Route
+                            path="/customer/*"
+                            element={
+                                <ProtectedRoute role="Customer">
+                                    <CustomerDashboard />
+                                </ProtectedRoute>
+                            }
+                        />
+
                         {/* Fallback */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
-                </AppLayout>                                   {/* ← add */}
+                </AppLayout>
             </BrowserRouter>
         </AuthProvider>
     );

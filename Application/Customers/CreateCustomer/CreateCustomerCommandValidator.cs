@@ -11,7 +11,7 @@ public sealed class CreateCustomerCommandValidator : AbstractValidator<CreateCus
         // Personal
         RuleFor(x => x.Dto.FirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.LastName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Dto.IdNumber).MaximumLength(50); // optional — no NotEmpty
+        RuleFor(x => x.Dto.IdNumber).MaximumLength(50);
         RuleFor(x => x.Dto.BusinessName).NotEmpty().MaximumLength(150);
         RuleFor(x => x.Dto.PhoneNumber).NotEmpty().MaximumLength(20);
 
@@ -21,11 +21,11 @@ public sealed class CreateCustomerCommandValidator : AbstractValidator<CreateCus
         RuleFor(x => x.Dto.Address).NotEmpty().MaximumLength(250);
 
         // Login
-        RuleFor(x => x.Dto.Username)
+        RuleFor(x => x.Dto.Email)
             .NotEmpty()
-            .MaximumLength(50)
-            .Matches(@"^[a-zA-Z0-9_.-]+$")
-            .WithMessage("Username may only contain letters, digits, underscores, hyphens, and dots.");
+            .MaximumLength(256)
+            .EmailAddress()
+            .WithMessage("Please provide a valid email address.");
 
         RuleFor(x => x.Dto.Password)
             .NotEmpty()

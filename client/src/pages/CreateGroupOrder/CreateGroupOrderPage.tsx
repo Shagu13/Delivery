@@ -241,13 +241,14 @@ export function CreateGroupOrderPage() {
         try {
             const payload: CreateGroupOrderRequest = {
                 ...sender,
-                senderIdNumber:     sender.senderIdNumber?.trim() || undefined,
+                senderIdNumber: sender.senderIdNumber?.trim() || undefined,
                 senderBusinessName: sender.senderBusinessName,
-                note:               sender.note.trim() || undefined,
-                orders:             packages.map(p => ({
+                note: sender.note.trim() || undefined,
+                orders: packages.map(p => ({
                     ...p,
                     description: p.description?.trim() || undefined,
                 })),
+                customerId: user?.role === 'Customer' ? user.customerId : undefined,
             };
 
             const response = await createGroupOrder(payload);

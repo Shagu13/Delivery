@@ -1,4 +1,4 @@
-﻿using Application.Auth.DTOs;
+using Application.Auth.DTOs;
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using Domain;
@@ -26,9 +26,11 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
 
     public async Task<LoginResultDto> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
-        // 1. Find user by username
+        // 1. Find user — try by username first, then by email
+        //    Customers register with email-as-username, but staff may use plain usernames.
         var user = await _userManager.FindByNameAsync(request.Username)
-            ?? throw new NotFoundException(nameof(ApplicationUser), request.Username);
+                ?? await _userManager.FindByEmailAsync(request.Username)
+                ?? throw new NotFoundException(nameof(ApplicationUser), request.Username);
 
         // 2. Verify password
         var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
@@ -41,31 +43,40 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
 
         // 4. Get role
         var roles = await _userManager.GetRolesAsync(user);
-        var role = roles.FirstOrDefault()
+        var role  = roles.FirstOrDefault()
             ?? throw new ForbiddenException("User has no assigned role.");
 
-        // 5. If courier, fetch domain Courier ID for JWT claim
-        Guid? courierId = null;
+        // 5. Embed domain ID for Courier JWT claim
+        Guid? courierId  = null;
+        Guid? customerId = null;
+
         if (role == "Courier")
         {
             var courier = await _context.Couriers
                 .FirstOrDefaultAsync(c => c.ApplicationUserId == user.Id, cancellationToken)
                 ?? throw new NotFoundException(nameof(Courier), user.Id);
-
             courierId = courier.Id;
+        }
+        else if (role == "Customer")
+        {
+            var customer = await _context.Customers
+                .FirstOrDefaultAsync(c => c.ApplicationUserId == user.Id, cancellationToken)
+                ?? throw new NotFoundException(nameof(Customer), user.Id);
+            customerId = customer.Id;
         }
 
         // 6. Generate token
         var expiresAt = DateTime.UtcNow.AddMinutes(480);
-        var token = _jwtGenerator.GenerateToken(user, role, courierId);
+        var token = _jwtGenerator.GenerateToken(user, role, courierId, customerId);
 
         return new LoginResultDto(
-            Token: token,
-            Username: user.UserName ?? user.Id,
-            FirstName: user.FirstName,
-            LastName: user.LastName,
-            Role: role,
-            ExpiresAt: expiresAt
+            Token:      token,
+            Username:   user.Email ?? user.UserName ?? user.Id,
+            FirstName:  user.FirstName,
+            LastName:   user.LastName,
+            Role:       role,
+            ExpiresAt:  expiresAt,
+            CustomerId: customerId
         );
     }
 }

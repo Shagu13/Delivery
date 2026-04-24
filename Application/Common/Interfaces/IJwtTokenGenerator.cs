@@ -4,5 +4,9 @@ namespace Application.Common.Interfaces;
 
 public interface IJwtTokenGenerator
 {
-    string GenerateToken(ApplicationUser user, string role, Guid? courierId = null);
+    string GenerateToken(
+        ApplicationUser user,
+        string          role,
+        Guid?           courierId  = null,
+        Guid?           customerId = null);
 }

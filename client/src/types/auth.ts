@@ -1,4 +1,4 @@
-export type UserRole = 'Admin' | 'Courier';
+export type UserRole = 'Admin' | 'Courier' | 'Customer';
 
 export interface LoginRequest {
   username: string;
@@ -6,10 +6,11 @@ export interface LoginRequest {
 }
 
 export interface AuthUser {
-  token: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  role: UserRole;
-  expiresAt: string; // ISO datetime string
+  token:      string;
+  username:   string;
+  firstName:  string;
+  lastName:   string;
+  role:       UserRole;
+  expiresAt:  string;      // ISO datetime string
+  customerId?: string;     // present when role === 'Customer'
 }
