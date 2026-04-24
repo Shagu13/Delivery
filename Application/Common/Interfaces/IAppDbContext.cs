@@ -5,7 +5,7 @@ namespace Application.Common.Interfaces;
 
 public interface IAppDbContext
 {
-    DbSet<Courier>       Couriers       { get; }
+    DbSet<Domain.Courier>       Couriers       { get; }
     DbSet<Customer>      Customers      { get; }
     DbSet<Warehouse>     Warehouses     { get; }
     DbSet<GroupOrder>    GroupOrders    { get; }

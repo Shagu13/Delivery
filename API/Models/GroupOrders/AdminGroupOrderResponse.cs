@@ -1,9 +1,6 @@
 namespace API.Models.GroupOrders;
 
-/// <summary>
-/// HTTP response for GET /api/grouporders (admin list view).
-/// One entry per group order, each with its full list of child orders.
-/// </summary>
+/// <summary>HTTP response for GET /api/grouporders — admin list view.</summary>
 public sealed record AdminGroupOrderResponse(
     Guid Id,
     DateTime CreatedAt,
@@ -20,6 +17,9 @@ public sealed record AdminGroupOrderResponse(
     string PickUpAddress,
     string? Note,
     int NumberOfPackages,
+    // Pickup courier (null until assigned by admin)
+    Guid?   CourierId,
+    string? CourierFullName,
     IReadOnlyList<AdminOrderResponse> Orders
 );
 
@@ -36,5 +36,7 @@ public sealed record AdminOrderResponse(
     string? Description,
     string Status,
     bool IsPaid,
+    // Last-mile delivery courier (null until assigned)
+    Guid? CourierId,
     DateTime CreatedAt
 );

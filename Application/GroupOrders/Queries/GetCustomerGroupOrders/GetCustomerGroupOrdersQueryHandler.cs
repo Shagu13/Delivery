@@ -25,6 +25,7 @@ public sealed class GetCustomerGroupOrdersQueryHandler
         var groupOrders = await _context.GroupOrders
             .Where(g => g.CustomerId == request.CustomerId)
             .Include(g => g.Orders)
+            .Include(g => g.Courier)
             .AsNoTracking()
             .OrderByDescending(g => g.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -43,6 +44,8 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             PickUpAddress:     go.PickUpAddress,
             Note:              go.Note,
             NumberOfPackages:  go.NumberOfPackages,
+            CourierId: go.CourierId,        // ← add this
+            CourierFullName: null,
             Orders: go.Orders
                 .OrderBy(o => o.CreatedAt)
                 .Select(o => new AdminOrderDto(
@@ -50,7 +53,7 @@ public sealed class GetCustomerGroupOrdersQueryHandler
                     o.RecipientFirstName, o.RecipientLastName,
                     o.RecipientPhone, o.RecipientCity,
                     o.RecipientDistrict, o.RecipientAddress,
-                    o.Description, o.Status, o.IsPaid, o.CreatedAt))
+                    o.Description, o.Status, o.IsPaid, null, o.CreatedAt))
                 .ToList()
         )).ToList();
     }

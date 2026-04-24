@@ -1,151 +1,159 @@
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface RegisterCustomerRequest {
-    firstName: string; lastName: string; idNumber?: string;
-    businessName: string; phoneNumber: string;
-    city: string; district: string; address: string;
-    email: string; password: string; confirmPassword: string;
+  firstName: string; lastName: string; idNumber?: string;
+  businessName: string; phoneNumber: string;
+  city: string; district: string; address: string;
+  email: string; password: string; confirmPassword: string;
 }
 
 export interface CreateCustomerRequest {
-    firstName: string; lastName: string; idNumber?: string;
-    businessName: string; phoneNumber: string;
-    city: string; district: string; address: string;
-    email: string; password: string;
+  firstName: string; lastName: string; idNumber?: string;
+  businessName: string; phoneNumber: string;
+  city: string; district: string; address: string;
+  email: string; password: string;
 }
 
 export interface UpdateCustomerRequest {
-    firstName: string; lastName: string; idNumber?: string;
-    businessName: string; phoneNumber: string;
-    city: string; district: string; address: string;
+  firstName: string; lastName: string; idNumber?: string;
+  businessName: string; phoneNumber: string;
+  city: string; district: string; address: string;
 }
 
 export interface ChangePasswordRequest {
-    currentPassword: string;
-    newPassword: string;
-    confirmNewPassword: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
 }
 
 export interface CreateCustomerResponse {
-    customerId: string; email: string; fullName: string;
+  customerId: string; email: string; fullName: string;
 }
 
 export interface Customer {
-    id: string;
-    firstName: string; lastName: string; idNumber: string | null;
-    businessName: string; phoneNumber: string;
-    city: string; district: string; address: string;
-    email: string; isActive: boolean; createdAt: string;
+  id: string;
+  firstName: string; lastName: string; idNumber: string | null;
+  businessName: string; phoneNumber: string;
+  city: string; district: string; address: string;
+  email: string; isActive: boolean; createdAt: string;
 }
 
 export interface PagedResult<T> {
-    items: T[]; total: number; page: number; pageSize: number;
+  items: T[]; total: number; page: number; pageSize: number;
 }
 
-// ── Order types (mirrors backend AdminGroupOrderDto) ─────────────────────────
+// ── Order types ───────────────────────────────────────────────────────────────
 
 export interface CustomerOrder {
-    id: string; trackingNumber: string;
-    recipientFirstName: string; recipientLastName: string;
-    recipientPhone: string; recipientCity: string;
-    recipientDistrict: string; recipientAddress: string;
-    description: string | null; status: string;
-    isPaid: boolean; createdAt: string;
+  id: string; trackingNumber: string;
+  recipientFirstName: string; recipientLastName: string;
+  recipientPhone: string; recipientCity: string;
+  recipientDistrict: string; recipientAddress: string;
+  description: string | null; status: string;
+  isPaid: boolean; createdAt: string;
 }
 
 export interface CustomerGroupOrder {
-    id: string; createdAt: string; status: string;
-    senderBusinessName: string;
-    pickUpCity: string; pickUpDistrict: string;
-    note: string | null; numberOfPackages: number;
-    orders: CustomerOrder[];
+  id: string; createdAt: string; status: string;
+  senderBusinessName: string;
+  pickUpCity: string; pickUpDistrict: string;
+  note: string | null; numberOfPackages: number;
+  orders: CustomerOrder[];
 }
 
 // ── Error ─────────────────────────────────────────────────────────────────────
 
 export class CustomerApiError extends Error {
-    constructor(
-        public readonly status: number,
-        message: string,
-        public readonly errors?: Record<string, string[]>,
-    ) { super(message); this.name = 'CustomerApiError'; }
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly errors?: Record<string, string[]>,
+  ) { super(message); this.name = 'CustomerApiError'; }
 }
 
 async function handle<T>(res: Response): Promise<T> {
-    if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new CustomerApiError(res.status,
-            body?.title ?? `Request failed with status ${res.status}`, body?.errors);
-    }
-    return res.json() as Promise<T>;
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new CustomerApiError(res.status,
+      body?.title ?? `Request failed with status ${res.status}`, body?.errors);
+  }
+  return res.json() as Promise<T>;
 }
 
 async function handleEmpty(res: Response): Promise<void> {
-    if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new CustomerApiError(res.status,
-            body?.title ?? `Request failed with status ${res.status}`, body?.errors);
-    }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new CustomerApiError(res.status,
+      body?.title ?? `Request failed with status ${res.status}`, body?.errors);
+  }
 }
 
 // ── Auth-less ─────────────────────────────────────────────────────────────────
 
 export async function registerCustomer(data: RegisterCustomerRequest): Promise<CreateCustomerResponse> {
-    return handle(await fetch('/api/customers/register', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-    }));
+  return handle(await fetch('/api/customers/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }));
 }
 
 // ── Customer self-service ─────────────────────────────────────────────────────
 
 export async function getMyProfile(token: string): Promise<Customer> {
-    return handle(await fetch('/api/customers/me', {
-        headers: { Authorization: `Bearer ${token}` },
-    }));
+  return handle(await fetch('/api/customers/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  }));
 }
 
 export async function updateMyProfile(
-    data: UpdateCustomerRequest, token: string
+  data: UpdateCustomerRequest, token: string
 ): Promise<void> {
-    return handleEmpty(await fetch('/api/customers/me', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(data),
-    }));
+  return handleEmpty(await fetch('/api/customers/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
 }
 
 export async function changePassword(
-    data: ChangePasswordRequest, token: string
+  data: ChangePasswordRequest, token: string
 ): Promise<void> {
-    return handleEmpty(await fetch('/api/customers/me/password', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(data),
-    }));
+  return handleEmpty(await fetch('/api/customers/me/password', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
 }
 
 export async function getMyOrders(token: string): Promise<CustomerGroupOrder[]> {
-    return handle(await fetch('/api/grouporders/my', {
-        headers: { Authorization: `Bearer ${token}` },
-    }));
+  return handle(await fetch('/api/grouporders/my', {
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
+/// Cancel a pending group order (only valid while status = Pending)
+export async function cancelGroupOrder(groupOrderId: string, token: string): Promise<void> {
+  return handleEmpty(await fetch(`/api/grouporders/${groupOrderId}/cancel`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+  }));
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export async function createCustomer(data: CreateCustomerRequest, token: string): Promise<CreateCustomerResponse> {
-    return handle(await fetch('/api/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(data),
-    }));
+  return handle(await fetch('/api/customers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
 }
 
 export async function getCustomers(token: string, page = 1, pageSize = 20, search = ''): Promise<PagedResult<Customer>> {
-    const p = new URLSearchParams({ page: String(page), pageSize: String(pageSize), ...(search ? { search } : {}) });
-    return handle(await fetch(`/api/customers?${p}`, { headers: { Authorization: `Bearer ${token}` } }));
+  const p = new URLSearchParams({ page: String(page), pageSize: String(pageSize), ...(search ? { search } : {}) });
+  return handle(await fetch(`/api/customers?${p}`, { headers: { Authorization: `Bearer ${token}` } }));
 }
 
 export async function getCustomerById(id: string, token: string): Promise<Customer> {
-    return handle(await fetch(`/api/customers/${id}`, { headers: { Authorization: `Bearer ${token}` } }));
+  return handle(await fetch(`/api/customers/${id}`, { headers: { Authorization: `Bearer ${token}` } }));
 }

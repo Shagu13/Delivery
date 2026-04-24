@@ -15,6 +15,17 @@ export interface CreateCourierResponse {
   fullName: string;
 }
 
+/// Full courier record as returned by GET /api/couriers
+export interface Courier {
+  courierId: string;
+  fullName: string;
+  username: string;
+  assignedCity: string;
+  assignedDistrict: string;
+  phoneNumber: string;
+  isAvailable: boolean;
+}
+
 export class CourierApiError extends Error {
   constructor(
     public readonly status: number,
@@ -49,4 +60,10 @@ export async function createCourier(
   }
 
   return response.json() as Promise<CreateCourierResponse>;
+}
+
+export async function fetchCouriers(): Promise<Courier[]> {
+  const res = await fetch('/api/couriers', { credentials: 'include' });
+  if (!res.ok) throw new Error('Failed to fetch couriers');
+  return res.json();
 }

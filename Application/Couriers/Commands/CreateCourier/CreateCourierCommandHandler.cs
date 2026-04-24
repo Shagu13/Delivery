@@ -29,6 +29,7 @@ public sealed class CreateCourierCommandHandler : IRequestHandler<CreateCourierC
         var user = new ApplicationUser
         {
             UserName = dto.Username,
+            Email = $"{dto.Username}@courier.local",
             FirstName = dto.FirstName,
             LastName = dto.LastName,
             Role = "Courier"
@@ -45,7 +46,7 @@ public sealed class CreateCourierCommandHandler : IRequestHandler<CreateCourierC
         await _userManager.AddToRoleAsync(user, "Courier");
 
         // 2. Create the domain Courier entity linked to that user
-        var courier = new Courier
+        var courier = new Domain.Courier
         {
             FirstName = dto.FirstName,
             LastName = dto.LastName,

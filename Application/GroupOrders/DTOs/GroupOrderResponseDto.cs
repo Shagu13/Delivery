@@ -18,7 +18,7 @@ public sealed record GroupOrderResponseDto(
     string PickUpAddress,
     string? Note,
     int NumberOfPackages,
-    GroupOrderStatus Status,
+    OrderStatus Status,
 
     // Courier info — null until a courier accepts or is assigned
     Guid? CourierId,

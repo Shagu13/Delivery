@@ -1,40 +1,40 @@
-using Domain.Enums;
+//using Domain.Enums;
 
-namespace Application.GroupOrders.Queries.GetAllGroupOrders;
+//namespace Application.GroupOrders.Queries.GetAllGroupOrders;
 
-/// <summary>Full group order representation for the admin dashboard.</summary>
-public sealed record AdminGroupOrderDto(
-    Guid Id,
-    DateTime CreatedAt,
-    GroupOrderStatus Status,
-    // Sender
-    string SenderFirstName,
-    string SenderLastName,
-    string? SenderIdNumber,
-    string SenderBusinessName,
-    string SenderPhone,
-    // Pickup
-    string PickUpCity,
-    string PickUpDistrict,
-    string PickUpAddress,
-    string? Note,
-    int NumberOfPackages,
-    // Child orders
-    IReadOnlyList<AdminOrderDto> Orders
-);
+///// <summary>Full group order representation for the admin dashboard.</summary>
+//public sealed record AdminGroupOrderDto(
+//    Guid Id,
+//    DateTime CreatedAt,
+//    GroupOrderStatus Status,
+//    // Sender
+//    string SenderFirstName,
+//    string SenderLastName,
+//    string? SenderIdNumber,
+//    string SenderBusinessName,
+//    string SenderPhone,
+//    // Pickup
+//    string PickUpCity,
+//    string PickUpDistrict,
+//    string PickUpAddress,
+//    string? Note,
+//    int NumberOfPackages,
+//    // Child orders
+//    IReadOnlyList<AdminOrderDto> Orders
+//);
 
-/// <summary>Single package within a group order.</summary>
-public sealed record AdminOrderDto(
-    Guid Id,
-    string TrackingNumber,
-    string RecipientFirstName,
-    string RecipientLastName,
-    string RecipientPhone,
-    string RecipientCity,
-    string RecipientDistrict,
-    string RecipientAddress,
-    string? Description,
-    OrderStatus Status,
-    bool IsPaid,
-    DateTime CreatedAt
-);
+///// <summary>Single package within a group order.</summary>
+//public sealed record AdminOrderDto(
+//    Guid Id,
+//    string TrackingNumber,
+//    string RecipientFirstName,
+//    string RecipientLastName,
+//    string RecipientPhone,
+//    string RecipientCity,
+//    string RecipientDistrict,
+//    string RecipientAddress,
+//    string? Description,
+//    OrderStatus Status,
+//    bool IsPaid,
+//    DateTime CreatedAt
+//);
