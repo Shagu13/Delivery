@@ -1,13 +1,13 @@
 namespace API.Models.Orders;
 
 public sealed record TrackingEventResponse(
-    string Status,
-    string Description,
+    string   Status,
+    string   Description,
     DateTime CreatedAt
 );
 
 public sealed record TrackOrderResponse(
-    Guid OrderId,
+    Guid   OrderId,
     string TrackingNumber,
     string Status,
 
@@ -17,12 +17,16 @@ public sealed record TrackOrderResponse(
     string RecipientDistrict,
     string RecipientAddress,
 
+    bool IsFragile,
+
     string? CourierFullName,
     string? WarehouseName,
 
-    DateTime CreatedAt,
+    DateTime  CreatedAt,
     DateTime? PickedUpFromWarehouseAt,
     DateTime? DeliveredAt,
+    DateTime? DeliveryDateFrom,
+    DateTime? DeliveryDateTo,
 
     IReadOnlyList<TrackingEventResponse> TrackingEvents
 );

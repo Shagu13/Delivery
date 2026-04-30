@@ -4,10 +4,9 @@ namespace Application.GroupOrders.DTOs;
 
 /// <summary>
 /// Output DTO for a single Order as seen inside a GroupOrderResponseDto.
-/// Shows recipient info, current status, and tracking number.
 /// </summary>
 public sealed record OrderResponseDto(
-    Guid Id,
+    Guid   Id,
     string TrackingNumber,
     string RecipientFirstName,
     string RecipientLastName,
@@ -16,17 +15,23 @@ public sealed record OrderResponseDto(
     string RecipientDistrict,
     string RecipientAddress,
     string? Description,
-    OrderStatus Status,
+    bool   IsFragile,
+    OrderStatus   Status,
+    PaymentStatus ProductPaymentStatus,
+    ServicePayer  WhoPaysForCompanyService,
+    decimal?      CourierSalary,
 
     // Courier assigned for last-mile delivery — null until admin assigns
-    Guid? CourierId,
+    Guid?   CourierId,
     string? CourierFullName,
 
     // Warehouse — null until GroupOrder is DeliveredToWarehouse
-    Guid? WarehouseId,
+    Guid?   WarehouseId,
     string? WarehouseName,
 
-    DateTime CreatedAt,
+    DateTime  CreatedAt,
     DateTime? PickedUpFromWarehouseAt,
-    DateTime? DeliveredAt
+    DateTime? DeliveredAt,
+    DateTime? DeliveryDateFrom,
+    DateTime? DeliveryDateTo
 );

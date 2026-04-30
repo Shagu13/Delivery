@@ -5,10 +5,9 @@ namespace Application.GroupOrders.DTOs;
 /// <summary>
 /// Output DTO returned when reading a GroupOrder.
 /// Used by GetGroupOrderByIdQuery, GetGroupOrdersQuery, GetCourierGroupOrdersQuery, etc.
-/// One shared DTO for all read operations — no duplication across queries.
 /// </summary>
 public sealed record GroupOrderResponseDto(
-    Guid Id,
+    Guid   Id,
     string SenderFirstName,
     string SenderLastName,
     string SenderIdNumber,
@@ -17,20 +16,21 @@ public sealed record GroupOrderResponseDto(
     string PickUpDistrict,
     string PickUpAddress,
     string? Note,
-    int NumberOfPackages,
+    int     NumberOfPackages,
     OrderStatus Status,
+    DateTime? WhenPackagePickedUpDate,
 
     // Courier info — null until a courier accepts or is assigned
-    Guid? CourierId,
+    Guid?   CourierId,
     string? CourierFullName,
     string? CourierPhone,
 
     // Warehouse info — null until DeliveredToWarehouse
-    Guid? WarehouseId,
+    Guid?   WarehouseId,
     string? WarehouseName,
 
     // Timestamps — each populated as status advances
-    DateTime CreatedAt,
+    DateTime  CreatedAt,
     DateTime? AcceptedAt,
     DateTime? PickedUpAt,
     DateTime? DeliveredToWarehouseAt,

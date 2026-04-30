@@ -13,7 +13,7 @@ import { PackageCard } from './PackageCard';
 import { SuccessView } from './SuccessView';
 import './createGroupOrder.css';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SenderFormData {
     senderFirstName:    string;
@@ -21,6 +21,11 @@ interface SenderFormData {
     senderIdNumber?:    string;
     senderBusinessName: string;
     senderPhone:        string;
+    // Stored registered address (never changes unless they update profile)
+    registeredCity:     string;
+    registeredDistrict: string;
+    registeredAddress:  string;
+    // Actual pick-up address for this order — defaults to registered, overridable
     pickUpCity:         string;
     pickUpDistrict:     string;
     pickUpAddress:      string;
@@ -33,6 +38,9 @@ const EMPTY_SENDER: SenderFormData = {
     senderIdNumber:     '',
     senderBusinessName: '',
     senderPhone:        '',
+    registeredCity:     '',
+    registeredDistrict: '',
+    registeredAddress:  '',
     pickUpCity:         '',
     pickUpDistrict:     '',
     pickUpAddress:      '',
@@ -40,13 +48,16 @@ const EMPTY_SENDER: SenderFormData = {
 };
 
 const EMPTY_PACKAGE: OrderItemRequest = {
-    recipientFirstName: '',
-    recipientLastName:  '',
-    recipientPhone:     '',
-    recipientCity:      '',
-    recipientDistrict:  '',
-    recipientAddress:   '',
-    description:        '',
+    recipientFirstName:      '',
+    recipientLastName:       '',
+    recipientPhone:          '',
+    recipientCity:           '',
+    recipientDistrict:       '',
+    recipientAddress:        '',
+    description:             '',
+    isFragile:               false,
+    productPaymentStatus:    'NotPaid',
+    whoPaysForCompanyService: 'Sender',
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -88,25 +99,22 @@ function validate(sender: SenderFormData, packages: OrderItemRequest[]): Validat
 export function CreateGroupOrderPage() {
     const { user, token } = useAuth();
 
-    const [sender,     setSender]     = useState<SenderFormData>(EMPTY_SENDER);
-    const [packages,   setPackages]   = useState<OrderItemRequest[]>([{ ...EMPTY_PACKAGE }]);
-    const [errors,     setErrors]     = useState<ValidationErrors>({});
-    const [submitting, setSubmitting] = useState(false);
-    const [globalError, setGlobalError] = useState<string | null>(null);
-    const [result,     setResult]     = useState<CreateGroupOrderResponse | null>(null);
+    const [sender,       setSender]       = useState<SenderFormData>(EMPTY_SENDER);
+    const [useOtherAddr, setUseOtherAddr] = useState(false);
+    const [packages,     setPackages]     = useState<OrderItemRequest[]>([{ ...EMPTY_PACKAGE }]);
+    const [errors,       setErrors]       = useState<ValidationErrors>({});
+    const [submitting,   setSubmitting]   = useState(false);
+    const [globalError,  setGlobalError]  = useState<string | null>(null);
+    const [result,       setResult]       = useState<CreateGroupOrderResponse | null>(null);
 
-    // ── Excel import state ─────────────────────────────────────────────────────
     const [excelImporting, setExcelImporting] = useState(false);
     const [excelError,     setExcelError]     = useState<string | null>(null);
     const [importedCount,  setImportedCount]  = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // ── Customer pre-fill ──────────────────────────────────────────────────────
-    // When a logged-in Customer opens this page their saved profile is fetched
-    // and mapped into SenderFormData so they don't have to type it all again.
-    // They can still edit every field before submitting.
     const [prefilled, setPrefilled] = useState(false);
 
+    // ── Pre-fill from customer profile ────────────────────────────────────────
     useEffect(() => {
         if (user?.role !== 'Customer' || !token) return;
 
@@ -116,46 +124,58 @@ export function CreateGroupOrderPage() {
                 const profile = await getMyProfile(token);
                 if (cancelled) return;
 
-                setSender({
+                setSender(prev => ({
+                    ...prev,
                     senderFirstName:    profile.firstName,
                     senderLastName:     profile.lastName,
                     senderIdNumber:     profile.idNumber ?? '',
                     senderBusinessName: profile.businessName,
                     senderPhone:        profile.phoneNumber,
+                    registeredCity:     profile.city,
+                    registeredDistrict: profile.district,
+                    registeredAddress:  profile.address,
+                    // Default pickup = registered address
                     pickUpCity:         profile.city,
                     pickUpDistrict:     profile.district,
                     pickUpAddress:      profile.address,
-                    note:               '',
-                });
+                }));
                 setPrefilled(true);
             } catch {
-                // silently ignore — customer can fill manually
+                // silently ignore
             }
         })();
 
         return () => { cancelled = true; };
     }, [user?.role, token]);
 
-    // ── Sender handlers ────────────────────────────────────────────────────────
+    // ── When user toggles "Use Other Address" ─────────────────────────────────
+    const handleUseOtherAddrChange = (checked: boolean) => {
+        setUseOtherAddr(checked);
+        if (!checked) {
+            // Revert pickup address back to registered address
+            setSender(prev => ({
+                ...prev,
+                pickUpCity:     prev.registeredCity,
+                pickUpDistrict: prev.registeredDistrict,
+                pickUpAddress:  prev.registeredAddress,
+            }));
+        }
+    };
 
+    // ── Sender handlers ───────────────────────────────────────────────────────
     const handleSenderChange = useCallback((field: keyof SenderFormData, value: string) => {
         setSender(prev => ({ ...prev, [field]: value }));
-        setErrors(prev => {
-            const next = { ...prev };
-            delete next[field];
-            return next;
-        });
+        setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
     }, []);
 
-    // ── Package handlers ───────────────────────────────────────────────────────
-
+    // ── Package handlers ──────────────────────────────────────────────────────
     const handlePackageChange = useCallback(
-        (index: number, field: keyof OrderItemRequest, value: string) => {
+        (index: number, field: keyof OrderItemRequest, value: string | boolean) => {
             setPackages(prev => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
             setErrors(prev => {
-                const next = { ...prev };
-                delete next[`orders[${index}].${field}`];
-                return next;
+                const n = { ...prev };
+                delete n[`orders[${index}].${field}`];
+                return n;
             });
         },
         [],
@@ -185,14 +205,10 @@ export function CreateGroupOrderPage() {
         });
     }, []);
 
-    // ── Excel handlers ─────────────────────────────────────────────────────────
-
+    // ── Excel handlers ────────────────────────────────────────────────────────
     const handleDownloadTemplate = async () => {
-        try {
-            await downloadExcelTemplate();
-        } catch {
-            setExcelError('Could not download the template. Please try again.');
-        }
+        try { await downloadExcelTemplate(); }
+        catch { setExcelError('Could not download the template. Please try again.'); }
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,16 +219,18 @@ export function CreateGroupOrderPage() {
         setExcelImporting(true);
         try {
             const parsed = await parseGroupOrderExcel(file);
-            const normalised = parsed.map(o => ({ ...o, description: o.description ?? '' }));
+            const normalised = parsed.map(o => ({
+                ...EMPTY_PACKAGE,
+                ...o,
+                description: o.description ?? '',
+            }));
             setPackages(normalised);
             setImportedCount(normalised.length);
             setErrors({});
         } catch (err) {
-            if (err instanceof ApiError) {
-                setExcelError(err.message);
-            } else {
-                setExcelError('Failed to read the file. Make sure you are using the downloaded template.');
-            }
+            setExcelError(err instanceof ApiError
+                ? err.message
+                : 'Failed to read the file. Make sure you are using the downloaded template.');
         } finally {
             setExcelImporting(false);
         }
@@ -224,8 +242,7 @@ export function CreateGroupOrderPage() {
         setPackages([{ ...EMPTY_PACKAGE }]);
     };
 
-    // ── Submit ─────────────────────────────────────────────────────────────────
-
+    // ── Submit ────────────────────────────────────────────────────────────────
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setGlobalError(null);
@@ -240,10 +257,15 @@ export function CreateGroupOrderPage() {
         setSubmitting(true);
         try {
             const payload: CreateGroupOrderRequest = {
-                ...sender,
-                senderIdNumber: sender.senderIdNumber?.trim() || undefined,
+                senderFirstName:    sender.senderFirstName,
+                senderLastName:     sender.senderLastName,
+                senderIdNumber:     sender.senderIdNumber?.trim() || undefined,
                 senderBusinessName: sender.senderBusinessName,
-                note: sender.note.trim() || undefined,
+                senderPhone:        sender.senderPhone,
+                pickUpCity:         sender.pickUpCity,
+                pickUpDistrict:     sender.pickUpDistrict,
+                pickUpAddress:      sender.pickUpAddress,
+                note:               sender.note.trim() || undefined,
                 orders: packages.map(p => ({
                     ...p,
                     description: p.description?.trim() || undefined,
@@ -259,7 +281,7 @@ export function CreateGroupOrderPage() {
                 if (err.errors) {
                     const mapped: ValidationErrors = {};
                     Object.entries(err.errors).forEach(([key, messages]) => {
-                        mapped[key.toLowerCase()] = messages[0];
+                        mapped[key.toLowerCase()] = (messages as string[])[0];
                     });
                     setErrors(mapped);
                 }
@@ -274,7 +296,6 @@ export function CreateGroupOrderPage() {
 
     const handleNewOrder = () => {
         setResult(null);
-        // If customer, re-fetch profile to reset pre-fill; otherwise clear entirely
         if (user?.role === 'Customer' && token) {
             getMyProfile(token).then(profile => {
                 setSender({
@@ -283,6 +304,9 @@ export function CreateGroupOrderPage() {
                     senderIdNumber:     profile.idNumber ?? '',
                     senderBusinessName: profile.businessName,
                     senderPhone:        profile.phoneNumber,
+                    registeredCity:     profile.city,
+                    registeredDistrict: profile.district,
+                    registeredAddress:  profile.address,
                     pickUpCity:         profile.city,
                     pickUpDistrict:     profile.district,
                     pickUpAddress:      profile.address,
@@ -292,6 +316,7 @@ export function CreateGroupOrderPage() {
         } else {
             setSender(EMPTY_SENDER);
         }
+        setUseOtherAddr(false);
         setPackages([{ ...EMPTY_PACKAGE }]);
         setErrors({});
         setGlobalError(null);
@@ -300,8 +325,7 @@ export function CreateGroupOrderPage() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // ── Render ─────────────────────────────────────────────────────────────────
-
+    // ── Render ────────────────────────────────────────────────────────────────
     if (result) {
         return (
             <div className="page">
@@ -325,12 +349,13 @@ export function CreateGroupOrderPage() {
                 </div>
 
                 <form className="order-form" onSubmit={handleSubmit} noValidate>
-                    {/* prefilled prop shows the blue banner when data came from the customer profile */}
                     <SenderSection
                         data={sender}
                         errors={errors}
                         onChange={handleSenderChange}
                         prefilled={prefilled}
+                        useOtherAddress={useOtherAddr}
+                        onUseOtherAddressChange={handleUseOtherAddrChange}
                     />
 
                     <section className="form-section">
@@ -345,7 +370,7 @@ export function CreateGroupOrderPage() {
                         </div>
 
                         <div className="form-section__body">
-                            {/* ── Excel Import Box ── */}
+                            {/* Excel Import */}
                             <div className="excel-import">
                                 <div className="excel-import__left">
                                     <div className="excel-import__icon" aria-hidden="true">
@@ -359,7 +384,6 @@ export function CreateGroupOrderPage() {
                                         <span className="excel-import__desc">Download the template, fill in recipients, then upload.</span>
                                     </div>
                                 </div>
-
                                 <div className="excel-import__actions">
                                     {importedCount !== null ? (
                                         <>
@@ -409,7 +433,6 @@ export function CreateGroupOrderPage() {
                                         onChange={handleFileChange}
                                     />
                                 </div>
-
                                 {excelError && (
                                     <div className="excel-import__error">
                                         <svg width="13" height="13" viewBox="0 0 13 13" fill="none">

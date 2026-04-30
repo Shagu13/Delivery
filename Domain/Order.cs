@@ -1,45 +1,90 @@
-﻿using Domain.Enums;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.Metrics;
-using System.Text;
 
-namespace Domain
+namespace Domain;
+
+[Index(nameof(TrackingNumber), IsUnique = true)]
+public class Order
 {
-    [Index(nameof(TrackingNumber), IsUnique = true)]
-    public class Order
-    {
-        public Guid Id { get; set; } = Guid.NewGuid();
-        public Guid GroupOrderId { get; set; }
-        public GroupOrder GroupOrder { get; set; } = null!;
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid GroupOrderId { get; set; }
+    public GroupOrder GroupOrder { get; set; } = null!;
 
-        // Recipient / Delivery
-        public required string RecipientFirstName { get; set; }
-        public required string RecipientLastName { get; set; }
-        public required string RecipientPhone { get; set; }
-        public required string RecipientCity { get; set; }
-        public required string RecipientDistrict { get; set; }
-        public required string RecipientAddress { get; set; }
+    // ── Recipient / Delivery ─────────────────────────────────────────────────
+    public required string RecipientFirstName { get; set; }
+    public required string RecipientLastName  { get; set; }
+    public required string RecipientPhone     { get; set; }
+    public required string RecipientCity      { get; set; }
+    public required string RecipientDistrict  { get; set; }
+    public required string RecipientAddress   { get; set; }
 
-        // Assignment
-        public Guid? CourierId { get; set; }
-        public Courier? Courier { get; set; }
-        public Guid? WarehouseId { get; set; }
-        public Warehouse? Warehouse { get; set; }
+    // ── Assignment ───────────────────────────────────────────────────────────
+    public Guid?     CourierId   { get; set; }
+    public Courier?  Courier     { get; set; }
+    public Guid?     WarehouseId { get; set; }
+    public Warehouse? Warehouse  { get; set; }
 
-        // Details
-        public string? Description { get; set; }
-        public OrderStatus Status { get; set; } = OrderStatus.Pending;
-        public required string TrackingNumber { get; set; }
-        public required bool IsPaid { get; set; }
+    // ── Package details ──────────────────────────────────────────────────────
+    public string? Description { get; set; }
 
-        // Timestamps
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime? PickedUpFromWarehouseAt { get; set; }
-        public DateTime? DeliveredAt { get; set; }
+    /// <summary>Whether the product is made of glass or other easily breakable material.</summary>
+    public bool IsFragile { get; set; } = false;
 
-        // Navigation
-        public ICollection<TrackingEvent> TrackingEvents { get; set; } = new List<TrackingEvent>();
-    }
+    // ── Payment ──────────────────────────────────────────────────────────────
+    /// <summary>Replaces the former bool IsPaid. Tracks whether product payment has been collected.</summary>
+    public PaymentStatus ProductPaymentStatus { get; set; } = PaymentStatus.NotPaid;
+
+    /// <summary>Which party pays the company's courier service fee (საკურიერო).</summary>
+    public ServicePayer WhoPaysForCompanyService { get; set; } = ServicePayer.Sender;
+
+    // ── Financials (admin-managed) ───────────────────────────────────────────
+    /// <summary>
+    /// The price the company charges for delivering this order.
+    /// Auto-filled from the district's CompanyServicePrice (or customer's negotiated price for Tbilisi).
+    /// Admin can override at any time.
+    /// </summary>
+    public decimal CompanyServicePrice { get; set; } = 0;
+
+    /// <summary>
+    /// Salary amount the admin allocates to the courier for delivering this order.
+    /// Filled by admin individually at end of day.
+    /// </summary>
+    public decimal? CourierSalary { get; set; }
+
+    /// <summary>
+    /// Profit for the company: CompanyServicePrice - CourierSalary.
+    /// Calculated automatically when CourierSalary is set.
+    /// </summary>
+    public decimal? CompanyRevenue { get; set; }
+
+    /// <summary>
+    /// The cash amount the courier collected from the recipient for the product itself (COD).
+    /// Null when the product was pre-paid or payment was not collected (e.g. returned order).
+    /// Populated by admin when closing the day settlement.
+    /// </summary>
+    public decimal? AmountOfCashCollected { get; set; }
+
+    // ── Status & tracking ────────────────────────────────────────────────────
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
+    public required string TrackingNumber { get; set; }
+
+    // ── Timestamps ───────────────────────────────────────────────────────────
+    public DateTime  CreatedAt                { get; set; } = DateTime.UtcNow;
+    public DateTime? PickedUpFromWarehouseAt  { get; set; }
+    public DateTime? DeliveredAt              { get; set; }
+
+    /// <summary>
+    /// Auto-filled when courier confirms receipt of a non-Tbilisi order
+    /// (status → CourierRecievedOrderToDeliver). Set to received date + 1 day.
+    /// </summary>
+    public DateTime? DeliveryDateFrom { get; set; }
+
+    /// <summary>
+    /// Auto-filled when courier confirms receipt of a non-Tbilisi order.
+    /// Set to received date + 4 days.
+    /// </summary>
+    public DateTime? DeliveryDateTo { get; set; }
+
+    // ── Navigation ───────────────────────────────────────────────────────────
+    public ICollection<TrackingEvent> TrackingEvents { get; set; } = new List<TrackingEvent>();
 }

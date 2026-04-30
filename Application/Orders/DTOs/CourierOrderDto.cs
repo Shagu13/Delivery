@@ -13,9 +13,13 @@ public sealed record CourierOrderDto(
     string RecipientDistrict,
     string RecipientAddress,
     string? Description,
-    OrderStatus Status,
-    bool   IsPaid,
-    DateTime CreatedAt,
+    bool   IsFragile,
+    OrderStatus   Status,
+    PaymentStatus ProductPaymentStatus,
+    ServicePayer  WhoPaysForCompanyService,
+    DateTime  CreatedAt,
     DateTime? PickedUpFromWarehouseAt,
-    DateTime? DeliveredAt
+    DateTime? DeliveredAt,
+    DateTime? DeliveryDateFrom,
+    DateTime? DeliveryDateTo
 );

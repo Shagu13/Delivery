@@ -101,6 +101,33 @@ namespace Persistence.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("Domain.City", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CityName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateDeleted")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CityName")
+                        .IsUnique();
+
+                    b.HasIndex("DateDeleted");
+
+                    b.ToTable("Cities");
+                });
+
             modelBuilder.Entity("Domain.Courier", b =>
                 {
                     b.Property<Guid>("Id")
@@ -185,6 +212,9 @@ namespace Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<decimal?>("CompanyPriceToDeliverPackages")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -228,6 +258,83 @@ namespace Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("Domain.DailySettlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CourierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsTheDayClosed")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("TotalAmountOfCashCollected")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCompanyNetIncome")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCompanyServiceRevenue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCourierSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("TotalOrdersDelivered")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalOrdersPickedUp")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourierId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CourierId", "CreatedAt");
+
+                    b.ToTable("DailySettlements");
+                });
+
+            modelBuilder.Entity("Domain.District", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("CompanyServicePrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateDeleted")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DistrictName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DateDeleted");
+
+                    b.HasIndex("CityId", "DistrictName")
+                        .IsUnique();
+
+                    b.ToTable("Districts");
                 });
 
             modelBuilder.Entity("Domain.GroupOrder", b =>
@@ -308,6 +415,9 @@ namespace Persistence.Migrations
                     b.Property<Guid?>("WarehouseId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("WhenPackagePickedUpDate")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CourierId");
@@ -331,13 +441,31 @@ namespace Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("AmountOfCashCollected")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("CompanyRevenue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("CompanyServicePrice")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<Guid?>("CourierId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("CourierSalary")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeliveryDateFrom")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeliveryDateTo")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
@@ -347,11 +475,16 @@ namespace Persistence.Migrations
                     b.Property<Guid>("GroupOrderId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<bool>("IsPaid")
+                    b.Property<bool>("IsFragile")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("PickedUpFromWarehouseAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ProductPaymentStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("RecipientAddress")
                         .IsRequired()
@@ -395,6 +528,11 @@ namespace Persistence.Migrations
 
                     b.Property<Guid?>("WarehouseId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("WhoPaysForCompanyService")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("Id");
 
@@ -630,6 +768,28 @@ namespace Persistence.Migrations
                     b.Navigation("ApplicationUser");
                 });
 
+            modelBuilder.Entity("Domain.DailySettlement", b =>
+                {
+                    b.HasOne("Domain.Courier", "Courier")
+                        .WithMany("DailySettlements")
+                        .HasForeignKey("CourierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Courier");
+                });
+
+            modelBuilder.Entity("Domain.District", b =>
+                {
+                    b.HasOne("Domain.City", "City")
+                        .WithMany("Districts")
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("City");
+                });
+
             modelBuilder.Entity("Domain.GroupOrder", b =>
                 {
                     b.HasOne("Domain.Courier", "Courier")
@@ -739,8 +899,15 @@ namespace Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Domain.City", b =>
+                {
+                    b.Navigation("Districts");
+                });
+
             modelBuilder.Entity("Domain.Courier", b =>
                 {
+                    b.Navigation("DailySettlements");
+
                     b.Navigation("GroupOrders");
 
                     b.Navigation("Orders");

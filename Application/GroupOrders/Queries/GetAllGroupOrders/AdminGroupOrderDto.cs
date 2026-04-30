@@ -4,21 +4,22 @@ namespace Application.GroupOrders.Queries.GetAllGroupOrders;
 
 /// <summary>Full group order representation for the admin dashboard.</summary>
 public sealed record AdminGroupOrderDto(
-    Guid Id,
+    Guid   Id,
     DateTime CreatedAt,
-    OrderStatus Status,   // ← unified enum (was GroupOrderStatus)
+    OrderStatus Status,
     // Sender
-    string SenderFirstName,
-    string SenderLastName,
+    string  SenderFirstName,
+    string  SenderLastName,
     string? SenderIdNumber,
-    string SenderBusinessName,
-    string SenderPhone,
+    string  SenderBusinessName,
+    string  SenderPhone,
     // Pickup
-    string PickUpCity,
-    string PickUpDistrict,
-    string PickUpAddress,
+    string  PickUpCity,
+    string  PickUpDistrict,
+    string  PickUpAddress,
     string? Note,
-    int NumberOfPackages,
+    int     NumberOfPackages,
+    DateTime? WhenPackagePickedUpDate,
     // Assigned pickup courier (null until assigned)
     Guid?   CourierId,
     string? CourierFullName,
@@ -26,9 +27,9 @@ public sealed record AdminGroupOrderDto(
     IReadOnlyList<AdminOrderDto> Orders
 );
 
-/// <summary>Single package within a group order.</summary>
+/// <summary>Single package within a group order — admin view.</summary>
 public sealed record AdminOrderDto(
-    Guid Id,
+    Guid   Id,
     string TrackingNumber,
     string RecipientFirstName,
     string RecipientLastName,
@@ -37,9 +38,16 @@ public sealed record AdminOrderDto(
     string RecipientDistrict,
     string RecipientAddress,
     string? Description,
-    OrderStatus Status,
-    bool IsPaid,
+    bool   IsFragile,
+    OrderStatus   Status,
+    PaymentStatus ProductPaymentStatus,
+    ServicePayer  WhoPaysForCompanyService,
+    decimal?      CourierSalary,
+    decimal       CompanyServicePrice,
+    decimal?      CompanyRevenue,
     // Last-mile courier (null until admin assigns for delivery)
-    Guid? CourierId,
-    DateTime CreatedAt
+    Guid?    CourierId,
+    DateTime CreatedAt,
+    DateTime? DeliveryDateFrom,
+    DateTime? DeliveryDateTo
 );

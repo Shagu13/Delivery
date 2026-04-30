@@ -13,9 +13,12 @@ export type OrderStatus =
     | 'OrderIsOnItsWayToRecipientsCity'
     | 'CourierAssignedToDeliver'
     | 'CourierRecievedOrderToDeliver'
-    | 'OrderIsBeingDeliveredToRecipient'
     | 'DeliveredToRecipient'
-    | 'CancelledBySender';
+    | 'CancelledBySender'
+    | 'CancelledByAdmin';
+
+export type PaymentStatus = 'Paid' | 'NotPaid';
+export type ServicePayer  = 'Sender' | 'Recipient';
 
 export interface AdminOrder {
     id: string;
@@ -27,10 +30,17 @@ export interface AdminOrder {
     recipientDistrict: string;
     recipientAddress: string;
     description: string | null;
+    isFragile: boolean;
     status: OrderStatus;
-    isPaid: boolean;
+    productPaymentStatus: PaymentStatus;
+    whoPaysForCompanyService: ServicePayer;
+    companyServicePrice: number;
+    courierSalary: number | null;
+    companyRevenue: number | null;
     courierId: string | null;
     createdAt: string;
+    deliveryDateFrom: string | null;
+    deliveryDateTo: string | null;
 }
 
 export interface AdminGroupOrder {
@@ -47,6 +57,7 @@ export interface AdminGroupOrder {
     pickUpAddress: string;
     note: string | null;
     numberOfPackages: number;
+    whenPackagePickedUpDate: string | null;
     courierId: string | null;
     courierFullName: string | null;
     orders: AdminOrder[];
@@ -95,29 +106,12 @@ async function groupOrderAction(
 
 // ── Admin actions ─────────────────────────────────────────────────────────────
 
-export const acceptGroupOrder =
-    (token: string, id: string) => groupOrderAction(token, id, 'accept');
+export const acceptGroupOrder         = (token: string, id: string) => groupOrderAction(token, id, 'accept');
+export const declineGroupOrder        = (token: string, id: string) => groupOrderAction(token, id, 'decline');
+export const acceptGroupOrderInWarehouse = (token: string, id: string) => groupOrderAction(token, id, 'accept-in-warehouse');
+export const cancelGroupOrderByAdmin  = (token: string, id: string) => groupOrderAction(token, id, 'cancel-by-admin');
+export const setGroupOrderPickupDate  = (token: string, id: string, pickupDate: string) =>
+    groupOrderAction(token, id, 'pickup-date', { pickupDate });
 
-export const declineGroupOrder =
-    (token: string, id: string) => groupOrderAction(token, id, 'decline');
-
-export const assignCourierToGroupOrder =
-    (token: string, id: string, courierId: string) =>
-        groupOrderAction(token, id, 'assign-courier', { courierId });
-
-export const acceptGroupOrderInWarehouse =
-    (token: string, id: string) => groupOrderAction(token, id, 'accept-in-warehouse');
-
-export const cancelGroupOrder =
-    (token: string, id: string) => groupOrderAction(token, id, 'cancel');
-
-// ── Courier actions ───────────────────────────────────────────────────────────
-
-export const markPickingUp =
-    (token: string, id: string) => groupOrderAction(token, id, 'picking-up');
-
-export const markPickedUp =
-    (token: string, id: string) => groupOrderAction(token, id, 'picked-up');
-
-export const markDeliveredToWarehouse =
-    (token: string, id: string) => groupOrderAction(token, id, 'delivered-to-warehouse');
+export const assignCourierToGroupOrder = (token: string, id: string, courierId: string) =>
+    groupOrderAction(token, id, 'assign-courier', { courierId });

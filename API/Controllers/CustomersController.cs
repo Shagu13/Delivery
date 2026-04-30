@@ -2,6 +2,7 @@ using API.Models.Customers;
 using Application.Common.Exceptions;
 using Application.Customers.Commands.ChangePassword;
 using Application.Customers.Commands.CreateCustomer;
+using Application.Customers.Commands.SetCompanyPrice;
 using Application.Customers.Commands.UpdateCustomer;
 using Application.Customers.DTOs;
 using Application.Customers.Queries;
@@ -35,7 +36,7 @@ public sealed class CustomersController : BaseController
                 $"{request.FirstName} {request.LastName}"));
     }
 
-    // ── POST /api/customers ───────────────────────────────────────────────────
+    // ── POST /api/customers  (Admin creates customer) ────────────────────────
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(
@@ -59,16 +60,15 @@ public sealed class CustomersController : BaseController
     {
         var appUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? throw new UnauthorizedAccessException();
+        // Returns CustomerResponseDto — does NOT include CompanyPriceToDeliverPackages
         var dto = await Sender.Send(new GetCustomerByApplicationUserIdQuery(appUserId), ct);
         return Ok(dto);
     }
 
     // ── PUT /api/customers/me ─────────────────────────────────────────────────
-    /// <summary>Customer edits their own profile details.</summary>
     [HttpPut("me")]
     [Authorize(Roles = "Customer")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> UpdateMe(
         [FromBody] UpdateCustomerRequest request, CancellationToken ct)
     {
@@ -86,11 +86,9 @@ public sealed class CustomersController : BaseController
     }
 
     // ── PUT /api/customers/me/password ────────────────────────────────────────
-    /// <summary>Customer changes their own password.</summary>
     [HttpPut("me/password")]
     [Authorize(Roles = "Customer")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> ChangePassword(
         [FromBody] ChangePasswordRequest request, CancellationToken ct)
     {
@@ -108,7 +106,7 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
-    // ── GET /api/customers ────────────────────────────────────────────────────
+    // ── GET /api/customers  (Admin — includes company price) ─────────────────
     [HttpGet]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetAll(
@@ -119,7 +117,7 @@ public sealed class CustomersController : BaseController
         return Ok(result);
     }
 
-    // ── GET /api/customers/{id} ───────────────────────────────────────────────
+    // ── GET /api/customers/{id}  (Admin — includes company price) ────────────
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin,Customer")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -128,8 +126,25 @@ public sealed class CustomersController : BaseController
         return Ok(dto);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── PUT /api/customers/{id}/company-price  (Admin only) ──────────────────
+    /// <summary>
+    /// Sets or updates the per-package delivery price negotiated with a business customer.
+    /// Pass null to revert to the standard rate.
+    /// </summary>
+    [HttpPut("{id:guid}/company-price")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetCompanyPrice(
+        Guid id,
+        [FromBody] SetCompanyPriceRequest request,
+        CancellationToken ct)
+    {
+        await Sender.Send(new SetCustomerCompanyPriceCommand(id, request.Price), ct);
+        return NoContent();
+    }
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
     private Guid GetCustomerIdFromToken()
     {
         var claim = User.FindFirst("customerId")?.Value;
@@ -146,3 +161,6 @@ public sealed class CustomersController : BaseController
         new(new CreateCustomerDto(firstName, lastName, idNumber,
             businessName, phoneNumber, city, district, address, email, password));
 }
+
+// ── Request model ─────────────────────────────────────────────────────────────
+public sealed record SetCompanyPriceRequest(decimal? Price);

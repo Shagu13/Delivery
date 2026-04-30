@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Domain;
+using Domain.Enums;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,12 +10,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-    public DbSet<Courier>       Couriers       => Set<Courier>();
-    public DbSet<Customer>      Customers      => Set<Customer>();
-    public DbSet<Warehouse>     Warehouses     => Set<Warehouse>();
-    public DbSet<GroupOrder>    GroupOrders    => Set<GroupOrder>();
-    public DbSet<Order>         Orders         => Set<Order>();
-    public DbSet<TrackingEvent> TrackingEvents => Set<TrackingEvent>();
+    public DbSet<Courier>          Couriers         => Set<Courier>();
+    public DbSet<Customer>         Customers        => Set<Customer>();
+    public DbSet<Warehouse>        Warehouses       => Set<Warehouse>();
+    public DbSet<GroupOrder>       GroupOrders      => Set<GroupOrder>();
+    public DbSet<Order>            Orders           => Set<Order>();
+    public DbSet<TrackingEvent>    TrackingEvents   => Set<TrackingEvent>();
+    public DbSet<City>             Cities           => Set<City>();
+    public DbSet<District>         Districts        => Set<District>();
+    public DbSet<DailySettlement>  DailySettlements => Set<DailySettlement>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,7 +55,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasOne(c => c.ApplicationUser).WithOne()
              .HasForeignKey<Customer>(c => c.ApplicationUserId)
              .OnDelete(DeleteBehavior.Restrict);
-            // Customer → GroupOrders (one customer can have many group orders)
             e.HasMany<GroupOrder>()
              .WithOne(g => g.Customer)
              .HasForeignKey(g => g.CustomerId)
@@ -64,6 +67,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(c => c.City).HasMaxLength(100).IsRequired();
             e.Property(c => c.District).HasMaxLength(100).IsRequired();
             e.Property(c => c.Address).HasMaxLength(250).IsRequired();
+            e.Property(c => c.CompanyPriceToDeliverPackages).HasColumnType("decimal(18,2)");
         });
 
         // ── Warehouse ────────────────────────────────────────────────────────
@@ -125,9 +129,30 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(o => o.TrackingNumber).HasMaxLength(30).IsRequired();
             e.Property(o => o.Description).HasMaxLength(500);
             e.Property(o => o.Status).HasConversion<string>().HasMaxLength(50);
+            e.Property(o => o.ProductPaymentStatus).HasConversion<string>().HasMaxLength(20);
+            e.Property(o => o.WhoPaysForCompanyService).HasConversion<string>().HasMaxLength(20);
+            e.Property(o => o.CourierSalary).HasColumnType("decimal(18,2)");
+            e.Property(o => o.CompanyServicePrice).HasColumnType("decimal(18,2)");
+            e.Property(o => o.CompanyRevenue).HasColumnType("decimal(18,2)");
+            e.Property(o => o.AmountOfCashCollected).HasColumnType("decimal(18,2)");
         });
 
-        // ── TrackingEvent ──────────────────────────────────────────────────────
+        // ── DailySettlement ───────────────────────────────────────────────────
+        modelBuilder.Entity<DailySettlement>(e =>
+        {
+            e.HasKey(d => d.Id);
+            e.HasIndex(d => d.CourierId);
+            e.HasIndex(d => d.CreatedAt);
+            e.HasIndex(d => new { d.CourierId, d.CreatedAt });
+            e.HasOne(d => d.Courier).WithMany(c => c.DailySettlements)
+             .HasForeignKey(d => d.CourierId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(d => d.TotalAmountOfCashCollected).HasColumnType("decimal(18,2)");
+            e.Property(d => d.TotalCompanyServiceRevenue).HasColumnType("decimal(18,2)");
+            e.Property(d => d.TotalCompanyNetIncome).HasColumnType("decimal(18,2)");
+            e.Property(d => d.TotalCourierSalary).HasColumnType("decimal(18,2)");
+        });
+
+        // ── TrackingEvent ─────────────────────────────────────────────────────
         modelBuilder.Entity<TrackingEvent>(e =>
         {
             e.HasKey(t => t.Id);
@@ -135,6 +160,29 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(t => t.CreatedAt);
             e.Property(t => t.Status).HasMaxLength(100).IsRequired();
             e.Property(t => t.Description).HasMaxLength(500).IsRequired();
+        });
+
+        // ── City ──────────────────────────────────────────────────────────────
+        modelBuilder.Entity<City>(e =>
+        {
+            e.HasKey(c => c.Id);
+            e.HasIndex(c => c.CityName).IsUnique();
+            e.HasIndex(c => c.DateDeleted);
+            e.Property(c => c.CityName).HasMaxLength(100).IsRequired();
+            e.HasMany(c => c.Districts)
+             .WithOne(d => d.City)
+             .HasForeignKey(d => d.CityId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── District ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<District>(e =>
+        {
+            e.HasKey(d => d.Id);
+            e.HasIndex(d => new { d.CityId, d.DistrictName }).IsUnique();
+            e.HasIndex(d => d.DateDeleted);
+            e.Property(d => d.DistrictName).HasMaxLength(100).IsRequired();
+            e.Property(d => d.CompanyServicePrice).HasColumnType("decimal(18,2)");
         });
     }
 }

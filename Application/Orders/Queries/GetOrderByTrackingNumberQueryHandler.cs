@@ -10,17 +10,12 @@ public sealed class GetOrderByTrackingNumberQueryHandler
     : IRequestHandler<GetOrderByTrackingNumberQuery, TrackOrderDto>
 {
     private readonly IAppDbContext _context;
-
-    public GetOrderByTrackingNumberQueryHandler(IAppDbContext context)
-    {
-        _context = context;
-    }
+    public GetOrderByTrackingNumberQueryHandler(IAppDbContext context) => _context = context;
 
     public async Task<TrackOrderDto> Handle(
         GetOrderByTrackingNumberQuery request,
         CancellationToken cancellationToken)
     {
-        // Single round-trip: Order + related Courier, Warehouse, TrackingEvents
         var order = await _context.Orders
             .AsNoTracking()
             .Include(o => o.Courier)
@@ -32,30 +27,26 @@ public sealed class GetOrderByTrackingNumberQueryHandler
             ?? throw new NotFoundException("Order", request.TrackingNumber);
 
         return new TrackOrderDto(
-            OrderId: order.Id,
-            TrackingNumber: order.TrackingNumber,
-            Status: order.Status,
-
-            RecipientFirstName: order.RecipientFirstName,
-            RecipientLastName: order.RecipientLastName,
-            RecipientCity: order.RecipientCity,
-            RecipientDistrict: order.RecipientDistrict,
-            RecipientAddress: order.RecipientAddress,
-
-            CourierFullName: order.Courier is null
+            OrderId:                order.Id,
+            TrackingNumber:         order.TrackingNumber,
+            Status:                 order.Status,
+            RecipientFirstName:     order.RecipientFirstName,
+            RecipientLastName:      order.RecipientLastName,
+            RecipientCity:          order.RecipientCity,
+            RecipientDistrict:      order.RecipientDistrict,
+            RecipientAddress:       order.RecipientAddress,
+            IsFragile:              order.IsFragile,
+            CourierFullName:        order.Courier is null
                 ? null
                 : $"{order.Courier.FirstName} {order.Courier.LastName}",
-            WarehouseName: order.Warehouse?.Name,
-
-            CreatedAt: order.CreatedAt,
+            WarehouseName:          order.Warehouse?.Name,
+            CreatedAt:              order.CreatedAt,
             PickedUpFromWarehouseAt: order.PickedUpFromWarehouseAt,
-            DeliveredAt: order.DeliveredAt,
-
-            TrackingEvents: order.TrackingEvents
-                .Select(e => new TrackingEventDto(
-                    Status: e.Status,
-                    Description: e.Description,
-                    CreatedAt: e.CreatedAt))
+            DeliveredAt:            order.DeliveredAt,
+            DeliveryDateFrom:       order.DeliveryDateFrom,
+            DeliveryDateTo:         order.DeliveryDateTo,
+            TrackingEvents:         order.TrackingEvents
+                .Select(e => new TrackingEventDto(e.Status, e.Description, e.CreatedAt))
                 .ToList()
         );
     }

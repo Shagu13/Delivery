@@ -2,22 +2,19 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
-import type { CreateCourierResponse } from '../../api/couriers';
+import type { CreateCourierResponse, Courier, CourierOrder } from '../../api/couriers';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
-import { fetchCouriers } from '../../api/couriers';
-import type { Courier } from '../../api/couriers';
+import { fetchCouriers, fetchCourierOrders, setCourierSalary } from '../../api/couriers';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
+import AdminCustomersPage from './AdminCustomersPage';
+import AdminCitiesPage from './AdminCitiesPage';
 import '../../styles/dashboard.css';
 
-type AdminView = 'overview' | 'orders' | 'couriers';
-
-interface CreatedCourier extends CreateCourierResponse {
-  createdAt: string;
-}
+type AdminView = 'overview' | 'orders' | 'couriers' | 'customers' | 'cities';
 
 export function AdminDashboard() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, token } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -33,13 +30,20 @@ export function AdminDashboard() {
   };
 
   const [showCreateCourier, setShowCreateCourier] = useState(false);
-  const [couriers, setCouriers] = useState<CreatedCourier[]>([]);
+  const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Load couriers from DB on mount
+  useEffect(() => {
+    if (!token) return;
+    fetchCouriers(token).then(setCouriers).catch(() => {});
+  }, [token]);
 
   const handleSignOut = () => { signOut(); navigate('/login', { replace: true }); };
 
   const handleCourierCreated = (courier: CreateCourierResponse) => {
-    setCouriers(prev => [{ ...courier, createdAt: new Date().toISOString() }, ...prev]);
+    // Reload full list so new courier has all fields
+    if (token) fetchCouriers(token).then(setCouriers).catch(() => {});
     setShowCreateCourier(false);
     setToast(`Courier "${courier.fullName}" created successfully.`);
     setTimeout(() => setToast(null), 4000);
@@ -88,6 +92,22 @@ export function AdminDashboard() {
             Couriers
             {couriers.length > 0 && <span className="sidebar__badge">{couriers.length}</span>}
           </button>
+          <button className={`sidebar__link ${activeView === 'customers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('customers')}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+              <circle cx="11" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M1 14c0-2.5 2-4 4.5-4M8 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            Customers
+          </button>
+          <button className={`sidebar__link ${activeView === 'cities' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('cities')}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="7" width="14" height="8" rx="1" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M4 7V5a4 4 0 018 0v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M8 11v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            Cities &amp; Districts
+          </button>
         </nav>
         <div className="sidebar__footer">
           <div className="sidebar__user">
@@ -109,9 +129,11 @@ export function AdminDashboard() {
       <div className="dashboard__body">
         <div className="dashboard__topbar">
           <span className="dashboard__topbar-title">
-            {activeView === 'overview' && 'Overview'}
-            {activeView === 'orders'   && 'Group Orders'}
-            {activeView === 'couriers' && 'Couriers'}
+            {activeView === 'overview'  && 'Overview'}
+            {activeView === 'orders'    && 'Group Orders'}
+            {activeView === 'couriers'  && 'Couriers'}
+            {activeView === 'customers' && 'Customers'}
+            {activeView === 'cities'    && 'Cities & Districts'}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
@@ -123,9 +145,11 @@ export function AdminDashboard() {
           )}
         </div>
         <main className="dashboard__content">
-          {activeView === 'overview' && <AdminOverview />}
-          {activeView === 'orders'   && <AdminOrders key={statusParam} initialStatus={statusParam} />}
-          {activeView === 'couriers' && <AdminCouriers couriers={couriers} onAdd={() => setShowCreateCourier(true)} />}
+          {activeView === 'overview'  && <AdminOverview />}
+          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} />}
+          {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} />}
+          {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} />}
+          {activeView === 'cities'    && <AdminCitiesPage token={token ?? ''} />}
         </main>
       </div>
 
@@ -279,6 +303,7 @@ function statusClass(status: string): string {
     OrderIsBeingDeliveredToRecipient:'delivering',
     DeliveredToRecipient:            'delivered',
     CancelledBySender:               'cancelled',
+    CancelledByAdmin:                'cancelled',
     OrderNotAccepted:                'declined',
   };
   return map[status] ?? 'pending';
@@ -328,18 +353,31 @@ function AdminOverview() {
   );
 }
 
+// Statuses that live on individual orders (not on the GroupOrder itself)
+const ORDER_LEVEL_STATUSES = new Set([
+  'OrderIsOnItsWayToRecipientsCity',
+  'CourierAssignedToDeliver',
+  'CourierRecievedOrderToDeliver',
+  'DeliveredToRecipient',
+  'CancelledByAdmin',
+]);
+
 const STATUS_PILLS = [
-  { value: '',                          label: 'All' },
-  { value: 'Pending',                   label: 'Pending' },
-  { value: 'AcceptedGroupOrder',        label: 'Accepted' },
-  { value: 'CourierAssignedToPickUp',   label: 'Courier Assigned' },
-  { value: 'CourierOnTheWayToPickUp',   label: 'On The Way' },
-  { value: 'CourierDeliveringToWarehouse', label: 'To Warehouse' },
-  { value: 'DeliveredToWarehouse',      label: 'At Warehouse' },
-  { value: 'AdminAcceptedOrderInWareHouse', label: 'Warehouse Accepted' },
-  { value: 'DeliveredToRecipient',      label: 'Delivered' },
-  { value: 'CancelledBySender',         label: 'Cancelled' },
-  { value: 'OrderNotAccepted',          label: 'Declined' },
+  { value: '',                                label: 'All' },
+  { value: 'Pending',                         label: 'Pending' },
+  { value: 'AcceptedGroupOrder',              label: 'Accepted' },
+  { value: 'CourierAssignedToPickUp',         label: 'Courier Assigned (Pickup)' },
+  { value: 'CourierOnTheWayToPickUp',         label: 'On The Way' },
+  { value: 'CourierDeliveringToWarehouse',    label: 'To Warehouse' },
+  { value: 'DeliveredToWarehouse',            label: 'At Warehouse' },
+  { value: 'AdminAcceptedOrderInWareHouse',   label: 'Warehouse Accepted' },
+  { value: 'OrderIsOnItsWayToRecipientsCity', label: 'Sent To City' },
+  { value: 'CourierAssignedToDeliver',        label: 'Courier Assigned (Delivery)' },
+  { value: 'CourierRecievedOrderToDeliver',   label: 'Courier Received' },
+  { value: 'DeliveredToRecipient',            label: 'Delivered' },
+  { value: 'CancelledBySender',               label: 'Cancelled (Sender)' },
+  { value: 'CancelledByAdmin',                label: 'Cancelled (Admin)' },
+  { value: 'OrderNotAccepted',                label: 'Declined' },
 ];
 
 function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
@@ -415,7 +453,14 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
 
   const visibleOrders = useMemo(() => {
     return groupOrders.filter(go => {
-      if (filterStatus && go.status !== filterStatus) return false;
+      if (filterStatus) {
+        // Order-level statuses live on child orders, not on the GroupOrder
+        if (ORDER_LEVEL_STATUSES.has(filterStatus)) {
+          if (!go.orders.some(o => o.status === filterStatus)) return false;
+        } else {
+          if (go.status !== filterStatus) return false;
+        }
+      }
       if (!filterCity && !filterDistrict) return true;
       if (filterParty === 'sender') {
         if (filterCity     && go.pickUpCity     !== filterCity)     return false;
@@ -653,9 +698,11 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
 
 function AdminCouriers({
   couriers,
+  token,
   onAdd,
 }: {
-  couriers: { courierId: string; username: string; fullName: string; createdAt: string }[];
+  couriers: Courier[];
+  token: string;
   onAdd: () => void;
 }) {
   if (couriers.length === 0) {
@@ -688,25 +735,219 @@ function AdminCouriers({
           {couriers.length} account{couriers.length !== 1 ? 's' : ''}
         </span>
       </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table className="courier-table">
-          <thead>
-            <tr><th>Name</th><th>Courier ID</th><th>Created</th></tr>
-          </thead>
-          <tbody>
-            {couriers.map(c => (
-              <tr key={c.courierId}>
-                <td>
-                  <div className="courier-name">{c.fullName}</div>
-                  <div className="courier-username">@{c.username}</div>
-                </td>
-                <td><span className="courier-id-badge" title={c.courierId}>{c.courierId}</span></td>
-                <td><span className="courier-time">{new Date(c.createdAt).toLocaleString()}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {couriers.map(c => (
+          <CourierRow key={c.courierId} courier={c} token={token} />
+        ))}
       </div>
+    </div>
+  );
+}
+
+// ── Single expandable courier row ─────────────────────────────────────────────
+function CourierRow({ courier, token }: { courier: Courier; token: string }) {
+  const [expanded,   setExpanded]   = useState(false);
+  const [orders,     setOrders]     = useState<CourierOrder[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [selected,   setSelected]   = useState<Set<string>>(new Set());
+  const [bulkSalary, setBulkSalary] = useState('');
+  const [saving,     setSaving]     = useState(false);
+  const [rowToast,   setRowToast]   = useState<{ msg: string; err: boolean } | null>(null);
+
+  const showRowToast = (msg: string, err = false) => {
+    setRowToast({ msg, err });
+    setTimeout(() => setRowToast(null), 3500);
+  };
+
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchCourierOrders(courier.courierId, token);
+      setOrders(data);
+    } catch {
+      showRowToast('Failed to load orders', true);
+    } finally {
+      setLoading(false);
+    }
+  }, [courier.courierId, token]);
+
+  const handleToggle = () => {
+    if (!expanded && orders.length === 0) void loadOrders();
+    setExpanded(v => !v);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === orders.length) setSelected(new Set());
+    else setSelected(new Set(orders.map(o => o.id)));
+  };
+
+  const handleBulkSave = async () => {
+    const salary = parseFloat(bulkSalary);
+    if (isNaN(salary) || salary < 0) { showRowToast('Enter a valid salary amount', true); return; }
+    if (selected.size === 0) { showRowToast('Select at least one order', true); return; }
+    setSaving(true);
+    try {
+      await Promise.all([...selected].map(id => setCourierSalary(id, salary, token)));
+      await loadOrders();
+      setSelected(new Set());
+      setBulkSalary('');
+      showRowToast(`Salary set for ${selected.size} order${selected.size !== 1 ? 's' : ''}`);
+    } catch {
+      showRowToast('Failed to save salary', true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--color-border)' }}>
+      {/* Header row */}
+      <div
+        className="go-row-header"
+        onClick={handleToggle}
+        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}
+      >
+        <svg
+          className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`}
+          width="14" height="14" viewBox="0 0 16 16" fill="none"
+        >
+          <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <div style={{ flex: 1 }}>
+          <div className="courier-name">{courier.fullName}</div>
+          <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
+            {courier.phoneNumber}
+          </span>
+          <span className={`status-badge ${courier.isAvailable ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
+            {courier.isAvailable ? 'Available' : 'Unavailable'}
+          </span>
+        </div>
+      </div>
+
+      {/* Orders panel */}
+      {expanded && (
+        <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-3)', animation: 'expand-in 0.15s ease both' }}>
+          {loading && (
+            <div className="go-loading"><div className="go-spinner" />Loading orders…</div>
+          )}
+          {!loading && orders.length === 0 && (
+            <div style={{ padding: '24px 20px', textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem' }}>
+              No orders assigned to this courier.
+            </div>
+          )}
+          {!loading && orders.length > 0 && (
+            <>
+              {/* Bulk salary bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  {selected.size > 0 ? `${selected.size} selected` : 'Select orders to set salary'}
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Courier salary"
+                  value={bulkSalary}
+                  onChange={e => setBulkSalary(e.target.value)}
+                  style={{
+                    background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
+                    fontSize: '0.825rem', padding: '6px 10px', width: 140, outline: 'none',
+                  }}
+                  disabled={selected.size === 0 || saving}
+                />
+                <button
+                  className="go-action-btn go-action-btn--assign"
+                  onClick={handleBulkSave}
+                  disabled={selected.size === 0 || saving || bulkSalary === ''}
+                >
+                  {saving ? 'Saving…' : `Set Salary (${selected.size})`}
+                </button>
+                {rowToast && (
+                  <span style={{ fontSize: '0.78rem', color: rowToast.err ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                    {rowToast.msg}
+                  </span>
+                )}
+              </div>
+
+              {/* Orders table */}
+              <div style={{ overflowX: 'auto' }}>
+                <table className="go-orders-table" style={{ minWidth: 700 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 36 }}>
+                        <input
+                          type="checkbox"
+                          checked={selected.size === orders.length}
+                          onChange={toggleAll}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </th>
+                      <th>Tracking №</th>
+                      <th>Recipient</th>
+                      <th>City / District</th>
+                      <th>Status</th>
+                      <th>Service Price</th>
+                      <th>Courier Salary</th>
+                      <th>Revenue</th>
+                      <th>Delivered</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map(o => (
+                      <tr key={o.id} style={{ background: selected.has(o.id) ? 'var(--color-accent-dim)' : undefined }}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(o.id)}
+                            onChange={() => toggleSelect(o.id)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </td>
+                        <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontFamily: 'Courier New, monospace' }}>{o.recipientPhone}</div>
+                        </td>
+                        <td>
+                          <div>{o.recipientCity}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
+                        </td>
+                        <td><StatusBadge status={o.status} /></td>
+                        <td style={{ fontWeight: 600 }}>₾{o.companyServicePrice.toFixed(2)}</td>
+                        <td>
+                          {o.courierSalary != null
+                            ? <span style={{ color: '#f97316', fontWeight: 600 }}>₾{o.courierSalary.toFixed(2)}</span>
+                            : <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>}
+                        </td>
+                        <td>
+                          {o.companyRevenue != null
+                            ? <span style={{ color: o.companyRevenue >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>₾{o.companyRevenue.toFixed(2)}</span>
+                            : <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>}
+                        </td>
+                        <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
+                          {o.deliveredAt ? new Date(o.deliveredAt).toLocaleDateString('en-GB') : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

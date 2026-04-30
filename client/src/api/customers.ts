@@ -38,8 +38,13 @@ export interface Customer {
   email: string; isActive: boolean; createdAt: string;
 }
 
+export interface AdminCustomer extends Customer {
+  companyPriceToDeliverPackages: number | null;
+}
+
 export interface PagedResult<T> {
-  items: T[]; total: number; page: number; pageSize: number;
+  items: T[]; totalCount: number; page: number; pageSize: number; totalPages: number;
+  hasNextPage: boolean; hasPreviousPage: boolean;
 }
 
 // ── Order types ───────────────────────────────────────────────────────────────
@@ -149,11 +154,23 @@ export async function createCustomer(data: CreateCustomerRequest, token: string)
   }));
 }
 
-export async function getCustomers(token: string, page = 1, pageSize = 20, search = ''): Promise<PagedResult<Customer>> {
+export async function getCustomers(token: string, page = 1, pageSize = 20, search = ''): Promise<PagedResult<AdminCustomer>> {
   const p = new URLSearchParams({ page: String(page), pageSize: String(pageSize), ...(search ? { search } : {}) });
   return handle(await fetch(`/api/customers?${p}`, { headers: { Authorization: `Bearer ${token}` } }));
 }
 
 export async function getCustomerById(id: string, token: string): Promise<Customer> {
   return handle(await fetch(`/api/customers/${id}`, { headers: { Authorization: `Bearer ${token}` } }));
+}
+
+export async function setCustomerCompanyPrice(
+  id: string,
+  price: number | null,
+  token: string
+): Promise<void> {
+  return handleEmpty(await fetch(`/api/customers/${id}/company-price`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ price }),
+  }));
 }

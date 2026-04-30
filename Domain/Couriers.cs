@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -20,7 +20,8 @@ namespace Domain
         public ApplicationUser ApplicationUser { get; set; } = null!;
 
         // Navigation
-        public ICollection<Order> Orders { get; set; } = new List<Order>();
-        public ICollection<GroupOrder> GroupOrders { get; set; } = new List<GroupOrder>();
+        public ICollection<Order>           Orders           { get; set; } = new List<Order>();
+        public ICollection<GroupOrder>      GroupOrders      { get; set; } = new List<GroupOrder>();
+        public ICollection<DailySettlement> DailySettlements { get; set; } = new List<DailySettlement>();
     }
 }

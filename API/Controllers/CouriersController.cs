@@ -77,4 +77,40 @@ public sealed class CouriersController : BaseController
 
     [HttpGet("{id:guid}")]
     public IActionResult GetById(Guid id) => Ok(new { id });
+
+    // ── GET /api/couriers/{id}/orders  (Admin) ────────────────────────────────
+    /// <summary>Returns all orders ever assigned to this courier, regardless of status.</summary>
+    [HttpGet("{id:guid}/orders")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCourierOrders(Guid id, CancellationToken ct)
+    {
+        var exists = await _context.Couriers.AnyAsync(c => c.Id == id, ct);
+        if (!exists) return NotFound();
+
+        var orders = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CourierId == id)
+            .OrderByDescending(o => o.CreatedAt)
+            .Select(o => new
+            {
+                id                      = o.Id,
+                trackingNumber          = o.TrackingNumber,
+                recipientFirstName      = o.RecipientFirstName,
+                recipientLastName       = o.RecipientLastName,
+                recipientPhone          = o.RecipientPhone,
+                recipientCity           = o.RecipientCity,
+                recipientDistrict       = o.RecipientDistrict,
+                recipientAddress        = o.RecipientAddress,
+                status                  = o.Status.ToString(),
+                companyServicePrice     = o.CompanyServicePrice,
+                courierSalary           = o.CourierSalary,
+                companyRevenue          = o.CompanyRevenue,
+                deliveredAt             = o.DeliveredAt,
+                createdAt               = o.CreatedAt,
+            })
+            .ToListAsync(ct);
+
+        return Ok(orders);
+    }
 }

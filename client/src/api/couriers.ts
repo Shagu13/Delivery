@@ -26,6 +26,23 @@ export interface Courier {
     isAvailable: boolean;
 }
 
+export interface CourierOrder {
+    id: string;
+    trackingNumber: string;
+    recipientFirstName: string;
+    recipientLastName: string;
+    recipientPhone: string;
+    recipientCity: string;
+    recipientDistrict: string;
+    recipientAddress: string;
+    status: string;
+    companyServicePrice: number;
+    courierSalary: number | null;
+    companyRevenue: number | null;
+    deliveredAt: string | null;
+    createdAt: string;
+}
+
 export class CourierApiError extends Error {
     constructor(
         public readonly status: number,
@@ -68,4 +85,21 @@ export async function fetchCouriers(token: string): Promise<Courier[]> {
     });
     if (!res.ok) throw new Error('Failed to fetch couriers');
     return res.json();
+}
+
+export async function fetchCourierOrders(courierId: string, token: string): Promise<CourierOrder[]> {
+    const res = await fetch(`/api/couriers/${courierId}/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch courier orders');
+    return res.json();
+}
+
+export async function setCourierSalary(orderId: string, salary: number, token: string): Promise<void> {
+    const res = await fetch(`/api/orders/${orderId}/courier-salary`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ salary }),
+    });
+    if (!res.ok) throw new Error('Failed to set courier salary');
 }

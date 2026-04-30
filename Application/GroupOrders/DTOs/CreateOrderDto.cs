@@ -1,3 +1,5 @@
+using Domain.Enums;
+
 namespace Application.GroupOrders.DTOs;
 
 /// <summary>
@@ -11,5 +13,8 @@ public sealed record CreateOrderDto(
     string RecipientCity,
     string RecipientDistrict,
     string RecipientAddress,
-    string? Description
+    string?        Description,
+    bool           IsFragile,
+    PaymentStatus  ProductPaymentStatus,
+    ServicePayer   WhoPaysForCompanyService
 );

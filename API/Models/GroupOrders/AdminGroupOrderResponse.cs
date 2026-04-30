@@ -2,21 +2,22 @@ namespace API.Models.GroupOrders;
 
 /// <summary>HTTP response for GET /api/grouporders — admin list view.</summary>
 public sealed record AdminGroupOrderResponse(
-    Guid Id,
+    Guid    Id,
     DateTime CreatedAt,
-    string Status,
+    string  Status,
     // Sender
-    string SenderFirstName,
-    string SenderLastName,
+    string  SenderFirstName,
+    string  SenderLastName,
     string? SenderIdNumber,
-    string SenderBusinessName,
-    string SenderPhone,
+    string  SenderBusinessName,
+    string  SenderPhone,
     // Pickup
-    string PickUpCity,
-    string PickUpDistrict,
-    string PickUpAddress,
-    string? Note,
-    int NumberOfPackages,
+    string    PickUpCity,
+    string    PickUpDistrict,
+    string    PickUpAddress,
+    string?   Note,
+    int       NumberOfPackages,
+    DateTime? WhenPackagePickedUpDate,
     // Pickup courier (null until assigned by admin)
     Guid?   CourierId,
     string? CourierFullName,
@@ -25,18 +26,23 @@ public sealed record AdminGroupOrderResponse(
 
 /// <summary>One package row inside an AdminGroupOrderResponse.</summary>
 public sealed record AdminOrderResponse(
-    Guid Id,
-    string TrackingNumber,
-    string RecipientFirstName,
-    string RecipientLastName,
-    string RecipientPhone,
-    string RecipientCity,
-    string RecipientDistrict,
-    string RecipientAddress,
+    Guid    Id,
+    string  TrackingNumber,
+    string  RecipientFirstName,
+    string  RecipientLastName,
+    string  RecipientPhone,
+    string  RecipientCity,
+    string  RecipientDistrict,
+    string  RecipientAddress,
     string? Description,
-    string Status,
-    bool IsPaid,
+    bool    IsFragile,
+    string  Status,
+    string  ProductPaymentStatus,
+    string  WhoPaysForCompanyService,
+    decimal? CourierSalary,
     // Last-mile delivery courier (null until assigned)
-    Guid? CourierId,
-    DateTime CreatedAt
+    Guid?    CourierId,
+    DateTime CreatedAt,
+    DateTime? DeliveryDateFrom,
+    DateTime? DeliveryDateTo
 );

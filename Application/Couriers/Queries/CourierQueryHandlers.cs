@@ -23,7 +23,6 @@ public sealed class GetCourierGroupOrdersQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CourierUserId, cancellationToken)
             ?? throw new NotFoundException("Courier", request.CourierUserId);
 
-        // Active pickup-phase statuses
         var activeStatuses = new[]
         {
             OrderStatus.CourierAssignedToPickUp,
@@ -41,46 +40,53 @@ public sealed class GetCourierGroupOrdersQueryHandler
             .ToListAsync(cancellationToken);
 
         return groupOrders.Select(go => new GroupOrderResponseDto(
-            Id:                    go.Id,
-            SenderFirstName:       go.SenderFirstName,
-            SenderLastName:        go.SenderLastName,
-            SenderIdNumber:        go.SenderIdNumber ?? string.Empty,
-            SenderPhone:           go.SenderPhone,
-            PickUpCity:            go.PickUpCity,
-            PickUpDistrict:        go.PickUpDistrict,
-            PickUpAddress:         go.PickUpAddress,
-            Note:                  go.Note,
-            NumberOfPackages:      go.NumberOfPackages,
-            Status:                go.Status,
-            CourierId:             go.CourierId,
-            CourierFullName:       go.Courier is null ? null : $"{go.Courier.FirstName} {go.Courier.LastName}",
-            CourierPhone:          go.Courier?.PhoneNumber,
-            WarehouseId:           go.WarehouseId,
-            WarehouseName:         go.Warehouse?.Name,
-            CreatedAt:             go.CreatedAt,
-            AcceptedAt:            go.AcceptedAt,
-            PickedUpAt:            go.PickedUpAt,
+            Id:                     go.Id,
+            SenderFirstName:        go.SenderFirstName,
+            SenderLastName:         go.SenderLastName,
+            SenderIdNumber:         go.SenderIdNumber ?? string.Empty,
+            SenderPhone:            go.SenderPhone,
+            PickUpCity:             go.PickUpCity,
+            PickUpDistrict:         go.PickUpDistrict,
+            PickUpAddress:          go.PickUpAddress,
+            Note:                   go.Note,
+            NumberOfPackages:       go.NumberOfPackages,
+            Status:                 go.Status,
+            WhenPackagePickedUpDate: go.WhenPackagePickedUpDate,
+            CourierId:              go.CourierId,
+            CourierFullName:        go.Courier is null ? null : $"{go.Courier.FirstName} {go.Courier.LastName}",
+            CourierPhone:           go.Courier?.PhoneNumber,
+            WarehouseId:            go.WarehouseId,
+            WarehouseName:          go.Warehouse?.Name,
+            CreatedAt:              go.CreatedAt,
+            AcceptedAt:             go.AcceptedAt,
+            PickedUpAt:             go.PickedUpAt,
             DeliveredToWarehouseAt: go.DeliveredToWarehouseAt,
             Orders: go.Orders
                 .OrderBy(o => o.CreatedAt)
                 .Select(o => new OrderResponseDto(
-                    Id:                     o.Id,
-                    TrackingNumber:         o.TrackingNumber,
-                    RecipientFirstName:     o.RecipientFirstName,
-                    RecipientLastName:      o.RecipientLastName,
-                    RecipientPhone:         o.RecipientPhone,
-                    RecipientCity:          o.RecipientCity,
-                    RecipientDistrict:      o.RecipientDistrict,
-                    RecipientAddress:       o.RecipientAddress,
-                    Description:            o.Description,
-                    Status:                 o.Status,
-                    CourierId:              o.CourierId,
-                    CourierFullName:        null,
-                    WarehouseId:            o.WarehouseId,
-                    WarehouseName:          null,
-                    CreatedAt:              o.CreatedAt,
+                    Id:                      o.Id,
+                    TrackingNumber:          o.TrackingNumber,
+                    RecipientFirstName:      o.RecipientFirstName,
+                    RecipientLastName:       o.RecipientLastName,
+                    RecipientPhone:          o.RecipientPhone,
+                    RecipientCity:           o.RecipientCity,
+                    RecipientDistrict:       o.RecipientDistrict,
+                    RecipientAddress:        o.RecipientAddress,
+                    Description:             o.Description,
+                    IsFragile:               o.IsFragile,
+                    Status:                  o.Status,
+                    ProductPaymentStatus:    o.ProductPaymentStatus,
+                    WhoPaysForCompanyService: o.WhoPaysForCompanyService,
+                    CourierSalary:           o.CourierSalary,
+                    CourierId:               o.CourierId,
+                    CourierFullName:         null,
+                    WarehouseId:             o.WarehouseId,
+                    WarehouseName:           null,
+                    CreatedAt:               o.CreatedAt,
                     PickedUpFromWarehouseAt: o.PickedUpFromWarehouseAt,
-                    DeliveredAt:            o.DeliveredAt))
+                    DeliveredAt:             o.DeliveredAt,
+                    DeliveryDateFrom:        o.DeliveryDateFrom,
+                    DeliveryDateTo:          o.DeliveryDateTo))
                 .ToList()
         )).ToList();
     }
@@ -101,12 +107,11 @@ public sealed class GetCourierOrdersQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CourierUserId, cancellationToken)
             ?? throw new NotFoundException("Courier", request.CourierUserId);
 
-        // Active last-mile delivery statuses
+        // OrderIsBeingDeliveredToRecipient removed — only two active last-mile statuses remain
         var activeStatuses = new[]
         {
             OrderStatus.CourierAssignedToDeliver,
             OrderStatus.CourierRecievedOrderToDeliver,
-            OrderStatus.OrderIsBeingDeliveredToRecipient,
         };
 
         var orders = await _context.Orders
@@ -116,20 +121,24 @@ public sealed class GetCourierOrdersQueryHandler
             .ToListAsync(cancellationToken);
 
         return orders.Select(o => new CourierOrderDto(
-            Id:                     o.Id,
-            TrackingNumber:         o.TrackingNumber,
-            RecipientFirstName:     o.RecipientFirstName,
-            RecipientLastName:      o.RecipientLastName,
-            RecipientPhone:         o.RecipientPhone,
-            RecipientCity:          o.RecipientCity,
-            RecipientDistrict:      o.RecipientDistrict,
-            RecipientAddress:       o.RecipientAddress,
-            Description:            o.Description,
-            Status:                 o.Status,
-            IsPaid:                 o.IsPaid,
-            CreatedAt:              o.CreatedAt,
+            Id:                      o.Id,
+            TrackingNumber:          o.TrackingNumber,
+            RecipientFirstName:      o.RecipientFirstName,
+            RecipientLastName:       o.RecipientLastName,
+            RecipientPhone:          o.RecipientPhone,
+            RecipientCity:           o.RecipientCity,
+            RecipientDistrict:       o.RecipientDistrict,
+            RecipientAddress:        o.RecipientAddress,
+            Description:             o.Description,
+            IsFragile:               o.IsFragile,
+            Status:                  o.Status,
+            ProductPaymentStatus:    o.ProductPaymentStatus,
+            WhoPaysForCompanyService: o.WhoPaysForCompanyService,
+            CreatedAt:               o.CreatedAt,
             PickedUpFromWarehouseAt: o.PickedUpFromWarehouseAt,
-            DeliveredAt:            o.DeliveredAt
+            DeliveredAt:             o.DeliveredAt,
+            DeliveryDateFrom:        o.DeliveryDateFrom,
+            DeliveryDateTo:          o.DeliveryDateTo
         )).ToList();
     }
 }

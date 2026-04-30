@@ -1,37 +1,86 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
-import {
-  fetchMyPickups,
-  markPickingUp,
-  markPickedUp,
-  markDeliveredToWarehouse,
-} from '../../api/adminGroupOrders';
+import { useNavigate } from 'react-router-dom';
+import { fetchMyPickups } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
 import {
   fetchMyDeliveries,
   markOrderReceived,
-  markOrderDelivering,
   markOrderDelivered,
 } from '../../api/orders';
 import type { CourierOrder } from '../../api/orders';
 import '../../styles/dashboard.css';
 
-type CourierView = 'pickups' | 'deliveries';
-
 export function CourierDashboard() {
-  const { user, signOut, token } = useAuth();
+  const { user, token, signOut } = useAuth();
   const navigate = useNavigate();
-  const [activeView, setActiveView] = useState<CourierView>('pickups');
-  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const [view, setView] = useState<'pickups' | 'deliveries'>('pickups');
 
-  const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
+  // ── Pickups (GroupOrders) ──────────────────────────────────────────────────
+  const [pickups, setPickups]       = useState<AdminGroupOrder[]>([]);
+  const [pickupLoading, setPickupLoading] = useState(false);
+  const [pickupError,   setPickupError]   = useState<string | null>(null);
+
+  // ── Deliveries (Orders) ───────────────────────────────────────────────────
+  const [deliveries, setDeliveries]         = useState<CourierOrder[]>([]);
+  const [deliveriesLoading, setDeliveriesLoading] = useState(false);
+  const [deliveriesError,   setDeliveriesError]   = useState<string | null>(null);
+
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [toast,  setToast]  = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
   };
 
+  const loadPickups = useCallback(async () => {
+    if (!token) return;
+    setPickupLoading(true);
+    setPickupError(null);
+    try {
+      setPickups(await fetchMyPickups(token));
+    } catch {
+      setPickupError('Failed to load pickups.');
+    } finally {
+      setPickupLoading(false);
+    }
+  }, [token]);
+
+  const loadDeliveries = useCallback(async () => {
+    if (!token) return;
+    setDeliveriesLoading(true);
+    setDeliveriesError(null);
+    try {
+      setDeliveries(await fetchMyDeliveries(token));
+    } catch {
+      setDeliveriesError('Failed to load deliveries.');
+    } finally {
+      setDeliveriesLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { loadPickups(); }, [loadPickups]);
+  useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
+
+  async function act(id: string, fn: () => Promise<void>, msg: string) {
+    setBusyId(id);
+    try {
+      await fn();
+      showToast(msg);
+      loadDeliveries();
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Action failed.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const handleSignOut = () => { signOut(); navigate('/login', { replace: true }); };
-  const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : 'C';
+
+  const initials = user
+    ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+    : 'C';
 
   return (
     <div className="dashboard">
@@ -44,365 +93,183 @@ export function CourierDashboard() {
           Delivery
         </div>
         <span className="sidebar__role-badge">Courier</span>
-
         <div className="sidebar__divider" />
-        <p className="sidebar__section-label">My Work</p>
-
         <nav className="sidebar__nav">
           <button
-            className={`sidebar__link ${activeView === 'pickups' ? 'sidebar__link--active' : ''}`}
-            onClick={() => setActiveView('pickups')}
+            className={`sidebar__link ${view === 'pickups' ? 'sidebar__link--active' : ''}`}
+            onClick={() => setView('pickups')}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M8 1L14 4.5V11.5L8 15L2 11.5V4.5L8 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-              <path d="M8 1v14M2 4.5l6 3.5 6-3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              <rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.4" />
             </svg>
-            Pickups
+            My Pickups
           </button>
           <button
-            className={`sidebar__link ${activeView === 'deliveries' ? 'sidebar__link--active' : ''}`}
-            onClick={() => setActiveView('deliveries')}
+            className={`sidebar__link ${view === 'deliveries' ? 'sidebar__link--active' : ''}`}
+            onClick={() => setView('deliveries')}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
-              <path d="M4.5 5.5h7M4.5 8h5M4.5 10.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              <path d="M2 8h12M10 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Deliveries
+            My Deliveries
           </button>
         </nav>
-
-        <div className="sidebar__footer">
+        <div className="sidebar__bottom">
           <div className="sidebar__user">
-            <div className="sidebar__avatar">{initials}</div>
-            <div className="sidebar__user-info">
-              <div className="sidebar__user-name">{user?.firstName} {user?.lastName}</div>
-              <div className="sidebar__user-handle">@{user?.username}</div>
-            </div>
+            <span className="sidebar__avatar">{initials}</span>
+            <span className="sidebar__username">{user?.firstName} {user?.lastName}</span>
           </div>
-          <button className="sidebar__logout" onClick={handleSignOut}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Sign out
-          </button>
+          <button className="sidebar__signout" onClick={handleSignOut}>Sign out</button>
         </div>
       </aside>
 
-      <div className="dashboard__body">
-        <div className="dashboard__topbar">
-          <span className="dashboard__topbar-title">
-            {activeView === 'pickups' ? 'Assigned Pickups' : 'My Deliveries'}
-          </span>
-        </div>
-        <main className="dashboard__content">
-          {activeView === 'pickups' && (
-            <CourierPickups onToast={showToast} token={token ?? ''} />
-          )}
-          {activeView === 'deliveries' && (
-            <CourierDeliveries onToast={showToast} token={token ?? ''} />
-          )}
-        </main>
-      </div>
+      <main className="dashboard__main">
+        {toast && <div className="dashboard__toast">{toast}</div>}
 
-      {toast && (
-        <div className={`toast ${toast.type === 'err' ? 'toast--error' : ''}`} role="status">
-          {toast.msg}
-        </div>
-      )}
+        {view === 'pickups' && (
+          <PickupsPanel
+            pickups={pickups}
+            loading={pickupLoading}
+            error={pickupError}
+            onRefresh={loadPickups}
+          />
+        )}
 
-      <style>{`
-        .courier-card {
-          background: var(--color-bg-2, var(--color-bg));
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-md);
-          margin-bottom: 16px;
-          overflow: hidden;
-        }
-        .courier-card__header {
-          padding: 16px 20px 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .courier-card__biz {
-          font-weight: 700;
-          font-size: 1rem;
-          color: var(--color-text);
-        }
-        .courier-card__meta {
-          font-size: 0.8rem;
-          color: var(--color-text-subtle);
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          margin-top: 4px;
-        }
-        .courier-card__orders {
-          border-top: 1px solid var(--color-border);
-          padding: 8px 20px 12px;
-        }
-        .courier-card__order-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 0;
-          border-bottom: 1px solid var(--color-border);
-          font-size: 0.85rem;
-        }
-        .courier-card__order-item:last-child { border-bottom: none; }
-        .courier-card__actions {
-          padding: 12px 20px;
-          border-top: 1px solid var(--color-border);
-          display: flex;
-          gap: 10px;
-          background: var(--color-bg-3);
-        }
-        .c-btn {
-          border: none;
-          border-radius: var(--radius-sm);
-          font-size: 0.82rem;
-          font-weight: 600;
-          padding: 8px 18px;
-          cursor: pointer;
-          transition: opacity 0.15s;
-        }
-        .c-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-        .c-btn--primary  { background: var(--color-accent); color: #fff; }
-        .c-btn--secondary { background: var(--color-bg-3); border: 1px solid var(--color-border); color: var(--color-text); }
-        .c-btn--success  { background: #10b981; color: #fff; }
-        .status-pill {
-          display: inline-block;
-          font-size: 0.68rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          border-radius: 100px;
-          padding: 2px 9px;
-          white-space: nowrap;
-        }
-        .tn { font-family: 'Courier New', monospace; font-size: 0.78rem; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: 4px; padding: 1px 6px; }
-        .toast--error { background: #ef4444 !important; color: #fff !important; }
-      `}</style>
+        {view === 'deliveries' && (
+          <DeliveriesPanel
+            deliveries={deliveries}
+            loading={deliveriesLoading}
+            error={deliveriesError}
+            busyId={busyId}
+            token={token!}
+            onAct={act}
+          />
+        )}
+      </main>
     </div>
   );
 }
 
-// ── Pickup list ───────────────────────────────────────────────────────────────
-function CourierPickups({
-  onToast,
-  token,
-}: {
-  onToast: (msg: string, type?: 'ok' | 'err') => void;
-  token: string;
-}) {
-  const [groups, setGroups] = useState<AdminGroupOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<string | null>(null);
+// ── Pickups Panel ─────────────────────────────────────────────────────────────
 
-    const [refreshKey, setRefreshKey] = useState(0);
+interface PickupsPanelProps {
+  pickups: AdminGroupOrder[];
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}
 
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const data = await fetchMyPickups(token);
-                if (!cancelled) setGroups(data);
-            } catch (e: unknown) {
-                if (!cancelled) onToast(e instanceof Error ? e.message : 'Failed to load.', 'err');
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [token, onToast, refreshKey]);
-
-  async function act(id: string, fn: () => Promise<void>, msg: string) {
-    setBusy(id);
-    try {
-      await fn();
-      onToast(msg);
-        setRefreshKey(k => k + 1);
-    } catch (e: unknown) {
-      onToast(e instanceof Error ? e.message : 'Action failed.', 'err');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  if (loading) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-subtle)' }}>Loading…</div>;
-  if (groups.length === 0) {
-    return (
-      <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.9rem' }}>
-        No active pickups assigned to you.
-      </div>
-    );
-  }
+function PickupsPanel({ pickups, loading, error, onRefresh }: PickupsPanelProps) {
+  if (loading) return <div className="dashboard__loader">Loading pickups…</div>;
+  if (error)   return <div className="dashboard__error">{error} <button onClick={onRefresh}>Retry</button></div>;
+  if (!pickups.length) return <div className="dashboard__empty">No active pickups assigned to you.</div>;
 
   return (
-    <div style={{ padding: 20 }}>
-      {groups.map(go => {
-        const isBusy = busy === go.id;
-        return (
-          <div className="courier-card" key={go.id}>
-            <div className="courier-card__header">
-              <div className="courier-card__biz">{go.senderBusinessName}</div>
-              <div className="courier-card__meta">
-                <span>📞 {go.senderPhone}</span>
-                <span>📍 {go.pickUpAddress}, {go.pickUpDistrict}, {go.pickUpCity}</span>
-                {go.note && <span>📝 {go.note}</span>}
-                <StatusPill status={go.status} />
-              </div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
-                {go.senderFirstName} {go.senderLastName} · {go.numberOfPackages} package{go.numberOfPackages !== 1 ? 's' : ''}
-              </div>
-            </div>
-
-            <div className="courier-card__orders">
-              {go.orders.map(o => (
-                <div className="courier-card__order-item" key={o.id}>
-                  <span className="tn">{o.trackingNumber}</span>
-                  <span style={{ flex: 1 }}>{o.recipientFirstName} {o.recipientLastName}</span>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
-                    {o.recipientCity}, {o.recipientDistrict}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="courier-card__actions">
-              {go.status === 'CourierAssignedToPickUp' && (
-                <button
-                  className="c-btn c-btn--primary"
-                  disabled={isBusy}
-                  onClick={() => act(go.id, () => markPickingUp(token, go.id), 'Marked as picking up.')}
-                >
-                  Picking Up
-                </button>
-              )}
-              {go.status === 'CourierOnTheWayToPickUp' && (
-                <button
-                  className="c-btn c-btn--primary"
-                  disabled={isBusy}
-                  onClick={() => act(go.id, () => markPickedUp(token, go.id), 'Marked as picked up.')}
-                >
-                  Picked Up
-                </button>
-              )}
-              {go.status === 'CourierDeliveringToWarehouse' && (
-                <button
-                  className="c-btn c-btn--success"
-                  disabled={isBusy}
-                  onClick={() => act(go.id, () => markDeliveredToWarehouse(token, go.id), 'Delivered to warehouse.')}
-                >
-                  Delivered to Warehouse
-                </button>
-              )}
-            </div>
+    <div className="dashboard__section">
+      <h2 className="dashboard__title">Active Pickups</h2>
+      {pickups.map(go => (
+        <div key={go.id} className="go-card">
+          <div className="go-card__header">
+            <span className="go-card__business">{go.senderBusinessName}</span>
+            <StatusPill status={go.status} />
           </div>
-        );
-      })}
+          <div className="go-card__meta">
+            <span>{go.pickUpCity}, {go.pickUpDistrict}</span>
+            <span>{go.pickUpAddress}</span>
+            <span>{go.numberOfPackages} package{go.numberOfPackages !== 1 ? 's' : ''}</span>
+            {go.whenPackagePickedUpDate && (
+              <span className="go-card__pickup-date">
+                📅 Pickup scheduled: {new Date(go.whenPackagePickedUpDate).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
-// ── Delivery list ─────────────────────────────────────────────────────────────
-function CourierDeliveries({
-  onToast,
-  token,
-}: {
-  onToast: (msg: string, type?: 'ok' | 'err') => void;
+// ── Deliveries Panel ──────────────────────────────────────────────────────────
+
+interface DeliveriesPanelProps {
+  deliveries: CourierOrder[];
+  loading: boolean;
+  error: string | null;
+  busyId: string | null;
   token: string;
-}) {
-  const [orders, setOrders] = useState<CourierOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<string | null>(null);
+  onAct: (id: string, fn: () => Promise<void>, msg: string) => Promise<void>;
+}
 
-    const [refreshKey, setRefreshKey] = useState(0);
-
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const data = await fetchMyDeliveries(token);
-                if (!cancelled) setOrders(data);
-            } catch (e: unknown) {
-                if (!cancelled) onToast(e instanceof Error ? e.message : 'Failed to load.', 'err');
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [token, onToast, refreshKey]);
-
-    async function act(id: string, fn: () => Promise<void>, msg: string) {
-        setBusy(id);
-        try {
-            await fn();
-            onToast(msg);
-            setRefreshKey(k => k + 1);
-        } catch (e: unknown) {
-            onToast(e instanceof Error ? e.message : 'Action failed.', 'err');
-        } finally {
-            setBusy(null);
-        }
-  }
-
-  if (loading) return <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-subtle)' }}>Loading…</div>;
-  if (orders.length === 0) {
-    return (
-      <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.9rem' }}>
-        No active deliveries assigned to you.
-      </div>
-    );
-  }
+function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: DeliveriesPanelProps) {
+  if (loading) return <div className="dashboard__loader">Loading deliveries…</div>;
+  if (error)   return <div className="dashboard__error">{error}</div>;
+  if (!deliveries.length) return <div className="dashboard__empty">No active deliveries assigned to you.</div>;
 
   return (
-    <div style={{ padding: 20 }}>
-      {orders.map(order => {
-        const isBusy = busy === order.id;
+    <div className="dashboard__section">
+      <h2 className="dashboard__title">Active Deliveries</h2>
+      {deliveries.map(order => {
+        const isBusy = busyId === order.id;
         return (
-          <div className="courier-card" key={order.id}>
-            <div className="courier-card__header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span className="tn">{order.trackingNumber}</span>
-                <StatusPill status={order.status} />
+          <div key={order.id} className="order-card">
+            <div className="order-card__header">
+              <div>
+                <span className="order-card__tracking">{order.trackingNumber}</span>
+                {order.isFragile && (
+                  <span className="order-card__fragile" title="Fragile — handle with care">⚠ Fragile</span>
+                )}
               </div>
-              <div className="courier-card__meta" style={{ marginTop: 8 }}>
-                <span style={{ fontWeight: 600 }}>{order.recipientFirstName} {order.recipientLastName}</span>
-                <span>📞 {order.recipientPhone}</span>
-                <span>📍 {order.recipientAddress}, {order.recipientDistrict}, {order.recipientCity}</span>
-              </div>
-              {order.description && (
-                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', marginTop: 4 }}>
-                  📋 {order.description}
-                </div>
+              <StatusPill status={order.status} />
+            </div>
+
+            <div className="order-card__recipient">
+              {order.recipientFirstName} {order.recipientLastName} · {order.recipientPhone}
+            </div>
+            <div className="order-card__address">
+              {order.recipientCity}, {order.recipientDistrict} — {order.recipientAddress}
+            </div>
+
+            {/* Payment info */}
+            <div className="order-card__payment">
+              <span className={`payment-badge payment-badge--${order.productPaymentStatus.toLowerCase()}`}>
+                {order.productPaymentStatus === 'Paid' ? '✓ Paid' : '⚠ Collect Payment'}
+              </span>
+              {order.productPaymentStatus === 'NotPaid' && order.whoPaysForCompanyService === 'Recipient' && (
+                <span className="payment-badge payment-badge--fee">+ Collect courier fee</span>
               )}
             </div>
 
-            <div className="courier-card__actions">
+            {/* Delivery window (non-Tbilisi) */}
+            {order.deliveryDateFrom && order.deliveryDateTo && (
+              <div className="order-card__delivery-window">
+                📦 Deliver between{' '}
+                <strong>{new Date(order.deliveryDateFrom).toLocaleDateString()}</strong>
+                {' '}–{' '}
+                <strong>{new Date(order.deliveryDateTo).toLocaleDateString()}</strong>
+              </div>
+            )}
+
+            {order.description && (
+              <div className="order-card__desc">{order.description}</div>
+            )}
+
+            {/* Actions — two steps: Received → Delivered (no intermediate step) */}
+            <div className="order-card__actions">
               {order.status === 'CourierAssignedToDeliver' && (
                 <button
-                  className="c-btn c-btn--secondary"
+                  className="c-btn c-btn--primary"
                   disabled={isBusy}
-                  onClick={() => act(order.id, () => markOrderReceived(token, order.id), 'Order received from warehouse.')}
+                  onClick={() => onAct(order.id, () => markOrderReceived(token, order.id), 'Marked as received.')}
                 >
-                  Received Order
+                  Confirm Receipt
                 </button>
               )}
               {order.status === 'CourierRecievedOrderToDeliver' && (
                 <button
-                  className="c-btn c-btn--primary"
-                  disabled={isBusy}
-                  onClick={() => act(order.id, () => markOrderDelivering(token, order.id), 'Marked as delivering.')}
-                >
-                  Delivering
-                </button>
-              )}
-              {order.status === 'OrderIsBeingDeliveredToRecipient' && (
-                <button
                   className="c-btn c-btn--success"
                   disabled={isBusy}
-                  onClick={() => act(order.id, () => markOrderDelivered(token, order.id), 'Order delivered to recipient.')}
+                  onClick={() => onAct(order.id, () => markOrderDelivered(token, order.id), 'Order delivered to recipient.')}
                 >
                   Delivered ✓
                 </button>
@@ -417,21 +284,21 @@ function CourierDeliveries({
 
 // ── StatusPill ────────────────────────────────────────────────────────────────
 const STATUS_COLORS: Record<string, [string, string]> = {
-  Pending:                          ['rgba(160,120,0,0.12)',  '#c4870f'],
-  AcceptedGroupOrder:               ['rgba(59,130,246,0.12)', '#3b82f6'],
-  AcceptedOrder:                    ['rgba(59,130,246,0.12)', '#3b82f6'],
-  CourierAssignedToPickUp:          ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierOnTheWayToPickUp:          ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierDeliveringToWarehouse:     ['rgba(249,115,22,0.12)', '#f97316'],
-  DeliveredToWarehouse:             ['rgba(16,185,129,0.12)', '#10b981'],
-  AdminAcceptedOrderInWareHouse:    ['rgba(16,185,129,0.12)', '#10b981'],
-  OrderIsOnItsWayToRecipientsCity:  ['rgba(59,130,246,0.12)', '#3b82f6'],
-  CourierAssignedToDeliver:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierRecievedOrderToDeliver:    ['rgba(249,115,22,0.12)', '#f97316'],
-  OrderIsBeingDeliveredToRecipient: ['rgba(249,115,22,0.12)', '#f97316'],
-  DeliveredToRecipient:             ['rgba(16,185,129,0.12)', '#10b981'],
-  CancelledBySender:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-  OrderNotAccepted:                 ['rgba(239,68,68,0.12)',  '#ef4444'],
+  Pending:                         ['rgba(160,120,0,0.12)',  '#c4870f'],
+  AcceptedGroupOrder:              ['rgba(59,130,246,0.12)', '#3b82f6'],
+  AcceptedOrder:                   ['rgba(59,130,246,0.12)', '#3b82f6'],
+  CourierAssignedToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
+  CourierOnTheWayToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
+  CourierDeliveringToWarehouse:    ['rgba(249,115,22,0.12)', '#f97316'],
+  DeliveredToWarehouse:            ['rgba(16,185,129,0.12)', '#10b981'],
+  AdminAcceptedOrderInWareHouse:   ['rgba(16,185,129,0.12)', '#10b981'],
+  OrderIsOnItsWayToRecipientsCity: ['rgba(59,130,246,0.12)', '#3b82f6'],
+  CourierAssignedToDeliver:        ['rgba(139,92,246,0.12)', '#8b5cf6'],
+  CourierRecievedOrderToDeliver:   ['rgba(249,115,22,0.12)', '#f97316'],
+  DeliveredToRecipient:            ['rgba(16,185,129,0.12)', '#10b981'],
+  CancelledBySender:               ['rgba(239,68,68,0.12)',  '#ef4444'],
+  OrderNotAccepted:                ['rgba(239,68,68,0.12)',  '#ef4444'],
+  CancelledByAdmin:                ['rgba(239,68,68,0.12)',  '#ef4444'],
 };
 
 function StatusPill({ status }: { status: string }) {

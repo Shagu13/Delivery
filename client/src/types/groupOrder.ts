@@ -1,3 +1,5 @@
+import type { PaymentStatus, ServicePayer } from '../api/adminGroupOrders';
+
 export interface OrderItemRequest {
     recipientFirstName: string;
     recipientLastName: string;
@@ -6,6 +8,9 @@ export interface OrderItemRequest {
     recipientDistrict: string;
     recipientAddress: string;
     description?: string;
+    isFragile: boolean;
+    productPaymentStatus: PaymentStatus;
+    whoPaysForCompanyService: ServicePayer;
 }
 
 export interface CreateGroupOrderRequest {
@@ -19,7 +24,7 @@ export interface CreateGroupOrderRequest {
     pickUpAddress: string;
     note?: string;
     orders: OrderItemRequest[];
-    customerId?: string;   // ← set when a logged-in customer places the order
+    customerId?: string;
 }
 
 export interface OrderTrackingResponse {

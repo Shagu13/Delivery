@@ -1,4 +1,4 @@
-import type { OrderStatus } from './adminGroupOrders';
+import type { OrderStatus, PaymentStatus, ServicePayer } from './adminGroupOrders';
 
 const BASE = '/api/orders';
 
@@ -12,11 +12,15 @@ export interface CourierOrder {
     recipientDistrict: string;
     recipientAddress: string;
     description: string | null;
+    isFragile: boolean;
     status: OrderStatus;
-    isPaid: boolean;
+    productPaymentStatus: PaymentStatus;
+    whoPaysForCompanyService: ServicePayer;
     createdAt: string;
     pickedUpFromWarehouseAt: string | null;
     deliveredAt: string | null;
+    deliveryDateFrom: string | null;
+    deliveryDateTo: string | null;
 }
 
 async function orderAction(token: string, id: string, action: string, body?: object): Promise<void> {
@@ -34,14 +38,19 @@ async function orderAction(token: string, id: string, action: string, body?: obj
     }
 }
 
-// Admin
-export const sendOrderToCity = (token: string, id: string) => orderAction(token, id, 'send-to-city');
+// ── Admin ─────────────────────────────────────────────────────────────────────
+export const sendOrderToCity     = (token: string, id: string) => orderAction(token, id, 'send-to-city');
 export const assignCourierToOrder = (token: string, id: string, courierId: string) =>
     orderAction(token, id, 'assign-courier', { courierId });
+export const cancelOrderByAdmin  = (token: string, id: string) => orderAction(token, id, 'cancel-by-admin');
+export const setCourierSalary    = (token: string, id: string, salary: number) =>
+    orderAction(token, id, 'courier-salary', { salary });
+export const setCompanyServicePrice = (token: string, id: string, price: number) =>
+    orderAction(token, id, 'company-service-price', { price });
 
-// Courier
-export const markOrderReceived = (token: string, id: string) => orderAction(token, id, 'received');
-export const markOrderDelivering = (token: string, id: string) => orderAction(token, id, 'delivering');
+// ── Courier ───────────────────────────────────────────────────────────────────
+// NOTE: markOrderDelivering removed — courier goes directly from received → delivered
+export const markOrderReceived  = (token: string, id: string) => orderAction(token, id, 'received');
 export const markOrderDelivered = (token: string, id: string) => orderAction(token, id, 'delivered');
 
 export async function fetchMyDeliveries(token: string): Promise<CourierOrder[]> {

@@ -5,13 +5,16 @@ using Application.GroupOrders.Commands.AcceptGroupOrder;
 using Application.GroupOrders.Commands.AcceptGroupOrderInWarehouse;
 using Application.GroupOrders.Commands.AssignCourierToGroupOrder;
 using Application.GroupOrders.Commands.CancelGroupOrder;
+using Application.GroupOrders.Commands.CancelGroupOrderByAdmin;
 using Application.GroupOrders.Commands.CourierGroupOrderActions;
 using Application.GroupOrders.Commands.CreateGroupOrder;
 using Application.GroupOrders.Commands.DeclineGroupOrder;
+using Application.GroupOrders.Commands.SetGroupOrderPickupDate;
 using Application.GroupOrders.DTOs;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
 using Application.GroupOrders.Queries.GetCustomerGroupOrders;
 using ClosedXML.Excel;
+using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -48,7 +51,10 @@ public sealed class GroupOrdersController : BaseController
                         o.RecipientCity,
                         o.RecipientDistrict,
                         o.RecipientAddress,
-                        o.Description))
+                        o.Description,
+                        o.IsFragile,
+                        o.ProductPaymentStatus,
+                        o.WhoPaysForCompanyService))
                     .ToList(),
                 CustomerId: request.CustomerId
             )
@@ -105,23 +111,33 @@ public sealed class GroupOrdersController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/grouporders/my  (Customer) ──────────────────────────────────
+    [HttpGet("my")]
+    [Authorize(Roles = "Customer")]
+    [ProducesResponseType(typeof(IReadOnlyList<AdminGroupOrderResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMy(CancellationToken ct)
+    {
+        var customerIdClaim = User.FindFirstValue("customerId");
+        if (!Guid.TryParse(customerIdClaim, out var customerId))
+            return Forbid();
+
+        var result = await Sender.Send(new GetCustomerGroupOrdersQuery(customerId), ct);
+        return Ok(result.Select(MapToAdminResponse).ToList());
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  STATUS-TRANSITION ENDPOINTS
     // ══════════════════════════════════════════════════════════════════════════
 
-    // ── PUT /api/grouporders/{id}/accept  (Admin) ────────────────────────────
     [HttpPut("{id:guid}/accept")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Accept(Guid id, CancellationToken ct)
     {
         await Sender.Send(new AcceptGroupOrderCommand(id), ct);
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/decline  (Admin) ───────────────────────────
     [HttpPut("{id:guid}/decline")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -131,7 +147,6 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/assign-courier  (Admin) ────────────────────
     [HttpPut("{id:guid}/assign-courier")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -144,7 +159,6 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/accept-in-warehouse  (Admin) ───────────────
     [HttpPut("{id:guid}/accept-in-warehouse")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -154,13 +168,12 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/cancel  (Customer) ─────────────────────────
+    // ── PUT /api/grouporders/{id}/cancel  (Customer cancels their own) ────────
     [HttpPut("{id:guid}/cancel")]
     [Authorize(Roles = "Customer")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Cancel(Guid id, CancellationToken ct)
     {
-        // CustomerId is stored as a claim set during login
         var customerIdClaim = User.FindFirstValue("customerId");
         if (!Guid.TryParse(customerIdClaim, out var customerId))
             return Forbid();
@@ -169,7 +182,31 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/picking-up  (Courier) ──────────────────────
+    // ── PUT /api/grouporders/{id}/cancel-by-admin  (Admin — always available) ─
+    [HttpPut("{id:guid}/cancel-by-admin")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelByAdmin(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new CancelGroupOrderByAdminCommand(id), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/grouporders/{id}/pickup-date  (Admin sets scheduled pickup date) ─
+    [HttpPut("{id:guid}/pickup-date")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetPickupDate(
+        Guid id,
+        [FromBody] SetPickupDateRequest request,
+        CancellationToken ct)
+    {
+        await Sender.Send(new SetGroupOrderPickupDateCommand(id, request.PickupDate), ct);
+        return NoContent();
+    }
+
+    // ── Courier endpoints ──────────────────────────────────────────────────────
     [HttpPut("{id:guid}/picking-up")]
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -180,7 +217,6 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/picked-up  (Courier) ───────────────────────
     [HttpPut("{id:guid}/picked-up")]
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -191,7 +227,6 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/delivered-to-warehouse  (Courier) ──────────
     [HttpPut("{id:guid}/delivered-to-warehouse")]
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -203,7 +238,7 @@ public sealed class GroupOrdersController : BaseController
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  EXCEL / TEMPLATE ENDPOINTS (unchanged)
+    //  EXCEL / TEMPLATE ENDPOINTS
     // ══════════════════════════════════════════════════════════════════════════
 
     [HttpGet("excel-template")]
@@ -305,48 +340,44 @@ public sealed class GroupOrdersController : BaseController
     // ══════════════════════════════════════════════════════════════════════════
     private static AdminGroupOrderResponse MapToAdminResponse(AdminGroupOrderDto go) =>
         new(
-            Id:                go.Id,
-            CreatedAt:         go.CreatedAt,
-            Status:            go.Status.ToString(),
-            SenderFirstName:   go.SenderFirstName,
-            SenderLastName:    go.SenderLastName,
-            SenderIdNumber:    go.SenderIdNumber,
-            SenderBusinessName: go.SenderBusinessName,
-            SenderPhone:       go.SenderPhone,
-            PickUpCity:        go.PickUpCity,
-            PickUpDistrict:    go.PickUpDistrict,
-            PickUpAddress:     go.PickUpAddress,
-            Note:              go.Note,
-            NumberOfPackages:  go.NumberOfPackages,
-            CourierId:         go.CourierId,
-            CourierFullName:   go.CourierFullName,
+            Id:                      go.Id,
+            CreatedAt:               go.CreatedAt,
+            Status:                  go.Status.ToString(),
+            SenderFirstName:         go.SenderFirstName,
+            SenderLastName:          go.SenderLastName,
+            SenderIdNumber:          go.SenderIdNumber,
+            SenderBusinessName:      go.SenderBusinessName,
+            SenderPhone:             go.SenderPhone,
+            PickUpCity:              go.PickUpCity,
+            PickUpDistrict:          go.PickUpDistrict,
+            PickUpAddress:           go.PickUpAddress,
+            Note:                    go.Note,
+            NumberOfPackages:        go.NumberOfPackages,
+            WhenPackagePickedUpDate: go.WhenPackagePickedUpDate,
+            CourierId:               go.CourierId,
+            CourierFullName:         go.CourierFullName,
             Orders: go.Orders.Select(o => new AdminOrderResponse(
-                Id:                 o.Id,
-                TrackingNumber:     o.TrackingNumber,
-                RecipientFirstName: o.RecipientFirstName,
-                RecipientLastName:  o.RecipientLastName,
-                RecipientPhone:     o.RecipientPhone,
-                RecipientCity:      o.RecipientCity,
-                RecipientDistrict:  o.RecipientDistrict,
-                RecipientAddress:   o.RecipientAddress,
-                Description:        o.Description,
-                Status:             o.Status.ToString(),
-                IsPaid:             o.IsPaid,
-                CourierId:          o.CourierId,
-                CreatedAt:          o.CreatedAt
+                Id:                      o.Id,
+                TrackingNumber:          o.TrackingNumber,
+                RecipientFirstName:      o.RecipientFirstName,
+                RecipientLastName:       o.RecipientLastName,
+                RecipientPhone:          o.RecipientPhone,
+                RecipientCity:           o.RecipientCity,
+                RecipientDistrict:       o.RecipientDistrict,
+                RecipientAddress:        o.RecipientAddress,
+                Description:             o.Description,
+                IsFragile:               o.IsFragile,
+                Status:                  o.Status.ToString(),
+                ProductPaymentStatus:    o.ProductPaymentStatus.ToString(),
+                WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
+                CourierSalary:           o.CourierSalary,
+                CourierId:               o.CourierId,
+                CreatedAt:               o.CreatedAt,
+                DeliveryDateFrom:        o.DeliveryDateFrom,
+                DeliveryDateTo:          o.DeliveryDateTo
             )).ToList()
         );
-
-    [HttpGet("my")]
-    [Authorize(Roles = "Customer")]
-    [ProducesResponseType(typeof(IReadOnlyList<AdminGroupOrderResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMy(CancellationToken ct)
-    {
-        var customerIdClaim = User.FindFirstValue("customerId");
-        if (!Guid.TryParse(customerIdClaim, out var customerId))
-            return Forbid();
-
-        var result = await Sender.Send(new GetCustomerGroupOrdersQuery(customerId), ct);
-        return Ok(result.Select(MapToAdminResponse).ToList());
-    }
 }
+
+// ── Request models ────────────────────────────────────────────────────────────
+public sealed record SetPickupDateRequest(DateTime PickupDate);

@@ -10,15 +10,15 @@ public sealed record GetAllCustomersQuery(
     int    Page     = 1,
     int    PageSize = 20,
     string Search   = ""
-) : IRequest<PagedResult<CustomerResponseDto>>;
+) : IRequest<PagedResult<AdminCustomerResponseDto>>;
 
 public sealed class GetAllCustomersQueryHandler
-    : IRequestHandler<GetAllCustomersQuery, PagedResult<CustomerResponseDto>>
+    : IRequestHandler<GetAllCustomersQuery, PagedResult<AdminCustomerResponseDto>>
 {
     private readonly IAppDbContext _context;
     public GetAllCustomersQueryHandler(IAppDbContext context) => _context = context;
 
-    public async Task<PagedResult<CustomerResponseDto>> Handle(
+    public async Task<PagedResult<AdminCustomerResponseDto>> Handle(
         GetAllCustomersQuery request,
         CancellationToken    cancellationToken)
     {
@@ -43,7 +43,7 @@ public sealed class GetAllCustomersQueryHandler
             .OrderByDescending(c => c.CreatedAt)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
-            .Select(c => new CustomerResponseDto(
+            .Select(c => new AdminCustomerResponseDto(
                 c.Id,
                 c.FirstName,
                 c.LastName,
@@ -55,10 +55,11 @@ public sealed class GetAllCustomersQueryHandler
                 c.Address,
                 c.ApplicationUser.Email!,
                 c.IsActive,
-                c.CreatedAt
+                c.CreatedAt,
+                c.CompanyPriceToDeliverPackages
             ))
             .ToListAsync(cancellationToken);
 
-        return new PagedResult<CustomerResponseDto>(items, total, request.Page, request.PageSize);
+        return new PagedResult<AdminCustomerResponseDto>(items, total, request.Page, request.PageSize);
     }
 }

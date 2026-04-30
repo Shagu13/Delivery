@@ -8,7 +8,6 @@ public sealed class GetAllGroupOrdersQueryHandler
     : IRequestHandler<GetAllGroupOrdersQuery, IReadOnlyList<AdminGroupOrderDto>>
 {
     private readonly IAppDbContext _context;
-
     public GetAllGroupOrdersQueryHandler(IAppDbContext context) => _context = context;
 
     public async Task<IReadOnlyList<AdminGroupOrderDto>> Handle(
@@ -17,13 +16,12 @@ public sealed class GetAllGroupOrdersQueryHandler
     {
         var query = _context.GroupOrders
             .Include(go => go.Orders)
-            .Include(go => go.Courier)       // ← pickup courier
+            .Include(go => go.Courier)
             .AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
             var term = request.SearchTerm.Trim().ToLower();
-
             query = query.Where(go =>
                 go.SenderFirstName.ToLower().Contains(term) ||
                 go.SenderLastName.ToLower().Contains(term) ||
@@ -48,39 +46,47 @@ public sealed class GetAllGroupOrdersQueryHandler
             .ToListAsync(cancellationToken);
 
         return groupOrders.Select(go => new AdminGroupOrderDto(
-            Id:                go.Id,
-            CreatedAt:         go.CreatedAt,
-            Status:            go.Status,
-            SenderFirstName:   go.SenderFirstName,
-            SenderLastName:    go.SenderLastName,
-            SenderIdNumber:    go.SenderIdNumber,
-            SenderBusinessName: go.SenderBusinessName,
-            SenderPhone:       go.SenderPhone,
-            PickUpCity:        go.PickUpCity,
-            PickUpDistrict:    go.PickUpDistrict,
-            PickUpAddress:     go.PickUpAddress,
-            Note:              go.Note,
-            NumberOfPackages:  go.NumberOfPackages,
-            CourierId:         go.CourierId,
-            CourierFullName:   go.Courier is null
+            Id:                      go.Id,
+            CreatedAt:               go.CreatedAt,
+            Status:                  go.Status,
+            SenderFirstName:         go.SenderFirstName,
+            SenderLastName:          go.SenderLastName,
+            SenderIdNumber:          go.SenderIdNumber,
+            SenderBusinessName:      go.SenderBusinessName,
+            SenderPhone:             go.SenderPhone,
+            PickUpCity:              go.PickUpCity,
+            PickUpDistrict:          go.PickUpDistrict,
+            PickUpAddress:           go.PickUpAddress,
+            Note:                    go.Note,
+            NumberOfPackages:        go.NumberOfPackages,
+            WhenPackagePickedUpDate: go.WhenPackagePickedUpDate,
+            CourierId:               go.CourierId,
+            CourierFullName:         go.Courier is null
                 ? null
                 : $"{go.Courier.FirstName} {go.Courier.LastName}",
             Orders: go.Orders
                 .OrderBy(o => o.CreatedAt)
                 .Select(o => new AdminOrderDto(
-                    Id:                 o.Id,
-                    TrackingNumber:     o.TrackingNumber,
-                    RecipientFirstName: o.RecipientFirstName,
-                    RecipientLastName:  o.RecipientLastName,
-                    RecipientPhone:     o.RecipientPhone,
-                    RecipientCity:      o.RecipientCity,
-                    RecipientDistrict:  o.RecipientDistrict,
-                    RecipientAddress:   o.RecipientAddress,
-                    Description:        o.Description,
-                    Status:             o.Status,
-                    IsPaid:             o.IsPaid,
-                    CourierId:          o.CourierId,
-                    CreatedAt:          o.CreatedAt))
+                    Id:                      o.Id,
+                    TrackingNumber:          o.TrackingNumber,
+                    RecipientFirstName:      o.RecipientFirstName,
+                    RecipientLastName:       o.RecipientLastName,
+                    RecipientPhone:          o.RecipientPhone,
+                    RecipientCity:           o.RecipientCity,
+                    RecipientDistrict:       o.RecipientDistrict,
+                    RecipientAddress:        o.RecipientAddress,
+                    Description:             o.Description,
+                    IsFragile:               o.IsFragile,
+                    Status:                  o.Status,
+                    ProductPaymentStatus:    o.ProductPaymentStatus,
+                    WhoPaysForCompanyService: o.WhoPaysForCompanyService,
+                    CourierSalary:           o.CourierSalary,
+                    CompanyServicePrice:     o.CompanyServicePrice,
+                    CompanyRevenue:          o.CompanyRevenue,
+                    CourierId:               o.CourierId,
+                    CreatedAt:               o.CreatedAt,
+                    DeliveryDateFrom:        o.DeliveryDateFrom,
+                    DeliveryDateTo:          o.DeliveryDateTo))
                 .ToList()
         )).ToList();
     }

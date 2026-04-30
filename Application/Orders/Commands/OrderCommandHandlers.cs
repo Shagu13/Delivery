@@ -26,7 +26,6 @@ public sealed class SendOrderToCityCommandHandler : IRequestHandler<SendOrderToC
             throw new ConflictException("Tbilisi orders must use Assign Courier, not Send To City.");
 
         order.Status = OrderStatus.OrderIsOnItsWayToRecipientsCity;
-
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
@@ -43,7 +42,6 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
 
-        // Valid from either Tbilisi (AdminAcceptedOrderInWareHouse) or after city transit
         var validStatuses = new[]
         {
             OrderStatus.AdminAcceptedOrderInWareHouse,
@@ -59,10 +57,8 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)
             ?? throw new NotFoundException("Courier", request.CourierId);
 
-        // Order.CourierId = last-mile delivery courier (distinct from GroupOrder.CourierId = pickup courier)
         order.CourierId = courier.Id;
         order.Status    = OrderStatus.CourierAssignedToDeliver;
-
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
@@ -105,34 +101,26 @@ public sealed class MarkOrderReceivedCommandHandler : IRequestHandler<MarkOrderR
         if (order.Status != OrderStatus.CourierAssignedToDeliver)
             throw new ConflictException($"Expected CourierAssignedToDeliver. Current: {order.Status}.");
 
-        order.Status                  = OrderStatus.CourierRecievedOrderToDeliver;
-        order.PickedUpFromWarehouseAt = DateTime.UtcNow;
+        var receivedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync(cancellationToken);
-    }
-}
+        order.Status                 = OrderStatus.CourierRecievedOrderToDeliver;
+        order.PickedUpFromWarehouseAt = receivedAt;
 
-// ── MarkOrderDelivering ───────────────────────────────────────────────────────
-public sealed class MarkOrderDeliveringCommandHandler : IRequestHandler<MarkOrderDeliveringCommand>
-{
-    private readonly IAppDbContext _context;
-    public MarkOrderDeliveringCommandHandler(IAppDbContext context) => _context = context;
-
-    public async Task Handle(MarkOrderDeliveringCommand request, CancellationToken cancellationToken)
-    {
-        var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
-            _context, request.OrderId, request.CourierUserId, cancellationToken);
-
-        if (order.Status != OrderStatus.CourierRecievedOrderToDeliver)
-            throw new ConflictException($"Expected CourierRecievedOrderToDeliver. Current: {order.Status}.");
-
-        order.Status = OrderStatus.OrderIsBeingDeliveredToRecipient;
+        // Auto-fill delivery window for non-Tbilisi orders
+        const string tbilisi = "თბილისი";
+        if (!order.RecipientCity.Equals(tbilisi, StringComparison.OrdinalIgnoreCase))
+        {
+            order.DeliveryDateFrom = receivedAt.Date.AddDays(1);
+            order.DeliveryDateTo   = receivedAt.Date.AddDays(4);
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
 
 // ── MarkOrderDelivered ────────────────────────────────────────────────────────
+// NOTE: The intermediate "OrderIsBeingDeliveredToRecipient" step has been removed.
+// Courier goes directly from CourierRecievedOrderToDeliver → DeliveredToRecipient.
 public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrderDeliveredCommand>
 {
     private readonly IAppDbContext _context;
@@ -143,12 +131,107 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
             _context, request.OrderId, request.CourierUserId, cancellationToken);
 
-        if (order.Status != OrderStatus.OrderIsBeingDeliveredToRecipient)
-            throw new ConflictException($"Expected OrderIsBeingDeliveredToRecipient. Current: {order.Status}.");
+        if (order.Status != OrderStatus.CourierRecievedOrderToDeliver)
+            throw new ConflictException($"Expected CourierRecievedOrderToDeliver. Current: {order.Status}.");
 
         order.Status      = OrderStatus.DeliveredToRecipient;
         order.DeliveredAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}
 
+// ── CancelOrderByAdmin ────────────────────────────────────────────────────────
+public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrderByAdminCommand>
+{
+    private readonly IAppDbContext _context;
+    public CancelOrderByAdminCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(CancelOrderByAdminCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        // Cannot cancel an already-delivered order
+        if (order.Status == OrderStatus.DeliveredToRecipient)
+            throw new ConflictException("Cannot cancel an order that has already been delivered.");
+
+        if (order.Status == OrderStatus.CancelledByAdmin)
+            throw new ConflictException("Order is already cancelled.");
+
+        order.Status = OrderStatus.CancelledByAdmin;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}
+
+// ── SetCourierSalary ──────────────────────────────────────────────────────────
+public sealed class SetCourierSalaryCommandHandler : IRequestHandler<SetCourierSalaryCommand>
+{
+    private readonly IAppDbContext _context;
+    public SetCourierSalaryCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(SetCourierSalaryCommand request, CancellationToken cancellationToken)
+    {
+        if (request.Salary < 0)
+            throw new ValidationException(new[] {
+                new FluentValidation.Results.ValidationFailure("Price", "Company price must be a non-negative value.")
+            });
+
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        order.CourierSalary  = request.Salary;
+        order.CompanyRevenue = order.CompanyServicePrice - request.Salary;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}
+
+// ── SetOrderCompanyServicePrice ───────────────────────────────────────────────
+public sealed class SetOrderCompanyServicePriceCommandHandler : IRequestHandler<SetOrderCompanyServicePriceCommand>
+{
+    private readonly IAppDbContext _context;
+    public SetOrderCompanyServicePriceCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(SetOrderCompanyServicePriceCommand request, CancellationToken cancellationToken)
+    {
+        if (request.Price < 0)
+            throw new ValidationException(new[] {
+                new FluentValidation.Results.ValidationFailure("Price", "Company service price must be a non-negative value.")
+            });
+
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        order.CompanyServicePrice = request.Price;
+
+        // Recalculate revenue if courier salary already set
+        if (order.CourierSalary.HasValue)
+            order.CompanyRevenue = order.CompanyServicePrice - order.CourierSalary.Value;
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}
+
+// ── SetDistrictCompanyServicePrice ────────────────────────────────────────────
+public sealed class SetDistrictCompanyServicePriceCommandHandler : IRequestHandler<SetDistrictCompanyServicePriceCommand>
+{
+    private readonly IAppDbContext _context;
+    public SetDistrictCompanyServicePriceCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(SetDistrictCompanyServicePriceCommand request, CancellationToken cancellationToken)
+    {
+        if (request.Price.HasValue && request.Price.Value < 0)
+            throw new ValidationException(new[] {
+                new FluentValidation.Results.ValidationFailure("Price", "Company service price must be a non-negative value.")
+            });
+
+        var district = await _context.Districts
+            .FirstOrDefaultAsync(d => d.Id == request.DistrictId, cancellationToken)
+            ?? throw new NotFoundException("District", request.DistrictId);
+
+        district.CompanyServicePrice = request.Price;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
