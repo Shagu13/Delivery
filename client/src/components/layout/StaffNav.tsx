@@ -2,26 +2,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
+import { LanguageToggle } from '../ui/LanguageToggle';
 
 function usePendingCount(token: string | null, isAdmin: boolean) {
     const [count, setCount] = useState<number | null>(null);
 
     useEffect(() => {
         if (!isAdmin || !token) return;
-
         let cancelled = false;
-
         const load = async () => {
             try {
                 const orders = await fetchGroupOrders(token);
-                if (!cancelled) {
-                    setCount(orders.filter(o => o.status === 'Pending').length);
-                }
-            } catch {
-                // silently ignore — badge just won't show
-            }
+                if (!cancelled) setCount(orders.filter(o => o.status === 'Pending').length);
+            } catch { /* silently ignore */ }
         };
-
         void load();
         const interval = setInterval(() => void load(), 30_000);
         return () => { cancelled = true; clearInterval(interval); };
@@ -47,6 +41,7 @@ export function StaffNav() {
                     <span>Delivery</span>
                 </Link>
                 <nav className="nav__links">
+                    <LanguageToggle />
                     {isAdmin && (
                         <button
                             className="nav__pending-btn"
@@ -54,7 +49,6 @@ export function StaffNav() {
                             aria-label={`Pending group orders${pendingCount !== null ? `: ${pendingCount}` : ''}`}
                             title="View pending group orders"
                         >
-                            {/* Package / orders icon */}
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M21 16V8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z" />
                                 <polyline points="3.29 7 12 12 20.71 7" />

@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/useAuth';
 import { SenderSection } from './SenderSection';
 import { PackageCard } from './PackageCard';
 import { SuccessView } from './SuccessView';
+import { PickupAddressModal } from './PickupAddressModal';
 import './createGroupOrder.css';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ export function CreateGroupOrderPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [prefilled, setPrefilled] = useState(false);
+    const [pickupModalOpen, setPickupModalOpen] = useState(false);
 
     // ── Pre-fill from customer profile ────────────────────────────────────────
     useEffect(() => {
@@ -356,6 +358,18 @@ export function CreateGroupOrderPage() {
                         prefilled={prefilled}
                         useOtherAddress={useOtherAddr}
                         onUseOtherAddressChange={handleUseOtherAddrChange}
+                        onOpenPickupModal={() => setPickupModalOpen(true)}
+                    />
+
+                    <PickupAddressModal
+                        open={pickupModalOpen}
+                        initial={{ city: sender.pickUpCity, district: sender.pickUpDistrict, address: sender.pickUpAddress }}
+                        onSave={addr => {
+                            setSender(prev => ({ ...prev, pickUpCity: addr.city, pickUpDistrict: addr.district, pickUpAddress: addr.address }));
+                            setUseOtherAddr(true);
+                            setPickupModalOpen(false);
+                        }}
+                        onClose={() => setPickupModalOpen(false)}
                     />
 
                     <section className="form-section">

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthProvider';
+import { LanguageProvider } from './contexts/LanguageProvider';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { CreateGroupOrderPage } from './pages/CreateGroupOrder/CreateGroupOrderPage';
 import { LoginPage } from './pages/Login/LoginPage';
@@ -12,62 +13,62 @@ import { AppLayout } from './components/layout/AppLayout';
 
 export default function App() {
     return (
-        <AuthProvider>
-            <BrowserRouter>
-                <AppLayout>
-                    <Routes>
-                        {/* Public */}
-                        <Route path="/"         element={<HomePage />} />
-                        <Route path="/login"    element={<LoginPage />} />
-                        <Route path="/register" element={<RegisterPage />} />
+        <LanguageProvider>
+            <AuthProvider>
+                <BrowserRouter>
+                    <AppLayout>
+                        <Routes>
+                            {/* Public */}
+                            <Route path="/"         element={<HomePage />} />
+                            <Route path="/login"    element={<LoginPage />} />
+                            <Route path="/register" element={<RegisterPage />} />
 
-                        {/* Send packages — Customer only.
-                            Unauthenticated → redirected to /login (then back here after sign-in).
-                            Wrong role (Admin/Courier) → redirected to their own dashboard. */}
-                        <Route
-                            path="/send"
-                            element={
-                                <ProtectedRoute role="Customer">
-                                    <CreateGroupOrderPage />
-                                </ProtectedRoute>
-                            }
-                        />
+                            {/* Send packages — Customer only */}
+                            <Route
+                                path="/send"
+                                element={
+                                    <ProtectedRoute role="Customer">
+                                        <CreateGroupOrderPage />
+                                    </ProtectedRoute>
+                                }
+                            />
 
-                        {/* Admin only */}
-                        <Route
-                            path="/admin/*"
-                            element={
-                                <ProtectedRoute role="Admin">
-                                    <AdminDashboard />
-                                </ProtectedRoute>
-                            }
-                        />
+                            {/* Admin only */}
+                            <Route
+                                path="/admin/*"
+                                element={
+                                    <ProtectedRoute role="Admin">
+                                        <AdminDashboard />
+                                    </ProtectedRoute>
+                                }
+                            />
 
-                        {/* Courier only */}
-                        <Route
-                            path="/courier/*"
-                            element={
-                                <ProtectedRoute role="Courier">
-                                    <CourierDashboard />
-                                </ProtectedRoute>
-                            }
-                        />
+                            {/* Courier only */}
+                            <Route
+                                path="/courier/*"
+                                element={
+                                    <ProtectedRoute role="Courier">
+                                        <CourierDashboard />
+                                    </ProtectedRoute>
+                                }
+                            />
 
-                        {/* Customer only */}
-                        <Route
-                            path="/customer/*"
-                            element={
-                                <ProtectedRoute role="Customer">
-                                    <CustomerDashboard />
-                                </ProtectedRoute>
-                            }
-                        />
+                            {/* Customer only */}
+                            <Route
+                                path="/customer/*"
+                                element={
+                                    <ProtectedRoute role="Customer">
+                                        <CustomerDashboard />
+                                    </ProtectedRoute>
+                                }
+                            />
 
-                        {/* Fallback */}
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                </AppLayout>
-            </BrowserRouter>
-        </AuthProvider>
+                            {/* Fallback */}
+                            <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                    </AppLayout>
+                </BrowserRouter>
+            </AuthProvider>
+        </LanguageProvider>
     );
 }

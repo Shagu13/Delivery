@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerCustomer, CustomerApiError } from '../../api/customers';
 import { FormField } from '../../components/ui/FormField';
+import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { useLanguage } from '../../contexts/useLanguage';
 import './register.css';
 
 interface FormState {
@@ -13,27 +15,20 @@ interface FormState {
   city:            string;
   district:        string;
   address:         string;
-  email:           string;   // ← replaces username
+  email:           string;
   password:        string;
-  confirmPassword: string;   // ← new
+  confirmPassword: string;
 }
 
 const EMPTY: FormState = {
-  firstName:       '',
-  lastName:        '',
-  idNumber:        '',
-  businessName:    '',
-  phoneNumber:     '',
-  city:            '',
-  district:        '',
-  address:         '',
-  email:           '',
-  password:        '',
-  confirmPassword: '',
+  firstName: '', lastName: '', idNumber: '', businessName: '',
+  phoneNumber: '', city: '', district: '', address: '',
+  email: '', password: '', confirmPassword: '',
 };
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [form,     setForm]     = useState<FormState>(EMPTY);
   const [errors,   setErrors]   = useState<Partial<Record<keyof FormState, string>>>({});
   const [apiError, setApiError] = useState<string | null>(null);
@@ -45,32 +40,30 @@ export function RegisterPage() {
     setApiError(null);
   };
 
+  const setDirect = (field: 'city' | 'district') => (value: string) => {
+    setForm(f => ({ ...f, [field]: value }));
+    setErrors(prev => ({ ...prev, [field]: undefined }));
+    setApiError(null);
+  };
+
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormState, string>> = {};
-
-    if (!form.firstName.trim())    e.firstName    = 'First name is required.';
-    if (!form.lastName.trim())     e.lastName     = 'Last name is required.';
-    if (!form.businessName.trim()) e.businessName = 'Business or page name is required.';
-    if (!form.phoneNumber.trim())  e.phoneNumber  = 'Phone number is required.';
-    if (!form.city.trim())         e.city         = 'City is required.';
-    if (!form.district.trim())     e.district     = 'District is required.';
-    if (!form.address.trim())      e.address      = 'Address is required.';
-
+    if (!form.firstName.trim())    e.firstName    = t.errFirstNameRequired;
+    if (!form.lastName.trim())     e.lastName     = t.errLastNameRequired;
+    if (!form.businessName.trim()) e.businessName = t.errBusinessNameRequired;
+    if (!form.phoneNumber.trim())  e.phoneNumber  = t.errPhoneRequired;
+    else if (form.phoneNumber.trim().length !== 9) e.phoneNumber = t.errPhoneLength;
+    if (!form.city.trim())         e.city         = t.errCityRequired;
+    if (!form.district.trim())     e.district     = t.errDistrictRequired;
+    if (!form.address.trim())      e.address      = t.errAddressRequired;
     if (!form.email.trim()) {
-      e.email = 'Email address is required.';
+      e.email = t.errEmailRequired;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      e.email = 'Please enter a valid email address.';
+      e.email = t.errEmailInvalid;
     }
-
-    if (form.password.length < 8) {
-      e.password = 'Password must be at least 8 characters.';
-    }
-    if (!form.confirmPassword) {
-      e.confirmPassword = 'Please confirm your password.';
-    } else if (form.password !== form.confirmPassword) {
-      e.confirmPassword = 'Passwords do not match.';
-    }
-
+    if (form.password.length < 8)    e.password        = t.errPasswordShort;
+    if (!form.confirmPassword)        e.confirmPassword  = t.errConfirmPasswordRequired;
+    else if (form.password !== form.confirmPassword) e.confirmPassword = t.errPasswordMismatch;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -81,17 +74,12 @@ export function RegisterPage() {
     setLoading(true);
     try {
       await registerCustomer({
-        firstName:       form.firstName.trim(),
-        lastName:        form.lastName.trim(),
-        idNumber:        form.idNumber.trim() || undefined,
-        businessName:    form.businessName.trim(),
-        phoneNumber:     form.phoneNumber.trim(),
-        city:            form.city.trim(),
-        district:        form.district.trim(),
-        address:         form.address.trim(),
-        email:           form.email.trim(),
-        password:        form.password,
-        confirmPassword: form.confirmPassword,
+        firstName: form.firstName.trim(), lastName: form.lastName.trim(),
+        idNumber: form.idNumber.trim() || undefined,
+        businessName: form.businessName.trim(), phoneNumber: form.phoneNumber.trim(),
+        city: form.city.trim(), district: form.district.trim(),
+        address: form.address.trim(), email: form.email.trim(),
+        password: form.password, confirmPassword: form.confirmPassword,
       });
       navigate('/login', { state: { registered: true } });
     } catch (err) {
@@ -109,11 +97,11 @@ export function RegisterPage() {
             <rect width="28" height="28" rx="6" fill="currentColor" />
             <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          Delivery
+          {t.appName}
         </div>
 
-        <p className="register-card__eyebrow">Customer Portal</p>
-        <h1 className="register-card__title">Create your account</h1>
+        <p className="register-card__eyebrow">{t.registerEyebrow}</p>
+        <h1 className="register-card__title">{t.registerTitle}</h1>
 
         <form className="register-form" onSubmit={handleSubmit} noValidate>
           {apiError && (
@@ -126,90 +114,67 @@ export function RegisterPage() {
             </div>
           )}
 
-          {/* ── Personal ── */}
-          <p className="register-form__section-label">Personal information</p>
+          {/* Personal */}
+          <p className="register-form__section-label">{t.registerPersonal}</p>
           <div className="register-form__row">
-            <FormField label="First name" value={form.firstName} onChange={set('firstName')} error={errors.firstName} />
-            <FormField label="Last name"  value={form.lastName}  onChange={set('lastName')}  error={errors.lastName} />
+            <FormField label={t.firstName} value={form.firstName} onChange={set('firstName')} error={errors.firstName} placeholder={t.phFirstName} />
+            <FormField label={t.lastName}  value={form.lastName}  onChange={set('lastName')}  error={errors.lastName}  placeholder={t.phLastName} />
           </div>
           <FormField
-            label="Business / page name"
+            label={t.businessName}
             value={form.businessName}
             onChange={set('businessName')}
             error={errors.businessName}
-            placeholder="e.g. My Online Shop, Nike Georgia"
+            placeholder={t.phBusinessName}
           />
           <div className="register-form__row">
-            <FormField
-              label="ID number"
-              value={form.idNumber}
-              onChange={set('idNumber')}
-              error={errors.idNumber}
-              placeholder="National ID / Passport (optional)"
-            />
-            <FormField
-              label="Phone number"
-              value={form.phoneNumber}
-              onChange={set('phoneNumber')}
-              error={errors.phoneNumber}
-              placeholder="5XX XXX XXX"
-            />
+            <FormField label={t.idNumber}    value={form.idNumber}    onChange={set('idNumber')}    error={errors.idNumber}    placeholder={t.phIdNumber} />
+                    <FormField label={t.phoneNumber} value={form.phoneNumber} onChange={set('phoneNumber')} error={errors.phoneNumber} placeholder={t.phPhone} maxLength={9} />
           </div>
 
           <div className="register-form__divider" />
 
-          {/* ── Pickup address ── */}
-          <p className="register-form__section-label">Default pickup address</p>
-          <div className="register-form__row">
-            <FormField label="City"     value={form.city}     onChange={set('city')}     error={errors.city}     placeholder="e.g. Tbilisi" />
-            <FormField label="District" value={form.district} onChange={set('district')} error={errors.district} placeholder="e.g. Vake" />
-          </div>
+          {/* Pickup address */}
+          <p className="register-form__section-label">{t.registerPickup}</p>
+          <CityDistrictPicker
+            cityValue={form.city}
+            districtValue={form.district}
+            onCityChange={setDirect('city')}
+            onDistrictChange={setDirect('district')}
+            cityError={errors.city}
+            districtError={errors.district}
+          />
           <FormField
-            label="Street address"
+            label={t.streetAddress}
             value={form.address}
             onChange={set('address')}
             error={errors.address}
-            placeholder="e.g. 12 Rustaveli Avenue, Apt 4"
+            placeholder={t.phStreetAddress}
           />
 
           <div className="register-form__divider" />
 
-          {/* ── Login credentials — email only, no username ── */}
-          <p className="register-form__section-label">Login credentials</p>
+          {/* Credentials */}
+          <p className="register-form__section-label">{t.registerCredentials}</p>
           <FormField
-            label="Email address"
-            type="email"
-            autoComplete="email"
-            value={form.email}
-            onChange={set('email')}
-            error={errors.email}
-            placeholder="you@example.com"
+            label={t.emailAddress} type="email" autoComplete="email"
+            value={form.email} onChange={set('email')} error={errors.email} placeholder={t.phEmail}
           />
           <FormField
-            label="Password"
-            type="password"
-            autoComplete="new-password"
-            value={form.password}
-            onChange={set('password')}
-            error={errors.password}
-            placeholder="At least 8 characters"
+            label={t.password} type="password" autoComplete="new-password"
+            value={form.password} onChange={set('password')} error={errors.password} placeholder={t.phPassword}
           />
           <FormField
-            label="Confirm password"
-            type="password"
-            autoComplete="new-password"
-            value={form.confirmPassword}
-            onChange={set('confirmPassword')}
-            error={errors.confirmPassword}
-            placeholder="Repeat your password"
+            label={t.confirmPassword} type="password" autoComplete="new-password"
+            value={form.confirmPassword} onChange={set('confirmPassword')} error={errors.confirmPassword} placeholder={t.phConfirmPassword}
           />
 
           <button type="submit" className="register-form__submit" disabled={loading}>
-            {loading ? 'Creating account…' : 'Create Account'}
+            {loading ? t.registerSubmitting : t.registerSubmit}
           </button>
 
           <p className="register-form__login-link">
-            Already have an account? <Link to="/login">Sign in</Link>
+            {t.registerHaveAccount} <Link to="/login">{t.registerSignIn}</Link>
           </p>
         </form>
       </div>

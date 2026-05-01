@@ -25,6 +25,8 @@ interface SenderSectionProps {
    */
   useOtherAddress?: boolean;
   onUseOtherAddressChange?: (checked: boolean) => void;
+  /** Called when the user clicks "Use a different pickup address" button. */
+  onOpenPickupModal?: () => void;
 }
 
 export function SenderSection({
@@ -34,6 +36,7 @@ export function SenderSection({
   prefilled,
   useOtherAddress = false,
   onUseOtherAddressChange,
+  onOpenPickupModal,
 }: SenderSectionProps) {
   return (
     <section className="form-section">
@@ -109,16 +112,29 @@ export function SenderSection({
         <fieldset className="fieldset">
           <legend className="fieldset__legend">Pickup Location</legend>
 
-          {/* Use Other Address toggle (only shown when profile was pre-filled) */}
-          {prefilled && onUseOtherAddressChange && (
-            <label className="other-address-toggle">
-              <input
-                type="checkbox"
-                checked={useOtherAddress}
-                onChange={e => onUseOtherAddressChange(e.target.checked)}
-              />
-              <span>Use a different pickup address for this order</span>
-            </label>
+          {/* Use Other Address button (only shown when profile was pre-filled) */}
+          {prefilled && onOpenPickupModal && (
+            <div className="other-address-row">
+              <button
+                type="button"
+                className="btn btn--ghost other-address-btn"
+                onClick={onOpenPickupModal}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 1C5.24 1 3 3.24 3 6c0 3.75 5 9 5 9s5-5.25 5-9c0-2.76-2.24-5-5-5zm0 6.5A1.5 1.5 0 1 1 8 4a1.5 1.5 0 0 1 0 3z" fill="currentColor" />
+                </svg>
+                {useOtherAddress ? 'Change pickup address' : 'Use a different pickup address for this order'}
+              </button>
+              {useOtherAddress && onUseOtherAddressChange && (
+                <button
+                  type="button"
+                  className="btn btn--ghost other-address-reset"
+                  onClick={() => onUseOtherAddressChange(false)}
+                >
+                  Reset to registered address
+                </button>
+              )}
+            </div>
           )}
 
           {/* Pickup fields — always shown; locked to registered address unless toggle is on */}

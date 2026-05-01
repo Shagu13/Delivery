@@ -1,0 +1,234 @@
+/* ─── Layout ─────────────────────────────────────────────────────────────── */
+
+.cdp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+}
+
+@media (max-width: 420px) {
+  .cdp-row { grid-template-columns: 1fr; }
+}
+
+/* ─── Field wrapper ──────────────────────────────────────────────────────── */
+
+.cdp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cdp-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #6b7280);
+  letter-spacing: 0.01em;
+}
+
+.cdp-required {
+  color: var(--color-accent, #c47f17);
+  margin-left: 2px;
+}
+
+/* ─── Input control ──────────────────────────────────────────────────────── */
+
+.cdp-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--color-bg, #fff);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.cdp-control:focus-within,
+.cdp-control--open {
+  border-color: var(--color-accent, #c47f17);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent, #c47f17) 12%, transparent);
+}
+
+.cdp-field--error .cdp-control {
+  border-color: var(--color-error, #c0392b);
+}
+
+.cdp-field--error .cdp-control:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error, #c0392b) 12%, transparent);
+}
+
+.cdp-control--disabled {
+  background: var(--color-bg-3, #f9fafb);
+  border-color: var(--color-border, #e5e7eb);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cdp-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 9px 36px 9px 12px;
+  font-family: var(--font-body, inherit);
+  font-size: 0.875rem;
+  color: var(--color-text, #111827);
+  min-width: 0;
+}
+
+.cdp-input::placeholder { color: var(--color-text-subtle, #d1d5db); }
+.cdp-input:disabled     { cursor: not-allowed; }
+
+/* right-side adornment: chevron / clear / spinner */
+.cdp-adornment {
+  position: absolute;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted, #9ca3af);
+  pointer-events: none; /* clear button inside overrides this */
+}
+
+.cdp-chevron {
+  transition: transform 0.18s ease;
+  display: block;
+}
+.cdp-chevron--up { transform: rotate(180deg); }
+
+.cdp-clear-btn {
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-bg-3, #f3f4f6);
+  color: var(--color-text-muted, #6b7280);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.cdp-clear-btn:hover {
+  background: var(--color-error-bg, #fef2f2);
+  color: var(--color-error, #c0392b);
+}
+
+/* ─── Portal container ───────────────────────────────────────────────────── */
+
+.cdp-portal {
+  /* Stacks above everything — popped out of the modal's overflow:auto */
+}
+
+/* ─── Dropdown panel ─────────────────────────────────────────────────────── */
+
+.cdp-dropdown {
+  background: var(--color-bg, #fff);
+  border: 1.5px solid var(--color-border, #e5e7eb);
+  border-radius: 10px;
+  box-shadow:
+    0 4px 6px -1px rgba(0,0,0,0.08),
+    0 10px 28px -4px rgba(0,0,0,0.12);
+  overflow: hidden;
+  animation: cdp-pop 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes cdp-pop {
+  from { opacity: 0; transform: scaleY(0.93) translateY(-4px); transform-origin: top center; }
+  to   { opacity: 1; transform: scaleY(1)    translateY(0);    transform-origin: top center; }
+}
+
+/* ─── Scrollable list ────────────────────────────────────────────────────── */
+
+.cdp-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border, #e5e7eb) transparent;
+}
+.cdp-list::-webkit-scrollbar       { width: 4px; }
+.cdp-list::-webkit-scrollbar-track { background: transparent; }
+.cdp-list::-webkit-scrollbar-thumb { background: var(--color-border, #e5e7eb); border-radius: 4px; }
+
+/* ─── Option ─────────────────────────────────────────────────────────────── */
+
+.cdp-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  color: var(--color-text, #111827);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.08s;
+}
+
+.cdp-option--highlighted {
+  background: var(--color-bg-2, #f9fafb);
+}
+
+.cdp-option--selected {
+  background: color-mix(in srgb, var(--color-accent, #c47f17) 8%, transparent);
+  color: var(--color-accent, #c47f17);
+  font-weight: 600;
+}
+
+.cdp-option--selected.cdp-option--highlighted {
+  background: color-mix(in srgb, var(--color-accent, #c47f17) 14%, transparent);
+}
+
+.cdp-option-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* match highlight — uses <mark> so no extra span nesting */
+.cdp-mark {
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-accent, #c47f17) 60%, transparent);
+  text-underline-offset: 2px;
+}
+
+.cdp-tick {
+  flex-shrink: 0;
+  margin-left: 8px;
+  color: var(--color-accent, #c47f17);
+}
+
+/* ─── Empty / loading state ──────────────────────────────────────────────── */
+
+.cdp-empty {
+  padding: 12px 14px;
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #9ca3af);
+  text-align: center;
+  margin: 0;
+}
+
+/* ─── Error message ──────────────────────────────────────────────────────── */
+
+.cdp-error-msg {
+  font-size: 0.78rem;
+  color: var(--color-error, #c0392b);
+  font-weight: 500;
+}
+
+/* ─── Spinner ────────────────────────────────────────────────────────────── */
+
+.cdp-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-border, #e5e7eb);
+  border-top-color: var(--color-accent, #c47f17);
+  border-radius: 50%;
+  animation: cdp-spin 0.55s linear infinite;
+}
+
+@keyframes cdp-spin { to { transform: rotate(360deg); } }

@@ -1,0 +1,462 @@
+import { useState, useEffect, useCallback } from 'react';
+import {
+    fetchSettlementPreview,
+    createSettlement,
+    SettlementApiError,
+} from '../../api/settlements';
+import type { SettlementPreview } from '../../api/settlements';
+
+interface Props {
+    open: boolean;
+    onClose: () => void;
+    onCreated: () => void;
+    courierId: string;
+    courierFullName: string;
+    token: string;
+}
+
+interface Totals {
+    totalOrdersPickedUp: string;
+    totalOrdersDelivered: string;
+    totalAmountOfCashCollected: string;
+    totalCompanyServiceRevenue: string;
+    totalCourierSalary: string;
+    totalCompanyNetIncome: string;
+}
+
+function todayIso(): string {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function toTotals(p: SettlementPreview): Totals {
+    return {
+        totalOrdersPickedUp:        String(p.totalOrdersPickedUp),
+        totalOrdersDelivered:       String(p.totalOrdersDelivered),
+        totalAmountOfCashCollected: p.totalAmountOfCashCollected > 0
+            ? p.totalAmountOfCashCollected.toFixed(2)
+            : '',
+        totalCompanyServiceRevenue: p.totalCompanyServiceRevenue.toFixed(2),
+        totalCourierSalary:         p.totalCourierSalary.toFixed(2),
+        totalCompanyNetIncome:      p.totalCompanyNetIncome.toFixed(2),
+    };
+}
+
+export function SettlementModal({
+    open,
+    onClose,
+    onCreated,
+    courierId,
+    courierFullName,
+    token,
+}: Props) {
+    const [date,     setDate]     = useState(todayIso());
+    const [preview,  setPreview]  = useState<SettlementPreview | null>(null);
+    const [totals,   setTotals]   = useState<Totals | null>(null);
+    const [loading,  setLoading]  = useState(false);
+    const [saving,   setSaving]   = useState(false);
+    const [error,    setError]    = useState<string | null>(null);
+
+    // ── Fetch preview whenever date changes ───────────────────────────────────
+    const loadPreview = useCallback(async (d: string) => {
+        setLoading(true);
+        setError(null);
+        setPreview(null);
+        setTotals(null);
+        try {
+            const data = await fetchSettlementPreview(courierId, d, token);
+            setPreview(data);
+            setTotals(toTotals(data));
+        } catch (err) {
+            setError(err instanceof SettlementApiError ? err.message : 'Failed to load preview.');
+        } finally {
+            setLoading(false);
+        }
+    }, [courierId, token]);
+
+    useEffect(() => {
+        if (open) loadPreview(date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
+
+    // Close on Escape
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [open, onClose]);
+
+    const handleDateChange = (d: string) => {
+        setDate(d);
+        loadPreview(d);
+    };
+
+    const handleTotalChange = (field: keyof Totals, value: string) => {
+        setTotals(prev => prev ? { ...prev, [field]: value } : prev);
+    };
+
+    const handleSave = async () => {
+        if (!totals || !preview) return;
+        setSaving(true);
+        setError(null);
+        try {
+            const cashStr = totals.totalAmountOfCashCollected.trim();
+            await createSettlement({
+                courierId,
+                date,
+                totalOrdersPickedUp:        parseInt(totals.totalOrdersPickedUp, 10)  || 0,
+                totalOrdersDelivered:       parseInt(totals.totalOrdersDelivered, 10) || 0,
+                totalAmountOfCashCollected: cashStr ? parseFloat(cashStr) : null,
+                totalCompanyServiceRevenue: parseFloat(totals.totalCompanyServiceRevenue) || 0,
+                totalCourierSalary:         parseFloat(totals.totalCourierSalary)         || 0,
+                totalCompanyNetIncome:      parseFloat(totals.totalCompanyNetIncome)       || 0,
+            }, token);
+            onCreated();
+            onClose();
+        } catch (err) {
+            setError(err instanceof SettlementApiError ? err.message : 'Failed to save settlement.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (!open) return null;
+
+    const hasIncomplete = (preview?.incompleteOrderTrackingNumbers ?? []).length > 0;
+
+    return (
+        <>
+            <div className="modal-backdrop" onClick={onClose} />
+            <div className="modal settlement-modal" role="dialog" aria-modal="true" aria-labelledby="settlement-title">
+
+                {/* ── Header ─────────────────────────────────────────────── */}
+                <div className="modal__header">
+                    <div>
+                        <p className="modal__eyebrow">Daily Settlement</p>
+                        <h2 className="modal__title" id="settlement-title">{courierFullName}</h2>
+                    </div>
+                    <button className="modal__close" onClick={onClose} aria-label="Close">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div className="modal__body">
+                    {/* ── Date picker ──────────────────────────────────────── */}
+                    <fieldset className="modal__fieldset">
+                        <legend className="modal__legend">Settlement Date</legend>
+                        <input
+                            type="date"
+                            value={date}
+                            max={todayIso()}
+                            onChange={e => handleDateChange(e.target.value)}
+                            className="settlement-date-input"
+                        />
+                    </fieldset>
+
+                    {/* ── Error banner ─────────────────────────────────────── */}
+                    {error && (
+                        <div className="modal__global-error" role="alert">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+                                <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                            </svg>
+                            {error}
+                        </div>
+                    )}
+
+                    {/* ── Incomplete orders warning ─────────────────────────── */}
+                    {hasIncomplete && (
+                        <div className="settlement-warning" role="alert">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                <path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                                <path d="M8 6v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                            </svg>
+                            <div>
+                                <strong>Missing financial data on {preview!.incompleteOrderTrackingNumbers.length} order{preview!.incompleteOrderTrackingNumbers.length !== 1 ? 's' : ''}:</strong>
+                                {' '}{preview!.incompleteOrderTrackingNumbers.join(', ')}. Set CourierSalary, CompanyServicePrice and CompanyRevenue before saving.
+                            </div>
+                        </div>
+                    )}
+
+                    {loading && (
+                        <div className="go-loading">
+                            <div className="go-spinner" />
+                            Loading data for {date}…
+                        </div>
+                    )}
+
+                    {!loading && preview && totals && (
+                        <>
+                            {/* ── Editable totals ──────────────────────────── */}
+                            <fieldset className="modal__fieldset">
+                                <legend className="modal__legend">Settlement Totals — editable</legend>
+                                <div className="settlement-grid">
+                                    <SettlementField
+                                        label="Packages Picked Up"
+                                        hint="Sum of GroupOrder.NumberOfPackages"
+                                        type="number"
+                                        value={totals.totalOrdersPickedUp}
+                                        onChange={v => handleTotalChange('totalOrdersPickedUp', v)}
+                                    />
+                                    <SettlementField
+                                        label="Orders Delivered"
+                                        hint="Count of DeliveredToRecipient orders"
+                                        type="number"
+                                        value={totals.totalOrdersDelivered}
+                                        onChange={v => handleTotalChange('totalOrdersDelivered', v)}
+                                    />
+                                    <SettlementField
+                                        label="Cash Collected (₾)"
+                                        hint="Leave blank if no COD orders"
+                                        type="number"
+                                        value={totals.totalAmountOfCashCollected}
+                                        onChange={v => handleTotalChange('totalAmountOfCashCollected', v)}
+                                        placeholder="0.00"
+                                    />
+                                    <SettlementField
+                                        label="Service Revenue (₾)"
+                                        hint="Sum of CompanyServicePrice"
+                                        type="number"
+                                        value={totals.totalCompanyServiceRevenue}
+                                        onChange={v => handleTotalChange('totalCompanyServiceRevenue', v)}
+                                    />
+                                    <SettlementField
+                                        label="Courier Salary (₾)"
+                                        hint="Sum of CourierSalary"
+                                        type="number"
+                                        value={totals.totalCourierSalary}
+                                        onChange={v => handleTotalChange('totalCourierSalary', v)}
+                                    />
+                                    <SettlementField
+                                        label="Company Net Income (₾)"
+                                        hint="Revenue − Salary"
+                                        type="number"
+                                        value={totals.totalCompanyNetIncome}
+                                        onChange={v => handleTotalChange('totalCompanyNetIncome', v)}
+                                    />
+                                </div>
+                            </fieldset>
+
+                            {/* ── Orders table ─────────────────────────────── */}
+                            {preview.orders.length > 0 && (
+                                <fieldset className="modal__fieldset">
+                                    <legend className="modal__legend">
+                                        Delivered Orders ({preview.orders.length})
+                                    </legend>
+                                    <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
+                                        <table className="go-orders-table settlement-orders-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Tracking №</th>
+                                                    <th>Recipient</th>
+                                                    <th>City</th>
+                                                    <th style={{ textAlign: 'right' }}>Service ₾</th>
+                                                    <th style={{ textAlign: 'right' }}>Salary ₾</th>
+                                                    <th style={{ textAlign: 'right' }}>Revenue ₾</th>
+                                                    <th style={{ textAlign: 'right' }}>Cash ₾</th>
+                                                    <th>Delivered</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {preview.orders.map(o => {
+                                                    const incomplete =
+                                                        !o.courierSalary || o.courierSalary <= 0 ||
+                                                        o.companyServicePrice <= 0 ||
+                                                        o.companyRevenue == null;
+                                                    return (
+                                                        <tr key={o.id} style={incomplete ? { background: 'rgba(239,68,68,0.06)' } : undefined}>
+                                                            <td>
+                                                                <span className="tn-badge">{o.trackingNumber}</span>
+                                                                {incomplete && (
+                                                                    <span style={{ marginLeft: 6, color: '#ef4444', fontSize: '0.7rem', fontWeight: 700 }}>⚠</span>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ fontWeight: 600 }}>{o.recipientName}</td>
+                                                            <td style={{ color: 'var(--color-text-subtle)', fontSize: '0.8rem' }}>
+                                                                {o.recipientCity}<br />
+                                                                <span style={{ fontSize: '0.72rem' }}>{o.recipientDistrict}</span>
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                                                                {o.companyServicePrice > 0 ? `₾${o.companyServicePrice.toFixed(2)}` : <Dash />}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', color: '#f97316', fontWeight: 600 }}>
+                                                                {o.courierSalary != null ? `₾${o.courierSalary.toFixed(2)}` : <Dash red />}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                                                                {o.companyRevenue != null
+                                                                    ? <span style={{ color: o.companyRevenue >= 0 ? '#10b981' : '#ef4444' }}>₾{o.companyRevenue.toFixed(2)}</span>
+                                                                    : <Dash red />}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', color: 'var(--color-text-subtle)' }}>
+                                                                {o.amountOfCashCollected != null ? `₾${o.amountOfCashCollected.toFixed(2)}` : <Dash />}
+                                                            </td>
+                                                            <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap' }}>
+                                                                {o.deliveredAt ? new Date(o.deliveredAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </fieldset>
+                            )}
+
+                            {preview.orders.length === 0 && (
+                                <p style={{ textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem', padding: '8px 0' }}>
+                                    No delivered orders found for {date}.
+                                </p>
+                            )}
+                        </>
+                    )}
+                </div>
+
+                {/* ── Footer ─────────────────────────────────────────────────── */}
+                <div className="modal__footer" style={{ padding: '16px 24px' }}>
+                    <button
+                        type="button"
+                        className="modal__btn-cancel"
+                        onClick={onClose}
+                        disabled={saving}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        className="modal__btn-submit"
+                        onClick={handleSave}
+                        disabled={saving || loading || !preview || hasIncomplete}
+                        title={hasIncomplete ? 'Fix incomplete orders before saving' : undefined}
+                    >
+                        {saving ? (
+                            <><span className="btn__spinner" />Saving…</>
+                        ) : (
+                            <>
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                    <path d="M3 8l4 4 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                Save Settlement
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            <style>{`
+                .settlement-modal {
+                    width: min(780px, calc(100vw - 32px));
+                }
+                .settlement-date-input {
+                    background: var(--color-bg-3);
+                    border: 1px solid var(--color-border);
+                    border-radius: var(--radius-sm);
+                    color: var(--color-text);
+                    font-size: 0.875rem;
+                    padding: 8px 12px;
+                    outline: none;
+                    transition: border-color var(--transition);
+                    font-family: var(--font-body);
+                }
+                .settlement-date-input:focus {
+                    border-color: var(--color-accent);
+                }
+                .settlement-warning {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 10px;
+                    background: rgba(251,191,36,0.1);
+                    border: 1px solid rgba(251,191,36,0.3);
+                    border-radius: var(--radius-sm);
+                    color: #d97706;
+                    font-size: 0.825rem;
+                    padding: 10px 14px;
+                    line-height: 1.5;
+                }
+                .settlement-warning svg { flex-shrink: 0; margin-top: 2px; }
+                .settlement-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 12px;
+                }
+                @media (max-width: 560px) {
+                    .settlement-grid { grid-template-columns: 1fr 1fr; }
+                }
+                .settlement-field { display: flex; flex-direction: column; gap: 4px; }
+                .settlement-field__label {
+                    font-size: 0.68rem;
+                    font-weight: 700;
+                    letter-spacing: 0.07em;
+                    text-transform: uppercase;
+                    color: var(--color-text-subtle);
+                }
+                .settlement-field__hint {
+                    font-size: 0.65rem;
+                    color: var(--color-text-subtle);
+                    opacity: 0.7;
+                    margin-bottom: 2px;
+                }
+                .settlement-field__input {
+                    background: var(--color-bg);
+                    border: 1px solid var(--color-border);
+                    border-radius: var(--radius-sm);
+                    color: var(--color-text);
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    font-family: 'Courier New', monospace;
+                    padding: 8px 10px;
+                    outline: none;
+                    transition: border-color var(--transition);
+                    width: 100%;
+                    box-sizing: border-box;
+                }
+                .settlement-field__input:focus {
+                    border-color: var(--color-accent);
+                }
+                .settlement-orders-table { font-size: 0.8rem; }
+                .settlement-orders-table th { font-size: 0.62rem; }
+            `}</style>
+        </>
+    );
+}
+
+// ── Small helpers ─────────────────────────────────────────────────────────────
+
+function Dash({ red = false }: { red?: boolean }) {
+    return (
+        <span style={{ opacity: red ? 0.9 : 0.4, fontSize: '0.78rem', color: red ? '#ef4444' : undefined }}>—</span>
+    );
+}
+
+function SettlementField({
+    label,
+    hint,
+    type,
+    value,
+    onChange,
+    placeholder = '',
+}: {
+    label: string;
+    hint: string;
+    type: string;
+    value: string;
+    onChange: (v: string) => void;
+    placeholder?: string;
+}) {
+    return (
+        <div className="settlement-field">
+            <span className="settlement-field__label">{label}</span>
+            <span className="settlement-field__hint">{hint}</span>
+            <input
+                className="settlement-field__input"
+                type={type}
+                min="0"
+                step="0.01"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                placeholder={placeholder}
+            />
+        </div>
+    );
+}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
+import { SettlementModal } from './SettlementModal';
 import type { CreateCourierResponse, Courier, CourierOrder } from '../../api/couriers';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
@@ -9,12 +10,15 @@ import { fetchCouriers, fetchCourierOrders, setCourierSalary } from '../../api/c
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import AdminCustomersPage from './AdminCustomersPage';
 import AdminCitiesPage from './AdminCitiesPage';
+import { useLanguage } from '../../contexts/useLanguage';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import '../../styles/dashboard.css';
 
 type AdminView = 'overview' | 'orders' | 'couriers' | 'customers' | 'cities';
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -33,7 +37,6 @@ export function AdminDashboard() {
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Load couriers from DB on mount
   useEffect(() => {
     if (!token) return;
     fetchCouriers(token).then(setCouriers).catch(() => {});
@@ -42,7 +45,6 @@ export function AdminDashboard() {
   const handleSignOut = () => { signOut(); navigate('/login', { replace: true }); };
 
   const handleCourierCreated = (courier: CreateCourierResponse) => {
-    // Reload full list so new courier has all fields
     if (token) fetchCouriers(token).then(setCouriers).catch(() => {});
     setShowCreateCourier(false);
     setToast(`Courier "${courier.fullName}" created successfully.`);
@@ -62,11 +64,11 @@ export function AdminDashboard() {
             <rect width="28" height="28" rx="6" fill="currentColor" />
             <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          Delivery
+          {t.appName}
         </div>
         <span className="sidebar__role-badge">Admin</span>
         <div className="sidebar__divider" />
-        <p className="sidebar__section-label">Management</p>
+        <p className="sidebar__section-label">{t.sidebarManagement}</p>
         <nav className="sidebar__nav">
           <button className={`sidebar__link ${activeView === 'overview' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('overview')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -75,21 +77,21 @@ export function AdminDashboard() {
               <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
               <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
             </svg>
-            Overview
+            {t.sidebarOverview}
           </button>
           <button className={`sidebar__link ${activeView === 'orders' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('orders')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
               <path d="M4.5 5.5h7M4.5 8h5M4.5 10.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-            Group Orders
+            {t.sidebarGroupOrders}
           </button>
           <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4" />
               <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            Couriers
+            {t.sidebarCouriers}
             {couriers.length > 0 && <span className="sidebar__badge">{couriers.length}</span>}
           </button>
           <button className={`sidebar__link ${activeView === 'customers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('customers')}>
@@ -98,7 +100,7 @@ export function AdminDashboard() {
               <circle cx="11" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M1 14c0-2.5 2-4 4.5-4M8 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            Customers
+            {t.sidebarCustomers}
           </button>
           <button className={`sidebar__link ${activeView === 'cities' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('cities')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -106,10 +108,11 @@ export function AdminDashboard() {
               <path d="M4 7V5a4 4 0 018 0v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               <path d="M8 11v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            Cities &amp; Districts
+            {t.sidebarCities}
           </button>
         </nav>
         <div className="sidebar__footer">
+          <LanguageToggle className="sidebar__lang-toggle" />
           <div className="sidebar__user">
             <div className="sidebar__avatar">{initials}</div>
             <div className="sidebar__user-info">
@@ -121,7 +124,7 @@ export function AdminDashboard() {
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Sign out
+            {t.signOut}
           </button>
         </div>
       </aside>
@@ -129,18 +132,18 @@ export function AdminDashboard() {
       <div className="dashboard__body">
         <div className="dashboard__topbar">
           <span className="dashboard__topbar-title">
-            {activeView === 'overview'  && 'Overview'}
-            {activeView === 'orders'    && 'Group Orders'}
-            {activeView === 'couriers'  && 'Couriers'}
-            {activeView === 'customers' && 'Customers'}
-            {activeView === 'cities'    && 'Cities & Districts'}
+            {activeView === 'overview'  && t.topbarOverview}
+            {activeView === 'orders'    && t.topbarOrders}
+            {activeView === 'couriers'  && t.topbarCouriers}
+            {activeView === 'customers' && t.topbarCustomers}
+            {activeView === 'cities'    && t.topbarCities}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
-              Add Courier
+              {t.addCourier}
             </button>
           )}
         </div>
@@ -176,6 +179,7 @@ export function AdminDashboard() {
         .go-status-pill:hover:not(.go-status-pill--active) { background: var(--color-bg-3); color: var(--color-text); }
         .go-status-pill--active { background: var(--color-accent-dim); border-color: rgba(196,127,23,0.35); color: var(--color-accent); }
         .sidebar__badge { margin-left: auto; background: var(--color-accent-dim); color: var(--color-accent); border: 1px solid rgba(196,127,23,0.25); border-radius: 100px; font-size: 0.65rem; font-weight: 700; padding: 1px 7px; min-width: 20px; text-align: center; }
+        .sidebar__lang-toggle { margin-bottom: 10px; width: 100%; justify-content: center; }
         .courier-table { width: 100%; border-collapse: collapse; }
         .courier-table th { text-align: left; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 12px 16px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); }
         .courier-table td { padding: 13px 16px; font-size: 0.875rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; }
@@ -257,7 +261,6 @@ export function AdminDashboard() {
         .go-error { padding: 24px 20px; color: #ef4444; font-size: 0.875rem; text-align: center; }
         .go-spinner { width: 18px; height: 18px; border: 2px solid var(--color-border); border-top-color: var(--color-accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        /* ── Action buttons ── */
         .go-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; margin-left: auto; flex-shrink: 0; }
         .go-action-btn { border: none; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; padding: 6px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
         .go-action-btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -270,7 +273,6 @@ export function AdminDashboard() {
         .go-action-hint { font-size: 0.72rem; color: var(--color-text-subtle); font-style: italic; }
         .go-courier-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .go-select--inline { min-width: 200px; padding: 6px 28px 6px 10px; font-size: 0.8rem; }
-        /* ── Action toast ── */
         .action-toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; align-items: center; gap: 9px; background: var(--color-text); color: var(--color-bg); border-radius: var(--radius-md); padding: 12px 20px; font-size: 0.875rem; font-weight: 500; box-shadow: 0 8px 32px rgba(0,0,0,0.2); animation: toast-in 0.25s ease both; white-space: nowrap; }
         .action-toast--err { background: #ef4444; color: #fff; }
       `}</style>
@@ -424,7 +426,6 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [search, load]);
 
-  // Fetch courier list for assign-courier pickers
   useEffect(() => {
     fetchCouriers(token ?? '').then(setCouriers).catch(() => {});
   }, [token]);
@@ -454,7 +455,6 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const visibleOrders = useMemo(() => {
     return groupOrders.filter(go => {
       if (filterStatus) {
-        // Order-level statuses live on child orders, not on the GroupOrder
         if (ORDER_LEVEL_STATUSES.has(filterStatus)) {
           if (!go.orders.some(o => o.status === filterStatus)) return false;
         } else {
@@ -614,7 +614,6 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                     <span className="go-meta__pkgs">{go.numberOfPackages} pkg{go.numberOfPackages !== 1 ? 's' : ''}</span>
                     <span className="go-meta__date">{formatDate(go.createdAt)}</span>
                   </div>
-                  {/* ── Action buttons ── */}
                   <AdminGroupOrderActions
                     groupOrder={go}
                     couriers={couriers}
@@ -658,8 +657,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                               </td>
                               <td><StatusBadge status={o.status} /></td>
                               <td>
-                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: o.isPaid ? '#10b981' : '#ef4444' }}>
-                                  {o.isPaid ? '✓ Paid' : '✗ Unpaid'}
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444' }}>
+                                  {o.productPaymentStatus === 'Paid' ? '✓ Paid' : '✗ Unpaid'}
                                 </span>
                               </td>
                               <td>
@@ -746,13 +745,15 @@ function AdminCouriers({
 
 // ── Single expandable courier row ─────────────────────────────────────────────
 function CourierRow({ courier, token }: { courier: Courier; token: string }) {
-  const [expanded,   setExpanded]   = useState(false);
-  const [orders,     setOrders]     = useState<CourierOrder[]>([]);
-  const [loading,    setLoading]    = useState(false);
-  const [selected,   setSelected]   = useState<Set<string>>(new Set());
-  const [bulkSalary, setBulkSalary] = useState('');
-  const [saving,     setSaving]     = useState(false);
-  const [rowToast,   setRowToast]   = useState<{ msg: string; err: boolean } | null>(null);
+  const [expanded,        setExpanded]        = useState(false);
+  const [orders,          setOrders]          = useState<CourierOrder[]>([]);
+  const [loading,         setLoading]         = useState(false);
+  const [selected,        setSelected]        = useState<Set<string>>(new Set());
+  const [bulkSalary,      setBulkSalary]      = useState('');
+  const [saving,          setSaving]          = useState(false);
+  const [rowToast,        setRowToast]        = useState<{ msg: string; err: boolean } | null>(null);
+  const [showSettlement,  setShowSettlement]  = useState(false);
+  const [settlementToast, setSettlementToast] = useState<string | null>(null);
 
   const showRowToast = (msg: string, err = false) => {
     setRowToast({ msg, err });
@@ -832,8 +833,35 @@ function CourierRow({ courier, token }: { courier: Courier; token: string }) {
           <span className={`status-badge ${courier.isAvailable ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
             {courier.isAvailable ? 'Available' : 'Unavailable'}
           </span>
+          <button
+            className="go-action-btn go-action-btn--assign"
+            style={{ padding: '5px 13px', fontSize: '0.75rem' }}
+            onClick={e => { e.stopPropagation(); setShowSettlement(true); }}
+          >
+            Settlement
+          </button>
         </div>
       </div>
+
+      {/* Settlement toast */}
+      {settlementToast && (
+        <div className="action-toast" style={{ bottom: 60 }}>
+          {settlementToast}
+        </div>
+      )}
+
+      {/* Settlement modal */}
+      <SettlementModal
+        open={showSettlement}
+        onClose={() => setShowSettlement(false)}
+        onCreated={() => {
+          setSettlementToast(`Settlement saved for ${courier.fullName}`);
+          setTimeout(() => setSettlementToast(null), 4000);
+        }}
+        courierId={courier.courierId}
+        courierFullName={courier.fullName}
+        token={token}
+      />
 
       {/* Orders panel */}
       {expanded && (

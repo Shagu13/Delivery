@@ -833,3 +833,115 @@ body {
         color: var(--color-text);
         border-color: var(--color-text-muted);
     }*/
+
+/* ── Other Address Button ────────────────────────────────────────────────────── */
+.other-address-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.other-address-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+    padding: 6px 14px;
+}
+
+    .other-address-btn:hover {
+        background: var(--color-accent-dim);
+    }
+
+.other-address-reset {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    padding: 6px 12px;
+}
+
+/* ── Pickup Address Modal ────────────────────────────────────────────────────── */
+.pickup-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 900;
+    padding: 16px;
+}
+
+.pickup-modal {
+    background: var(--color-bg-2);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    animation: modalFadeUp 0.22s ease both;
+}
+
+@keyframes modalFadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.pickup-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.pickup-modal__title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.pickup-modal__close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition), background var(--transition);
+}
+
+    .pickup-modal__close:hover {
+        color: var(--color-text);
+        background: var(--color-bg-3);
+    }
+
+.pickup-modal__body {
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+}
+
+.pickup-modal__hint {
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+}
+
+.pickup-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px 18px;
+    border-top: 1px solid var(--color-border);
+}

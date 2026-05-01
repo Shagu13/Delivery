@@ -13,7 +13,7 @@ public sealed class CreateCustomerCommandValidator : AbstractValidator<CreateCus
         RuleFor(x => x.Dto.LastName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.IdNumber).MaximumLength(50);
         RuleFor(x => x.Dto.BusinessName).NotEmpty().MaximumLength(150);
-        RuleFor(x => x.Dto.PhoneNumber).NotEmpty().MaximumLength(20);
+        RuleFor(x => x.Dto.PhoneNumber).NotEmpty().MaximumLength(9);
 
         // Pickup address
         RuleFor(x => x.Dto.City).NotEmpty().MaximumLength(100);
