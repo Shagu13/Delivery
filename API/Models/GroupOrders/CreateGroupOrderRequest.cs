@@ -26,5 +26,6 @@ public sealed record OrderItemRequest(
     string? Description,
     bool          IsFragile                = false,
     PaymentStatus ProductPaymentStatus     = PaymentStatus.NotPaid,
-    ServicePayer  WhoPaysForCompanyService = ServicePayer.Sender
+    ServicePayer  WhoPaysForCompanyService = ServicePayer.Sender,
+    decimal?      CompanyServicePrice      = null   // explicit override; null = use auto-pricing
 );

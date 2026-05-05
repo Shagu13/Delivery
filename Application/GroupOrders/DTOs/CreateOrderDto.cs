@@ -16,5 +16,6 @@ public sealed record CreateOrderDto(
     string?        Description,
     bool           IsFragile,
     PaymentStatus  ProductPaymentStatus,
-    ServicePayer   WhoPaysForCompanyService
+    ServicePayer   WhoPaysForCompanyService,
+    decimal?       CompanyServicePrice = null   // explicit override; null = use auto-pricing
 );

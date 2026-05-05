@@ -9,20 +9,21 @@ export default function AdminCitiesPage({ token }: Props) {
   const [cities, setCities] = useState<City[]>([]);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [districts, setDistricts] = useState<District[]>([]);
-  const [loadingCities, setLoadingCities] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(true);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    setLoadingCities(true);
-    fetchCities()
-      .then(setCities)
-      .catch(() => setError('Failed to load cities'))
-      .finally(() => setLoadingCities(false));
-  }, []);
+    useEffect(() => {
+        let cancelled = false;
+        fetchCities()
+            .then(data => { if (!cancelled) setCities(data); })
+            .catch(() => { if (!cancelled) setError('Failed to load cities'); })
+            .finally(() => { if (!cancelled) setLoadingCities(false); });
+        return () => { cancelled = true; };
+    }, []);
 
   async function selectCity(city: City) {
     setSelectedCity(city);

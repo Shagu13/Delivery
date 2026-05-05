@@ -8,8 +8,10 @@ import {
   cancelGroupOrderByAdmin,
   setGroupOrderPickupDate,
 } from '../../api/adminGroupOrders';
-import { sendOrderToCity, assignCourierToOrder, cancelOrderByAdmin, setCourierSalary, setCompanyServicePrice } from '../../api/orders';
+import { sendOrderToCity, assignCourierToOrder, cancelOrderByAdmin } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
+//import { STATUS_COLORS } from '../../utils/statusColors';
+
 
 interface Props {
   groupOrder: AdminGroupOrder;
@@ -184,10 +186,6 @@ export function AdminOrderRowActions({ order, couriers, token, onSuccess, onErro
   const [busy, setBusy] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState('');
-  const [showSalary, setShowSalary] = useState(false);
-  const [salaryValue, setSalaryValue] = useState(order.courierSalary?.toString() ?? '');
-  const [showServicePrice, setShowServicePrice] = useState(false);
-  const [servicePriceValue, setServicePriceValue] = useState(order.companyServicePrice?.toString() ?? '');
 
   async function run(fn: () => Promise<void>, msg: string) {
     setBusy(true);
@@ -256,84 +254,6 @@ export function AdminOrderRowActions({ order, couriers, token, onSuccess, onErro
         </div>
       )}
 
-      {/* Courier Salary input (admin sets any time) */}
-      {!showSalary && (
-        <button className="go-action-btn go-action-btn--ghost" disabled={busy}
-          title="Set courier salary for this package"
-          onClick={() => setShowSalary(true)}>
-          💰 {order.courierSalary != null ? `₾${order.courierSalary}` : 'Set Salary'}
-        </button>
-      )}
-      {showSalary && (
-        <div className="go-courier-picker" onClick={e => e.stopPropagation()}>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            className="go-select go-select--inline"
-            placeholder="0.00"
-            value={salaryValue}
-            onChange={e => setSalaryValue(e.target.value)}
-          />
-          <button className="go-action-btn go-action-btn--accept"
-            disabled={busy || salaryValue === ''}
-            onClick={async () => {
-              const amount = parseFloat(salaryValue);
-              if (isNaN(amount) || amount < 0) return;
-              await run(
-                () => setCourierSalary(token, order.id, amount),
-                `Salary set to ₾${amount.toFixed(2)}.`
-              );
-              setShowSalary(false);
-            }}>
-            Save
-          </button>
-          <button className="go-action-btn go-action-btn--ghost"
-            onClick={() => setShowSalary(false)}>
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {/* Company Service Price input */}
-      {!showServicePrice && (
-        <button className="go-action-btn go-action-btn--ghost" disabled={busy}
-          title="Set company service price for this package"
-          onClick={() => setShowServicePrice(true)}>
-          🏷 {order.companyServicePrice != null && order.companyServicePrice > 0 ? `₾${order.companyServicePrice}` : 'Set Price'}
-        </button>
-      )}
-      {showServicePrice && (
-        <div className="go-courier-picker" onClick={e => e.stopPropagation()}>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            className="go-select go-select--inline"
-            placeholder="0.00"
-            value={servicePriceValue}
-            onChange={e => setServicePriceValue(e.target.value)}
-          />
-          <button className="go-action-btn go-action-btn--accept"
-            disabled={busy || servicePriceValue === ''}
-            onClick={async () => {
-              const amount = parseFloat(servicePriceValue);
-              if (isNaN(amount) || amount < 0) return;
-              await run(
-                () => setCompanyServicePrice(token, order.id, amount),
-                `Service price set to ₾${amount.toFixed(2)}.`
-              );
-              setShowServicePrice(false);
-            }}>
-            Save
-          </button>
-          <button className="go-action-btn go-action-btn--ghost"
-            onClick={() => setShowServicePrice(false)}>
-            Cancel
-          </button>
-        </div>
-      )}
-
       {/* Cancel single order by Admin — always available unless terminal */}
       {!isTerminal && (
         <button
@@ -352,21 +272,21 @@ export function AdminOrderRowActions({ order, couriers, token, onSuccess, onErro
   );
 }
 
-// ── Status colour map (all statuses including new ones) ───────────────────────
-export const STATUS_COLORS: Record<string, [string, string]> = {
-  Pending:                         ['rgba(160,120,0,0.12)',  '#c4870f'],
-  AcceptedGroupOrder:              ['rgba(59,130,246,0.12)', '#3b82f6'],
-  AcceptedOrder:                   ['rgba(59,130,246,0.12)', '#3b82f6'],
-  CourierAssignedToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierOnTheWayToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierDeliveringToWarehouse:    ['rgba(249,115,22,0.12)', '#f97316'],
-  DeliveredToWarehouse:            ['rgba(16,185,129,0.12)', '#10b981'],
-  AdminAcceptedOrderInWareHouse:   ['rgba(16,185,129,0.12)', '#10b981'],
-  OrderIsOnItsWayToRecipientsCity: ['rgba(59,130,246,0.12)', '#3b82f6'],
-  CourierAssignedToDeliver:        ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierRecievedOrderToDeliver:   ['rgba(249,115,22,0.12)', '#f97316'],
-  DeliveredToRecipient:            ['rgba(16,185,129,0.12)', '#10b981'],
-  CancelledBySender:               ['rgba(239,68,68,0.12)',  '#ef4444'],
-  OrderNotAccepted:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-  CancelledByAdmin:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-};
+//// ── Status colour map (all statuses including new ones) ───────────────────────
+//export const STATUS_COLORS: Record<string, [string, string]> = {
+//  Pending:                         ['rgba(160,120,0,0.12)',  '#c4870f'],
+//  AcceptedGroupOrder:              ['rgba(59,130,246,0.12)', '#3b82f6'],
+//  AcceptedOrder:                   ['rgba(59,130,246,0.12)', '#3b82f6'],
+//  CourierAssignedToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
+//  CourierOnTheWayToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
+//  CourierDeliveringToWarehouse:    ['rgba(249,115,22,0.12)', '#f97316'],
+//  DeliveredToWarehouse:            ['rgba(16,185,129,0.12)', '#10b981'],
+//  AdminAcceptedOrderInWareHouse:   ['rgba(16,185,129,0.12)', '#10b981'],
+//  OrderIsOnItsWayToRecipientsCity: ['rgba(59,130,246,0.12)', '#3b82f6'],
+//  CourierAssignedToDeliver:        ['rgba(139,92,246,0.12)', '#8b5cf6'],
+//  CourierRecievedOrderToDeliver:   ['rgba(249,115,22,0.12)', '#f97316'],
+//  DeliveredToRecipient:            ['rgba(16,185,129,0.12)', '#10b981'],
+//  CancelledBySender:               ['rgba(239,68,68,0.12)',  '#ef4444'],
+//  OrderNotAccepted:                ['rgba(239,68,68,0.12)',  '#ef4444'],
+//  CancelledByAdmin:                ['rgba(239,68,68,0.12)',  '#ef4444'],
+//};

@@ -1,0 +1,99 @@
+using Application.Common.Interfaces;
+using Application.Common.Models;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace Application.Orders.Queries.GetAllOrders;
+
+public sealed class GetAllOrdersQueryHandler
+    : IRequestHandler<GetAllOrdersQuery, PagedResult<AdminOrderListDto>>
+{
+    private readonly IAppDbContext _context;
+
+    public GetAllOrdersQueryHandler(IAppDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<PagedResult<AdminOrderListDto>> Handle(
+        GetAllOrdersQuery request,
+        CancellationToken cancellationToken)
+    {
+        var query = _context.Orders
+            .Include(o => o.GroupOrder)
+            .AsNoTracking();
+
+        // ── City filter ──────────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(request.City))
+            query = query.Where(o => o.RecipientCity == request.City);
+
+        // ── District filter ──────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(request.District))
+            query = query.Where(o => o.RecipientDistrict == request.District);
+
+        // ── Courier filter ───────────────────────────────────────────────────
+        if (request.CourierId.HasValue)
+            query = query.Where(o => o.CourierId == request.CourierId.Value);
+
+        // ── Unpriced filter ──────────────────────────────────────────────────
+        if (request.Unpriced)
+            query = query.Where(o =>
+                o.CompanyServicePrice == 0 ||
+                o.CourierSalary == null    ||
+                o.CourierSalary == 0);
+
+        // ── Free-text search ─────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var term = request.Search.Trim().ToLower();
+            query = query.Where(o =>
+                o.TrackingNumber.ToLower().Contains(term) ||
+                o.RecipientFirstName.ToLower().Contains(term) ||
+                o.RecipientLastName.ToLower().Contains(term) ||
+                o.RecipientPhone.Contains(term) ||
+                o.RecipientAddress.ToLower().Contains(term) ||
+                o.GroupOrder.SenderBusinessName.ToLower().Contains(term) ||
+                o.GroupOrder.SenderFirstName.ToLower().Contains(term) ||
+                o.GroupOrder.SenderLastName.ToLower().Contains(term)
+            );
+        }
+
+        // ── Count then page ──────────────────────────────────────────────────
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var entities = await query
+            .OrderByDescending(o => o.CreatedAt)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .ToListAsync(cancellationToken);
+
+        var items = entities
+            .Select(o => new AdminOrderListDto(
+                Id:                       o.Id,
+                TrackingNumber:           o.TrackingNumber,
+                SenderBusinessName:       o.GroupOrder.SenderBusinessName,
+                SenderFirstName:          o.GroupOrder.SenderFirstName,
+                SenderLastName:           o.GroupOrder.SenderLastName,
+                SenderPhone:              o.GroupOrder.SenderPhone,
+                RecipientFirstName:       o.RecipientFirstName,
+                RecipientLastName:        o.RecipientLastName,
+                RecipientPhone:           o.RecipientPhone,
+                RecipientCity:            o.RecipientCity,
+                RecipientDistrict:        o.RecipientDistrict,
+                RecipientAddress:         o.RecipientAddress,
+                Description:              o.Description,
+                IsFragile:                o.IsFragile,
+                Status:                   o.Status.ToString(),
+                ProductPaymentStatus:     o.ProductPaymentStatus.ToString(),
+                WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
+                CompanyServicePrice:      o.CompanyServicePrice,
+                CourierSalary:            o.CourierSalary,
+                CompanyRevenue:           o.CompanyRevenue,
+                CreatedAt:                o.CreatedAt,
+                DeliveredAt:              o.DeliveredAt
+            ))
+            .ToList();
+
+        return new PagedResult<AdminOrderListDto>(items, totalCount, request.Page, request.PageSize);
+    }
+}

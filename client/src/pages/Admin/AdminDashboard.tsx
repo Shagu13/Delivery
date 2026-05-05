@@ -7,14 +7,16 @@ import type { CreateCourierResponse, Courier, CourierOrder } from '../../api/cou
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
 import { fetchCouriers, fetchCourierOrders, setCourierSalary } from '../../api/couriers';
+import { assignCourierToOrder } from '../../api/orders';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import AdminCustomersPage from './AdminCustomersPage';
 import AdminCitiesPage from './AdminCitiesPage';
+import AdminOrdersPage from './AdminOrdersPage';
 import { useLanguage } from '../../contexts/useLanguage';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import '../../styles/dashboard.css';
 
-type AdminView = 'overview' | 'orders' | 'couriers' | 'customers' | 'cities';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities';
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -86,6 +88,14 @@ export function AdminDashboard() {
             </svg>
             {t.sidebarGroupOrders}
           </button>
+          <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M1 8h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            Orders
+          </button>
           <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4" />
@@ -134,6 +144,7 @@ export function AdminDashboard() {
           <span className="dashboard__topbar-title">
             {activeView === 'overview'  && t.topbarOverview}
             {activeView === 'orders'    && t.topbarOrders}
+            {activeView === 'packages'  && 'Orders'}
             {activeView === 'couriers'  && t.topbarCouriers}
             {activeView === 'customers' && t.topbarCustomers}
             {activeView === 'cities'    && t.topbarCities}
@@ -150,6 +161,7 @@ export function AdminDashboard() {
         <main className="dashboard__content">
           {activeView === 'overview'  && <AdminOverview />}
           {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} />}
+          {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} />}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} />}
           {activeView === 'cities'    && <AdminCitiesPage token={token ?? ''} />}
@@ -395,6 +407,10 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const [filterStatus,   setFilterStatus]   = useState(initialStatus);
   const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
   const [actionToast,    setActionToast]    = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  // Bulk-assign state
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [bulkCourierId,    setBulkCourierId]    = useState('');
+  const [bulkAssigning,    setBulkAssigning]    = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
@@ -478,6 +494,48 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const hasLocationFilter = filterCity || filterDistrict;
   const hasFilters        = search || hasLocationFilter || filterStatus;
   const clearAll          = () => { setSearch(''); setFilterCity(''); setFilterDistrict(''); setFilterStatus(''); };
+
+  // Returns only the orders that match the active recipient city/district filter
+  // (returns all orders when in sender mode or when no location filter is active)
+  const visibleOrdersFor = useCallback((go: AdminGroupOrder) => {
+    if (filterParty !== 'recipient' || (!filterCity && !filterDistrict)) return go.orders;
+    return go.orders.filter(o => {
+      if (filterCity     && o.recipientCity     !== filterCity)     return false;
+      if (filterDistrict && o.recipientDistrict !== filterDistrict) return false;
+      return true;
+    });
+  }, [filterParty, filterCity, filterDistrict]);
+
+  // Bulk-assign all selected orders to one courier in parallel
+  const handleBulkAssign = async () => {
+    if (!bulkCourierId || selectedOrderIds.size === 0) return;
+    setBulkAssigning(true);
+    const ids = [...selectedOrderIds];
+    let ok = 0; let fail = 0;
+    await Promise.all(ids.map(async id => {
+      try {
+        await assignCourierToOrder(token ?? '', id, bulkCourierId);
+        ok++;
+      } catch { fail++; }
+    }));
+    setBulkAssigning(false);
+    setSelectedOrderIds(new Set());
+    setBulkCourierId('');
+    void (async () => { setLoading(true); await load(search); })();
+    showToast(
+      fail === 0 ? `Courier assigned to ${ok} order${ok !== 1 ? 's' : ''}.`
+                 : `${ok} assigned, ${fail} failed.`,
+      fail > 0 ? 'err' : 'ok'
+    );
+  };
+
+  const toggleOrderSelect = (id: string) => {
+    setSelectedOrderIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <div className="content-card" style={{ overflow: 'hidden' }}>
@@ -592,11 +650,67 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
         </div>
       )}
 
+      {/* Bulk assign bar — appears when any orders are selected */}
+      {selectedOrderIds.size > 0 && (
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 10,
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          padding: '10px 20px', background: 'var(--color-accent-dim)',
+          borderBottom: '1px solid rgba(196,127,23,0.3)',
+          animation: 'expand-in 0.15s ease both',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--color-accent)', flexShrink: 0 }}>
+            <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M4 8l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
+            {selectedOrderIds.size} order{selectedOrderIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="go-select-wrap" style={{ marginLeft: 4 }}>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon">
+              <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            <select
+              className="go-select"
+              value={bulkCourierId}
+              onChange={e => setBulkCourierId(e.target.value)}
+              style={{ minWidth: 220 }}
+            >
+              <option value="">Choose courier to assign…</option>
+              {couriers.map(c => (
+                <option key={c.courierId} value={c.courierId}>
+                  {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
+                </option>
+              ))}
+            </select>
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron">
+              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <button
+            className="go-action-btn go-action-btn--assign"
+            disabled={!bulkCourierId || bulkAssigning}
+            onClick={handleBulkAssign}
+          >
+            {bulkAssigning ? 'Assigning…' : `Assign Courier (${selectedOrderIds.size})`}
+          </button>
+          <button
+            className="go-action-btn go-action-btn--ghost"
+            onClick={() => setSelectedOrderIds(new Set())}
+            style={{ marginLeft: 'auto' }}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {/* Group order list */}
       {!loading && !error && visibleOrders.length > 0 && (
         <div className="go-list">
           {visibleOrders.map(go => {
             const expanded = expandedIds.has(go.id);
+            const filteredOrders = visibleOrdersFor(go);
             return (
               <div className="go-row" key={go.id}>
                 <div className="go-row-header" onClick={() => toggleExpand(go.id)}>
@@ -626,56 +740,85 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
 
                 {expanded && (
                   <div className="go-orders">
-                    <div style={{ overflowX: 'auto' }}>
-                      <table className="go-orders-table">
-                        <thead>
-                          <tr>
-                            <th>Tracking №</th>
-                            <th>Recipient</th>
-                            <th>Phone</th>
-                            <th>City / District</th>
-                            <th>Address</th>
-                            <th>Description</th>
-                            <th>Status</th>
-                            <th>Paid</th>
-                            <th>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {go.orders.map(o => (
-                            <tr key={o.id}>
-                              <td><span className="tn-badge">{o.trackingNumber}</span></td>
-                              <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
-                              <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
-                              <td>
-                                <div>{o.recipientCity}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
-                              </td>
-                              <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
-                              <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
-                                {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
-                              </td>
-                              <td><StatusBadge status={o.status} /></td>
-                              <td>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444' }}>
-                                  {o.productPaymentStatus === 'Paid' ? '✓ Paid' : '✗ Unpaid'}
-                                </span>
-                              </td>
-                              <td>
-                                <AdminOrderRowActions
-                                  order={o}
-                                  couriers={couriers}
-                                  token={token ?? ''}
-                                  onSuccess={msg => showToast(msg)}
-                                  onError={msg => showToast(msg, 'err')}
-                                  onRefresh={() => load(search)}
+                    {filteredOrders.length === 0 ? (
+                      <div style={{ padding: '16px 20px', fontSize: '0.825rem', color: 'var(--color-text-subtle)' }}>
+                        No orders match the current location filter.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="go-orders-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: 36 }}>
+                                <input
+                                  type="checkbox"
+                                  title="Select all in this group"
+                                  checked={filteredOrders.every(o => selectedOrderIds.has(o.id))}
+                                  onChange={e => {
+                                    setSelectedOrderIds(prev => {
+                                      const next = new Set(prev);
+                                      filteredOrders.forEach(o => e.target.checked ? next.add(o.id) : next.delete(o.id));
+                                      return next;
+                                    });
+                                  }}
+                                  style={{ cursor: 'pointer' }}
                                 />
-                              </td>
+                              </th>
+                              <th>Tracking №</th>
+                              <th>Recipient</th>
+                              <th>Phone</th>
+                              <th>City / District</th>
+                              <th>Address</th>
+                              <th>Description</th>
+                              <th>Status</th>
+                              <th>Paid</th>
+                              <th>Actions</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {filteredOrders.map(o => (
+                              <tr key={o.id} style={{ background: selectedOrderIds.has(o.id) ? 'var(--color-accent-dim)' : undefined }}>
+                                <td onClick={e => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedOrderIds.has(o.id)}
+                                    onChange={() => toggleOrderSelect(o.id)}
+                                    style={{ cursor: 'pointer' }}
+                                  />
+                                </td>
+                                <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                                <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
+                                <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
+                                <td>
+                                  <div>{o.recipientCity}</div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
+                                </td>
+                                <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
+                                <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
+                                  {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
+                                </td>
+                                <td><StatusBadge status={o.status} /></td>
+                                <td>
+                                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444' }}>
+                                    {o.productPaymentStatus === 'Paid' ? '✓ Paid' : '✗ Unpaid'}
+                                  </span>
+                                </td>
+                                <td>
+                                  <AdminOrderRowActions
+                                    order={o}
+                                    couriers={couriers}
+                                    token={token ?? ''}
+                                    onSuccess={msg => showToast(msg)}
+                                    onError={msg => showToast(msg, 'err')}
+                                    onRefresh={() => load(search)}
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                     {go.note && <div className="go-note"><strong>Note:</strong> {go.note}</div>}
                   </div>
                 )}

@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { fetchMyPickups } from '../../api/adminGroupOrders';
+import {
+    fetchMyPickups, markPickingUp,
+    markPickedUp,
+    markDeliveredToWarehouse, } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
 import {
   fetchMyDeliveries,
@@ -10,6 +13,8 @@ import {
 } from '../../api/orders';
 import type { CourierOrder } from '../../api/orders';
 import '../../styles/dashboard.css';
+import { STATUS_COLORS } from '../../utils/statusColors';
+
 
 export function CourierDashboard() {
   const { user, token, signOut } = useAuth();
@@ -60,21 +65,24 @@ export function CourierDashboard() {
     }
   }, [token]);
 
-  useEffect(() => { loadPickups(); }, [loadPickups]);
-  useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(() => { loadPickups(); }, [loadPickups]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
 
-  async function act(id: string, fn: () => Promise<void>, msg: string) {
-    setBusyId(id);
-    try {
-      await fn();
-      showToast(msg);
-      loadDeliveries();
-    } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'Action failed.');
-    } finally {
-      setBusyId(null);
+    async function act(id: string, fn: () => Promise<void>, msg: string) {
+        setBusyId(id);
+        try {
+            await fn();
+            showToast(msg);
+            loadPickups();
+            loadDeliveries();
+        } catch (e: unknown) {
+            showToast(e instanceof Error ? e.message : 'Action failed.');
+        } finally {
+            setBusyId(null);
+        }
     }
-  }
 
   const handleSignOut = () => { signOut(); navigate('/login', { replace: true }); };
 
@@ -128,12 +136,15 @@ export function CourierDashboard() {
         {toast && <div className="dashboard__toast">{toast}</div>}
 
         {view === 'pickups' && (
-          <PickupsPanel
-            pickups={pickups}
-            loading={pickupLoading}
-            error={pickupError}
-            onRefresh={loadPickups}
-          />
+                  <PickupsPanel
+                      pickups={pickups}
+                      loading={pickupLoading}
+                      error={pickupError}
+                      onRefresh={loadPickups}
+                      busyId={busyId}
+                      token={token!}
+                      onAct={act}
+                  />
         )}
 
         {view === 'deliveries' && (
@@ -154,40 +165,108 @@ export function CourierDashboard() {
 // ── Pickups Panel ─────────────────────────────────────────────────────────────
 
 interface PickupsPanelProps {
-  pickups: AdminGroupOrder[];
-  loading: boolean;
-  error: string | null;
-  onRefresh: () => void;
+    pickups: AdminGroupOrder[];
+    loading: boolean;
+    error: string | null;
+    onRefresh: () => void;
+    busyId: string | null;
+    token: string;
+    onAct: (id: string, fn: () => Promise<void>, msg: string) => Promise<void>;
 }
 
-function PickupsPanel({ pickups, loading, error, onRefresh }: PickupsPanelProps) {
+function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct }: PickupsPanelProps) {
   if (loading) return <div className="dashboard__loader">Loading pickups…</div>;
   if (error)   return <div className="dashboard__error">{error} <button onClick={onRefresh}>Retry</button></div>;
   if (!pickups.length) return <div className="dashboard__empty">No active pickups assigned to you.</div>;
 
-  return (
-    <div className="dashboard__section">
-      <h2 className="dashboard__title">Active Pickups</h2>
-      {pickups.map(go => (
-        <div key={go.id} className="go-card">
-          <div className="go-card__header">
-            <span className="go-card__business">{go.senderBusinessName}</span>
-            <StatusPill status={go.status} />
-          </div>
-          <div className="go-card__meta">
-            <span>{go.pickUpCity}, {go.pickUpDistrict}</span>
-            <span>{go.pickUpAddress}</span>
-            <span>{go.numberOfPackages} package{go.numberOfPackages !== 1 ? 's' : ''}</span>
-            {go.whenPackagePickedUpDate && (
-              <span className="go-card__pickup-date">
-                📅 Pickup scheduled: {new Date(go.whenPackagePickedUpDate).toLocaleDateString()}
-              </span>
-            )}
-          </div>
+    return (
+        <div className="dashboard__section">
+            <h2 className="dashboard__title">Active Pickups</h2>
+            <div className="courier-cards">
+                {pickups.map(go => (
+                    <div key={go.id} className="courier-card">
+
+                        {/* Top row: business name + status */}
+                        <div className="courier-card__header">
+                            <div className="courier-card__business">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                    <rect x="1" y="5" width="14" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+                                    <path d="M5 5V3.5A1.5 1.5 0 016.5 2h3A1.5 1.5 0 0111 3.5V5" stroke="currentColor" strokeWidth="1.4" />
+                                </svg>
+                                {go.senderBusinessName || `${go.senderFirstName} ${go.senderLastName}`}
+                            </div>
+                            <StatusPill status={go.status} />
+                        </div>
+
+                        {/* Info rows */}
+                        <div className="courier-card__body">
+                            <div className="courier-card__row">
+                                <span className="courier-card__label">📍 Location</span>
+                                <span className="courier-card__value">{go.pickUpCity}, {go.pickUpDistrict}</span>
+                            </div>
+                            <div className="courier-card__row">
+                                <span className="courier-card__label">🏠 Address</span>
+                                <span className="courier-card__value">{go.pickUpAddress}</span>
+                            </div>
+                            <div className="courier-card__row">
+                                <span className="courier-card__label">📦 Packages</span>
+                                <span className="courier-card__value">{go.numberOfPackages} package{go.numberOfPackages !== 1 ? 's' : ''}</span>
+                            </div>
+                            {go.senderPhone && (
+                                <div className="courier-card__row">
+                                    <span className="courier-card__label">📞 Phone</span>
+                                    <span className="courier-card__value">{go.senderPhone}</span>
+                                </div>
+                            )}
+                            {go.whenPackagePickedUpDate && (
+                                <div className="courier-card__row">
+                                    <span className="courier-card__label">📅 Scheduled</span>
+                                    <span className="courier-card__value">
+                                        {new Date(go.whenPackagePickedUpDate).toLocaleDateString()}
+                                    </span>
+                                </div>
+                            )}
+                            {go.note && (
+                                <div className="courier-card__note">{go.note}</div>
+                            )}
+                        </div>
+
+                        {/* Action footer */}
+                        <div className="courier-card__footer">
+                            {go.status === 'CourierAssignedToPickUp' && (
+                                <button
+                                    className="courier-card__btn courier-card__btn--primary"
+                                    disabled={busyId === go.id}
+                                    onClick={() => onAct(go.id, () => markPickingUp(token, go.id), 'On the way to pickup.')}
+                                >
+                                    🚗 On My Way
+                                </button>
+                            )}
+                            {go.status === 'CourierOnTheWayToPickUp' && (
+                                <button
+                                    className="courier-card__btn courier-card__btn--primary"
+                                    disabled={busyId === go.id}
+                                    onClick={() => onAct(go.id, () => markPickedUp(token, go.id), 'Packages picked up.')}
+                                >
+                                    ✅ Picked Up
+                                </button>
+                            )}
+                            {go.status === 'CourierDeliveringToWarehouse' && (
+                                <button
+                                    className="courier-card__btn courier-card__btn--success"
+                                    disabled={busyId === go.id}
+                                    onClick={() => onAct(go.id, () => markDeliveredToWarehouse(token, go.id), 'Delivered to warehouse.')}
+                                >
+                                    🏭 Delivered to Warehouse
+                                </button>
+                            )}
+                        </div>
+
+                    </div>
+                ))}
+            </div>
         </div>
-      ))}
-    </div>
-  );
+    );
 }
 
 // ── Deliveries Panel ──────────────────────────────────────────────────────────
@@ -282,24 +361,6 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
   );
 }
 
-// ── StatusPill ────────────────────────────────────────────────────────────────
-const STATUS_COLORS: Record<string, [string, string]> = {
-  Pending:                         ['rgba(160,120,0,0.12)',  '#c4870f'],
-  AcceptedGroupOrder:              ['rgba(59,130,246,0.12)', '#3b82f6'],
-  AcceptedOrder:                   ['rgba(59,130,246,0.12)', '#3b82f6'],
-  CourierAssignedToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierOnTheWayToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierDeliveringToWarehouse:    ['rgba(249,115,22,0.12)', '#f97316'],
-  DeliveredToWarehouse:            ['rgba(16,185,129,0.12)', '#10b981'],
-  AdminAcceptedOrderInWareHouse:   ['rgba(16,185,129,0.12)', '#10b981'],
-  OrderIsOnItsWayToRecipientsCity: ['rgba(59,130,246,0.12)', '#3b82f6'],
-  CourierAssignedToDeliver:        ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierRecievedOrderToDeliver:   ['rgba(249,115,22,0.12)', '#f97316'],
-  DeliveredToRecipient:            ['rgba(16,185,129,0.12)', '#10b981'],
-  CancelledBySender:               ['rgba(239,68,68,0.12)',  '#ef4444'],
-  OrderNotAccepted:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-  CancelledByAdmin:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-};
 
 function StatusPill({ status }: { status: string }) {
   const [bg, color] = STATUS_COLORS[status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];

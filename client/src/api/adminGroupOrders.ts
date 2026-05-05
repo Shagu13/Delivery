@@ -115,3 +115,7 @@ export const setGroupOrderPickupDate  = (token: string, id: string, pickupDate: 
 
 export const assignCourierToGroupOrder = (token: string, id: string, courierId: string) =>
     groupOrderAction(token, id, 'assign-courier', { courierId });
+
+export const markPickingUp = (token: string, id: string) => groupOrderAction(token, id, 'picking-up');
+export const markPickedUp = (token: string, id: string) => groupOrderAction(token, id, 'picked-up');
+export const markDeliveredToWarehouse = (token: string, id: string) => groupOrderAction(token, id, 'delivered-to-warehouse');

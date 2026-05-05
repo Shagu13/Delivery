@@ -11,6 +11,7 @@ export interface OrderItemRequest {
     isFragile: boolean;
     productPaymentStatus: PaymentStatus;
     whoPaysForCompanyService: ServicePayer;
+    companyServicePrice?: number; // admin override — omit to use auto-pricing
 }
 
 export interface CreateGroupOrderRequest {

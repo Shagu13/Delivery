@@ -36,5 +36,8 @@ public sealed class CreateOrderDtoValidator : AbstractValidator<CreateOrderDto>
         RuleFor(x => x.RecipientDistrict).NotEmpty().MaximumLength(100);
         RuleFor(x => x.RecipientAddress).NotEmpty().MaximumLength(250);
         RuleFor(x => x.Description).MaximumLength(500).When(x => x.Description is not null);
+        RuleFor(x => x.CompanyServicePrice)
+            .GreaterThan(0).WithMessage("CompanyServicePrice must be greater than 0 when provided.")
+            .When(x => x.CompanyServicePrice.HasValue);
     }
 }

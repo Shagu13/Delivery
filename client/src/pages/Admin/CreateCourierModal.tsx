@@ -37,9 +37,13 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  useEffect(() => {
-    if (open) { setForm(EMPTY); setErrors({}); setGlobalError(null); }
-  }, [open]);
+    useEffect(() => {
+        if (!open) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setForm(EMPTY);
+        setErrors({});
+        setGlobalError(null);
+    }, [open]);
 
   const handleChange = useCallback((field: keyof FormData, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));

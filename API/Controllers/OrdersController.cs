@@ -1,6 +1,8 @@
 using API.Models.Orders;
+using Application.Common.Models;
 using Application.Courier.Queries;
 using Application.Orders.Commands;
+using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
 using Application.Orders.Queries.GetOrderByTrackingNumber;
 using Microsoft.AspNetCore.Authorization;
@@ -11,6 +13,25 @@ namespace API.Controllers;
 
 public sealed class OrdersController : BaseController
 {
+    // ── GET /api/orders  (Admin — all orders, filterable) ────────────────────
+    [HttpGet]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(PagedResult<AdminOrderListDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string? city      = null,
+        [FromQuery] string? district  = null,
+        [FromQuery] string? search    = null,
+        [FromQuery] Guid?   courierId = null,
+        [FromQuery] bool    unpriced  = false,
+        [FromQuery] int     page      = 1,
+        [FromQuery] int     pageSize  = 50,
+        CancellationToken ct = default)
+    {
+        var result = await Sender.Send(
+            new GetAllOrdersQuery(city, district, search, courierId, unpriced, page, pageSize), ct);
+        return Ok(result);
+    }
+
     // ── GET /api/orders/track/{trackingNumber}  (Public) ─────────────────────
     [HttpGet("track/{trackingNumber}")]
     [AllowAnonymous]
@@ -57,10 +78,6 @@ public sealed class OrdersController : BaseController
         return Ok(result);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  ADMIN STATUS-TRANSITION ENDPOINTS
-    // ══════════════════════════════════════════════════════════════════════════
-
     // ── PUT /api/orders/{id}/send-to-city  (Admin) ───────────────────────────
     [HttpPut("{id:guid}/send-to-city")]
     [Authorize(Roles = "Admin")]
@@ -84,7 +101,7 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/cancel-by-admin  (Admin — available at any stage) ─
+    // ── PUT /api/orders/{id}/cancel-by-admin  (Admin) ────────────────────────
     [HttpPut("{id:guid}/cancel-by-admin")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -121,7 +138,7 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── GET /api/orders/courier/{courierId}/daily?date=2026-04-30  (Admin) ────
+    // ── GET /api/orders/courier/{courierId}/daily  (Admin) ────────────────────
     [HttpGet("courier/{courierId:guid}/daily")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(CourierDailyDeliveriesDto), StatusCodes.Status200OK)]
@@ -134,12 +151,7 @@ public sealed class OrdersController : BaseController
         return Ok(result);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  COURIER STATUS-TRANSITION ENDPOINTS
-    // ══════════════════════════════════════════════════════════════════════════
-
     // ── PUT /api/orders/{id}/received  (Courier) ──────────────────────────────
-    /// <summary>Courier confirms receipt of order. Auto-fills delivery window for non-Tbilisi.</summary>
     [HttpPut("{id:guid}/received")]
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -151,7 +163,6 @@ public sealed class OrdersController : BaseController
     }
 
     // ── PUT /api/orders/{id}/delivered  (Courier) ─────────────────────────────
-    /// <summary>Courier marks delivery complete. Goes directly from CourierRecievedOrderToDeliver.</summary>
     [HttpPut("{id:guid}/delivered")]
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -163,6 +174,6 @@ public sealed class OrdersController : BaseController
     }
 }
 
-// ── Local request models ──────────────────────────────────────────────────────
+// ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetCourierSalaryRequest(decimal Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);

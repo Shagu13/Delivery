@@ -21,8 +21,8 @@
 }
 
 .home__eyebrow {
-    font-size: 0.8rem;
-    font-weight: 600;
+    font-size: 1.8rem;
+    font-weight: 1600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--color-accent);
@@ -31,7 +31,7 @@
 
 .home__title {
     font-family: var(--font-display);
-    font-size: clamp(2.2rem, 5vw, 3.5rem);
+    font-size: clamp(1.2rem, 3vw, 2.5rem);
     font-weight: 800;
     line-height: 1.1;
     color: var(--color-text);

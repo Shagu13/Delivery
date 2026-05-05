@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   type AdminCustomer,
   getCustomers,
@@ -22,20 +22,21 @@ export default function AdminCustomersPage({ token }: Props) {
 
   const PAGE_SIZE = 20;
 
-  async function load(p = page, q = search) {
-    setLoading(true);
-    try {
-      const result = await getCustomers(token, p, PAGE_SIZE, q);
-      setCustomers(result.items as AdminCustomer[]);
-      setTotalPages(result.totalPages || 1);
-    } catch {
-      setError('Failed to load customers');
-    } finally {
-      setLoading(false);
-    }
-  }
+    const load = useCallback(async (p: number, q: string) => {
+        setLoading(true);
+        try {
+            const result = await getCustomers(token, p, PAGE_SIZE, q);
+            setCustomers(result.items as AdminCustomer[]);
+            setTotalPages(result.totalPages || 1);
+        } catch {
+            setError('Failed to load customers');
+        } finally {
+            setLoading(false);
+        }
+    }, [token]);
 
-  useEffect(() => { load(1, search); setPage(1); }, [search]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(() => { void load(1, search); }, [search, load]);
 
   function startEdit(c: AdminCustomer) {
     setEditingId(c.id);
@@ -66,7 +67,7 @@ export default function AdminCustomersPage({ token }: Props) {
         type="text"
         placeholder="Search by name, business, city, email…"
         value={search}
-        onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
         style={{
           padding: '0.5rem 0.75rem',
           borderRadius: 8,
@@ -140,13 +141,13 @@ export default function AdminCustomersPage({ token }: Props) {
       <div style={{ display: 'flex', gap: 8, marginTop: '1rem', alignItems: 'center' }}>
         <button
           disabled={page <= 1}
-          onClick={() => { const p = page - 1; setPage(p); load(p); }}
+                  onClick={() => { const p = page - 1; setPage(p); void load(p, search); }}
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
         >← Prev</button>
         <span>Page {page} / {totalPages}</span>
         <button
           disabled={page >= totalPages}
-          onClick={() => { const p = page + 1; setPage(p); load(p); }}
+                  onClick={() => { const p = page - 1; setPage(p); void load(p, search); }}
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
         >Next →</button>
       </div>

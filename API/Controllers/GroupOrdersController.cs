@@ -1,5 +1,6 @@
 using API.Models.GroupOrders;
 using API.Models.Orders;
+using Application.Common.Interfaces;
 using Application.Courier.Queries;
 using Application.GroupOrders.Commands.AcceptGroupOrder;
 using Application.GroupOrders.Commands.AcceptGroupOrderInWarehouse;
@@ -17,7 +18,9 @@ using ClosedXML.Excel;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace API.Controllers;
 
@@ -54,7 +57,8 @@ public sealed class GroupOrdersController : BaseController
                         o.Description,
                         o.IsFragile,
                         o.ProductPaymentStatus,
-                        o.WhoPaysForCompanyService))
+                        o.WhoPaysForCompanyService,
+                        o.CompanyServicePrice))
                     .ToList(),
                 CustomerId: request.CustomerId
             )
@@ -243,17 +247,76 @@ public sealed class GroupOrdersController : BaseController
 
     [HttpGet("excel-template")]
     [AllowAnonymous]
-    public IActionResult DownloadTemplate()
+    public async Task<IActionResult> DownloadTemplate(CancellationToken ct)
     {
+        var db = HttpContext.RequestServices.GetRequiredService<IAppDbContext>();
+
+        // ── Load cities + districts from DB ───────────────────────────────────
+        var cities = await db.Cities
+            .AsNoTracking()
+            .Where(c => c.DateDeleted == null)
+            .OrderBy(c => c.CityName)
+            .Select(c => new
+            {
+                c.CityName,
+                Districts = c.Districts
+                    .Where(d => d.DateDeleted == null)
+                    .OrderBy(d => d.DistrictName)
+                    .Select(d => d.DistrictName)
+                    .ToList()
+            })
+            .ToListAsync(ct);
+
         using var workbook = new XLWorkbook();
+
+        // ── Hidden Data sheet ─────────────────────────────────────────────────
+        var wsData = workbook.Worksheets.Add("Data");
+        wsData.Visibility = XLWorksheetVisibility.Hidden;
+
+        // Column A: city list header + values
+        wsData.Cell(1, 1).Value = "Cities";
+        for (int i = 0; i < cities.Count; i++)
+            wsData.Cell(i + 2, 1).Value = cities[i].CityName;
+
+        // Wrap city column in an Excel Table — required for search-as-you-type in Excel 365/2021
+        var cityTableRange = wsData.Range(1, 1, cities.Count + 1, 1);
+        cityTableRange.AsTable("T_CityList");
+
+        // Named range pointing at the data rows (used by data validation source)
+        workbook.DefinedNames.Add("CityList", wsData.Range(2, 1, cities.Count + 1, 1));
+
+        // One column per city with its districts — each also wrapped in a Table
+        for (int col = 0; col < cities.Count; col++)
+        {
+            var city = cities[col];
+            var districts = city.Districts.Count > 0 ? city.Districts : [city.CityName];
+            int excelCol = col + 2; // B onwards
+
+            wsData.Cell(1, excelCol).Value = city.CityName;
+            for (int row = 0; row < districts.Count; row++)
+                wsData.Cell(row + 2, excelCol).Value = districts[row];
+
+            var rangeName = SanitizeRangeName(city.CityName);
+
+            // Table enables search-as-you-type for district dropdowns in Excel 365/2021
+            var distTableRange = wsData.Range(1, excelCol, districts.Count + 1, excelCol);
+            distTableRange.AsTable("T_" + rangeName);
+
+            // Named range for INDIRECT-based dependent dropdown (works in all Excel versions)
+            workbook.DefinedNames.Add(rangeName, wsData.Range(2, excelCol, districts.Count + 1, excelCol));
+        }
+
+        // ── Orders sheet ──────────────────────────────────────────────────────
         var ws = workbook.Worksheets.Add("Orders");
 
+        // ── Headers ───────────────────────────────────────────────────────────
         string[] headers =
         [
             "RecipientFirstName", "RecipientLastName", "RecipientPhone",
-            "RecipientCity", "RecipientDistrict", "RecipientAddress", "Description"
+            "RecipientCity", "RecipientDistrict", "RecipientAddress",
+            "Description", "PaymentStatus", "WhoPaysForCourierFee", "IsFragile"
         ];
-        bool[] required = [true, true, true, true, true, true, false];
+        bool[] required = [true, true, true, true, true, true, false, true, true, true];
 
         for (int i = 0; i < headers.Length; i++)
         {
@@ -266,6 +329,7 @@ public sealed class GroupOrdersController : BaseController
                 : XLColor.FromArgb(0x6B, 0x65, 0x60);
         }
 
+        // ── Sample row ────────────────────────────────────────────────────────
         ws.Cell(2, 1).Value = "Ana";
         ws.Cell(2, 2).Value = "Smith";
         ws.Cell(2, 3).Value = "+995599123456";
@@ -273,12 +337,52 @@ public sealed class GroupOrdersController : BaseController
         ws.Cell(2, 5).Value = "Saburtalo";
         ws.Cell(2, 6).Value = "Pekini Ave 42";
         ws.Cell(2, 7).Value = "Fragile – handle with care";
+        ws.Cell(2, 8).Value = "Not Paid";
+        ws.Cell(2, 9).Value = "Sender";
+        ws.Cell(2, 10).Value = "No";
 
         foreach (var cell in ws.Row(2).CellsUsed())
         {
             cell.Style.Font.Italic = true;
             cell.Style.Font.FontColor = XLColor.FromArgb(0xA8, 0xA1, 0x9A);
         }
+
+        // ── City dropdown (D2:D500) ───────────────────────────────────────────
+        var cityVal = ws.Range("D2:D500").CreateDataValidation();
+        cityVal.List("CityList", true);
+        cityVal.ShowErrorMessage = false;
+        cityVal.ErrorTitle = "Invalid City";
+        cityVal.ErrorMessage = "Please select a city from the list.";
+
+        // ── District dependent dropdown (E2:E500) ─────────────────────────────
+        // INDIRECT(SUBSTITUTE(D2," ","_")) resolves to the named range for the chosen city
+        for (int row = 2; row <= 500; row++)
+        {
+            var distVal = ws.Cell(row, 5).CreateDataValidation();
+            distVal.List($"INDIRECT(SUBSTITUTE(D{row},\" \",\"_\"))", true);
+            distVal.ShowErrorMessage = true;
+            distVal.ErrorTitle = "Invalid District";
+            distVal.ErrorMessage = "Please select a city first, then choose a district.";
+        }
+
+        // ── Static dropdowns (H, I, J) ────────────────────────────────────────
+        var paymentVal = ws.Range("H2:H500").CreateDataValidation();
+        paymentVal.List("\"Paid,Not Paid\"", true);
+        paymentVal.ShowErrorMessage = true;
+        paymentVal.ErrorTitle = "Invalid value";
+        paymentVal.ErrorMessage = "Choose Paid or Not Paid";
+
+        var payerVal = ws.Range("I2:I500").CreateDataValidation();
+        payerVal.List("\"Sender,Recipient\"", true);
+        payerVal.ShowErrorMessage = true;
+        payerVal.ErrorTitle = "Invalid value";
+        payerVal.ErrorMessage = "Choose Sender or Recipient";
+
+        var fragileVal = ws.Range("J2:J500").CreateDataValidation();
+        fragileVal.List("\"Yes,No\"", true);
+        fragileVal.ShowErrorMessage = true;
+        fragileVal.ErrorTitle = "Invalid value";
+        fragileVal.ErrorMessage = "Choose Yes or No";
 
         ws.Columns().AdjustToContents();
         ws.SheetView.FreezeRows(1);
@@ -289,6 +393,17 @@ public sealed class GroupOrdersController : BaseController
         return File(ms.ToArray(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "group-order-template.xlsx");
+    }
+
+    /// <summary>
+    /// Converts a city name into a valid Excel named range identifier.
+    /// Replaces any non-alphanumeric character with '_' and prepends '_' if it starts with a digit.
+    /// </summary>
+    private static string SanitizeRangeName(string name)
+    {
+        var s = Regex.Replace(name, @"[^A-Za-z0-9_]", "_");
+        if (char.IsDigit(s[0])) s = "_" + s;
+        return s;
     }
 
     [HttpPost("parse-excel")]
@@ -304,7 +419,8 @@ public sealed class GroupOrdersController : BaseController
 
         using var stream = file.OpenReadStream();
         using var workbook = new XLWorkbook(stream);
-        var ws = workbook.Worksheets.First();
+        var ws = workbook.Worksheets.FirstOrDefault(s => s.Name == "Orders")
+         ?? workbook.Worksheets.First();
 
         var orders = new List<OrderItemRequest>();
         int lastRow = ws.LastRowUsed()?.RowNumber() ?? 1;
@@ -318,14 +434,31 @@ public sealed class GroupOrdersController : BaseController
                 continue;
 
             var description = ws.Cell(row, 7).GetString().Trim();
+            var paymentRaw = ws.Cell(row, 8).GetString().Trim();
+            var payerRaw = ws.Cell(row, 9).GetString().Trim();
+            var fragileRaw = ws.Cell(row, 10).GetString().Trim();
+
+            var paymentStatus = paymentRaw.Equals("Paid", StringComparison.OrdinalIgnoreCase)
+                ? PaymentStatus.Paid
+                : PaymentStatus.NotPaid;
+
+            var payer = payerRaw.Equals("Recipient", StringComparison.OrdinalIgnoreCase)
+                ? ServicePayer.Recipient
+                : ServicePayer.Sender;
+
+            var isFragile = fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase);
+
             orders.Add(new OrderItemRequest(
                 RecipientFirstName: firstName,
-                RecipientLastName:  ws.Cell(row, 2).GetString().Trim(),
-                RecipientPhone:     ws.Cell(row, 3).GetString().Trim(),
-                RecipientCity:      ws.Cell(row, 4).GetString().Trim(),
-                RecipientDistrict:  ws.Cell(row, 5).GetString().Trim(),
-                RecipientAddress:   ws.Cell(row, 6).GetString().Trim(),
-                Description:        description.Length > 0 ? description : null
+                RecipientLastName: ws.Cell(row, 2).GetString().Trim(),
+                RecipientPhone: ws.Cell(row, 3).GetString().Trim(),
+                RecipientCity: ws.Cell(row, 4).GetString().Trim(),
+                RecipientDistrict: ws.Cell(row, 5).GetString().Trim(),
+                RecipientAddress: ws.Cell(row, 6).GetString().Trim(),
+                Description: description.Length > 0 ? description : null,
+                IsFragile: isFragile,
+                ProductPaymentStatus: paymentStatus,
+                WhoPaysForCompanyService: payer
             ));
         }
 

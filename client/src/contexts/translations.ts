@@ -74,12 +74,12 @@ const en = {
   navHome:             'Home',
   navSendPackages:     'Send Packages',
   navRegister:         'Register',
-  navStaffLogin:       'Staff Login',
+  navStaffLogin:       ' Login',
 
   // ── Home page ─────────────────────────────────────────────────────────────
   homeEyebrow:         'Fast & Reliable',
-  homeTitle1:          'Deliver Anywhere',
-  homeTitle2:          'Across Georgia',
+  homeTitle1:          'DILO Delivery',
+  homeTitle2:          'Deliver Anywhere Across Georgia',
   homeSubtitle:        'Send multiple packages in one request. Track every shipment in real time.',
   homeTrackLabel:      'Track a Package',
   homeTrack:           'Track',
@@ -211,7 +211,7 @@ const ka: typeof en = {
   phConfirmPassword:  'გაიმეორეთ პაროლი',
   phUsername:         'მაგ. courier_giorgi',
   phStreetAddress:    'მაგ. რუსთაველის გამზ. 12, ბინა 4',
-  phTrackingNumber:   'შეიყვანეთ თვალყურის ნომერი…',
+  phTrackingNumber:   'შეიყვანეთ Tracking N',
 
   // ── Validation errors ─────────────────────────────────────────────────────
   errFirstNameRequired:    'სახელი სავალდებულოა.',
@@ -236,14 +236,14 @@ const ka: typeof en = {
   navHome:             'მთავარი',
   navSendPackages:     'ამანათების გაგზავნა',
   navRegister:         'რეგისტრაცია',
-  navStaffLogin:       'პერსონალის შესვლა',
+  navStaffLogin:       'შესვლა',
 
   // ── Home page ─────────────────────────────────────────────────────────────
   homeEyebrow:         'სწრაფი და საიმედო',
-  homeTitle1:          'მიწოდება ნებისმიერ',
-  homeTitle2:          'ქალაქში, საქართველოში',
+  homeTitle1:          'DILO Delivery',
+  homeTitle2:          'მიწოდება ნებისმიერ ქალაქში, საქართველოს მასშტაბით',
   homeSubtitle:        'გაგზავნეთ მრავალი ამანათი ერთი მოთხოვნით. თვალყური ადევნეთ თითოეულ გზავნილს.',
-  homeTrackLabel:      'ამანათის თვალყური',
+  homeTrackLabel:      'ამანათის Tracking N',
   homeTrack:           'ძიება',
   homeTracking:        'მოძიება…',
   homeSendPackages:    'ამანათების გაგზავნა',
@@ -308,12 +308,12 @@ const ka: typeof en = {
   sidebarOverview:     'მიმოხილვა',
   sidebarGroupOrders:  'ჯგუფური შეკვეთები',
   sidebarCouriers:     'კურიერები',
-  sidebarCustomers:    'კლიენტები',
+  sidebarCustomers:    'მომხმარებლები',
   sidebarCities:       'ქალაქები და რაიონები',
   topbarOverview:      'მიმოხილვა',
   topbarOrders:        'ჯგუფური შეკვეთები',
   topbarCouriers:      'კურიერები',
-  topbarCustomers:     'კლიენტები',
+  topbarCustomers:     'მომხმარებლები',
   topbarCities:        'ქალაქები და რაიონები',
   addCourier:          'კურიერის დამატება',
 

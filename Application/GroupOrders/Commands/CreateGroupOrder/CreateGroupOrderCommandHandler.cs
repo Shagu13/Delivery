@@ -63,14 +63,22 @@ public sealed class CreateGroupOrderCommandHandler
         {
             var o = dto.Orders[i];
 
-            // Determine CompanyServicePrice for this order
-            decimal companyServicePrice = 0;
+            // Determine CompanyServicePrice for this order.
+            // Priority 1: explicit per-order override passed in the request (must be > 0).
+            // Priority 2: customer's negotiated flat rate — Tbilisi deliveries only (must be > 0).
+            // Priority 3: the recipient district's default service price.
+            decimal companyServicePrice;
 
-            // Check if customer has a negotiated price AND recipient city is Tbilisi
             bool isTbilisi = o.RecipientCity.Equals(tbilisi, StringComparison.OrdinalIgnoreCase);
-            if (isTbilisi && customer?.CompanyPriceToDeliverPackages.HasValue == true)
+            var customerPrice = customer?.CompanyPriceToDeliverPackages;
+
+            if (o.CompanyServicePrice.HasValue && o.CompanyServicePrice.Value > 0)
             {
-                companyServicePrice = customer.CompanyPriceToDeliverPackages.Value;
+                companyServicePrice = o.CompanyServicePrice.Value;
+            }
+            else if (isTbilisi && customerPrice.HasValue && customerPrice.Value > 0)
+            {
+                companyServicePrice = customerPrice.Value;
             }
             else
             {
