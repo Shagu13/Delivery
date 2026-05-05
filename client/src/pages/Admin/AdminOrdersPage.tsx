@@ -3,6 +3,9 @@ import { setCourierSalary, setCompanyServicePrice } from '../../api/orders';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
 import { useAuth } from '../../contexts/useAuth';
+import { useLanguage } from '../../contexts/useLanguage';
+import { getStatusMeta } from '../../utils/statusMeta';
+import { STATUS_COLORS } from '../../utils/statusColors';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,33 +80,6 @@ async function fetchUnpricedCount(token: string, courierId?: string): Promise<nu
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, [string, string]> = {
-  Pending:                         ['rgba(160,120,0,0.12)',  '#c4870f'],
-  AcceptedGroupOrder:              ['rgba(59,130,246,0.12)', '#3b82f6'],
-  AcceptedOrder:                   ['rgba(59,130,246,0.12)', '#3b82f6'],
-  CourierAssignedToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierOnTheWayToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierDeliveringToWarehouse:    ['rgba(249,115,22,0.12)', '#f97316'],
-  DeliveredToWarehouse:            ['rgba(16,185,129,0.12)', '#10b981'],
-  AdminAcceptedOrderInWareHouse:   ['rgba(16,185,129,0.12)', '#10b981'],
-  OrderIsOnItsWayToRecipientsCity: ['rgba(59,130,246,0.12)', '#3b82f6'],
-  CourierAssignedToDeliver:        ['rgba(139,92,246,0.12)', '#8b5cf6'],
-  CourierRecievedOrderToDeliver:   ['rgba(249,115,22,0.12)', '#f97316'],
-  DeliveredToRecipient:            ['rgba(16,185,129,0.12)', '#10b981'],
-  CancelledBySender:               ['rgba(239,68,68,0.12)',  '#ef4444'],
-  CancelledByAdmin:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-  OrderNotAccepted:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-};
-
-function statusLabel(s: string) { return s.replace(/([A-Z])/g, ' $1').trim(); }
-
-function fmt(iso: string) {
-  return new Date(iso).toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
 function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
 }
@@ -117,6 +93,7 @@ interface CourierPickerProps {
 }
 
 function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
+  const { t } = useLanguage();
   const [open,  setOpen]  = useState(false);
   const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -161,7 +138,7 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
               className="cp-clear"
               role="button"
               tabIndex={0}
-              title="Clear courier filter"
+              title={t.aopClearCourierTitle}
               onClick={e => { e.stopPropagation(); handleSelect(null); }}
               onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); handleSelect(null); }}}
             >
@@ -176,7 +153,7 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
               <circle cx="8" cy="5.5" r="3" stroke="currentColor" strokeWidth="1.4"/>
               <path d="M2 14c0-3 2.5-5 6-5s6 2 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
-            <span>All couriers</span>
+            <span>{t.aopAllCouriers}</span>
             <svg className="cp-chevron" width="11" height="11" viewBox="0 0 12 12" fill="none">
               <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
@@ -194,7 +171,7 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
             <input
               autoFocus
               className="cp-search"
-              placeholder="Search couriers…"
+              placeholder={t.aopSearchCouriers}
               value={query}
               onChange={e => setQuery(e.target.value)}
             />
@@ -208,7 +185,6 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
           </div>
 
           <div className="cp-list">
-            {/* "All couriers" option */}
             <button
               className={`cp-item${!selected ? ' cp-item--active' : ''}`}
               onClick={() => handleSelect(null)}
@@ -220,11 +196,11 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
                   <path d="M1 14c0-2.5 2-4 4.5-4M8 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                 </svg>
               </span>
-              <span className="cp-item-name">All couriers</span>
+              <span className="cp-item-name">{t.aopAllCouriers}</span>
             </button>
 
             {filtered.length === 0 && (
-              <div className="cp-empty">No couriers match "{query}"</div>
+              <div className="cp-empty">{t.aopNoCourierMatch(query)}</div>
             )}
 
             {filtered.map(c => (
@@ -258,6 +234,7 @@ const PAGE_SIZE = 50;
 
 export default function AdminOrdersPage({ token: tokenProp }: { token: string }) {
   const { token: authToken } = useAuth();
+  const { t, lang } = useLanguage();
   const token = tokenProp || authToken || '';
 
   const [data,            setData]            = useState<PagedResult | null>(null);
@@ -286,7 +263,6 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Load couriers once
   useEffect(() => {
     fetchCouriers(token).then(setCouriers).catch(() => {});
   }, [token]);
@@ -308,13 +284,12 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       const result = await fetchAllOrders(token, { ...params, pageSize: PAGE_SIZE });
       setData(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load orders.');
+      setError(e instanceof Error ? e.message : t.aopFailedLoad);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, t]);
 
-  // Single effect: handles all filter + page changes
   useEffect(() => {
     const prev = filterRef.current;
     const next = {
@@ -356,7 +331,6 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, page, load]);
 
-  // Derived cities / districts
   const cities = useMemo(() => {
     if (!data) return [];
     return [...new Set(data.items.map(o => o.recipientCity))].sort();
@@ -371,7 +345,6 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const orders = data?.items ?? [];
 
-  // Selection
   const allSelected  = orders.length > 0 && orders.every(o => selected.has(o.id));
   const someSelected = selected.size > 0;
   const toggleAll    = () => setSelected(allSelected ? new Set() : new Set(orders.map(o => o.id)));
@@ -381,7 +354,6 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     return next;
   });
 
-  // Bulk apply
   const handleBulkApply = async () => {
     if (!bulkMode || !bulkValue || selected.size === 0) return;
     const amount = parseFloat(bulkValue);
@@ -394,7 +366,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           ? setCompanyServicePrice(token, id, amount)
           : setCourierSalary(token, id, amount)
       ));
-      showToast(`${bulkMode === 'price' ? 'Service price' : 'Courier salary'} set to ₾${amount.toFixed(2)} for ${ids.length} order${ids.length !== 1 ? 's' : ''}.`);
+      const label = bulkMode === 'price' ? t.aopBulkLabelPrice : t.aopBulkLabelSalary;
+      showToast(t.aopBulkSuccess(label, amount.toFixed(2), ids.length));
       setBulkMode(null);
       setBulkValue('');
       setSelected(new Set());
@@ -403,7 +376,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         refreshUnpricedCount(),
       ]);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Bulk action failed.', 'err');
+      showToast(e instanceof Error ? e.message : t.aopBulkFailed, 'err');
     } finally {
       setBulkBusy(false);
     }
@@ -431,7 +404,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           </svg>
           <input
             type="text"
-            placeholder="Search by TN, recipient, sender, phone…"
+            placeholder={t.aopSearchPh}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -444,14 +417,12 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           )}
         </div>
 
-        {/* Courier picker */}
         <CourierPicker
           couriers={couriers}
           selected={filterCourier}
           onSelect={setFilterCourier}
         />
 
-        {/* City */}
         <div className="go-select-wrap">
           <svg className="go-select-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="7" r="4" stroke="currentColor" strokeWidth="1.4"/>
@@ -459,7 +430,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           </svg>
           <select className="go-select" value={filterCity}
             onChange={e => { setFilterCity(e.target.value); setFilterDistrict(''); }}>
-            <option value="">All cities</option>
+            <option value="">{t.aopAllCities}</option>
             {cities.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <svg className="go-select-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -467,11 +438,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           </svg>
         </div>
 
-        {/* District */}
         <div className="go-select-wrap">
           <select className="go-select" value={filterDistrict} disabled={!filterCity}
             onChange={e => setFilterDistrict(e.target.value)}>
-            <option value="">All districts</option>
+            <option value="">{t.aopAllDistricts}</option>
             {districts.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
           <svg className="go-select-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -479,17 +449,16 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           </svg>
         </div>
 
-        {/* Unpriced toggle */}
         <button
           className={`aop-unpriced-btn${filterUnpriced ? ' aop-unpriced-btn--active' : ''}`}
           onClick={() => setFilterUnpriced(v => !v)}
-          title="Show orders missing service price or courier salary"
+          title={t.aopUnpricedTitle}
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
             <path d="M8 5v3.5M8 10.5h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
-          Unpriced
+          {t.aopUnpriced}
           {unpricedCount !== null && unpricedCount > 0 && (
             <span className={`aop-unpriced-badge${filterUnpriced ? ' aop-unpriced-badge--active' : ''}`}>
               {unpricedCount}
@@ -498,11 +467,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         </button>
 
         {hasActiveFilters && (
-          <button className="go-clear-btn" onClick={clearAll}>Clear filters</button>
+          <button className="go-clear-btn" onClick={clearAll}>{t.aopClearFilters}</button>
         )}
 
         <span className="go-count" style={{ marginLeft: 'auto' }}>
-          {data ? `${data.totalCount.toLocaleString()} order${data.totalCount !== 1 ? 's' : ''}` : ''}
+          {data ? t.aopOrderCount(data.totalCount) : ''}
         </span>
       </div>
 
@@ -518,10 +487,14 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           </div>
           {filterUnpriced && unpricedCount !== null && (
             <span className="aop-courier-banner__unpriced">
-              {unpricedCount} order{unpricedCount !== 1 ? 's' : ''} missing financial details
+              {t.aopMissingFinancials(unpricedCount)}
             </span>
           )}
-          <button className="aop-courier-banner__clear" onClick={() => setFilterCourier(null)} title="Clear courier filter">
+          <button
+            className="aop-courier-banner__clear"
+            onClick={() => setFilterCourier(null)}
+            title={t.aopClearCourierTitle}
+          >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
@@ -537,22 +510,22 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/>
               <path d="M5 8l2.5 2.5L11 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            {selected.size} selected
+            {t.aopNSelected(selected.size)}
           </span>
 
           {bulkMode === null && (
             <>
               <button className="aop-bulk-btn aop-bulk-btn--price"
                 onClick={() => { setBulkMode('price'); setBulkValue(''); }}>
-                🏷 Set Service Price
+                {t.aopSetSvcPrice}
               </button>
               <button className="aop-bulk-btn aop-bulk-btn--salary"
                 onClick={() => { setBulkMode('salary'); setBulkValue(''); }}>
-                💰 Set Courier Salary
+                {t.aopSetSalary}
               </button>
               <button className="aop-bulk-btn aop-bulk-btn--ghost"
                 onClick={() => setSelected(new Set())}>
-                Deselect all
+                {t.aopDeselectAll}
               </button>
             </>
           )}
@@ -560,7 +533,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           {bulkMode !== null && (
             <div className="aop-bulk-input-row">
               <span className="aop-bulk-label">
-                {bulkMode === 'price' ? '🏷 Service Price' : '💰 Courier Salary'} for {selected.size} order{selected.size !== 1 ? 's' : ''}:
+                {bulkMode === 'price' ? t.aopBulkLabelPrice : t.aopBulkLabelSalary}
+                {' '}{t.aopBulkFor(selected.size)}
               </span>
               <div className="aop-bulk-input-wrap">
                 <span className="aop-bulk-currency">₾</span>
@@ -577,11 +551,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               </div>
               <button className="aop-bulk-btn aop-bulk-btn--apply"
                 disabled={bulkBusy || !bulkValue} onClick={handleBulkApply}>
-                {bulkBusy ? 'Saving…' : 'Apply'}
+                {bulkBusy ? t.aopSaving : t.aopApply}
               </button>
               <button className="aop-bulk-btn aop-bulk-btn--ghost"
                 disabled={bulkBusy} onClick={cancelBulk}>
-                Cancel
+                {t.cancel}
               </button>
             </div>
           )}
@@ -591,16 +565,14 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       {/* Table */}
       <div className="aop-table-wrap">
         {loading && (
-          <div className="go-loading"><div className="go-spinner"/>Loading orders…</div>
+          <div className="go-loading"><div className="go-spinner"/>{t.aopLoadingOrders}</div>
         )}
         {!loading && error && (
           <div className="go-error">{error}</div>
         )}
         {!loading && !error && orders.length === 0 && (
           <div className="go-loading" style={{ color: 'var(--color-text-subtle)' }}>
-            {filterUnpriced
-              ? '🎉 All orders have financial details set!'
-              : 'No orders match your filters.'}
+            {filterUnpriced ? t.aopAllPriced : t.aopNoOrdersMatch}
           </div>
         )}
 
@@ -611,26 +583,28 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <th className="aop-th aop-th--check">
                   <input type="checkbox" className="aop-checkbox" checked={allSelected}
                     ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                    onChange={toggleAll} title={allSelected ? 'Deselect all' : 'Select all'}
+                    onChange={toggleAll}
+                    title={allSelected ? t.aopDeselectAll : t.aopSelectAll}
                   />
                 </th>
-                <th className="aop-th">Tracking №</th>
-                <th className="aop-th">Sender</th>
-                <th className="aop-th">Recipient</th>
-                <th className="aop-th">Phone</th>
-                <th className="aop-th">City / District</th>
-                <th className="aop-th">Description</th>
-                <th className="aop-th">Status</th>
-                <th className="aop-th aop-th--num">Svc Price</th>
-                <th className="aop-th aop-th--num">Salary</th>
-                <th className="aop-th aop-th--num">Revenue</th>
-                <th className="aop-th">Paid</th>
+                <th className="aop-th">{t.aopThTracking}</th>
+                <th className="aop-th">{t.aopThSender}</th>
+                <th className="aop-th">{t.aopThRecipient}</th>
+                <th className="aop-th">{t.aopThPhone}</th>
+                <th className="aop-th">{t.aopThCityDistrict}</th>
+                <th className="aop-th">{t.aopThDescription}</th>
+                <th className="aop-th">{t.aopThStatus}</th>
+                <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>
+                <th className="aop-th aop-th--num">{t.aopThSalary}</th>
+                <th className="aop-th aop-th--num">{t.aopThRevenue}</th>
+                <th className="aop-th">{t.aopThPaid}</th>
               </tr>
             </thead>
             <tbody>
               {orders.map(order => {
                 const isChecked     = selected.has(order.id);
                 const [bg, color]   = STATUS_COLORS[order.status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];
+                const statusMeta    = getStatusMeta(order.status, lang);
                 const missingPrice  = order.companyServicePrice === 0;
                 const missingSalary = order.courierSalary == null || order.courierSalary === 0;
                 return (
@@ -659,23 +633,27 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       <div className="aop-district">{order.recipientDistrict}</div>
                     </td>
                     <td className="aop-td aop-td--desc">
-                      {order.isFragile && <span className="aop-fragile">Fragile</span>}
-                      {order.description && <span>{order.description}</span>}
+                      {order.isFragile && <span className="aop-fragile">{t.aopFragile}</span>}
+                      {order.description && order.description !== 'Fragile – handle with care' && <span>{order.description}</span>}
                     </td>
                     <td className="aop-td">
-                      <span className="status-badge" style={{ background: bg, color }}>
-                        {statusLabel(order.status)}
+                      <span
+                        className="status-badge"
+                        style={{ background: bg, color }}
+                        title={statusMeta.description}
+                      >
+                        {statusMeta.short}
                       </span>
                     </td>
                     <td className="aop-td aop-td--num">
                       {missingPrice
-                        ? <span className="aop-missing">Not set</span>
+                        ? <span className="aop-missing">{t.aopNotSet}</span>
                         : <span className="aop-price">₾{order.companyServicePrice.toFixed(2)}</span>
                       }
                     </td>
                     <td className="aop-td aop-td--num">
                       {missingSalary
-                        ? <span className="aop-missing">Not set</span>
+                        ? <span className="aop-missing">{t.aopNotSet}</span>
                         : <span className="aop-price">₾{order.courierSalary!.toFixed(2)}</span>
                       }
                     </td>
@@ -687,8 +665,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                     </td>
                     <td className="aop-td">
                       {order.productPaymentStatus === 'Paid'
-                        ? <span className="aop-paid">✓ Paid</span>
-                        : <span className="aop-unpaid">✗ Unpaid</span>
+                        ? <span className="aop-paid">{t.aopPaid}</span>
+                        : <span className="aop-unpaid">{t.aopUnpaid}</span>
                       }
                     </td>
                   </tr>
@@ -702,9 +680,13 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       {/* Pagination */}
       {data && data.totalPages > 1 && (
         <div className="aop-pagination">
-          <button className="aop-page-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
-          <span className="aop-page-info">Page {data.page} of {data.totalPages}</span>
-          <button className="aop-page-btn" disabled={page >= data.totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
+          <button className="aop-page-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+            {t.aopPrevPage}
+          </button>
+          <span className="aop-page-info">{t.aopPageInfo(data.page, data.totalPages)}</span>
+          <button className="aop-page-btn" disabled={page >= data.totalPages} onClick={() => setPage(p => p + 1)}>
+            {t.aopNextPage}
+          </button>
         </div>
       )}
 

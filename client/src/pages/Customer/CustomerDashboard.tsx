@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
+import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
 import {
   getMyProfile, getMyOrders,
@@ -8,6 +9,8 @@ import {
   CustomerApiError,
 } from '../../api/customers';
 import type { Customer, CustomerGroupOrder } from '../../api/customers';
+import { getStatusMeta } from '../../utils/statusMeta';
+import { STATUS_COLORS } from '../../utils/statusColors';
 import '../../styles/dashboard.css';
 
 
@@ -15,39 +18,25 @@ type View = 'overview' | 'shipments' | 'profile' | 'password';
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<string, string> = {
-  Pending:             'Pending',
-  Accepted:            'Accepted',
-  PickedUp:            'Picked up',
-  DeliveredToWarehouse:'At warehouse',
-  OutForDelivery:      'Out for delivery',
-  Delivered:           'Delivered',
-  Cancelled:           'Cancelled',
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  Pending:             '#6b7280',
-  Accepted:            '#3b82f6',
-  PickedUp:            '#8b5cf6',
-  DeliveredToWarehouse:'#f59e0b',
-  OutForDelivery:      '#f97316',
-  Delivered:           '#10b981',
-  Cancelled:           '#ef4444',
-};
-
 function StatusBadge({ status }: { status: string }) {
-  const color = STATUS_COLOR[status] ?? '#6b7280';
+  const { lang } = useLanguage();
+  const meta = getStatusMeta(status, lang);
+  const [bg, color] = STATUS_COLORS[status] ?? ['rgba(107,114,128,0.12)', '#6b7280'];
   return (
-    <span style={{
-      display: 'inline-block',
-      padding: '2px 10px',
-      borderRadius: 100,
-      fontSize: '0.72rem',
-      fontWeight: 700,
-      background: color + '18',
-      color,
-    }}>
-      {STATUS_LABEL[status] ?? status}
+    <span
+      title={meta.description}
+      style={{
+        display: 'inline-block',
+        padding: '2px 10px',
+        borderRadius: 100,
+        fontSize: '0.72rem',
+        fontWeight: 700,
+        background: bg,
+        color,
+        cursor: 'default',
+      }}
+    >
+      {meta.short}
     </span>
   );
 }

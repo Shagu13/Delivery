@@ -14,6 +14,7 @@ import AdminCitiesPage from './AdminCitiesPage';
 import AdminOrdersPage from './AdminOrdersPage';
 import { useLanguage } from '../../contexts/useLanguage';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { getStatusMeta } from '../../utils/statusMeta';
 import '../../styles/dashboard.css';
 
 type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities';
@@ -301,36 +302,37 @@ function formatDate(iso: string) {
   });
 }
 
-function statusClass(status: string): string {
-  const map: Record<string, string> = {
-    Pending:                         'pending',
-    AcceptedGroupOrder:              'accepted',
-    AcceptedOrder:                   'accepted',
-    CourierAssignedToPickUp:         'assigned',
-    CourierOnTheWayToPickUp:         'onway',
-    CourierDeliveringToWarehouse:    'delivering',
-    DeliveredToWarehouse:            'warehouse',
-    AdminAcceptedOrderInWareHouse:   'warehouse',
-    OrderIsOnItsWayToRecipientsCity: 'onway',
-    CourierAssignedToDeliver:        'assigned',
-    CourierRecievedOrderToDeliver:   'delivering',
-    OrderIsBeingDeliveredToRecipient:'delivering',
-    DeliveredToRecipient:            'delivered',
-    CancelledBySender:               'cancelled',
-    CancelledByAdmin:                'cancelled',
-    OrderNotAccepted:                'declined',
-  };
-  return map[status] ?? 'pending';
-}
-
 function StatusBadge({ status }: { status: string }) {
-  const label = status.replace(/([A-Z])/g, ' $1').trim();
+  const { lang } = useLanguage();
+  const meta = getStatusMeta(status, lang);
   return (
-    <span className={`status-badge status-badge--${statusClass(status)}`}>
-      {label}
+    <span
+      className={`status-badge status-badge--${STATUS_CLASS_MAP[status] ?? 'pending'}`}
+      title={meta.description}
+    >
+      {meta.short}
     </span>
   );
 }
+
+const STATUS_CLASS_MAP: Record<string, string> = {
+  Pending:                         'pending',
+  AcceptedGroupOrder:              'accepted',
+  AcceptedOrder:                   'accepted',
+  CourierAssignedToPickUp:         'assigned',
+  CourierOnTheWayToPickUp:         'onway',
+  CourierDeliveringToWarehouse:    'delivering',
+  DeliveredToWarehouse:            'warehouse',
+  AdminAcceptedOrderInWareHouse:   'warehouse',
+  OrderIsOnItsWayToRecipientsCity: 'onway',
+  CourierAssignedToDeliver:        'assigned',
+  CourierRecievedOrderToDeliver:   'delivering',
+  OrderIsBeingDeliveredToRecipient:'delivering',
+  DeliveredToRecipient:            'delivered',
+  CancelledBySender:               'cancelled',
+  CancelledByAdmin:                'cancelled',
+  OrderNotAccepted:                'declined',
+};
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
 
@@ -711,6 +713,9 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
           {visibleOrders.map(go => {
             const expanded = expandedIds.has(go.id);
             const filteredOrders = visibleOrdersFor(go);
+            const assignableOrders = filteredOrders.filter(
+              o => o.status !== 'DeliveredToRecipient' && o.courierId === null
+            );
             return (
               <div className="go-row" key={go.id}>
                 <div className="go-row-header" onClick={() => toggleExpand(go.id)}>
@@ -752,12 +757,12 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                               <th style={{ width: 36 }}>
                                 <input
                                   type="checkbox"
-                                  title="Select all in this group"
-                                  checked={filteredOrders.every(o => selectedOrderIds.has(o.id))}
+                                  title="Select all assignable in this group"
+                                  checked={assignableOrders.length > 0 && assignableOrders.every(o => selectedOrderIds.has(o.id))}
                                   onChange={e => {
                                     setSelectedOrderIds(prev => {
                                       const next = new Set(prev);
-                                      filteredOrders.forEach(o => e.target.checked ? next.add(o.id) : next.delete(o.id));
+                                      assignableOrders.forEach(o => e.target.checked ? next.add(o.id) : next.delete(o.id));
                                       return next;
                                     });
                                   }}
@@ -779,12 +784,16 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                             {filteredOrders.map(o => (
                               <tr key={o.id} style={{ background: selectedOrderIds.has(o.id) ? 'var(--color-accent-dim)' : undefined }}>
                                 <td onClick={e => e.stopPropagation()}>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedOrderIds.has(o.id)}
-                                    onChange={() => toggleOrderSelect(o.id)}
-                                    style={{ cursor: 'pointer' }}
-                                  />
+                                  {o.status !== 'DeliveredToRecipient' && o.courierId === null ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedOrderIds.has(o.id)}
+                                      onChange={() => toggleOrderSelect(o.id)}
+                                      style={{ cursor: 'pointer' }}
+                                    />
+                                  ) : (
+                                    <span style={{ display: 'inline-block', width: 15, textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.75rem' }}>—</span>
+                                  )}
                                 </td>
                                 <td><span className="tn-badge">{o.trackingNumber}</span></td>
                                 <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>

@@ -2,16 +2,27 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { trackParcel, type TrackOrderResult } from '../../services/tracking';
 import { useLanguage } from '../../contexts/useLanguage';
+import { getStatusMeta } from '../../utils/statusMeta';
 import './home.css';
 
 const STATUS_CLASS: Record<string, string> = {
-    Pending:              'track-badge--pending',
-    OnItsWayToWarehouse:  'track-badge--onitsway',
-    InWarehouse:          'track-badge--inwarehouse',
-    AssignedToCourier:    'track-badge--assigned',
-    Delivering:           'track-badge--delivering',
-    Delivered:            'track-badge--delivered',
-    Failed:               'track-badge--failed',
+    // GroupOrder flow
+    Pending:                         'track-badge--pending',
+    AcceptedGroupOrder:              'track-badge--assigned',
+    OrderNotAccepted:                'track-badge--failed',
+    CourierAssignedToPickUp:         'track-badge--assigned',
+    CourierOnTheWayToPickUp:         'track-badge--assigned',
+    CourierDeliveringToWarehouse:    'track-badge--delivering',
+    DeliveredToWarehouse:            'track-badge--inwarehouse',
+    AdminAcceptedOrderInWareHouse:   'track-badge--inwarehouse',
+    CancelledBySender:               'track-badge--failed',
+    // Order last-mile flow
+    AcceptedOrder:                   'track-badge--assigned',
+    OrderIsOnItsWayToRecipientsCity: 'track-badge--onitsway',
+    CourierAssignedToDeliver:        'track-badge--assigned',
+    CourierRecievedOrderToDeliver:   'track-badge--delivering',
+    DeliveredToRecipient:            'track-badge--delivered',
+    CancelledByAdmin:                'track-badge--failed',
 };
 
 function formatDate(iso: string, lang: string) {
@@ -28,16 +39,6 @@ export function HomePage() {
     const [result,   setResult]   = useState<TrackOrderResult | null>(null);
     const [error,    setError]    = useState<'NOT_FOUND' | 'SERVER_ERROR' | null>(null);
     const modalRef = useRef<HTMLDivElement>(null);
-
-    const STATUS_LABEL: Record<string, string> = {
-        Pending:             t.statusPending,
-        OnItsWayToWarehouse: t.statusOnItsWayToWarehouse,
-        InWarehouse:         t.statusInWarehouse,
-        AssignedToCourier:   t.statusAssignedToCourier,
-        Delivering:          t.statusDelivering,
-        Delivered:           t.statusDelivered,
-        Failed:              t.statusFailed,
-    };
 
     const isModalOpen = loading || result !== null || error !== null;
 
@@ -68,8 +69,9 @@ export function HomePage() {
         return () => { document.body.style.overflow = ''; };
     }, [isModalOpen]);
 
+    const badgeMeta  = result ? getStatusMeta(result.status, lang) : null;
     const badgeClass = result ? (STATUS_CLASS[result.status] ?? 'track-badge--pending') : '';
-    const badgeLabel = result ? (STATUS_LABEL[result.status] ?? result.status) : '';
+    const badgeLabel = badgeMeta?.short ?? '';
 
     return (
         <div className="home">
@@ -158,7 +160,10 @@ export function HomePage() {
                         {!loading && result && (
                             <div className="track-modal__body">
                                 <div className="track-modal__status-row">
-                                    <span className={`track-badge ${badgeClass}`}>
+                                    <span
+                                      className={`track-badge ${badgeClass}`}
+                                      title={badgeMeta?.description}
+                                    >
                                         <span className="track-badge__dot" />
                                         {badgeLabel}
                                     </span>
