@@ -152,12 +152,13 @@ try
         app.UseSwaggerUI(c =>
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "Delivery API v1"));
     }
-
+    app.UseStaticFiles();
     app.UseCors("AllowFrontend");
     app.UseHttpsRedirection();
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
+    app.MapFallbackToFile("index.html");
 
     Log.Information("Delivery App API started successfully.");
     app.Run();
