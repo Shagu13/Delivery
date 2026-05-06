@@ -29,14 +29,20 @@ try
     builder.Host.UseSerilog();
 
     // ── CORS ─────────────────────────────────────────────────────────────────
+    var allowedOrigins = builder.Configuration
+        .GetSection("AllowedOrigins")
+        .Get<string[]>() ?? Array.Empty<string>();
+
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("AllowFrontend", policy =>
         {
             policy
-                .WithOrigins(
-                    "http://localhost:3000",  // React dev server
-                    "https://localhost:3000")
+                .WithOrigins([
+                    "http://localhost:3000",
+                "https://localhost:3000",
+                ..allowedOrigins
+                ])
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();

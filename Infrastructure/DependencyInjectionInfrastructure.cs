@@ -42,12 +42,19 @@ public static class DependencyInjectionInfrastructure
 
         services.AddAuthorization();
 
-        services.AddStackExchangeRedisCache(options =>
+        var redisConnection = configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(redisConnection))
         {
-            options.Configuration = configuration.GetConnectionString("Redis")
-                ?? "localhost:6379";
-            options.InstanceName = "DeliveryApp:";
-        });
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnection;
+                options.InstanceName = "DeliveryApp:";
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+        }
 
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ICacheService, CacheService>();
