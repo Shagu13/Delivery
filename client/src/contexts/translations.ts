@@ -78,8 +78,8 @@ const en = {
 
   // ── Home page ─────────────────────────────────────────────────────────────
   homeEyebrow:         'Fast & Reliable',
-  homeTitle1:          'Deliver Anywhere',
-  homeTitle2:          'Across Georgia',
+  homeTitle1:          'Dilo Delivery',
+  homeTitle2:          'Deliver Anywhere Across Georgia',
   homeSubtitle:        'Send multiple packages in one request. Track every shipment in real time.',
   homeTrackLabel:      'Track a Package',
   homeTrack:           'Track',
@@ -289,8 +289,8 @@ const ka: typeof en = {
 
   // ── Home page ─────────────────────────────────────────────────────────────
   homeEyebrow:         'სწრაფი და საიმედო',
-  homeTitle1:          'მიწოდება ნებისმიერ',
-  homeTitle2:          'ქალაქში, საქართველოში',
+  homeTitle1:          'Dilo Delivery',
+  homeTitle2:          'მიწოდება ნებისმიერ ქალაქში, საქართველოს მასშტაბით',
   homeSubtitle:        'გაგზავნეთ მრავალი ამანათი ერთი მოთხოვნით. თვალყური ადევნეთ თითოეულ გზავნილს.',
   homeTrackLabel:      'ამანათის თვალყური',
   homeTrack:           'ძიება',
