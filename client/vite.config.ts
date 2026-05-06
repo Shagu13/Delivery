@@ -14,7 +14,7 @@ export default defineConfig({
         },
     },
     build: {
-        outDir: '../API/wwwroot',
+        outDir: 'dist',
         emptyOutDir: true,
         chunkSizeWarningLimit: 1500,
     },

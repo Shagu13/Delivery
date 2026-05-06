@@ -28,11 +28,11 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
 
   if (!open) return null;
 
-  const set = (field: keyof FormState) => (value: string) => {
-    setForm(f => ({ ...f, [field]: value }));
-    setErrors(e => ({ ...e, [field]: undefined }));
-    setApiError(null);
-  };
+    const set = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
+        setForm(f => ({ ...f, [field]: e.target.value }));
+        setErrors(prev => ({ ...prev, [field]: undefined }));
+        setApiError(null);
+    };
   const setDirect = (field: 'city' | 'district') => (value: string) => {
     setForm(f => ({ ...f, [field]: value }));
     setErrors(e => ({ ...e, [field]: undefined }));
