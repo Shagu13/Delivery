@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { createGroupOrder, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
 import { getMyProfile } from '../../api/customers';
+import { fetchCities, fetchDistricts } from '../../api/cities';
+import type { City } from '../../api/cities';
 import type {
     CreateGroupOrderRequest,
     CreateGroupOrderResponse,
@@ -22,11 +24,9 @@ interface SenderFormData {
     senderIdNumber?:    string;
     senderBusinessName: string;
     senderPhone:        string;
-    // Stored registered address (never changes unless they update profile)
     registeredCity:     string;
     registeredDistrict: string;
     registeredAddress:  string;
-    // Actual pick-up address for this order — defaults to registered, overridable
     pickUpCity:         string;
     pickUpDistrict:     string;
     pickUpAddress:      string;
@@ -49,21 +49,26 @@ const EMPTY_SENDER: SenderFormData = {
 };
 
 const EMPTY_PACKAGE: OrderItemRequest = {
-    recipientFirstName:      '',
-    recipientLastName:       '',
-    recipientPhone:          '',
-    recipientCity:           '',
-    recipientDistrict:       '',
-    recipientAddress:        '',
-    description:             '',
-    isFragile:               false,
-    productPaymentStatus:    'NotPaid',
+    recipientFirstName:       '',
+    recipientLastName:        '',
+    recipientPhone:           '',
+    recipientCity:            '',
+    recipientDistrict:        '',
+    recipientAddress:         '',
+    description:              '',
+    isFragile:                false,
+    productPaymentStatus:     'NotPaid',
     whoPaysForCompanyService: 'Sender',
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
-function validate(sender: SenderFormData, packages: OrderItemRequest[]): ValidationErrors {
+function validate(
+    sender: SenderFormData,
+    packages: OrderItemRequest[],
+    cities: City[],
+    cityDistrictCache: Record<string, Set<string>>,
+): ValidationErrors {
     const errors: ValidationErrors = {};
 
     const req = (key: string, val: string, label: string) => {
@@ -87,9 +92,24 @@ function validate(sender: SenderFormData, packages: OrderItemRequest[]): Validat
         p('recipientFirstName', pkg.recipientFirstName, 'First name');
         p('recipientLastName',  pkg.recipientLastName,  'Last name');
         p('recipientPhone',     pkg.recipientPhone,     'Phone number');
-        p('recipientCity',      pkg.recipientCity,      'City');
-        p('recipientDistrict',  pkg.recipientDistrict,  'District');
         p('recipientAddress',   pkg.recipientAddress,   'Street address');
+
+        // City existence check
+        if (!pkg.recipientCity.trim()) {
+            errors[`orders[${i}].recipientCity`] = 'City is required.';
+        } else if (cities.length > 0 && !cities.some(c => c.cityName === pkg.recipientCity)) {
+            errors[`orders[${i}].recipientCity`] = `"${pkg.recipientCity}" is not a valid city.`;
+        }
+
+        // District existence check — only if city is known and cache has been populated for it
+        if (!pkg.recipientDistrict.trim()) {
+            errors[`orders[${i}].recipientDistrict`] = 'District is required.';
+        } else if (
+            cityDistrictCache[pkg.recipientCity] &&
+            !cityDistrictCache[pkg.recipientCity].has(pkg.recipientDistrict)
+        ) {
+            errors[`orders[${i}].recipientDistrict`] = `"${pkg.recipientDistrict}" is not a valid district in the selected city.`;
+        }
     });
 
     return errors;
@@ -113,8 +133,16 @@ export function CreateGroupOrderPage() {
     const [importedCount,  setImportedCount]  = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const [prefilled, setPrefilled] = useState(false);
+    const [prefilled,       setPrefilled]       = useState(false);
     const [pickupModalOpen, setPickupModalOpen] = useState(false);
+
+    // ── City / district cache for frontend validation ─────────────────────────
+    const [cities,            setCities]            = useState<City[]>([]);
+    const [cityDistrictCache, setCityDistrictCache] = useState<Record<string, Set<string>>>({});
+
+    useEffect(() => {
+        fetchCities().then(setCities).catch(() => {});
+    }, []);
 
     // ── Pre-fill from customer profile ────────────────────────────────────────
     useEffect(() => {
@@ -136,7 +164,6 @@ export function CreateGroupOrderPage() {
                     registeredCity:     profile.city,
                     registeredDistrict: profile.district,
                     registeredAddress:  profile.address,
-                    // Default pickup = registered address
                     pickUpCity:         profile.city,
                     pickUpDistrict:     profile.district,
                     pickUpAddress:      profile.address,
@@ -154,7 +181,6 @@ export function CreateGroupOrderPage() {
     const handleUseOtherAddrChange = (checked: boolean) => {
         setUseOtherAddr(checked);
         if (!checked) {
-            // Revert pickup address back to registered address
             setSender(prev => ({
                 ...prev,
                 pickUpCity:     prev.registeredCity,
@@ -226,6 +252,19 @@ export function CreateGroupOrderPage() {
                 ...o,
                 description: o.description ?? '',
             }));
+
+            // Build district cache for all unique cities found in the import
+            const uniqueCities = [...new Set(normalised.map(o => o.recipientCity).filter(Boolean))];
+            await Promise.all(uniqueCities.map(async cityName => {
+                const city = cities.find(c => c.cityName === cityName);
+                if (!city) return;
+                const districts = await fetchDistricts(city.id);
+                setCityDistrictCache(prev => ({
+                    ...prev,
+                    [cityName]: new Set(districts.map(d => d.districtName)),
+                }));
+            }));
+
             setPackages(normalised);
             setImportedCount(normalised.length);
             setErrors({});
@@ -242,6 +281,7 @@ export function CreateGroupOrderPage() {
         setImportedCount(null);
         setExcelError(null);
         setPackages([{ ...EMPTY_PACKAGE }]);
+        setErrors({});
     };
 
     // ── Submit ────────────────────────────────────────────────────────────────
@@ -249,10 +289,13 @@ export function CreateGroupOrderPage() {
         e.preventDefault();
         setGlobalError(null);
 
-        const validationErrors = validate(sender, packages);
+        const validationErrors = validate(sender, packages, cities, cityDistrictCache);
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
-            document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                document.querySelector('.form-field--error, .cdp-field--error')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 50);
             return;
         }
 
@@ -272,10 +315,10 @@ export function CreateGroupOrderPage() {
                     ...p,
                     description: p.description?.trim() || undefined,
                 })),
-                customerId: user?.role === 'Customer' ? user.customerId : undefined,
+                // customerId is resolved server-side from the JWT — do not send it from the client
             };
 
-            const response = await createGroupOrder(payload);
+            const response = await createGroupOrder(payload, token!);
             setResult(response);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err) {
@@ -286,6 +329,11 @@ export function CreateGroupOrderPage() {
                         mapped[key.toLowerCase()] = (messages as string[])[0];
                     });
                     setErrors(mapped);
+                    // Scroll to first backend validation error after state update
+                    setTimeout(() => {
+                        document.querySelector('.form-field--error, .cdp-field--error')
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 50);
                 }
                 setGlobalError(err.message);
             } else {

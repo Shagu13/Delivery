@@ -42,7 +42,7 @@ public sealed class CreateGroupOrderCommandHandler
 
         var trackingNumbers = await _trackingGen.GenerateManyAsync(dto.Orders.Count, cancellationToken);
 
-        const string tbilisi = "თბილისი";
+        const string tbilisi = "Tbilisi";
 
         var groupOrder = new GroupOrder
         {

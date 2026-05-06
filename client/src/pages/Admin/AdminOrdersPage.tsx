@@ -592,7 +592,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <th className="aop-th">{t.aopThRecipient}</th>
                 <th className="aop-th">{t.aopThPhone}</th>
                 <th className="aop-th">{t.aopThCityDistrict}</th>
-                <th className="aop-th">{t.aopThDescription}</th>
+              {/*  <th className="aop-th">{t.aopThDescription}</th>*/}
                 <th className="aop-th">{t.aopThStatus}</th>
                 <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>
                 <th className="aop-th aop-th--num">{t.aopThSalary}</th>
@@ -632,10 +632,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       <div className="aop-city">{order.recipientCity}</div>
                       <div className="aop-district">{order.recipientDistrict}</div>
                     </td>
-                    <td className="aop-td aop-td--desc">
-                      {order.isFragile && <span className="aop-fragile">{t.aopFragile}</span>}
-                      {order.description && order.description !== 'Fragile – handle with care' && <span>{order.description}</span>}
-                    </td>
+                    {/*<td className="aop-td aop-td--desc">*/}
+                    {/*  {order.isFragile && <span className="aop-fragile">{t.aopFragile}</span>}*/}
+                    {/*  {order.description && order.description !== 'Fragile – handle with care' && <span>{order.description}</span>}*/}
+                    {/*</td>*/}
                     <td className="aop-td">
                       <span
                         className="status-badge"

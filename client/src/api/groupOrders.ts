@@ -13,10 +13,14 @@ export class ApiError extends Error {
 
 export async function createGroupOrder(
     data: CreateGroupOrderRequest,
+    token: string,
 ): Promise<CreateGroupOrderResponse> {
     const response = await fetch('/api/grouporders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify(data),
     });
 

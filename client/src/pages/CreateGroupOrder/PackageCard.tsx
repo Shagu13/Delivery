@@ -1,4 +1,5 @@
 import { FormField } from '../../components/ui/FormField';
+import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import type { OrderItemRequest, ValidationErrors } from '../../types/groupOrder';
 
 interface PackageCardProps {
@@ -81,26 +82,20 @@ export function PackageCard({
         {/* Delivery Address */}
         <fieldset className="fieldset">
           <legend className="fieldset__legend">Delivery Address</legend>
-          <div className="grid grid--2">
-            <FormField
-              label="City"
-              required
-              value={data.recipientCity}
-              onChange={e => onChange(index, 'recipientCity', e.target.value)}
-              error={fieldError('recipientCity')}
-              placeholder="e.g. Batumi"
-              maxLength={100}
-            />
-            <FormField
-              label="District"
-              required
-              value={data.recipientDistrict}
-              onChange={e => onChange(index, 'recipientDistrict', e.target.value)}
-              error={fieldError('recipientDistrict')}
-              placeholder="e.g. Orbi"
-              maxLength={100}
-            />
-          </div>
+
+          {/* City + District — picker for manual entry, errors surface for Excel imports */}
+          <CityDistrictPicker
+            cityValue={data.recipientCity}
+            districtValue={data.recipientDistrict}
+            onCityChange={cityName => {
+              onChange(index, 'recipientCity', cityName);
+              onChange(index, 'recipientDistrict', '');  // clear district when city changes
+            }}
+            onDistrictChange={districtName => onChange(index, 'recipientDistrict', districtName)}
+            cityError={fieldError('recipientCity')}
+            districtError={fieldError('recipientDistrict')}
+          />
+
           <FormField
             label="Street Address"
             required

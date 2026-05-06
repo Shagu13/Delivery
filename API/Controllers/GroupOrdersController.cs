@@ -28,24 +28,28 @@ public sealed class GroupOrdersController : BaseController
 {
     // ── POST /api/grouporders ────────────────────────────────────────────────
     [HttpPost]
-    [AllowAnonymous]
+    [Authorize(Roles = "Customer")]
     [ProducesResponseType(typeof(CreateGroupOrderResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Create(
-        [FromBody] CreateGroupOrderRequest request,
-        CancellationToken ct)
+    [FromBody] CreateGroupOrderRequest request,
+    CancellationToken ct)
     {
+        var customerIdClaim = User.FindFirstValue("customerId");
+        if (!Guid.TryParse(customerIdClaim, out var customerId))
+            return Forbid();
+
         var command = new CreateGroupOrderCommand(
             new CreateGroupOrderDto(
-                SenderFirstName:    request.SenderFirstName,
-                SenderLastName:     request.SenderLastName,
-                SenderIdNumber:     request.SenderIdNumber,
+                SenderFirstName: request.SenderFirstName,
+                SenderLastName: request.SenderLastName,
+                SenderIdNumber: request.SenderIdNumber,
                 SenderBusinessName: request.SenderBusinessName,
-                SenderPhone:        request.SenderPhone,
-                PickUpCity:         request.PickUpCity,
-                PickUpDistrict:     request.PickUpDistrict,
-                PickUpAddress:      request.PickUpAddress,
-                Note:               request.Note,
+                SenderPhone: request.SenderPhone,
+                PickUpCity: request.PickUpCity,
+                PickUpDistrict: request.PickUpDistrict,
+                PickUpAddress: request.PickUpAddress,
+                Note: request.Note,
                 Orders: request.Orders
                     .Select(o => new CreateOrderDto(
                         o.RecipientFirstName,
@@ -60,14 +64,14 @@ public sealed class GroupOrdersController : BaseController
                         o.WhoPaysForCompanyService,
                         o.CompanyServicePrice))
                     .ToList(),
-                CustomerId: request.CustomerId
+                CustomerId: customerId
             )
         );
 
         var result = await Sender.Send(command, ct);
 
         var response = new CreateGroupOrderResponse(
-            GroupOrderId:       result.GroupOrderId,
+            GroupOrderId: result.GroupOrderId,
             SenderBusinessName: result.SenderBusinessName,
             Orders: result.Orders
                 .Select(o => new OrderTrackingResponse(

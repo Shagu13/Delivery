@@ -1,18 +1,20 @@
+using Application.Common.Interfaces;
 using Application.GroupOrders.DTOs;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 
 namespace Application.GroupOrders.Commands.CreateGroupOrder;
 
 public sealed class CreateGroupOrderCommandValidator : AbstractValidator<CreateGroupOrderCommand>
 {
-    public CreateGroupOrderCommandValidator()
+    public CreateGroupOrderCommandValidator(IAppDbContext context)
     {
         RuleFor(x => x.Dto).NotNull();
         RuleFor(x => x.Dto.SenderFirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.SenderLastName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Dto.SenderIdNumber).MaximumLength(50)           // optional — no NotEmpty
+        RuleFor(x => x.Dto.SenderIdNumber).MaximumLength(50)
             .When(x => x.Dto.SenderIdNumber is not null);
-        RuleFor(x => x.Dto.SenderBusinessName).NotEmpty().MaximumLength(150); // was missing
+        RuleFor(x => x.Dto.SenderBusinessName).NotEmpty().MaximumLength(150);
         RuleFor(x => x.Dto.SenderPhone).NotEmpty().MaximumLength(20);
         RuleFor(x => x.Dto.PickUpCity).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.PickUpDistrict).NotEmpty().MaximumLength(100);
@@ -21,23 +23,47 @@ public sealed class CreateGroupOrderCommandValidator : AbstractValidator<CreateG
         RuleFor(x => x.Dto.Orders)
             .NotEmpty().WithMessage("At least one order (package) is required.")
             .Must(o => o.Count <= 100).WithMessage("A single group order cannot exceed 100 packages.");
-        RuleForEach(x => x.Dto.Orders).SetValidator(new CreateOrderDtoValidator());
+        RuleForEach(x => x.Dto.Orders).SetValidator(new CreateOrderDtoValidator(context));
     }
 }
 
 public sealed class CreateOrderDtoValidator : AbstractValidator<CreateOrderDto>
 {
-    public CreateOrderDtoValidator()
+    private readonly IAppDbContext _context;
+
+    public CreateOrderDtoValidator(IAppDbContext context)
     {
+        _context = context;
+
         RuleFor(x => x.RecipientFirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.RecipientLastName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.RecipientPhone).NotEmpty().MaximumLength(20);
-        RuleFor(x => x.RecipientCity).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.RecipientDistrict).NotEmpty().MaximumLength(100);
+
+        RuleFor(x => x.RecipientCity)
+            .NotEmpty().MaximumLength(100)
+            .MustAsync(CityExistsAsync)
+            .WithMessage("'{PropertyValue}' is not a valid city.")
+            .When(x => !string.IsNullOrEmpty(x.RecipientCity));
+
+        RuleFor(x => x.RecipientDistrict)
+            .NotEmpty().MaximumLength(100)
+            .MustAsync(DistrictExistsAsync)
+            .WithMessage("'{PropertyValue}' is not a valid district in the selected city.")
+            .When(x => !string.IsNullOrEmpty(x.RecipientCity) && !string.IsNullOrEmpty(x.RecipientDistrict));
+
         RuleFor(x => x.RecipientAddress).NotEmpty().MaximumLength(250);
         RuleFor(x => x.Description).MaximumLength(500).When(x => x.Description is not null);
         RuleFor(x => x.CompanyServicePrice)
             .GreaterThan(0).WithMessage("CompanyServicePrice must be greater than 0 when provided.")
             .When(x => x.CompanyServicePrice.HasValue);
     }
+
+    private Task<bool> CityExistsAsync(CreateOrderDto dto, string city, CancellationToken ct) =>
+        _context.Cities.AnyAsync(c => c.CityName == city && c.DateDeleted == null, ct);
+
+    private Task<bool> DistrictExistsAsync(CreateOrderDto dto, string district, CancellationToken ct) =>
+        _context.Districts.AnyAsync(d =>
+            d.DistrictName == district &&
+            d.City.CityName == dto.RecipientCity &&
+            d.DateDeleted == null, ct);
 }
