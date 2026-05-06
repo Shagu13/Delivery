@@ -65,6 +65,8 @@ public static class DependencyInjectionPersistence
             var admin = new ApplicationUser
             {
                 UserName = adminUsername,
+                Email = "admin@dilodelivery.com",
+                NormalizedEmail = "ADMIN@DILODELIVERY.COM",
                 FirstName = "System",
                 LastName = "Admin",
                 Role = "Admin"
