@@ -30,7 +30,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
         //    Customers register with email-as-username, but staff may use plain usernames.
         var user = await _userManager.FindByNameAsync(request.Username)
                 ?? await _userManager.FindByEmailAsync(request.Username)
-                ?? throw new NotFoundException(nameof(ApplicationUser), request.Username);
+                ?? throw new ForbiddenException("Invalid username or password.");
 
         // 2. Verify password
         var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
