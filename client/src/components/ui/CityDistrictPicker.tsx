@@ -42,7 +42,7 @@ function DropdownPortal({ anchorRef, open, children }: DropdownPortalProps) {
 }
 
 export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onDistrictChange, cityError, districtError }: Props) {
-  const { t } = useLanguage();
+    const { t, lang } = useLanguage();
 
   const [cities,           setCities]           = useState<City[]>([]);
   const [citySearch,       setCitySearch]       = useState(cityValue);
@@ -92,9 +92,11 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
   useEffect(() => setCityHighlight(-1),     [citySearch]);
   useEffect(() => setDistrictHighlight(-1), [districtSearch]);
 
-  const lc = (s: string) => s.toLowerCase();
-  const filteredCities    = cities.filter(c    => lc(c.cityName).includes(lc(citySearch)));
-  const filteredDistricts = districts.filter(d => lc(d.districtName).includes(lc(districtSearch)));
+    const lc = (s: string) => s.toLowerCase();
+    const cityLabel = (c: City) => lang === 'ka' && c.cityNameGeo ? c.cityNameGeo : c.cityName;
+    const districtLabel = (d: District) => lang === 'ka' && d.districtNameGeo ? d.districtNameGeo : d.districtName;
+    const filteredCities = cities.filter(c => lc(cityLabel(c)).includes(lc(citySearch)));
+    const filteredDistricts = districts.filter(d => lc(districtLabel(d)).includes(lc(districtSearch)));
 
   const clearCity = useCallback(() => {
     setCitySearch(''); onCityChange(''); setSelectedCityId(null); setDistrictSearch(''); onDistrictChange('');
@@ -105,15 +107,21 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
     setDistrictSearch(''); onDistrictChange(''); districtInputRef.current?.focus();
   }, [onDistrictChange]);
 
-  const selectCity = useCallback((city: City) => {
-    setCitySearch(city.cityName); setCityOpen(false); setSelectedCityId(city.id); onCityChange(city.cityName);
-    setDistrictSearch(''); onDistrictChange('');
-    setTimeout(() => districtInputRef.current?.focus(), 60);
-  }, [onCityChange, onDistrictChange]);
+    const selectCity = useCallback((city: City) => {
+        setCitySearch(cityLabel(city));   
+        setCityOpen(false);
+        setSelectedCityId(city.id);
+        onCityChange(city.cityName);      
+        setDistrictSearch('');
+        onDistrictChange('');
+        setTimeout(() => districtInputRef.current?.focus(), 60);
+    }, [onCityChange, onDistrictChange, lang]);
 
-  const selectDistrict = useCallback((d: District) => {
-    setDistrictSearch(d.districtName); setDistrictOpen(false); onDistrictChange(d.districtName);
-  }, [onDistrictChange]);
+    const selectDistrict = useCallback((d: District) => {
+        setDistrictSearch(districtLabel(d));  
+        setDistrictOpen(false);
+        onDistrictChange(d.districtName);     
+    }, [onDistrictChange, lang]);
 
   const handleCityKeyDown = (e: React.KeyboardEvent) => {
     if (!cityOpen) { if (e.key === 'ArrowDown' || e.key === 'Enter') setCityOpen(true); return; }
@@ -177,7 +185,7 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
                   <li key={c.id} role="option" aria-selected={c.cityName === cityValue}
                     className={['cdp-option', c.cityName === cityValue ? 'cdp-option--selected' : '', i === cityHighlight ? 'cdp-option--highlighted' : ''].join(' ')}
                     onMouseDown={e => { e.preventDefault(); selectCity(c); }} onMouseEnter={() => setCityHighlight(i)}>
-                    <span className="cdp-option-label">{highlight(c.cityName, citySearch)}</span>
+                        <span className="cdp-option-label">{highlight(cityLabel(c), citySearch)}</span>
                     {c.cityName === cityValue && <TickIcon />}
                   </li>
                 ))}
@@ -216,7 +224,7 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
                   <li key={d.id} role="option" aria-selected={d.districtName === districtValue}
                     className={['cdp-option', d.districtName === districtValue ? 'cdp-option--selected' : '', i === districtHighlight ? 'cdp-option--highlighted' : ''].join(' ')}
                     onMouseDown={e => { e.preventDefault(); selectDistrict(d); }} onMouseEnter={() => setDistrictHighlight(i)}>
-                    <span className="cdp-option-label">{highlight(d.districtName, districtSearch)}</span>
+                        <span className="cdp-option-label">{highlight(districtLabel(d), districtSearch)}</span>
                     {d.districtName === districtValue && <TickIcon />}
                   </li>
                 ))}

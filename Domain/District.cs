@@ -7,16 +7,23 @@ namespace Domain;
 /// </summary>
 public class District
 {
-    public Guid     Id             { get; set; } = Guid.NewGuid();
-    public required string DistrictName   { get; set; }
-    public Guid     CityId         { get; set; }
-    public City     City           { get; set; } = null!;
+    public Guid     Id               { get; set; } = Guid.NewGuid();
+
+    /// <summary>Latin/English name — used as the canonical DB value in orders.</summary>
+    public required string DistrictName     { get; set; }
+
+    /// <summary>Georgian script name — used for display when language = "ka".</summary>
+    public string?  DistrictNameGeo  { get; set; }
+
+    public Guid     CityId           { get; set; }
+    public City     City             { get; set; } = null!;
+
     /// <summary>
     /// Default company service price charged for deliveries to this district.
     /// Null means no default is set — admin must enter manually per order.
     /// </summary>
     public decimal? CompanyServicePrice { get; set; }
 
-    public DateTime CreatedAt      { get; set; } = DateTime.UtcNow;
-    public DateTime? DateDeleted   { get; set; }
+    public DateTime  CreatedAt       { get; set; } = DateTime.UtcNow;
+    public DateTime? DateDeleted     { get; set; }
 }

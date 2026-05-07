@@ -1,11 +1,13 @@
 export interface City {
   id: string;
   cityName: string;
+  cityNameGeo?: string;
 }
 
 export interface District {
   id: string;
   districtName: string;
+  districtNameGeo?: string; 
   companyServicePrice: number | null;
 }
 
