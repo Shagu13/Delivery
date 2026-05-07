@@ -21,7 +21,7 @@ public sealed class SendOrderToCityCommandHandler : IRequestHandler<SendOrderToC
         if (order.Status != OrderStatus.AdminAcceptedOrderInWareHouse)
             throw new ConflictException($"Expected AdminAcceptedOrderInWareHouse. Current: {order.Status}.");
 
-        const string tbilisi = "თბილისი";
+        const string tbilisi = "Tbilisi";
         if (order.RecipientCity.Equals(tbilisi, StringComparison.OrdinalIgnoreCase))
             throw new ConflictException("Tbilisi orders must use Assign Courier, not Send To City.");
 
@@ -107,7 +107,7 @@ public sealed class MarkOrderReceivedCommandHandler : IRequestHandler<MarkOrderR
         order.PickedUpFromWarehouseAt = receivedAt;
 
         // Auto-fill delivery window for non-Tbilisi orders
-        const string tbilisi = "თბილისი";
+        const string tbilisi = "Tbilisi";   
         if (!order.RecipientCity.Equals(tbilisi, StringComparison.OrdinalIgnoreCase))
         {
             order.DeliveryDateFrom = receivedAt.Date.AddDays(1);

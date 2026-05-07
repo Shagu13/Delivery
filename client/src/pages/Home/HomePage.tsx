@@ -160,13 +160,17 @@ export function HomePage() {
                         {!loading && result && (
                             <div className="track-modal__body">
                                 <div className="track-modal__status-row">
-                                    <span
-                                      className={`track-badge ${badgeClass}`}
-                                      title={badgeMeta?.description}
-                                    >
-                                        <span className="track-badge__dot" />
-                                        {badgeLabel}
-                                    </span>
+                                    <div className="track-badge-wrapper">
+                                        <span className={`track-badge ${badgeClass}`}>
+                                            <span className="track-badge__dot" />
+                                            {badgeLabel}
+                                        </span>
+                                        {badgeMeta?.description && (
+                                            <p className="track-badge__description">
+                                                {badgeMeta.description}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="track-modal__info">

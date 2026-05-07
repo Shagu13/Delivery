@@ -100,7 +100,6 @@ export function RegisterPage() {
           {t.appName}
         </div>
 
-        <p className="register-card__eyebrow">{t.registerEyebrow}</p>
         <h1 className="register-card__title">{t.registerTitle}</h1>
 
         <form className="register-form" onSubmit={handleSubmit} noValidate>
@@ -155,7 +154,6 @@ export function RegisterPage() {
           <div className="register-form__divider" />
 
           {/* Credentials */}
-          <p className="register-form__section-label">{t.registerCredentials}</p>
           <FormField
             label={t.emailAddress} type="email" autoComplete="email"
             value={form.email} onChange={set('email')} error={errors.email} placeholder={t.phEmail}

@@ -10,7 +10,7 @@ import {
 } from '../../api/adminGroupOrders';
 import { sendOrderToCity, cancelOrderByAdmin } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
-//import { STATUS_COLORS } from '../../utils/statusColors';
+import { useLanguage } from '../../contexts/useLanguage';
 
 
 interface Props {
@@ -28,6 +28,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
     const [selectedCourierId, setSelectedCourierId] = useState('');
     const [showPickupDate, setShowPickupDate] = useState(false);
     const [pickupDateValue, setPickupDateValue] = useState('');
+    const { t } = useLanguage();
 
     async function run(fn: () => Promise<void>, successMsg: string) {
         setBusy(true);
@@ -46,7 +47,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
         if (!selectedCourierId) return;
         await run(
             () => assignCourierToGroupOrder(token, groupOrder.id, selectedCourierId),
-            'Courier assigned for pickup.'
+            t.goAssignedPickup
         );
         setShowCourierPicker(false);
         setSelectedCourierId('');
@@ -56,7 +57,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
         if (!pickupDateValue) return;
         await run(
             () => setGroupOrderPickupDate(token, groupOrder.id, new Date(pickupDateValue).toISOString()),
-            'Pickup date set.'
+            t.goPickupDateSet
         );
         setShowPickupDate(false);
         setPickupDateValue('');
@@ -73,12 +74,12 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
             {status === 'Pending' && (
                 <>
                     <button className="go-action-btn go-action-btn--accept" disabled={busy}
-                        onClick={() => run(() => acceptGroupOrder(token, groupOrder.id), 'Group order accepted.')}>
-                        ✓ Accept
+                        onClick={() => run(() => acceptGroupOrder(token, groupOrder.id), t.goGroupAccepted)}>
+                        {t.goAccept}
                     </button>
                     <button className="go-action-btn go-action-btn--decline" disabled={busy}
-                        onClick={() => run(() => declineGroupOrder(token, groupOrder.id), 'Group order declined.')}>
-                        ✗ Decline
+                        onClick={() => run(() => declineGroupOrder(token, groupOrder.id), t.goGroupDeclined)}>
+                        {t.goDecline}
                     </button>
                 </>
             )}
@@ -88,11 +89,11 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 <>
                     <button className="go-action-btn go-action-btn--assign" disabled={busy}
                         onClick={() => setShowCourierPicker(true)}>
-                        Assign Courier
+                        {t.goAssignCourierBtn}
                     </button>
                     <button className="go-action-btn go-action-btn--ghost" disabled={busy}
                         onClick={() => setShowPickupDate(true)}>
-                        📅 Set Pickup Date
+                        {t.goSetPickupDate}
                     </button>
                 </>
             )}
@@ -102,7 +103,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 <div className="go-courier-picker" onClick={e => e.stopPropagation()}>
                     <select className="go-select go-select--inline" value={selectedCourierId}
                         onChange={e => setSelectedCourierId(e.target.value)}>
-                        <option value="">Choose courier…</option>
+                        <option value="">{t.goChooseCourierOption}</option>
                         {couriers.map(c => (
                             <option key={c.courierId} value={c.courierId}>
                                 {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
@@ -111,11 +112,11 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                     </select>
                     <button className="go-action-btn go-action-btn--accept"
                         disabled={!selectedCourierId || busy} onClick={handleAssignGroupCourier}>
-                        Confirm
+                        {t.goConfirm}
                     </button>
                     <button className="go-action-btn go-action-btn--ghost"
                         onClick={() => { setShowCourierPicker(false); setSelectedCourierId(''); }}>
-                        Cancel
+                        {t.cancel}
                     </button>
                 </div>
             )}
@@ -132,11 +133,11 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                     />
                     <button className="go-action-btn go-action-btn--accept"
                         disabled={!pickupDateValue || busy} onClick={handleSetPickupDate}>
-                        Save Date
+                        {t.goSaveDate}
                     </button>
                     <button className="go-action-btn go-action-btn--ghost"
                         onClick={() => { setShowPickupDate(false); setPickupDateValue(''); }}>
-                        Cancel
+                        {t.cancel}
                     </button>
                 </div>
             )}
@@ -144,13 +145,13 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
             {/* Step 6: Accept batch in warehouse */}
             {status === 'DeliveredToWarehouse' && (
                 <button className="go-action-btn go-action-btn--warehouse" disabled={busy}
-                    onClick={() => run(() => acceptGroupOrderInWarehouse(token, groupOrder.id), 'Accepted in warehouse.')}>
-                    ✓ Accept in Warehouse
+                    onClick={() => run(() => acceptGroupOrderInWarehouse(token, groupOrder.id), t.goAcceptedInWarehouse)}>
+                    {t.goAcceptInWarehouse}
                 </button>
             )}
 
             {status === 'AdminAcceptedOrderInWareHouse' && (
-                <span className="go-action-hint">↓ Assign each package below</span>
+                <span className="go-action-hint">{t.goAssignPackagesHint}</span>
             )}
 
             {/* Cancel by Admin — always visible unless already terminal */}
@@ -160,11 +161,11 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                     disabled={busy}
                     title="Cancel this entire group order"
                     onClick={() => {
-                        if (!window.confirm('Cancel this entire group order and all its packages?')) return;
-                        run(() => cancelGroupOrderByAdmin(token, groupOrder.id), 'Group order cancelled by admin.');
+                        if (!window.confirm(t.goCancelGroupConfirm)) return;
+                        run(() => cancelGroupOrderByAdmin(token, groupOrder.id), t.goGroupCancelled);
                     }}
                 >
-                    Cancel
+                    {t.goCancelGroup}
                 </button>
             )}
         </div>
@@ -184,6 +185,7 @@ interface OrderActionProps {
 
 export function AdminOrderRowActions({ order, token, onSuccess, onError, onRefresh }: OrderActionProps) {
     const [busy, setBusy] = useState(false);
+    const { t } = useLanguage();
 
     async function run(fn: () => Promise<void>, msg: string) {
         setBusy(true);
@@ -192,14 +194,14 @@ export function AdminOrderRowActions({ order, token, onSuccess, onError, onRefre
             onSuccess(msg);
             onRefresh();
         } catch (e: unknown) {
-            onError(e instanceof Error ? e.message : 'Action failed.');
+            onError(e instanceof Error ? e.message : t.goActionFailed);
         } finally {
             setBusy(false);
         }
     }
 
     const { status, recipientCity } = order;
-    const isTbilisi = recipientCity === 'თბილისი';
+    const isTbilisi = recipientCity.toLowerCase() === 'tbilisi';
     const isTerminal = status === 'DeliveredToRecipient' || status === 'CancelledByAdmin' || status === 'CancelledBySender';
 
     return (
@@ -207,8 +209,8 @@ export function AdminOrderRowActions({ order, token, onSuccess, onError, onRefre
             {/* Step 7: non-Tbilisi → Send to City */}
             {status === 'AdminAcceptedOrderInWareHouse' && !isTbilisi && (
                 <button className="go-action-btn go-action-btn--city" disabled={busy}
-                    onClick={() => run(() => sendOrderToCity(token, order.id), `Sent to ${recipientCity}.`)}>
-                    Send to {recipientCity}
+                    onClick={() => run(() => sendOrderToCity(token, order.id), t.goSentToCity(recipientCity))}>
+                    {t.goSendToCity(recipientCity)}
                 </button>
             )}
 
@@ -217,13 +219,13 @@ export function AdminOrderRowActions({ order, token, onSuccess, onError, onRefre
                 <button
                     className="go-action-btn go-action-btn--cancel-admin"
                     disabled={busy}
-                    title="Cancel this package"
+                    title={t.goCancelPackageTitle}
                     onClick={() => {
-                        if (!window.confirm('Cancel this package?')) return;
-                        run(() => cancelOrderByAdmin(token, order.id), 'Order cancelled by admin.');
+                        if (!window.confirm(t.goCancelPackageConfirm)) return;
+                        run(() => cancelOrderByAdmin(token, order.id), t.goOrderCancelled);
                     }}
                 >
-                    Cancel
+                    {t.goCancelPackage}
                 </button>
             )}
         </div>

@@ -160,7 +160,7 @@ export function AdminDashboard() {
           )}
         </div>
         <main className="dashboard__content">
-          {activeView === 'overview'  && <AdminOverview />}
+          {activeView === 'overview'  && <AdminOverview token={token ?? ''} />}
           {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} />}
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} />}
@@ -336,16 +336,52 @@ const STATUS_CLASS_MAP: Record<string, string> = {
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
 
-function AdminOverview() {
+function AdminOverview({ token }: { token: string }) {
+  const { t } = useLanguage();
+  const [groupOrders, setGroupOrders] = useState<AdminGroupOrder[]>([]);
+  const [couriers, setCouriersLocal] = useState<Courier[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    Promise.all([
+      fetchGroupOrders(token).catch(() => [] as AdminGroupOrder[]),
+      fetchCouriers(token).catch(() => [] as Courier[]),
+    ]).then(([go, co]) => {
+      setGroupOrders(go);
+      setCouriersLocal(co);
+      setLoading(false);
+    });
+  }, [token]);
+
+  const totalOrders   = groupOrders.reduce((sum, go) => sum + go.orders.length, 0);
+  const pendingPickup = groupOrders.filter(go =>
+    go.status === 'Pending' || go.status === 'AcceptedGroupOrder' || go.status === 'CourierAssignedToPickUp' || go.status === 'CourierOnTheWayToPickUp'
+  ).length;
+  const inTransit = groupOrders.reduce((sum, go) =>
+    sum + go.orders.filter(o =>
+      o.status === 'OrderIsOnItsWayToRecipientsCity' ||
+      o.status === 'CourierAssignedToDeliver' ||
+      o.status === 'CourierRecievedOrderToDeliver'
+    ).length, 0);
+  const activeCouriers = couriers.filter(c => c.isAvailable).length;
+
+  const recent = [...groupOrders]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 8);
+
+  const stats = [
+    { label: t.overviewTotalOrders   ?? 'Total Orders',    value: loading ? '…' : String(totalOrders),   sub: t.overviewAllTime      ?? 'All time' },
+    { label: t.overviewPendingPickup ?? 'Pending Pickup',  value: loading ? '…' : String(pendingPickup), sub: t.overviewAwaitingCourier ?? 'Awaiting courier' },
+    { label: t.overviewInTransit     ?? 'In Transit',      value: loading ? '…' : String(inTransit),     sub: t.overviewActiveDeliveries ?? 'Active deliveries' },
+    { label: t.overviewActiveCouriers ?? 'Active Couriers', value: loading ? '…' : String(activeCouriers), sub: t.overviewAvailableNow ?? 'Available now' },
+  ];
+
   return (
     <>
       <div className="stat-grid">
-        {[
-          { label: 'Total Orders',    value: '—', sub: 'All time' },
-          { label: 'Pending Pickup',  value: '—', sub: 'Awaiting courier' },
-          { label: 'In Transit',      value: '—', sub: 'Active deliveries' },
-          { label: 'Active Couriers', value: '—', sub: 'Available now' },
-        ].map((s, i) => (
+        {stats.map((s, i) => (
           <div className="stat-card" key={s.label} style={{ animationDelay: `${i * 60}ms` }}>
             <div className="stat-card__label">{s.label}</div>
             <div className="stat-card__value">{s.value}</div>
@@ -355,15 +391,46 @@ function AdminOverview() {
       </div>
       <div className="content-card">
         <div className="content-card__header">
-          <span className="content-card__title">Recent Group Orders</span>
+          <span className="content-card__title">{t.overviewRecentGroupOrders ?? 'Recent Group Orders'}</span>
         </div>
-        <div className="empty-state">
-          <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
-            <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M12 16h16M12 22h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-          <span className="empty-state__text">Orders will appear here</span>
-        </div>
+        {loading ? (
+          <div className="go-loading">
+            <div className="go-spinner" />
+          </div>
+        ) : recent.length === 0 ? (
+          <div className="empty-state">
+            <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
+              <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M12 16h16M12 22h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span className="empty-state__text">{t.goEmptyState ?? 'Orders will appear here'}</span>
+          </div>
+        ) : (
+          <table className="courier-table">
+            <thead>
+              <tr>
+                <th>{t.goColBusiness ?? 'Business'}</th>
+                <th>{t.goColSender   ?? 'Sender'}</th>
+                <th>{t.goColCity     ?? 'City'}</th>
+                <th>{t.goColPackages ?? 'Packages'}</th>
+                <th>{t.goColStatus   ?? 'Status'}</th>
+                <th>{t.goColDate     ?? 'Date'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.map(go => (
+                <tr key={go.id}>
+                  <td><span className="courier-name">{go.senderBusinessName}</span></td>
+                  <td><span className="courier-username">{go.senderFirstName} {go.senderLastName}</span></td>
+                  <td>{go.pickUpCity}</td>
+                  <td>{go.numberOfPackages}</td>
+                  <td><StatusBadge status={go.status} /></td>
+                  <td><span className="courier-time">{formatDate(go.createdAt)}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </>
   );
@@ -379,25 +446,26 @@ const ORDER_LEVEL_STATUSES = new Set([
 ]);
 
 const STATUS_PILLS = [
-  { value: '',                                label: 'All' },
-  { value: 'Pending',                         label: 'Pending' },
-  { value: 'AcceptedGroupOrder',              label: 'Accepted' },
-  { value: 'CourierAssignedToPickUp',         label: 'Courier Assigned (Pickup)' },
-  { value: 'CourierOnTheWayToPickUp',         label: 'On The Way' },
-  { value: 'CourierDeliveringToWarehouse',    label: 'To Warehouse' },
-  { value: 'DeliveredToWarehouse',            label: 'At Warehouse' },
-  { value: 'AdminAcceptedOrderInWareHouse',   label: 'Warehouse Accepted' },
-  { value: 'OrderIsOnItsWayToRecipientsCity', label: 'Sent To City' },
-  { value: 'CourierAssignedToDeliver',        label: 'Courier Assigned (Delivery)' },
-  { value: 'CourierRecievedOrderToDeliver',   label: 'Courier Received' },
-  { value: 'DeliveredToRecipient',            label: 'Delivered' },
-  { value: 'CancelledBySender',               label: 'Cancelled (Sender)' },
-  { value: 'CancelledByAdmin',                label: 'Cancelled (Admin)' },
-  { value: 'OrderNotAccepted',                label: 'Declined' },
-];
+  { value: '',                                label: 'pillAll' },
+  { value: 'Pending',                         label: 'pillPending' },
+  { value: 'AcceptedGroupOrder',              label: 'pillAccepted' },
+  { value: 'CourierAssignedToPickUp',         label: 'pillCourierPickup' },
+  { value: 'CourierOnTheWayToPickUp',         label: 'pillOnTheWay' },
+  { value: 'CourierDeliveringToWarehouse',    label: 'pillToWarehouse' },
+  { value: 'DeliveredToWarehouse',            label: 'pillAtWarehouse' },
+  { value: 'AdminAcceptedOrderInWareHouse',   label: 'pillWarehouseAccepted' },
+  { value: 'OrderIsOnItsWayToRecipientsCity', label: 'pillSentToCity' },
+  { value: 'CourierAssignedToDeliver',        label: 'pillCourierDelivery' },
+  { value: 'CourierRecievedOrderToDeliver',   label: 'pillCourierReceived' },
+  { value: 'DeliveredToRecipient',            label: 'pillDelivered' },
+  { value: 'CancelledBySender',               label: 'pillCancelledSender' },
+  { value: 'CancelledByAdmin',                label: 'pillCancelledAdmin' },
+  { value: 'OrderNotAccepted',                label: 'pillDeclined' },
+] as const;
 
 function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const { token } = useAuth();
+  const { t } = useLanguage();
   const [groupOrders, setGroupOrders]   = useState<AdminGroupOrder[]>([]);
   const [couriers,    setCouriers]      = useState<Courier[]>([]);
   const [loading,     setLoading]       = useState(true);
@@ -426,7 +494,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
       setGroupOrders(data);
       setError(null);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load group orders.');
+      setError(e instanceof Error ? e.message : t.goLoadingOrders);
     } finally {
       setLoading(false);
     }
@@ -525,8 +593,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     setBulkCourierId('');
     void (async () => { setLoading(true); await load(search); })();
     showToast(
-      fail === 0 ? `Courier assigned to ${ok} order${ok !== 1 ? 's' : ''}.`
-                 : `${ok} assigned, ${fail} failed.`,
+      fail === 0 ? t.goCourierAssigned(ok)
+                 : t.goCourierAssignedFail(ok, fail),
       fail > 0 ? 'err' : 'ok'
     );
   };
@@ -551,7 +619,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
           </svg>
           <input
             type="text"
-            placeholder="Search by sender, recipient, phone, city, address, TN…"
+            placeholder={t.goSearchPh}
             value={search}
             onChange={e => setSearch(e.target.value)}
             autoComplete="off"
@@ -566,35 +634,43 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
         </div>
         {!loading && !error && (
           <span className="go-count">
-            {visibleOrders.length}{visibleOrders.length !== groupOrders.length ? `/${groupOrders.length}` : ''} group order{visibleOrders.length !== 1 ? 's' : ''}{hasFilters ? ' matched' : ''}
+            {filterParty === 'recipient' && hasLocationFilter
+              ? (() => {
+                  const n = visibleOrders.reduce((sum, go) => sum + visibleOrdersFor(go).length, 0);
+                  return `${n} order${n !== 1 ? 's' : ''}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`;
+                })()
+              : `${t.goOrderCount(visibleOrders.length, groupOrders.length)}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`
+            }
           </span>
         )}
       </div>
 
       {/* Location filter */}
       <div className="go-toolbar go-toolbar--filters">
-        <span className="go-filter-label">Filter by location</span>
+        <span className="go-filter-label">{t.goFilterByLocation}</span>
         <div className="go-filter-chain">
           <div className="go-filter-step">
-            <span className="go-step-label">Party</span>
+            <span className="go-step-label">{t.goParty}</span>
             <div className="go-seg">
-              <button className={`go-seg__btn ${filterParty === 'sender' ? 'go-seg__btn--active' : ''}`} onClick={() => handlePartyChange('sender')}>
+              <button className={`go-seg__btn ${filterParty === 'sender' ? 'go-seg__btn--active' : ''}`}
+                onClick={() => handlePartyChange('sender')}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 8a3 3 0 100-6 3 3 0 000 6zM2 14c0-3 2.686-5 6-5s6 2 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-                Sender
+                {t.goSender}
               </button>
-              <button className={`go-seg__btn ${filterParty === 'recipient' ? 'go-seg__btn--active' : ''}`} onClick={() => handlePartyChange('recipient')}>
+              <button className={`go-seg__btn ${filterParty === 'recipient' ? 'go-seg__btn--active' : ''}`}
+                onClick={() => handlePartyChange('recipient')}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/><path d="M5 8h6M8 5v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>
-                Recipient
+                {t.goRecipient}
               </button>
             </div>
           </div>
           <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
           <div className="go-filter-step">
-            <span className="go-step-label">City</span>
+            <span className="go-step-label">{t.goCity}</span>
             <div className="go-select-wrap">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><path d="M8 1.5C5.515 1.5 3.5 3.515 3.5 6c0 3.75 4.5 8.5 4.5 8.5S12.5 9.75 12.5 6c0-2.485-2.015-4.5-4.5-4.5zm0 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" stroke="currentColor" strokeWidth="1.2"/></svg>
               <select className="go-select" value={filterCity} onChange={e => handleCityChange(e.target.value)} disabled={loading || availableCities.length === 0}>
-                <option value="">All cities</option>
+                <option value="">{t.goAllCities}</option>
                 {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -604,11 +680,11 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
             <>
               <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <div className="go-filter-step">
-                <span className="go-step-label">District</span>
+                <span className="go-step-label">{t.goDistrict}</span>
                 <div className="go-select-wrap">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
                   <select className="go-select" value={filterDistrict} onChange={e => setFilterDistrict(e.target.value)} disabled={availableDistricts.length === 0}>
-                    <option value="">All districts</option>
+                    <option value="">{t.goAllDistricts}</option>
                     {availableDistricts.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                   <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -620,27 +696,27 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
         {hasLocationFilter && (
           <button className="go-clear-btn" onClick={clearAll}>
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-            Clear
+            {t.goClear}
           </button>
         )}
       </div>
 
       {/* Status pills */}
       <div className="go-toolbar go-status-bar">
-        <span className="go-filter-label">Status</span>
+        <span className="go-filter-label">{t.goStatus}</span>
         {STATUS_PILLS.map(({ value, label }) => (
           <button
             key={value || 'all'}
             className={`go-status-pill ${filterStatus === value ? 'go-status-pill--active' : ''}`}
             onClick={() => setFilterStatus(value)}
           >
-            {label}
+            {t[label]}
           </button>
         ))}
       </div>
 
       {/* States */}
-      {loading && <div className="go-loading"><div className="go-spinner" />Loading group orders…</div>}
+      {loading && <div className="go-loading"><div className="go-spinner" />{t.goLoadingOrders}</div>}
       {!loading && error && <div className="go-error">{error}</div>}
       {!loading && !error && visibleOrders.length === 0 && (
         <div className="empty-state" style={{ padding: '48px 20px' }}>
@@ -648,7 +724,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
             <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
             <path d="M12 16h16M12 22h10M12 28h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <span className="empty-state__text">{hasFilters ? 'No group orders match your filters.' : 'No group orders yet.'}</span>
+          <span className="empty-state__text">{hasFilters ? t.goNoOrdersFilters : t.goNoOrders}</span>
         </div>
       )}
 
@@ -666,7 +742,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
             <path d="M4 8l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
-            {selectedOrderIds.size} order{selectedOrderIds.size !== 1 ? 's' : ''} selected
+            {t.goNSelected(selectedOrderIds.size)}
           </span>
           <div className="go-select-wrap" style={{ marginLeft: 4 }}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon">
@@ -679,7 +755,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
               onChange={e => setBulkCourierId(e.target.value)}
               style={{ minWidth: 220 }}
             >
-              <option value="">Choose courier to assign…</option>
+              <option value="">{t.goChooseCourier}</option>
               {couriers.map(c => (
                 <option key={c.courierId} value={c.courierId}>
                   {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
@@ -695,20 +771,114 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
             disabled={!bulkCourierId || bulkAssigning}
             onClick={handleBulkAssign}
           >
-            {bulkAssigning ? 'Assigning…' : `Assign Courier (${selectedOrderIds.size})`}
+            {bulkAssigning ? t.goAssigning : t.goAssignCourier(selectedOrderIds.size)}
           </button>
           <button
             className="go-action-btn go-action-btn--ghost"
             onClick={() => setSelectedOrderIds(new Set())}
             style={{ marginLeft: 'auto' }}
           >
-            Clear selection
+            {t.goClearSelection}
           </button>
         </div>
       )}
 
       {/* Group order list */}
-      {!loading && !error && visibleOrders.length > 0 && (
+      {!loading && !error && visibleOrders.length > 0 && (() => {
+        // ── Flat view: recipient party + location filter active ──────────────
+        const showFlat = filterParty === 'recipient' && hasLocationFilter;
+
+        if (showFlat) {
+          // Collect all matching individual orders (with their parent group order attached)
+          const flatOrders = visibleOrders.flatMap(go =>
+            visibleOrdersFor(go).map(o => ({ ...o, _go: go }))
+          );
+          const assignableFlat = flatOrders.filter(
+            o => o.status !== 'DeliveredToRecipient' && o.courierId === null
+          );
+          return (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="go-orders-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        title={t.goSelectAllAssignable}
+                        checked={assignableFlat.length > 0 && assignableFlat.every(o => selectedOrderIds.has(o.id))}
+                        onChange={e => {
+                          setSelectedOrderIds(prev => {
+                            const next = new Set(prev);
+                            assignableFlat.forEach(o => e.target.checked ? next.add(o.id) : next.delete(o.id));
+                            return next;
+                          });
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                    <th>{t.goThTracking}</th>
+                    <th>{t.goThRecipient}</th>
+                    <th>{t.goThPhone}</th>
+                    <th>{t.goThCityDistrict}</th>
+                    <th>{t.goThAddress}</th>
+                    <th>{t.goThDescription}</th>
+                    <th>{t.goThStatus}</th>
+                    <th>{t.goThPaid}</th>
+                    <th>{t.goThActions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {flatOrders.map(o => (
+                    <tr key={o.id} style={{ background: selectedOrderIds.has(o.id) ? 'var(--color-accent-dim)' : undefined }}>
+                      <td onClick={e => e.stopPropagation()}>
+                        {o.status !== 'DeliveredToRecipient' && o.courierId === null ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedOrderIds.has(o.id)}
+                            onChange={() => toggleOrderSelect(o.id)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        ) : (
+                          <span style={{ display: 'inline-block', width: 15, textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.75rem' }}>—</span>
+                        )}
+                      </td>
+                      <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                      <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
+                      <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
+                      <td>
+                        <div>{o.recipientCity}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
+                      </td>
+                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
+                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
+                        {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
+                      </td>
+                      <td><StatusBadge status={o.status} /></td>
+                      <td>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444' }}>
+                          {o.productPaymentStatus === 'Paid' ? t.goPaid : t.goUnpaid}
+                        </span>
+                      </td>
+                      <td>
+                        <AdminOrderRowActions
+                          order={o}
+                          couriers={couriers}
+                          token={token ?? ''}
+                          onSuccess={msg => showToast(msg)}
+                          onError={msg => showToast(msg, 'err')}
+                          onRefresh={() => load(search)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        // ── Default grouped accordion view ───────────────────────────────────
+        return (
         <div className="go-list">
           {visibleOrders.map(go => {
             const expanded = expandedIds.has(go.id);
@@ -730,7 +900,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                     <span className="go-meta__phone">{go.senderPhone}</span>
                     <span className="go-meta__city">{go.pickUpCity}, {go.pickUpDistrict}</span>
                     <StatusBadge status={go.status} />
-                    <span className="go-meta__pkgs">{go.numberOfPackages} pkg{go.numberOfPackages !== 1 ? 's' : ''}</span>
+                    <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
                     <span className="go-meta__date">{formatDate(go.createdAt)}</span>
                   </div>
                   <AdminGroupOrderActions
@@ -747,7 +917,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                   <div className="go-orders">
                     {filteredOrders.length === 0 ? (
                       <div style={{ padding: '16px 20px', fontSize: '0.825rem', color: 'var(--color-text-subtle)' }}>
-                        No orders match the current location filter.
+                        {t.goNoLocationMatch}
                       </div>
                     ) : (
                       <div style={{ overflowX: 'auto' }}>
@@ -757,7 +927,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                               <th style={{ width: 36 }}>
                                 <input
                                   type="checkbox"
-                                  title="Select all assignable in this group"
+                                  title={t.goSelectAllAssignable}
                                   checked={assignableOrders.length > 0 && assignableOrders.every(o => selectedOrderIds.has(o.id))}
                                   onChange={e => {
                                     setSelectedOrderIds(prev => {
@@ -769,15 +939,15 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                   style={{ cursor: 'pointer' }}
                                 />
                               </th>
-                              <th>Tracking №</th>
-                              <th>Recipient</th>
-                              <th>Phone</th>
-                              <th>City / District</th>
-                              <th>Address</th>
-                              <th>Description</th>
-                              <th>Status</th>
-                              <th>Paid</th>
-                              <th>Actions</th>
+                              <th>{t.goThTracking}</th>
+                              <th>{t.goThRecipient}</th>
+                              <th>{t.goThPhone}</th>
+                              <th>{t.goThCityDistrict}</th>
+                              <th>{t.goThAddress}</th>
+                              <th>{t.goThDescription}</th>
+                              <th>{t.goThStatus}</th>
+                              <th>{t.goThPaid}</th>
+                              <th>{t.goThActions}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -809,7 +979,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                 <td><StatusBadge status={o.status} /></td>
                                 <td>
                                   <span style={{ fontSize: '0.75rem', fontWeight: 600, color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444' }}>
-                                    {o.productPaymentStatus === 'Paid' ? '✓ Paid' : '✗ Unpaid'}
+                                    {o.productPaymentStatus === 'Paid' ? t.goPaid : t.goUnpaid}
                                   </span>
                                 </td>
                                 <td>
@@ -828,14 +998,15 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                         </table>
                       </div>
                     )}
-                    {go.note && <div className="go-note"><strong>Note:</strong> {go.note}</div>}
+                    {go.note && <div className="go-note"><strong>{t.goNote}:</strong> {go.note}</div>}
                   </div>
                 )}
               </div>
             );
           })}
         </div>
-      )}
+        );
+      })()}
 
       {/* Action toast */}
       {actionToast && (

@@ -322,6 +322,21 @@
     display: flex;
 }
 
+.track-badge-wrapper {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.track-badge__description {
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    margin: 0;
+    line-height: 1.5;
+}
+
 .track-badge {
     display: inline-flex;
     align-items: center;
