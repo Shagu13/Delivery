@@ -49,16 +49,17 @@ const EMPTY_SENDER: SenderFormData = {
 };
 
 const EMPTY_PACKAGE: OrderItemRequest = {
-    recipientFirstName:       '',
-    recipientLastName:        '',
-    recipientPhone:           '',
-    recipientCity:            '',
-    recipientDistrict:        '',
-    recipientAddress:         '',
-    description:              '',
-    isFragile:                false,
-    productPaymentStatus:     'NotPaid',
-    whoPaysForCompanyService: 'Sender',
+    recipientFirstName:           '',
+    recipientLastName:            '',
+    recipientPhone:               '',
+    recipientCity:                '',
+    recipientDistrict:            '',
+    recipientAddress:             '',
+    description:                  '',
+    isFragile:                    false,
+    productPaymentStatus:         'NotPaid',
+    whoPaysForCompanyService:     'Sender',
+    isDeliveryAddressInCityItself: false,
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -101,14 +102,18 @@ function validate(
             errors[`orders[${i}].recipientCity`] = `"${pkg.recipientCity}" is not a valid city.`;
         }
 
-        // District existence check — only if city is known and cache has been populated for it
+        // District / sub-district validation
         if (!pkg.recipientDistrict.trim()) {
-            errors[`orders[${i}].recipientDistrict`] = 'District is required.';
+            // Give a context-aware error message
+            errors[`orders[${i}].recipientDistrict`] = pkg.isDeliveryAddressInCityItself
+                ? `Sub-district within ${pkg.recipientCity} is required.`
+                : 'District is required.';
         } else if (
             cityDistrictCache[pkg.recipientCity] &&
             !cityDistrictCache[pkg.recipientCity].has(pkg.recipientDistrict)
         ) {
-            errors[`orders[${i}].recipientDistrict`] = `"${pkg.recipientDistrict}" is not a valid district in the selected city.`;
+            errors[`orders[${i}].recipientDistrict`] =
+                `"${pkg.recipientDistrict}" is not a valid district in ${pkg.recipientCity}.`;
         }
     });
 
@@ -251,6 +256,8 @@ export function CreateGroupOrderPage() {
                 ...EMPTY_PACKAGE,
                 ...o,
                 description: o.description ?? '',
+                // Excel imports always come in with normal district selection
+                isDeliveryAddressInCityItself: false,
             }));
 
             // Build district cache for all unique cities found in the import
@@ -292,10 +299,7 @@ export function CreateGroupOrderPage() {
         const validationErrors = validate(sender, packages, cities, cityDistrictCache);
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
-            setTimeout(() => {
-                document.querySelector('.form-field--error, .cdp-field--error')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 50);
+            document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
 
@@ -331,8 +335,7 @@ export function CreateGroupOrderPage() {
                     setErrors(mapped);
                     // Scroll to first backend validation error after state update
                     setTimeout(() => {
-                        document.querySelector('.form-field--error, .cdp-field--error')
-                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }, 50);
                 }
                 setGlobalError(err.message);

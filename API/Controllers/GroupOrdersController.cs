@@ -62,6 +62,7 @@ public sealed class GroupOrdersController : BaseController
                         o.IsFragile,
                         o.ProductPaymentStatus,
                         o.WhoPaysForCompanyService,
+                        o.IsDeliveryAddressInCityItself,
                         o.CompanyServicePrice))
                     .ToList(),
                 CustomerId: customerId
@@ -452,17 +453,23 @@ public sealed class GroupOrdersController : BaseController
 
             var isFragile = fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase);
 
+            var recipientCity     = ws.Cell(row, 4).GetString().Trim();
+            var recipientDistrict = ws.Cell(row, 5).GetString().Trim();
+
+            // Excel imports never trigger the in-city mode — the user chose a real district directly.
+            // IsDeliveryAddressInCityItself remains false for all Excel-imported rows.
             orders.Add(new OrderItemRequest(
-                RecipientFirstName: firstName,
-                RecipientLastName: ws.Cell(row, 2).GetString().Trim(),
-                RecipientPhone: ws.Cell(row, 3).GetString().Trim(),
-                RecipientCity: ws.Cell(row, 4).GetString().Trim(),
-                RecipientDistrict: ws.Cell(row, 5).GetString().Trim(),
-                RecipientAddress: ws.Cell(row, 6).GetString().Trim(),
-                Description: description.Length > 0 ? description : null,
-                IsFragile: isFragile,
-                ProductPaymentStatus: paymentStatus,
-                WhoPaysForCompanyService: payer
+                RecipientFirstName:           firstName,
+                RecipientLastName:            ws.Cell(row, 2).GetString().Trim(),
+                RecipientPhone:               ws.Cell(row, 3).GetString().Trim(),
+                RecipientCity:                recipientCity,
+                RecipientDistrict:            recipientDistrict,
+                RecipientAddress:             ws.Cell(row, 6).GetString().Trim(),
+                Description:                  description.Length > 0 ? description : null,
+                IsFragile:                    isFragile,
+                ProductPaymentStatus:         paymentStatus,
+                WhoPaysForCompanyService:     payer,
+                IsDeliveryAddressInCityItself: false
             ));
         }
 
@@ -496,26 +503,27 @@ public sealed class GroupOrdersController : BaseController
             CourierId:               go.CourierId,
             CourierFullName:         go.CourierFullName,
             Orders: go.Orders.Select(o => new AdminOrderResponse(
-                Id:                      o.Id,
-                TrackingNumber:          o.TrackingNumber,
-                RecipientFirstName:      o.RecipientFirstName,
-                RecipientLastName:       o.RecipientLastName,
-                RecipientPhone:          o.RecipientPhone,
-                RecipientCity:           o.RecipientCity,
-                RecipientCityGeo:        o.RecipientCityGeo,
-                RecipientDistrict:       o.RecipientDistrict,
-                RecipientDistrictGeo:    o.RecipientDistrictGeo,
-                RecipientAddress:        o.RecipientAddress,
-                Description:             o.Description,
-                IsFragile:               o.IsFragile,
-                Status:                  o.Status.ToString(),
-                ProductPaymentStatus:    o.ProductPaymentStatus.ToString(),
-                WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
-                CourierSalary:           o.CourierSalary,
-                CourierId:               o.CourierId,
-                CreatedAt:               o.CreatedAt,
-                DeliveryDateFrom:        o.DeliveryDateFrom,
-                DeliveryDateTo:          o.DeliveryDateTo
+                Id:                               o.Id,
+                TrackingNumber:                   o.TrackingNumber,
+                RecipientFirstName:               o.RecipientFirstName,
+                RecipientLastName:                o.RecipientLastName,
+                RecipientPhone:                   o.RecipientPhone,
+                RecipientCity:                    o.RecipientCity,
+                RecipientCityGeo:                 o.RecipientCityGeo,
+                RecipientDistrict:                o.RecipientDistrict,
+                RecipientDistrictGeo:             o.RecipientDistrictGeo,
+                RecipientAddress:                 o.RecipientAddress,
+                Description:                      o.Description,
+                IsFragile:                        o.IsFragile,
+                IsDeliveryAddressInCityItself:    o.IsDeliveryAddressInCityItself,
+                Status:                           o.Status.ToString(),
+                ProductPaymentStatus:             o.ProductPaymentStatus.ToString(),
+                WhoPaysForCompanyService:         o.WhoPaysForCompanyService.ToString(),
+                CourierSalary:                    o.CourierSalary,
+                CourierId:                        o.CourierId,
+                CreatedAt:                        o.CreatedAt,
+                DeliveryDateFrom:                 o.DeliveryDateFrom,
+                DeliveryDateTo:                   o.DeliveryDateTo
             )).ToList()
         );
 }

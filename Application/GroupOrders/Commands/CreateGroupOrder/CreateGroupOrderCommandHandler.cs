@@ -26,19 +26,18 @@ public sealed class CreateGroupOrderCommandHandler
     {
         var dto = request.Dto;
 
-        // Load customer to check negotiated price
+        // Load customer to check negotiated price tiers
         var customer = dto.CustomerId.HasValue
             ? await _context.Customers
                 .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == dto.CustomerId.Value, cancellationToken)
             : null;
 
-        // Load all districts referenced by the orders, including their City so we
-        // can determine the pricing tier (Tbilisi / other city / village) via City.CityName.
+        // Load the districts referenced by orders so we can fall back to their default price
+        // when the customer has no negotiated tier price.
         var districtNames = dto.Orders.Select(o => o.RecipientDistrict).Distinct().ToList();
         var districts = await _context.Districts
             .AsNoTracking()
-            .Include(d => d.City)
             .Where(d => districtNames.Contains(d.DistrictName))
             .ToListAsync(cancellationToken);
 
@@ -63,17 +62,21 @@ public sealed class CreateGroupOrderCommandHandler
         {
             var o = dto.Orders[i];
 
-            // ── Determine CompanyServicePrice for this order ───────────────────
-            // Priority 1: explicit per-order override supplied in the request (must be > 0).
-            // Priority 2: customer's negotiated tier price, determined by the district's CityName:
-            //   Tbilisi tier  → district.CityName == "Tbilisi"
-            //   City tier     → district.CityName != "Tbilisi"
-            //                   AND district.DistrictName == district.CityName
-            //                   (the seeded "city-level" district row for that city)
-            //   District tier → district.CityName != "Tbilisi"
-            //                   AND district.DistrictName != district.CityName
-            //                   (a village / suburb within that city)
-            // Priority 3: the recipient district's default service price from the DB.
+            // ── Determine CompanyServicePrice ─────────────────────────────────
+            //
+            // Priority 1 – explicit per-order override (must be > 0).
+            //
+            // Priority 2 – customer's negotiated tier price, driven by two flags:
+            //   • o.RecipientCity == "Tbilisi"            → capital city
+            //   • o.IsDeliveryAddressInCityItself         → delivery within the city proper
+            //
+            //   Tbilisi  + inCityItself  → CompanyServiceCapitalPrice
+            //   Tbilisi  + !inCityItself → CompanyServiceDistrictPrice  (Tbilisi suburb)
+            //   Other    + inCityItself  → CompanyServiceCityPrice      (another city centre)
+            //   Other    + !inCityItself → CompanyServiceDistrictPrice  (village / suburb)
+            //
+            // Priority 3 – District.CompanyServicePrice (DB default for that district).
+            //
             decimal companyServicePrice;
 
             var district = districts.FirstOrDefault(d =>
@@ -84,56 +87,53 @@ public sealed class CreateGroupOrderCommandHandler
                 // Priority 1: explicit override wins.
                 companyServicePrice = o.CompanyServicePrice.Value;
             }
-            else if (customer is not null && district is not null)
+            else if (customer is not null)
             {
-                bool isTbilisi = "Tbilisi".Equals(district.City.CityName, StringComparison.OrdinalIgnoreCase);
-                bool isCityLevel = !isTbilisi &&
-                    district.DistrictName.Equals(district.City.CityName, StringComparison.OrdinalIgnoreCase);
+                bool isTbilisi   = "Tbilisi".Equals(o.RecipientCity, StringComparison.OrdinalIgnoreCase);
+                bool inCityItself = o.IsDeliveryAddressInCityItself;
 
-                if (isTbilisi
-                    && customer.CompanyServiceCapitalPrice.HasValue
-                    && customer.CompanyServiceCapitalPrice.Value > 0)
+                if (isTbilisi && inCityItself
+                    && customer.CompanyServiceCapitalPrice is > 0)
                 {
-                    companyServicePrice = customer.CompanyServiceCapitalPrice.Value;
+                    companyServicePrice = customer.CompanyServiceCapitalPrice!.Value;
                 }
-                else if (isCityLevel
-                    && customer.CompanyServiceCityPrice.HasValue
-                    && customer.CompanyServiceCityPrice.Value > 0)
+                else if (!isTbilisi && inCityItself
+                    && customer.CompanyServiceCityPrice is > 0)
                 {
-                    companyServicePrice = customer.CompanyServiceCityPrice.Value;
+                    companyServicePrice = customer.CompanyServiceCityPrice!.Value;
                 }
-                else if (!isTbilisi && !isCityLevel
-                    && customer.CompanyServiceDistrictPrice.HasValue
-                    && customer.CompanyServiceDistrictPrice.Value > 0)
+                else if (!inCityItself
+                    && customer.CompanyServiceDistrictPrice is > 0)
                 {
-                    companyServicePrice = customer.CompanyServiceDistrictPrice.Value;
+                    companyServicePrice = customer.CompanyServiceDistrictPrice!.Value;
                 }
                 else
                 {
-                    // Priority 3: district default.
-                    companyServicePrice = district.CompanyServicePrice ?? 0;
+                    // Priority 3: fall back to the district's DB default.
+                    companyServicePrice = district?.CompanyServicePrice ?? 0;
                 }
             }
             else
             {
-                // No customer or district not found — use district default.
+                // No customer — use district default.
                 companyServicePrice = district?.CompanyServicePrice ?? 0;
             }
 
             groupOrder.Orders.Add(new Order
             {
-                RecipientFirstName       = o.RecipientFirstName,
-                RecipientLastName        = o.RecipientLastName,
-                RecipientPhone           = o.RecipientPhone,
-                RecipientCity            = o.RecipientCity,
-                RecipientDistrict        = o.RecipientDistrict,
-                RecipientAddress         = o.RecipientAddress,
-                Description              = o.Description,
-                IsFragile                = o.IsFragile,
-                ProductPaymentStatus     = o.ProductPaymentStatus,
-                WhoPaysForCompanyService = o.WhoPaysForCompanyService,
-                TrackingNumber           = trackingNumbers[i],
-                CompanyServicePrice      = companyServicePrice
+                RecipientFirstName            = o.RecipientFirstName,
+                RecipientLastName             = o.RecipientLastName,
+                RecipientPhone                = o.RecipientPhone,
+                RecipientCity                 = o.RecipientCity,
+                RecipientDistrict             = o.RecipientDistrict,
+                RecipientAddress              = o.RecipientAddress,
+                IsDeliveryAddressInCityItself = o.IsDeliveryAddressInCityItself,
+                Description                   = o.Description,
+                IsFragile                     = o.IsFragile,
+                ProductPaymentStatus          = o.ProductPaymentStatus,
+                WhoPaysForCompanyService      = o.WhoPaysForCompanyService,
+                TrackingNumber                = trackingNumbers[i],
+                CompanyServicePrice           = companyServicePrice
             });
         }
 
@@ -150,4 +150,3 @@ public sealed class CreateGroupOrderCommandHandler
         );
     }
 }
-

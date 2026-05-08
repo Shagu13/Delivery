@@ -487,6 +487,9 @@ namespace Persistence.Migrations
                     b.Property<Guid>("GroupOrderId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsDeliveryAddressInCityItself")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsFragile")
                         .HasColumnType("bit");
 

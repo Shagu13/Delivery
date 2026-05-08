@@ -27,5 +27,11 @@ public sealed record OrderItemRequest(
     bool IsFragile = false,
     PaymentStatus ProductPaymentStatus = PaymentStatus.NotPaid,
     ServicePayer WhoPaysForCompanyService = ServicePayer.Sender,
+    /// <summary>
+    /// True when the customer selected City == District in the form (e.g. City=Tbilisi, District=Tbilisi),
+    /// indicating the delivery is within the city itself. RecipientDistrict will then hold the
+    /// actual sub-district chosen in the third picker.
+    /// </summary>
+    bool IsDeliveryAddressInCityItself = false,
     decimal? CompanyServicePrice = null
 );

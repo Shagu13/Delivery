@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
 import { FormField } from '../../components/ui/FormField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { fetchCities, fetchDistricts } from '../../api/cities';
+import type { City, District } from '../../api/cities';
 import type { OrderItemRequest, ValidationErrors } from '../../types/groupOrder';
 
 interface PackageCardProps {
@@ -20,6 +23,53 @@ export function PackageCard({
   onRemove,
 }: PackageCardProps) {
   const fieldError = (field: string) => errors[`orders[${index}].${field}`];
+
+  // ── City list + sub-district list for in-city mode ──────────────────────────
+  const [cityList,     setCityList]     = useState<City[]>([]);
+  const [subDistricts, setSubDistricts] = useState<District[]>([]);
+  const [subLoading,   setSubLoading]   = useState(false);
+
+  // Load cities once so we can resolve cityId → city name
+  useEffect(() => {
+    fetchCities().then(setCityList).catch(() => {});
+  }, []);
+
+  // When in-city mode is active and city changes, load that city's districts
+  // for the 3rd picker (filtering out the "city-itself" entry).
+  useEffect(() => {
+    if (!data.isDeliveryAddressInCityItself || !data.recipientCity) {
+      setSubDistricts([]);
+      return;
+    }
+    const city = cityList.find(c => c.cityName === data.recipientCity);
+    if (!city) return;
+    setSubLoading(true);
+    fetchDistricts(city.id)
+      .then(districts =>
+        // Exclude the "city == district" entry so the user can't pick it again
+        setSubDistricts(districts.filter(d => d.districtName !== data.recipientCity))
+      )
+      .catch(() => setSubDistricts([]))
+      .finally(() => setSubLoading(false));
+  }, [data.isDeliveryAddressInCityItself, data.recipientCity, cityList]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleCityChange = (cityName: string) => {
+    onChange(index, 'recipientCity', cityName);
+    onChange(index, 'recipientDistrict', '');
+    onChange(index, 'isDeliveryAddressInCityItself', false);
+  };
+
+  const handleDistrictChange = (districtName: string) => {
+    if (districtName && districtName === data.recipientCity) {
+      // User selected the "city = district" option → trigger in-city mode
+      onChange(index, 'isDeliveryAddressInCityItself', true);
+      onChange(index, 'recipientDistrict', ''); // will be filled by 3rd picker
+    } else {
+      onChange(index, 'isDeliveryAddressInCityItself', false);
+      onChange(index, 'recipientDistrict', districtName);
+    }
+  };
 
   return (
     <div className="package-card" style={{ animationDelay: `${index * 60}ms` }}>
@@ -83,18 +133,56 @@ export function PackageCard({
         <fieldset className="fieldset">
           <legend className="fieldset__legend">Delivery Address</legend>
 
-          {/* City + District — picker for manual entry, errors surface for Excel imports */}
+          {/*
+            Step 1 + 2: City and District.
+            When the user picks District === City (e.g. "Tbilisi" / "Tbilisi"),
+            handleDistrictChange sets isDeliveryAddressInCityItself=true and clears recipientDistrict.
+            The picker's districtValue shows the city name to reflect the selection.
+          */}
           <CityDistrictPicker
             cityValue={data.recipientCity}
-            districtValue={data.recipientDistrict}
-            onCityChange={cityName => {
-              onChange(index, 'recipientCity', cityName);
-              onChange(index, 'recipientDistrict', '');  // clear district when city changes
-            }}
-            onDistrictChange={districtName => onChange(index, 'recipientDistrict', districtName)}
+            districtValue={
+              data.isDeliveryAddressInCityItself
+                ? data.recipientCity   // show city name as selected "district"
+                : data.recipientDistrict
+            }
+            onCityChange={handleCityChange}
+            onDistrictChange={handleDistrictChange}
             cityError={fieldError('recipientCity')}
-            districtError={fieldError('recipientDistrict')}
+            // Only show district error here when NOT in in-city mode
+            // (in-city mode shows its own error on the sub-district picker below)
+            districtError={data.isDeliveryAddressInCityItself ? undefined : fieldError('recipientDistrict')}
           />
+
+          {/* Step 3 — Sub-district within the city (only shown in in-city mode) */}
+          {data.isDeliveryAddressInCityItself && (
+            <div className={`form-field${fieldError('recipientDistrict') ? ' form-field--error' : ''}`}>
+              <label className="form-field__label">
+                Sub-district within {data.recipientCity}
+                <span className="form-field__required"> *</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <select
+                  className="form-field__input"
+                  value={data.recipientDistrict}
+                  disabled={subLoading}
+                  onChange={e => onChange(index, 'recipientDistrict', e.target.value)}
+                >
+                  <option value="">
+                    {subLoading ? 'Loading…' : `Select sub-district in ${data.recipientCity}…`}
+                  </option>
+                  {subDistricts.map(d => (
+                    <option key={d.id} value={d.districtName}>
+                      {d.districtName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {fieldError('recipientDistrict') && (
+                <span className="form-field__error">{fieldError('recipientDistrict')}</span>
+              )}
+            </div>
+          )}
 
           <FormField
             label="Street Address"

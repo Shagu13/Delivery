@@ -43,6 +43,11 @@ public sealed record AdminOrderDto(
     string RecipientAddress,
     string? Description,
     bool   IsFragile,
+    /// <summary>
+    /// True when the delivery is within the city itself (City == District was chosen in form).
+    /// Drives the pricing tier (Capital / City / District).
+    /// </summary>
+    bool   IsDeliveryAddressInCityItself,
     OrderStatus   Status,
     PaymentStatus ProductPaymentStatus,
     ServicePayer  WhoPaysForCompanyService,

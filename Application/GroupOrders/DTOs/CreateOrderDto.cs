@@ -17,5 +17,11 @@ public sealed record CreateOrderDto(
     bool           IsFragile,
     PaymentStatus  ProductPaymentStatus,
     ServicePayer   WhoPaysForCompanyService,
+    /// <summary>
+    /// True when City == District was chosen in the form (city-centre delivery),
+    /// which triggers the Capital / City tier pricing.
+    /// False (default) → District tier pricing.
+    /// </summary>
+    bool           IsDeliveryAddressInCityItself = false,
     decimal?       CompanyServicePrice = null   // explicit override; null = use auto-pricing
 );
