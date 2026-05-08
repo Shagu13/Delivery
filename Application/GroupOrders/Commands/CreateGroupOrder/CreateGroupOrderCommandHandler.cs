@@ -33,16 +33,16 @@ public sealed class CreateGroupOrderCommandHandler
                 .FirstOrDefaultAsync(c => c.Id == dto.CustomerId.Value, cancellationToken)
             : null;
 
-        // Load all districts referenced by the orders (match by name, case-insensitive)
+        // Load all districts referenced by the orders, including their City so we
+        // can determine the pricing tier (Tbilisi / other city / village) via City.CityName.
         var districtNames = dto.Orders.Select(o => o.RecipientDistrict).Distinct().ToList();
         var districts = await _context.Districts
             .AsNoTracking()
+            .Include(d => d.City)
             .Where(d => districtNames.Contains(d.DistrictName))
             .ToListAsync(cancellationToken);
 
         var trackingNumbers = await _trackingGen.GenerateManyAsync(dto.Orders.Count, cancellationToken);
-
-        const string tbilisi = "Tbilisi";
 
         var groupOrder = new GroupOrder
         {
@@ -63,27 +63,60 @@ public sealed class CreateGroupOrderCommandHandler
         {
             var o = dto.Orders[i];
 
-            // Determine CompanyServicePrice for this order.
-            // Priority 1: explicit per-order override passed in the request (must be > 0).
-            // Priority 2: customer's negotiated flat rate — Tbilisi deliveries only (must be > 0).
-            // Priority 3: the recipient district's default service price.
+            // ── Determine CompanyServicePrice for this order ───────────────────
+            // Priority 1: explicit per-order override supplied in the request (must be > 0).
+            // Priority 2: customer's negotiated tier price, determined by the district's CityName:
+            //   Tbilisi tier  → district.CityName == "Tbilisi"
+            //   City tier     → district.CityName != "Tbilisi"
+            //                   AND district.DistrictName == district.CityName
+            //                   (the seeded "city-level" district row for that city)
+            //   District tier → district.CityName != "Tbilisi"
+            //                   AND district.DistrictName != district.CityName
+            //                   (a village / suburb within that city)
+            // Priority 3: the recipient district's default service price from the DB.
             decimal companyServicePrice;
 
-            bool isTbilisi = o.RecipientCity.Equals(tbilisi, StringComparison.OrdinalIgnoreCase);
-            var customerPrice = customer?.CompanyPriceToDeliverPackages;
+            var district = districts.FirstOrDefault(d =>
+                d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
 
             if (o.CompanyServicePrice.HasValue && o.CompanyServicePrice.Value > 0)
             {
+                // Priority 1: explicit override wins.
                 companyServicePrice = o.CompanyServicePrice.Value;
             }
-            else if (isTbilisi && customerPrice.HasValue && customerPrice.Value > 0)
+            else if (customer is not null && district is not null)
             {
-                companyServicePrice = customerPrice.Value;
+                bool isTbilisi = "Tbilisi".Equals(district.City.CityName, StringComparison.OrdinalIgnoreCase);
+                bool isCityLevel = !isTbilisi &&
+                    district.DistrictName.Equals(district.City.CityName, StringComparison.OrdinalIgnoreCase);
+
+                if (isTbilisi
+                    && customer.CompanyServiceCapitalPrice.HasValue
+                    && customer.CompanyServiceCapitalPrice.Value > 0)
+                {
+                    companyServicePrice = customer.CompanyServiceCapitalPrice.Value;
+                }
+                else if (isCityLevel
+                    && customer.CompanyServiceCityPrice.HasValue
+                    && customer.CompanyServiceCityPrice.Value > 0)
+                {
+                    companyServicePrice = customer.CompanyServiceCityPrice.Value;
+                }
+                else if (!isTbilisi && !isCityLevel
+                    && customer.CompanyServiceDistrictPrice.HasValue
+                    && customer.CompanyServiceDistrictPrice.Value > 0)
+                {
+                    companyServicePrice = customer.CompanyServiceDistrictPrice.Value;
+                }
+                else
+                {
+                    // Priority 3: district default.
+                    companyServicePrice = district.CompanyServicePrice ?? 0;
+                }
             }
             else
             {
-                var district = districts.FirstOrDefault(d =>
-                    d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
+                // No customer or district not found — use district default.
                 companyServicePrice = district?.CompanyServicePrice ?? 0;
             }
 

@@ -215,7 +215,13 @@ namespace Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<decimal?>("CompanyPriceToDeliverPackages")
+                    b.Property<decimal?>("CompanyServiceCapitalPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("CompanyServiceCityPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("CompanyServiceDistrictPrice")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")

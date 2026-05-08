@@ -465,7 +465,9 @@ const STATUS_PILLS = [
 
 function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const { token } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
+  const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const [groupOrders, setGroupOrders]   = useState<AdminGroupOrder[]>([]);
   const [couriers,    setCouriers]      = useState<Courier[]>([]);
   const [loading,     setLoading]       = useState(true);
@@ -531,6 +533,25 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     if (filterParty === 'sender') return [...new Set(groupOrders.map(go => go.pickUpCity))].sort();
     return [...new Set(groupOrders.flatMap(go => go.orders.map(o => o.recipientCity)))].sort();
   }, [groupOrders, filterParty]);
+
+  // Maps English city name → Geo name using data already in groupOrders
+  const cityGeoMap = useMemo(() => {
+    const map: Record<string, string | undefined> = {};
+    groupOrders.forEach(go => {
+      if (go.pickUpCityGeo) map[go.pickUpCity] = go.pickUpCityGeo;
+      go.orders.forEach(o => { if (o.recipientCityGeo) map[o.recipientCity] = o.recipientCityGeo; });
+    });
+    return map;
+  }, [groupOrders]);
+
+  const districtGeoMap = useMemo(() => {
+    const map: Record<string, string | undefined> = {};
+    groupOrders.forEach(go => {
+      if (go.pickUpDistrictGeo) map[go.pickUpDistrict] = go.pickUpDistrictGeo;
+      go.orders.forEach(o => { if (o.recipientDistrictGeo) map[o.recipientDistrict] = o.recipientDistrictGeo; });
+    });
+    return map;
+  }, [groupOrders]);
 
   const availableDistricts = useMemo(() => {
     if (!filterCity) return [];
@@ -671,7 +692,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><path d="M8 1.5C5.515 1.5 3.5 3.515 3.5 6c0 3.75 4.5 8.5 4.5 8.5S12.5 9.75 12.5 6c0-2.485-2.015-4.5-4.5-4.5zm0 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" stroke="currentColor" strokeWidth="1.2"/></svg>
               <select className="go-select" value={filterCity} onChange={e => handleCityChange(e.target.value)} disabled={loading || availableCities.length === 0}>
                 <option value="">{t.goAllCities}</option>
-                {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+                {availableCities.map(c => <option key={c} value={c}>{locCity(c, cityGeoMap[c])}</option>)}
               </select>
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </div>
@@ -685,7 +706,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
                   <select className="go-select" value={filterDistrict} onChange={e => setFilterDistrict(e.target.value)} disabled={availableDistricts.length === 0}>
                     <option value="">{t.goAllDistricts}</option>
-                    {availableDistricts.map(d => <option key={d} value={d}>{d}</option>)}
+                    {availableDistricts.map(d => <option key={d} value={d}>{locDistrict(d, districtGeoMap[d])}</option>)}
                   </select>
                   <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
@@ -846,8 +867,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                       <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                       <td>
-                        <div>{o.recipientCity}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
+                        <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}</div>
                       </td>
                       <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
                       <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
@@ -898,7 +919,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                   </div>
                   <div className="go-meta">
                     <span className="go-meta__phone">{go.senderPhone}</span>
-                    <span className="go-meta__city">{go.pickUpCity}, {go.pickUpDistrict}</span>
+                    <span className="go-meta__city">{locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}</span>
                     <StatusBadge status={go.status} />
                     <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
                     <span className="go-meta__date">{formatDate(go.createdAt)}</span>
@@ -969,8 +990,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                 <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
                                 <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                                 <td>
-                                  <div>{o.recipientCity}</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
+                                  <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}</div>
                                 </td>
                                 <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
                                 <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>

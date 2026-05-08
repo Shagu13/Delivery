@@ -45,6 +45,12 @@ public sealed class GetAllGroupOrdersQueryHandler
             .OrderByDescending(go => go.CreatedAt)
             .ToListAsync(cancellationToken);
 
+        // Build lookup dictionaries for Georgian names
+        var cityGeo     = (await _context.Cities    .AsNoTracking().ToListAsync(cancellationToken))
+                            .GroupBy(c => c.CityName)    .ToDictionary(g => g.Key, g => g.First().CityNameGeo);
+        var districtGeo = (await _context.Districts .AsNoTracking().ToListAsync(cancellationToken))
+                            .GroupBy(d => d.DistrictName).ToDictionary(g => g.Key, g => g.First().DistrictNameGeo);
+
         return groupOrders.Select(go => new AdminGroupOrderDto(
             Id:                      go.Id,
             CreatedAt:               go.CreatedAt,
@@ -55,7 +61,9 @@ public sealed class GetAllGroupOrdersQueryHandler
             SenderBusinessName:      go.SenderBusinessName,
             SenderPhone:             go.SenderPhone,
             PickUpCity:              go.PickUpCity,
+            PickUpCityGeo:           cityGeo.GetValueOrDefault(go.PickUpCity),
             PickUpDistrict:          go.PickUpDistrict,
+            PickUpDistrictGeo:       districtGeo.GetValueOrDefault(go.PickUpDistrict),
             PickUpAddress:           go.PickUpAddress,
             Note:                    go.Note,
             NumberOfPackages:        go.NumberOfPackages,
@@ -73,7 +81,9 @@ public sealed class GetAllGroupOrdersQueryHandler
                     RecipientLastName:       o.RecipientLastName,
                     RecipientPhone:          o.RecipientPhone,
                     RecipientCity:           o.RecipientCity,
+                    RecipientCityGeo:        cityGeo.GetValueOrDefault(o.RecipientCity),
                     RecipientDistrict:       o.RecipientDistrict,
+                    RecipientDistrictGeo:    districtGeo.GetValueOrDefault(o.RecipientDistrict),
                     RecipientAddress:        o.RecipientAddress,
                     Description:             o.Description,
                     IsFragile:               o.IsFragile,

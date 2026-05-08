@@ -1,4 +1,5 @@
 import { FormField } from '../../components/ui/FormField';
+import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import type { ValidationErrors } from '../../types/groupOrder';
 
 interface SenderData {
@@ -138,24 +139,18 @@ export function SenderSection({
           )}
 
           {/* Pickup fields — always shown; locked to registered address unless toggle is on */}
-          <div className="grid grid--2">
-            <FormField
-              label="City" required
-              value={data.pickUpCity}
-              onChange={e => onChange('pickUpCity', e.target.value)}
-              error={errors.pickUpCity}
-              placeholder="e.g. Tbilisi" maxLength={100}
-              disabled={prefilled && !useOtherAddress}
-            />
-            <FormField
-              label="District" required
-              value={data.pickUpDistrict}
-              onChange={e => onChange('pickUpDistrict', e.target.value)}
-              error={errors.pickUpDistrict}
-              placeholder="e.g. Vake" maxLength={100}
-              disabled={prefilled && !useOtherAddress}
-            />
-          </div>
+          <CityDistrictPicker
+            cityValue={data.pickUpCity}
+            districtValue={data.pickUpDistrict}
+            onCityChange={cityName => {
+              onChange('pickUpCity', cityName);
+              onChange('pickUpDistrict', '');
+            }}
+            onDistrictChange={districtName => onChange('pickUpDistrict', districtName)}
+            cityError={errors.pickUpCity}
+            districtError={errors.pickUpDistrict}
+            disabled={prefilled && !useOtherAddress}
+          />
 
           <FormField
             label="Street Address" required

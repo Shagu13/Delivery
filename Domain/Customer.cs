@@ -25,11 +25,23 @@ public class Customer
 
     // ── Pricing (admin-only) ─────────────────────────────────────────────────
     /// <summary>
-    /// Custom per-package delivery price negotiated with this business.
-    /// Set and visible to admins only — not exposed to the customer themselves.
-    /// Null means the standard default rate applies.
+    /// Negotiated per-package price for deliveries within Tbilisi (capital).
+    /// Null / 0 → fall back to the district's default rate.
     /// </summary>
-    public decimal? CompanyPriceToDeliverPackages { get; set; }
+    public decimal? CompanyServiceCapitalPrice { get; set; }
+
+    /// <summary>
+    /// Negotiated per-package price for deliveries to non-Tbilisi cities.
+    /// Null / 0 → fall back to the district's default rate.
+    /// </summary>
+    public decimal? CompanyServiceCityPrice { get; set; }
+
+    /// <summary>
+    /// Negotiated per-package price for deliveries to districts / villages
+    /// that are not matched to a known city in the database.
+    /// Null / 0 → fall back to the district's default rate.
+    /// </summary>
+    public decimal? CompanyServiceDistrictPrice { get; set; }
 
     // ── Account status ───────────────────────────────────────────────────────
     public bool     IsActive  { get; set; } = true;

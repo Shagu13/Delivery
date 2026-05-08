@@ -67,7 +67,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(c => c.City).HasMaxLength(100).IsRequired();
             e.Property(c => c.District).HasMaxLength(100).IsRequired();
             e.Property(c => c.Address).HasMaxLength(250).IsRequired();
-            e.Property(c => c.CompanyPriceToDeliverPackages).HasColumnType("decimal(18,2)");
+            e.Property(c => c.CompanyServiceCapitalPrice).HasColumnType("decimal(18,2)");
+            e.Property(c => c.CompanyServiceCityPrice).HasColumnType("decimal(18,2)");
+            e.Property(c => c.CompanyServiceDistrictPrice).HasColumnType("decimal(18,2)");
         });
 
         // ── Warehouse ────────────────────────────────────────────────────────

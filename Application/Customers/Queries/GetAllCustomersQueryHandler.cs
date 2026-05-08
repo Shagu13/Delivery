@@ -56,7 +56,9 @@ public sealed class GetAllCustomersQueryHandler
                 c.ApplicationUser.Email!,
                 c.IsActive,
                 c.CreatedAt,
-                c.CompanyPriceToDeliverPackages
+                c.CompanyServiceCapitalPrice,
+                c.CompanyServiceCityPrice,
+                c.CompanyServiceDistrictPrice
             ))
             .ToListAsync(cancellationToken);
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
+import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import {
   getMyProfile, getMyOrders,
   updateMyProfile, changePassword,
@@ -237,6 +238,9 @@ function OverviewView({
 
 function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const { lang } = useLanguage();
+  const cityName     = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
+  const districtName = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
 
   if (orders.length === 0) {
     return (
@@ -270,7 +274,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
               </span>
               <span style={{ color: 'var(--color-text-subtle)', fontSize: '0.8rem' }}>
                 {go.numberOfPackages} package{go.numberOfPackages !== 1 ? 's' : ''}
-                {' · '}{go.pickUpCity}, {go.pickUpDistrict}
+                {' · '}{cityName(go.pickUpCity, go.pickUpCityGeo)}, {districtName(go.pickUpDistrict, go.pickUpDistrictGeo)}
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
@@ -311,7 +315,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientPhone}</div>
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
-                        {o.recipientCity}, {o.recipientDistrict}
+                        {cityName(o.recipientCity, o.recipientCityGeo)}, {districtName(o.recipientDistrict, o.recipientDistrictGeo)}
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
                         {o.recipientAddress}
@@ -343,6 +347,8 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
 // ── Small overview table ───────────────────────────────────────────────────────
 
 function GroupOrderTable({ orders }: { orders: CustomerGroupOrder[] }) {
+  const { lang } = useLanguage();
+  const cityName = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
       <thead>
@@ -361,7 +367,7 @@ function GroupOrderTable({ orders }: { orders: CustomerGroupOrder[] }) {
           <tr key={go.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
             <td style={{ padding: '12px 20px', fontWeight: 500 }}>{go.senderBusinessName}</td>
             <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)' }}>{go.numberOfPackages}</td>
-            <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)' }}>{go.pickUpCity}</td>
+            <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)' }}>{cityName(go.pickUpCity, go.pickUpCityGeo)}</td>
             <td style={{ padding: '12px 20px' }}><StatusBadge status={go.status} /></td>
             <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)', fontSize: '0.8rem' }}>
               {new Date(go.createdAt).toLocaleDateString()}
@@ -483,10 +489,14 @@ function EditProfileView({
           textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 12 }}>
           Default Pickup Address
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          <FormField label="City"     value={form.city}     onChange={set('city')}     error={errors.city}     placeholder="e.g. Tbilisi" />
-          <FormField label="District" value={form.district} onChange={set('district')} error={errors.district} placeholder="e.g. Vake" />
-        </div>
+        <CityDistrictPicker
+          cityValue={form.city}
+          districtValue={form.district}
+          onCityChange={cityName => { setForm(f => ({ ...f, city: cityName, district: '' })); setErrors(e => ({ ...e, city: undefined, district: undefined })); setApiError(null); setSaved(false); }}
+          onDistrictChange={districtName => { setForm(f => ({ ...f, district: districtName })); setErrors(e => ({ ...e, district: undefined })); setApiError(null); setSaved(false); }}
+          cityError={errors.city}
+          districtError={errors.district}
+        />
         <FormField label="Street address" value={form.address} onChange={set('address')} error={errors.address} placeholder="e.g. 12 Rustaveli Ave" />
 
         <div style={{ marginTop: 8 }}>

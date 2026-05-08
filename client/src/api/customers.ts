@@ -39,7 +39,9 @@ export interface Customer {
 }
 
 export interface AdminCustomer extends Customer {
-  companyPriceToDeliverPackages: number | null;
+  companyServiceCapitalPrice:  number | null;
+  companyServiceCityPrice:     number | null;
+  companyServiceDistrictPrice: number | null;
 }
 
 export interface PagedResult<T> {
@@ -52,8 +54,8 @@ export interface PagedResult<T> {
 export interface CustomerOrder {
   id: string; trackingNumber: string;
   recipientFirstName: string; recipientLastName: string;
-  recipientPhone: string; recipientCity: string;
-  recipientDistrict: string; recipientAddress: string;
+  recipientPhone: string; recipientCity: string; recipientCityGeo?: string;
+  recipientDistrict: string; recipientDistrictGeo?: string; recipientAddress: string;
   description: string | null; status: string;
   isPaid: boolean; createdAt: string;
 }
@@ -61,7 +63,8 @@ export interface CustomerOrder {
 export interface CustomerGroupOrder {
   id: string; createdAt: string; status: string;
   senderBusinessName: string;
-  pickUpCity: string; pickUpDistrict: string;
+  pickUpCity: string; pickUpCityGeo?: string;
+  pickUpDistrict: string; pickUpDistrictGeo?: string;
   note: string | null; numberOfPackages: number;
   orders: CustomerOrder[];
 }
@@ -165,12 +168,12 @@ export async function getCustomerById(id: string, token: string): Promise<Custom
 
 export async function setCustomerCompanyPrice(
   id: string,
-  price: number | null,
+  prices: { capitalPrice: number | null; cityPrice: number | null; districtPrice: number | null },
   token: string
 ): Promise<void> {
   return handleEmpty(await fetch(`/api/customers/${id}/company-price`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ price }),
+    body: JSON.stringify(prices),
   }));
 }

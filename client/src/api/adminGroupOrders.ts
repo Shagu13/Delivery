@@ -27,7 +27,9 @@ export interface AdminOrder {
     recipientLastName: string;
     recipientPhone: string;
     recipientCity: string;
+    recipientCityGeo?: string;
     recipientDistrict: string;
+    recipientDistrictGeo?: string;
     recipientAddress: string;
     description: string | null;
     isFragile: boolean;
@@ -53,7 +55,9 @@ export interface AdminGroupOrder {
     senderBusinessName: string;
     senderPhone: string;
     pickUpCity: string;
+    pickUpCityGeo?: string;
     pickUpDistrict: string;
+    pickUpDistrictGeo?: string;
     pickUpAddress: string;
     note: string | null;
     numberOfPackages: number;

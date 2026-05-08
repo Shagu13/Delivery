@@ -5,7 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Customers.Commands.SetCompanyPrice;
 
-public sealed record SetCustomerCompanyPriceCommand(Guid CustomerId, decimal? Price) : IRequest;
+public sealed record SetCustomerCompanyPriceCommand(
+    Guid     CustomerId,
+    decimal? CapitalPrice,
+    decimal? CityPrice,
+    decimal? DistrictPrice
+) : IRequest;
 
 public sealed class SetCustomerCompanyPriceCommandHandler
     : IRequestHandler<SetCustomerCompanyPriceCommand>
@@ -15,16 +20,24 @@ public sealed class SetCustomerCompanyPriceCommandHandler
 
     public async Task Handle(SetCustomerCompanyPriceCommand request, CancellationToken cancellationToken)
     {
-        if (request.Price.HasValue && request.Price.Value < 0)
+        if ((request.CapitalPrice.HasValue  && request.CapitalPrice.Value  < 0) ||
+            (request.CityPrice.HasValue     && request.CityPrice.Value     < 0) ||
+            (request.DistrictPrice.HasValue && request.DistrictPrice.Value < 0))
+        {
             throw new ValidationException(new[] {
-            new FluentValidation.Results.ValidationFailure("Price", "Company price must be a non-negative value.")
-                });
+                new FluentValidation.Results.ValidationFailure(
+                    "Price", "Company prices must be non-negative values.")
+            });
+        }
 
         var customer = await _context.Customers
             .FirstOrDefaultAsync(c => c.Id == request.CustomerId, cancellationToken)
             ?? throw new NotFoundException("Customer", request.CustomerId);
 
-        customer.CompanyPriceToDeliverPackages = request.Price;
+        customer.CompanyServiceCapitalPrice  = request.CapitalPrice;
+        customer.CompanyServiceCityPrice     = request.CityPrice;
+        customer.CompanyServiceDistrictPrice = request.DistrictPrice;
+
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

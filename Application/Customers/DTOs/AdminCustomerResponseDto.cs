@@ -17,6 +17,8 @@ public sealed record AdminCustomerResponseDto(
     string   Email,
     bool     IsActive,
     DateTime CreatedAt,
-    // Admin-only field
-    decimal? CompanyPriceToDeliverPackages
+    // Admin-only pricing tiers
+    decimal? CompanyServiceCapitalPrice,
+    decimal? CompanyServiceCityPrice,
+    decimal? CompanyServiceDistrictPrice
 );

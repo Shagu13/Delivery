@@ -60,7 +60,7 @@ public sealed class CustomersController : BaseController
     {
         var appUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? throw new UnauthorizedAccessException();
-        // Returns CustomerResponseDto — does NOT include CompanyPriceToDeliverPackages
+        // Returns CustomerResponseDto — does NOT include company pricing fields
         var dto = await Sender.Send(new GetCustomerByApplicationUserIdQuery(appUserId), ct);
         return Ok(dto);
     }
@@ -128,8 +128,9 @@ public sealed class CustomersController : BaseController
 
     // ── PUT /api/customers/{id}/company-price  (Admin only) ──────────────────
     /// <summary>
-    /// Sets or updates the per-package delivery price negotiated with a business customer.
-    /// Pass null to revert to the standard rate.
+    /// Sets or updates the tiered per-package delivery prices negotiated with a business customer.
+    /// Each tier (Capital / City / District) can be set independently; pass null to revert to the
+    /// district's default rate for that tier.
     /// </summary>
     [HttpPut("{id:guid}/company-price")]
     [Authorize(Roles = "Admin")]
@@ -140,7 +141,11 @@ public sealed class CustomersController : BaseController
         [FromBody] SetCompanyPriceRequest request,
         CancellationToken ct)
     {
-        await Sender.Send(new SetCustomerCompanyPriceCommand(id, request.Price), ct);
+        await Sender.Send(new SetCustomerCompanyPriceCommand(
+            id,
+            request.CapitalPrice,
+            request.CityPrice,
+            request.DistrictPrice), ct);
         return NoContent();
     }
 
@@ -163,4 +168,8 @@ public sealed class CustomersController : BaseController
 }
 
 // ── Request model ─────────────────────────────────────────────────────────────
-public sealed record SetCompanyPriceRequest(decimal? Price);
+public sealed record SetCompanyPriceRequest(
+    decimal? CapitalPrice,
+    decimal? CityPrice,
+    decimal? DistrictPrice
+);

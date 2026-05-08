@@ -9,55 +9,84 @@ interface Props {
   token: string;
 }
 
+interface EditState {
+  capitalPrice:  string;
+  cityPrice:     string;
+  districtPrice: string;
+}
+
+function priceDisplay(v: number | null) {
+  return v != null ? `₾${v}` : <em style={{ color: '#999' }}>default</em>;
+}
+
 export default function AdminCustomersPage({ token }: Props) {
-  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [customers, setCustomers]       = useState<AdminCustomer[]>([]);
+  const [search, setSearch]             = useState('');
+  const [page, setPage]                 = useState(1);
+  const [totalPages, setTotalPages]     = useState(1);
+  const [loading, setLoading]           = useState(false);
+  const [editingId, setEditingId]       = useState<string | null>(null);
+  const [editState, setEditState]       = useState<EditState>({ capitalPrice: '', cityPrice: '', districtPrice: '' });
+  const [saving, setSaving]             = useState(false);
+  const [error, setError]               = useState('');
 
   const PAGE_SIZE = 20;
 
-    const load = useCallback(async (p: number, q: string) => {
-        setLoading(true);
-        try {
-            const result = await getCustomers(token, p, PAGE_SIZE, q);
-            setCustomers(result.items as AdminCustomer[]);
-            setTotalPages(result.totalPages || 1);
-        } catch {
-            setError('Failed to load customers');
-        } finally {
-            setLoading(false);
-        }
-    }, [token]);
+  const load = useCallback(async (p: number, q: string) => {
+    setLoading(true);
+    try {
+      const result = await getCustomers(token, p, PAGE_SIZE, q);
+      setCustomers(result.items as AdminCustomer[]);
+      setTotalPages(result.totalPages || 1);
+    } catch {
+      setError('Failed to load customers');
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { void load(1, search); }, [search, load]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(1, search); }, [search, load]);
 
   function startEdit(c: AdminCustomer) {
     setEditingId(c.id);
-    setEditValue(c.companyPriceToDeliverPackages != null ? String(c.companyPriceToDeliverPackages) : '');
+    setEditState({
+      capitalPrice:  c.companyServiceCapitalPrice  != null ? String(c.companyServiceCapitalPrice)  : '',
+      cityPrice:     c.companyServiceCityPrice     != null ? String(c.companyServiceCityPrice)     : '',
+      districtPrice: c.companyServiceDistrictPrice != null ? String(c.companyServiceDistrictPrice) : '',
+    });
   }
 
   async function saveEdit(id: string) {
     setSaving(true);
     try {
-      const price = editValue === '' ? null : Number(editValue);
-      await setCustomerCompanyPrice(id, price, token);
+      const parse = (v: string) => v === '' ? null : Number(v);
+      const prices = {
+        capitalPrice:  parse(editState.capitalPrice),
+        cityPrice:     parse(editState.cityPrice),
+        districtPrice: parse(editState.districtPrice),
+      };
+      await setCustomerCompanyPrice(id, prices, token);
       setCustomers(prev => prev.map(c =>
-        c.id === id ? { ...c, companyPriceToDeliverPackages: price } : c
+        c.id === id ? {
+          ...c,
+          companyServiceCapitalPrice:  prices.capitalPrice,
+          companyServiceCityPrice:     prices.cityPrice,
+          companyServiceDistrictPrice: prices.districtPrice,
+        } : c
       ));
       setEditingId(null);
     } catch {
-      setError('Failed to save price');
+      setError('Failed to save prices');
     } finally {
       setSaving(false);
     }
   }
+
+  const inputStyle: React.CSSProperties = {
+    width: 80, padding: '0.25rem', borderRadius: 6,
+    border: '1px solid #ccc', fontSize: '0.82rem',
+  };
 
   return (
     <div style={{ padding: '1.5rem' }}>
@@ -67,15 +96,10 @@ export default function AdminCustomersPage({ token }: Props) {
         type="text"
         placeholder="Search by name, business, city, email…"
         value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1); }}
+        onChange={e => { setSearch(e.target.value); setPage(1); }}
         style={{
-          padding: '0.5rem 0.75rem',
-          borderRadius: 8,
-          border: '1px solid #ddd',
-          width: '100%',
-          maxWidth: 400,
-          marginBottom: '1rem',
-          fontSize: '0.9rem',
+          padding: '0.5rem 0.75rem', borderRadius: 8, border: '1px solid #ddd',
+          width: '100%', maxWidth: 400, marginBottom: '1rem', fontSize: '0.9rem',
         }}
       />
 
@@ -87,8 +111,13 @@ export default function AdminCustomersPage({ token }: Props) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
           <thead>
             <tr style={{ background: '#f5f5f5' }}>
-              {['Business', 'Name', 'Phone', 'City', 'District', 'Email', 'Active', 'Company Price (₾)'].map(h => (
-                <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{h}</th>
+              {[
+                'Business', 'Name', 'Phone', 'City', 'District', 'Email', 'Active',
+                'Capital (₾)', 'City (₾)', 'District (₾)', '',
+              ].map((h, i) => (
+                <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
@@ -102,36 +131,56 @@ export default function AdminCustomersPage({ token }: Props) {
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.district}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.email}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.isActive ? '✓' : '✗'}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>
-                  {editingId === c.id ? (
-                    <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+
+                {editingId === c.id ? (
+                  <>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>
                       <input
-                        type="number"
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        placeholder="null = default"
-                        style={{ width: 90, padding: '0.25rem', borderRadius: 6, border: '1px solid #ccc' }}
+                        type="number" style={inputStyle} value={editState.capitalPrice}
+                        placeholder="null"
+                        onChange={e => setEditState(s => ({ ...s, capitalPrice: e.target.value }))}
                       />
-                      <button
-                        onClick={() => saveEdit(c.id)}
-                        disabled={saving}
-                        style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}
-                      >Save</button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer' }}
-                      >✕</button>
-                    </span>
-                  ) : (
-                    <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span>{c.companyPriceToDeliverPackages != null ? `₾${c.companyPriceToDeliverPackages}` : <em style={{ color: '#999' }}>default</em>}</span>
+                    </td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>
+                      <input
+                        type="number" style={inputStyle} value={editState.cityPrice}
+                        placeholder="null"
+                        onChange={e => setEditState(s => ({ ...s, cityPrice: e.target.value }))}
+                      />
+                    </td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>
+                      <input
+                        type="number" style={inputStyle} value={editState.districtPrice}
+                        placeholder="null"
+                        onChange={e => setEditState(s => ({ ...s, districtPrice: e.target.value }))}
+                      />
+                    </td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>
+                      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <button
+                          onClick={() => saveEdit(c.id)} disabled={saving}
+                          style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}
+                        >Save</button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer' }}
+                        >✕</button>
+                      </span>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCapitalPrice)}</td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCityPrice)}</td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceDistrictPrice)}</td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>
                       <button
                         onClick={() => startEdit(c)}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
                       >Edit</button>
-                    </span>
-                  )}
-                </td>
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
@@ -141,13 +190,13 @@ export default function AdminCustomersPage({ token }: Props) {
       <div style={{ display: 'flex', gap: 8, marginTop: '1rem', alignItems: 'center' }}>
         <button
           disabled={page <= 1}
-                  onClick={() => { const p = page - 1; setPage(p); void load(p, search); }}
+          onClick={() => { const p = page - 1; setPage(p); void load(p, search); }}
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
         >← Prev</button>
         <span>Page {page} / {totalPages}</span>
         <button
           disabled={page >= totalPages}
-                  onClick={() => { const p = page - 1; setPage(p); void load(p, search); }}
+          onClick={() => { const p = page + 1; setPage(p); void load(p, search); }}
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
         >Next →</button>
       </div>

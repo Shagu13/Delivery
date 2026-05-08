@@ -12,6 +12,7 @@ interface Props {
   onDistrictChange: (districtName: string) => void;
   cityError?: string;
   districtError?: string;
+  disabled?: boolean;
 }
 
 interface DropdownPortalProps {
@@ -41,7 +42,7 @@ function DropdownPortal({ anchorRef, open, children }: DropdownPortalProps) {
   return createPortal(<div className="cdp-portal" style={style}>{children}</div>, document.body);
 }
 
-export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onDistrictChange, cityError, districtError }: Props) {
+export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onDistrictChange, cityError, districtError, disabled = false }: Props) {
     const { t, lang } = useLanguage();
 
   const [cities,           setCities]           = useState<City[]>([]);
@@ -62,8 +63,17 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
   const cityInputRef     = useRef<HTMLInputElement>(null);
   const districtInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setCitySearch(cityValue);        }, [cityValue]);
-  useEffect(() => { setDistrictSearch(districtValue); }, [districtValue]);
+  useEffect(() => {
+    if (!cityValue) { setCitySearch(''); return; }
+    const match = cities.find(c => c.cityName === cityValue);
+    setCitySearch(match ? (lang === 'ka' && match.cityNameGeo ? match.cityNameGeo : match.cityName) : cityValue);
+  }, [cityValue, cities, lang]);
+
+  useEffect(() => {
+    if (!districtValue) { setDistrictSearch(''); return; }
+    const match = districts.find(d => d.districtName === districtValue);
+    setDistrictSearch(match ? (lang === 'ka' && match.districtNameGeo ? match.districtNameGeo : match.districtName) : districtValue);
+  }, [districtValue, districts, lang]);
 
   useEffect(() => {
     setCitiesLoading(true);
@@ -160,18 +170,20 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
       {/* City */}
       <div className={`cdp-field${cityError ? ' cdp-field--error' : ''}`} ref={cityWrapRef}>
         <label className="cdp-label">{t.city} <span className="cdp-required">*</span></label>
-        <div className={`cdp-control${cityOpen ? ' cdp-control--open' : ''}`}>
+        <div className={`cdp-control${cityOpen ? ' cdp-control--open' : ''}${disabled ? ' cdp-control--disabled' : ''}`}>
           <input ref={cityInputRef} className="cdp-input" type="text"
             placeholder={t.phCity} value={citySearch} autoComplete="off"
-            onFocus={() => setCityOpen(true)} onKeyDown={handleCityKeyDown}
+            disabled={disabled}
+            onFocus={() => { if (!disabled) setCityOpen(true); }} onKeyDown={handleCityKeyDown}
             onChange={e => {
+              if (disabled) return;
               setCitySearch(e.target.value); setCityOpen(true);
               if (!e.target.value) { onCityChange(''); setSelectedCityId(null); setDistrictSearch(''); onDistrictChange(''); }
             }}
           />
           <span className="cdp-adornment">
             {citiesLoading ? <span className="cdp-spinner" /> :
-              citySearch
+              !disabled && citySearch
                 ? <button type="button" className="cdp-clear-btn" tabIndex={-1} onMouseDown={e => { e.preventDefault(); clearCity(); }}><XIcon /></button>
                 : <ChevronIcon up={cityOpen} />
             }
@@ -201,12 +213,12 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
       {/* District */}
       <div className={`cdp-field${districtError ? ' cdp-field--error' : ''}`} ref={districtWrapRef}>
         <label className="cdp-label">{t.district} <span className="cdp-required">*</span></label>
-        <div className={`cdp-control${districtOpen ? ' cdp-control--open' : ''}${!selectedCityId ? ' cdp-control--disabled' : ''}`}>
+        <div className={`cdp-control${districtOpen ? ' cdp-control--open' : ''}${!selectedCityId || disabled ? ' cdp-control--disabled' : ''}`}>
           <input ref={districtInputRef} className="cdp-input" type="text"
             placeholder={selectedCityId ? t.phDistrict : t.phCityFirst}
-            value={districtSearch} autoComplete="off" disabled={!selectedCityId}
-            onFocus={() => { if (selectedCityId) setDistrictOpen(true); }} onKeyDown={handleDistrictKeyDown}
-            onChange={e => { setDistrictSearch(e.target.value); setDistrictOpen(true); if (!e.target.value) onDistrictChange(''); }}
+            value={districtSearch} autoComplete="off" disabled={!selectedCityId || disabled}
+            onFocus={() => { if (selectedCityId && !disabled) setDistrictOpen(true); }} onKeyDown={handleDistrictKeyDown}
+            onChange={e => { if (disabled) return; setDistrictSearch(e.target.value); setDistrictOpen(true); if (!e.target.value) onDistrictChange(''); }}
           />
           <span className="cdp-adornment">
             {districtsLoading ? <span className="cdp-spinner" /> :
