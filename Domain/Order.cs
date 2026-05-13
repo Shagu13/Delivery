@@ -18,18 +18,6 @@ public class Order
     public required string RecipientDistrict  { get; set; }
     public required string RecipientAddress   { get; set; }
 
-    /// <summary>
-    /// True when the delivery destination is within the city itself
-    /// (i.e. the customer chose City == District in the recipient form, then picked a sub-district).
-    /// Drives the pricing tier:
-    ///   Tbilisi  + true  → CompanyServiceCapitalPrice
-    ///   Tbilisi  + false → CompanyServiceDistrictPrice
-    ///   Other    + true  → CompanyServiceCityPrice
-    ///   Other    + false → CompanyServiceDistrictPrice
-    /// Falls back to District.CompanyServicePrice when the customer tier price is null / 0.
-    /// </summary>
-    public bool IsDeliveryAddressInCityItself { get; set; } = false;
-
     // ── Assignment ───────────────────────────────────────────────────────────
     public Guid?     CourierId   { get; set; }
     public Courier?  Courier     { get; set; }
@@ -52,8 +40,9 @@ public class Order
     // ── Financials (admin-managed) ───────────────────────────────────────────
     /// <summary>
     /// The price the company charges for delivering this order.
-    /// Auto-filled on creation using IsDeliveryAddressInCityItself + RecipientCity to select
-    /// the customer's negotiated tier, falling back to District.CompanyServicePrice.
+    /// Auto-filled on creation using the recipient district's territory flags
+    /// (IsCapitalTerritory / IsCityTerritory) to select the customer's negotiated tier,
+    /// falling back to District.CompanyServicePrice.
     /// Admin can override at any time.
     /// </summary>
     public decimal CompanyServicePrice { get; set; } = 0;

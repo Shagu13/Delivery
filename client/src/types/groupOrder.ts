@@ -5,26 +5,13 @@ export interface OrderItemRequest {
     recipientLastName: string;
     recipientPhone: string;
     recipientCity: string;
-    /** The actual delivery district (sub-district when isDeliveryAddressInCityItself is true). */
+    /** The delivery district. */
     recipientDistrict: string;
     recipientAddress: string;
     description?: string;
     isFragile: boolean;
     productPaymentStatus: PaymentStatus;
     whoPaysForCompanyService: ServicePayer;
-    /**
-     * True when the customer selected City == District in the form
-     * (e.g. City = "Tbilisi", District = "Tbilisi"), indicating the delivery
-     * is within the city centre.  recipientDistrict then holds the sub-district
-     * chosen in the third picker.
-     *
-     * Drives pricing tier on the backend:
-     *   Tbilisi  + true  → CompanyServiceCapitalPrice
-     *   Tbilisi  + false → CompanyServiceDistrictPrice
-     *   Other    + true  → CompanyServiceCityPrice
-     *   Other    + false → CompanyServiceDistrictPrice
-     */
-    isDeliveryAddressInCityItself: boolean;
     companyServicePrice?: number; // admin override — omit to use auto-pricing
 }
 

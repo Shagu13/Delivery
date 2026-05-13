@@ -40,11 +40,6 @@ public sealed record AdminOrderResponse(
     string  RecipientAddress,
     string? Description,
     bool    IsFragile,
-    /// <summary>
-    /// True when delivery is within the city itself (Capital / City pricing tier).
-    /// False for suburb / village (District pricing tier).
-    /// </summary>
-    bool    IsDeliveryAddressInCityItself,
     string  Status,
     string  ProductPaymentStatus,
     string  WhoPaysForCompanyService,

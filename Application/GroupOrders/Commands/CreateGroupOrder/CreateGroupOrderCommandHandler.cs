@@ -66,14 +66,12 @@ public sealed class CreateGroupOrderCommandHandler
             //
             // Priority 1 – explicit per-order override (must be > 0).
             //
-            // Priority 2 – customer's negotiated tier price, driven by two flags:
-            //   • o.RecipientCity == "Tbilisi"            → capital city
-            //   • o.IsDeliveryAddressInCityItself         → delivery within the city proper
-            //
-            //   Tbilisi  + inCityItself  → CompanyServiceCapitalPrice
-            //   Tbilisi  + !inCityItself → CompanyServiceDistrictPrice  (Tbilisi suburb)
-            //   Other    + inCityItself  → CompanyServiceCityPrice      (another city centre)
-            //   Other    + !inCityItself → CompanyServiceDistrictPrice  (village / suburb)
+            // Priority 2 – customer's negotiated tier price, driven by the
+            //   recipient district's territory flags (set by admin per district):
+            //   IsCapitalTerritory → CompanyServiceCapitalPrice
+            //   IsCityTerritory    → CompanyServiceCityPrice
+            //   neither            → CompanyServiceDistrictPrice
+            //   (unknown district also falls back to CompanyServiceDistrictPrice)
             //
             // Priority 3 – District.CompanyServicePrice (DB default for that district).
             //
@@ -89,21 +87,18 @@ public sealed class CreateGroupOrderCommandHandler
             }
             else if (customer is not null)
             {
-                bool isTbilisi   = "Tbilisi".Equals(o.RecipientCity, StringComparison.OrdinalIgnoreCase);
-                bool inCityItself = o.IsDeliveryAddressInCityItself;
+                bool isCapital = district?.IsCapitalTerritory == true;
+                bool isCity    = district?.IsCityTerritory    == true;
 
-                if (isTbilisi && inCityItself
-                    && customer.CompanyServiceCapitalPrice is > 0)
+                if (isCapital && customer.CompanyServiceCapitalPrice is > 0)
                 {
                     companyServicePrice = customer.CompanyServiceCapitalPrice!.Value;
                 }
-                else if (!isTbilisi && inCityItself
-                    && customer.CompanyServiceCityPrice is > 0)
+                else if (isCity && customer.CompanyServiceCityPrice is > 0)
                 {
                     companyServicePrice = customer.CompanyServiceCityPrice!.Value;
                 }
-                else if (!inCityItself
-                    && customer.CompanyServiceDistrictPrice is > 0)
+                else if (customer.CompanyServiceDistrictPrice is > 0)
                 {
                     companyServicePrice = customer.CompanyServiceDistrictPrice!.Value;
                 }
@@ -127,7 +122,6 @@ public sealed class CreateGroupOrderCommandHandler
                 RecipientCity                 = o.RecipientCity,
                 RecipientDistrict             = o.RecipientDistrict,
                 RecipientAddress              = o.RecipientAddress,
-                IsDeliveryAddressInCityItself = o.IsDeliveryAddressInCityItself,
                 Description                   = o.Description,
                 IsFragile                     = o.IsFragile,
                 ProductPaymentStatus          = o.ProductPaymentStatus,

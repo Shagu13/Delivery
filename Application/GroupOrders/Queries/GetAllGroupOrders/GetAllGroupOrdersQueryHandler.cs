@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.GroupOrders.DTOs;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,10 +46,10 @@ public sealed class GetAllGroupOrdersQueryHandler
             .OrderByDescending(go => go.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        // Build lookup dictionaries for Georgian names
-        var cityGeo     = (await _context.Cities    .AsNoTracking().ToListAsync(cancellationToken))
+        // Build lookup dictionaries for Georgian names (active records only)
+        var cityGeo     = (await _context.Cities    .AsNoTracking().Where(c => c.DateDeleted == null).ToListAsync(cancellationToken))
                             .GroupBy(c => c.CityName)    .ToDictionary(g => g.Key, g => g.First().CityNameGeo);
-        var districtGeo = (await _context.Districts .AsNoTracking().ToListAsync(cancellationToken))
+        var districtGeo = (await _context.Districts .AsNoTracking().Where(d => d.DateDeleted == null).ToListAsync(cancellationToken))
                             .GroupBy(d => d.DistrictName).ToDictionary(g => g.Key, g => g.First().DistrictNameGeo);
 
         return groupOrders.Select(go => new AdminGroupOrderDto(
@@ -87,7 +88,6 @@ public sealed class GetAllGroupOrdersQueryHandler
                     RecipientAddress:                 o.RecipientAddress,
                     Description:                      o.Description,
                     IsFragile:                        o.IsFragile,
-                    IsDeliveryAddressInCityItself:    o.IsDeliveryAddressInCityItself,
                     Status:                           o.Status,
                     ProductPaymentStatus:             o.ProductPaymentStatus,
                     WhoPaysForCompanyService:         o.WhoPaysForCompanyService,

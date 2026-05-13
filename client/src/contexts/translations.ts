@@ -308,6 +308,19 @@ const en = {
   goColStatus:              'Status',
   goColDate:                'Date',
   goEmptyState:             'Orders will appear here',
+
+  // ── Price Calculator ──────────────────────────────────────────────────────
+  calcTitle:               'Calculator',
+  calcSubtitle:            'Check delivery price',
+  calcFrom:                'From',
+  calcTo:                  'To',
+  calcToPlaceholder:       'Search city or district…',
+  calcPrice:               'Delivery price',
+  calcNotSet:              'Price not set for this destination',
+  calcSelectDest:          'Select a destination to see the price',
+  calcReset:               'Reset',
+  calcLoading:             'Loading…',
+  calcAllCities:           'All cities',
 };
 
 const ka: typeof en = {
@@ -616,6 +629,19 @@ const ka: typeof en = {
   goColStatus:              'სტატუსი',
   goColDate:                'თარიღი',
   goEmptyState:             'შეკვეთები აქ გამოჩნდება',
+
+  // ── Price Calculator ──────────────────────────────────────────────────────
+  calcTitle:               'კალკულატორი',
+  calcSubtitle:            'მიწოდების ფასის გაგება',
+  calcFrom:                'გამგზავნი',
+  calcTo:                  'მიმღები',
+  calcToPlaceholder:       'ქალაქი ან რაიონი…',
+  calcPrice:               'მიწოდების ფასი',
+  calcNotSet:              'ამ მიმართულებისთვის ფასი არ არის დაყენებული',
+  calcSelectDest:          'აირჩიეთ მიმართულება ფასის სანახავად',
+  calcReset:               'გასუფთავება',
+  calcLoading:             'იტვირთება…',
+  calcAllCities:           'ყველა ქალაქი',
 };
 
 export const translations = { en, ka } as const;

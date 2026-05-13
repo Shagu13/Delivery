@@ -13,6 +13,14 @@ public sealed class EditDistrictCommandHandler : IRequestHandler<EditDistrictCom
 
     public async Task Handle(EditDistrictCommand request, CancellationToken cancellationToken)
     {
+        if (request.IsCapitalTerritory && request.IsCityTerritory)
+            throw new ValidationException(new[]
+            {
+                new FluentValidation.Results.ValidationFailure(
+                    "IsCityTerritory",
+                    "A district cannot be both Capital Territory and City Territory at the same time.")
+            });
+
         var district = await _context.Districts
             .FirstOrDefaultAsync(d => d.Id == request.Id && d.DateDeleted == null, cancellationToken)
             ?? throw new NotFoundException("District", request.Id);
@@ -26,6 +34,8 @@ public sealed class EditDistrictCommandHandler : IRequestHandler<EditDistrictCom
         district.DistrictName        = request.DistrictName.Trim();
         district.DistrictNameGeo     = string.IsNullOrWhiteSpace(request.DistrictNameGeo) ? null : request.DistrictNameGeo.Trim();
         district.CompanyServicePrice = request.CompanyServicePrice;
+        district.IsCapitalTerritory  = request.IsCapitalTerritory;
+        district.IsCityTerritory     = request.IsCityTerritory;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

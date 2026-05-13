@@ -235,3 +235,28 @@ public sealed class SetDistrictCompanyServicePriceCommandHandler : IRequestHandl
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
+
+// ── SetDistrictTerritory ──────────────────────────────────────────────────────
+public sealed class SetDistrictTerritoryCommandHandler : IRequestHandler<SetDistrictTerritoryCommand>
+{
+    private readonly IAppDbContext _context;
+    public SetDistrictTerritoryCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(SetDistrictTerritoryCommand request, CancellationToken cancellationToken)
+    {
+        if (request.IsCapitalTerritory && request.IsCityTerritory)
+            throw new ValidationException(new[] {
+                new FluentValidation.Results.ValidationFailure(
+                    "IsCityTerritory",
+                    "A district cannot be both Capital Territory and City Territory at the same time.")
+            });
+
+        var district = await _context.Districts
+            .FirstOrDefaultAsync(d => d.Id == request.DistrictId, cancellationToken)
+            ?? throw new NotFoundException("District", request.DistrictId);
+
+        district.IsCapitalTerritory = request.IsCapitalTerritory;
+        district.IsCityTerritory    = request.IsCityTerritory;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}

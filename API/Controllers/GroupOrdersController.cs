@@ -62,7 +62,6 @@ public sealed class GroupOrdersController : BaseController
                         o.IsFragile,
                         o.ProductPaymentStatus,
                         o.WhoPaysForCompanyService,
-                        o.IsDeliveryAddressInCityItself,
                         o.CompanyServicePrice))
                     .ToList(),
                 CustomerId: customerId
@@ -456,8 +455,7 @@ public sealed class GroupOrdersController : BaseController
             var recipientCity     = ws.Cell(row, 4).GetString().Trim();
             var recipientDistrict = ws.Cell(row, 5).GetString().Trim();
 
-            // Excel imports never trigger the in-city mode — the user chose a real district directly.
-            // IsDeliveryAddressInCityItself remains false for all Excel-imported rows.
+            // Excel imports always use district names directly — no in-city mode needed.
             orders.Add(new OrderItemRequest(
                 RecipientFirstName:           firstName,
                 RecipientLastName:            ws.Cell(row, 2).GetString().Trim(),
@@ -468,8 +466,7 @@ public sealed class GroupOrdersController : BaseController
                 Description:                  description.Length > 0 ? description : null,
                 IsFragile:                    isFragile,
                 ProductPaymentStatus:         paymentStatus,
-                WhoPaysForCompanyService:     payer,
-                IsDeliveryAddressInCityItself: false
+                WhoPaysForCompanyService:     payer
             ));
         }
 
@@ -515,7 +512,6 @@ public sealed class GroupOrdersController : BaseController
                 RecipientAddress:                 o.RecipientAddress,
                 Description:                      o.Description,
                 IsFragile:                        o.IsFragile,
-                IsDeliveryAddressInCityItself:    o.IsDeliveryAddressInCityItself,
                 Status:                           o.Status.ToString(),
                 ProductPaymentStatus:             o.ProductPaymentStatus.ToString(),
                 WhoPaysForCompanyService:         o.WhoPaysForCompanyService.ToString(),

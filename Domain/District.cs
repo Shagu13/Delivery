@@ -24,6 +24,20 @@ public class District
     /// </summary>
     public decimal? CompanyServicePrice { get; set; }
 
+    /// <summary>
+    /// True when this district belongs to the capital city (e.g. Tbilisi).
+    /// Drives the CompanyServiceCapitalPrice tier during order pricing.
+    /// Cannot be true at the same time as IsCityTerritory.
+    /// </summary>
+    public bool IsCapitalTerritory { get; set; } = false;
+
+    /// <summary>
+    /// True when this district belongs to a non-capital city centre.
+    /// Drives the CompanyServiceCityPrice tier during order pricing.
+    /// Cannot be true at the same time as IsCapitalTerritory.
+    /// </summary>
+    public bool IsCityTerritory { get; set; } = false;
+
     public DateTime  CreatedAt       { get; set; } = DateTime.UtcNow;
     public DateTime? DateDeleted     { get; set; }
 }

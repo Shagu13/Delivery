@@ -26,17 +26,27 @@ public sealed class CreateDistrictCommandHandler : IRequestHandler<CreateDistric
         if (exists)
             throw new ConflictException($"District '{request.DistrictName}' already exists in this city.");
 
+        if (request.IsCapitalTerritory && request.IsCityTerritory)
+            throw new ValidationException(new[]
+            {
+                new FluentValidation.Results.ValidationFailure(
+                    "IsCityTerritory",
+                    "A district cannot be both Capital Territory and City Territory at the same time.")
+            });
+
         var district = new District
         {
             CityId              = request.CityId,
             DistrictName        = request.DistrictName.Trim(),
             DistrictNameGeo     = string.IsNullOrWhiteSpace(request.DistrictNameGeo) ? null : request.DistrictNameGeo.Trim(),
             CompanyServicePrice = request.CompanyServicePrice,
+            IsCapitalTerritory  = request.IsCapitalTerritory,
+            IsCityTerritory     = request.IsCityTerritory,
         };
 
         _context.Districts.Add(district);
         await _context.SaveChangesAsync(cancellationToken);
 
-        return new CreateDistrictResult(district.Id, district.DistrictName, district.DistrictNameGeo, district.CompanyServicePrice);
+        return new CreateDistrictResult(district.Id, district.DistrictName, district.DistrictNameGeo, district.CompanyServicePrice, district.IsCapitalTerritory, district.IsCityTerritory);
     }
 }

@@ -6,7 +6,6 @@ import { getStatusMeta } from '../../utils/statusMeta';
 import './home.css';
 
 const STATUS_CLASS: Record<string, string> = {
-    // GroupOrder flow
     Pending:                         'track-badge--pending',
     AcceptedGroupOrder:              'track-badge--assigned',
     OrderNotAccepted:                'track-badge--failed',
@@ -16,7 +15,6 @@ const STATUS_CLASS: Record<string, string> = {
     DeliveredToWarehouse:            'track-badge--inwarehouse',
     AdminAcceptedOrderInWareHouse:   'track-badge--inwarehouse',
     CancelledBySender:               'track-badge--failed',
-    // Order last-mile flow
     AcceptedOrder:                   'track-badge--assigned',
     OrderIsOnItsWayToRecipientsCity: 'track-badge--onitsway',
     CourierAssignedToDeliver:        'track-badge--assigned',

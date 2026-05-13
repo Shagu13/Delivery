@@ -27,6 +27,36 @@ public sealed class CitiesController : ControllerBase
         _mediator = mediator;
     }
 
+    // ── GET /api/cities/all-districts ────────────────────────────────────────
+    /// <summary>
+    /// Returns a flat list of every active district with its parent city details.
+    /// Used by the price calculator "To" picker.
+    /// </summary>
+    [HttpGet("all-districts")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IReadOnlyList<AllDistrictEntry>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllDistricts(CancellationToken ct)
+    {
+        var districts = await _context.Districts
+            .AsNoTracking()
+            .Include(d => d.City)
+            .Where(d => d.DateDeleted == null && d.City.DateDeleted == null)
+            .OrderBy(d => d.City.CityName).ThenBy(d => d.DistrictName)
+            .Select(d => new AllDistrictEntry(
+                d.Id,
+                d.DistrictName,
+                d.DistrictNameGeo,
+                d.City.Id,
+                d.City.CityName,
+                d.City.CityNameGeo,
+                d.CompanyServicePrice,
+                d.IsCapitalTerritory,
+                d.IsCityTerritory))
+            .ToListAsync(ct);
+
+        return Ok(districts);
+    }
+
     // ── GET /api/cities ───────────────────────────────────────────────────────
     [HttpGet]
     [AllowAnonymous]
@@ -112,7 +142,7 @@ public sealed class CitiesController : ControllerBase
             .AsNoTracking()
             .Where(d => d.CityId == cityId && d.DateDeleted == null)
             .OrderBy(d => d.DistrictName)
-            .Select(d => new DistrictResponse(d.Id, d.DistrictName, d.DistrictNameGeo, d.CompanyServicePrice))
+            .Select(d => new DistrictResponse(d.Id, d.DistrictName, d.DistrictNameGeo, d.CompanyServicePrice, d.IsCapitalTerritory, d.IsCityTerritory))
             .ToListAsync(ct);
 
         return Ok(districts);
@@ -131,8 +161,8 @@ public sealed class CitiesController : ControllerBase
     {
         try
         {
-            var result = await _mediator.Send(new CreateDistrictCommand(cityId, request.DistrictName, request.DistrictNameGeo, request.CompanyServicePrice), ct);
-            var response = new DistrictResponse(result.Id, result.DistrictName, result.DistrictNameGeo, result.CompanyServicePrice);
+            var result = await _mediator.Send(new CreateDistrictCommand(cityId, request.DistrictName, request.DistrictNameGeo, request.CompanyServicePrice, request.IsCapitalTerritory, request.IsCityTerritory), ct);
+            var response = new DistrictResponse(result.Id, result.DistrictName, result.DistrictNameGeo, result.CompanyServicePrice, result.IsCapitalTerritory, result.IsCityTerritory);
             return CreatedAtAction(nameof(GetDistricts), new { cityId }, response);
         }
         catch (NotFoundException ex) { return NotFound(ex.Message); }
@@ -152,7 +182,7 @@ public sealed class CitiesController : ControllerBase
     {
         try
         {
-            await _mediator.Send(new EditDistrictCommand(districtId, request.DistrictName, request.DistrictNameGeo, request.CompanyServicePrice), ct);
+            await _mediator.Send(new EditDistrictCommand(districtId, request.DistrictName, request.DistrictNameGeo, request.CompanyServicePrice, request.IsCapitalTerritory, request.IsCityTerritory), ct);
             return NoContent();
         }
         catch (NotFoundException ex) { return NotFound(ex.Message); }
@@ -187,13 +217,30 @@ public sealed class CitiesController : ControllerBase
         await _mediator.Send(new SetDistrictCompanyServicePriceCommand(districtId, request.Price), ct);
         return NoContent();
     }
+
+    // ── PUT /api/cities/districts/{districtId}/territory  (Admin) ─────────────
+    [HttpPut("districts/{districtId:guid}/territory")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> SetDistrictTerritory(
+        Guid districtId,
+        [FromBody] SetDistrictTerritoryRequest request,
+        CancellationToken ct)
+    {
+        await _mediator.Send(new SetDistrictTerritoryCommand(districtId, request.IsCapitalTerritory, request.IsCityTerritory), ct);
+        return NoContent();
+    }
 }
 
 // ── Request / Response records ────────────────────────────────────────────────
 public sealed record CityResponse(Guid Id, string CityName, string? CityNameGeo);
-public sealed record DistrictResponse(Guid Id, string DistrictName, string? DistrictNameGeo, decimal? CompanyServicePrice);
+public sealed record DistrictResponse(Guid Id, string DistrictName, string? DistrictNameGeo, decimal? CompanyServicePrice, bool IsCapitalTerritory, bool IsCityTerritory);
+public sealed record AllDistrictEntry(Guid DistrictId, string DistrictName, string? DistrictNameGeo, Guid CityId, string CityName, string? CityNameGeo, decimal? CompanyServicePrice, bool IsCapitalTerritory, bool IsCityTerritory);
 public sealed record SetDistrictServicePriceRequest(decimal? Price);
+public sealed record SetDistrictTerritoryRequest(bool IsCapitalTerritory, bool IsCityTerritory);
 public sealed record CreateCityRequest(string CityName, string? CityNameGeo);
 public sealed record EditCityRequest(string CityName, string? CityNameGeo);
-public sealed record CreateDistrictRequest(string DistrictName, string? DistrictNameGeo, decimal? CompanyServicePrice);
-public sealed record EditDistrictRequest(string DistrictName, string? DistrictNameGeo, decimal? CompanyServicePrice);
+public sealed record CreateDistrictRequest(string DistrictName, string? DistrictNameGeo, decimal? CompanyServicePrice, bool IsCapitalTerritory = false, bool IsCityTerritory = false);
+public sealed record EditDistrictRequest(string DistrictName, string? DistrictNameGeo, decimal? CompanyServicePrice, bool IsCapitalTerritory = false, bool IsCityTerritory = false);

@@ -20,7 +20,9 @@ export interface AdminOrderItem {
   recipientLastName: string;
   recipientPhone: string;
   recipientCity: string;
+  recipientCityGeo?: string;
   recipientDistrict: string;
+  recipientDistrictGeo?: string;
   recipientAddress: string;
   description: string | null;
   isFragile: boolean;
@@ -629,8 +631,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                     </td>
                     <td className="aop-td aop-td--mono">{order.recipientPhone}</td>
                     <td className="aop-td">
-                      <div className="aop-city">{order.recipientCity}</div>
-                      <div className="aop-district">{order.recipientDistrict}</div>
+                      <div className="aop-city">{lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity}</div>
+                      <div className="aop-district">{lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict}</div>
                     </td>
                     {/*<td className="aop-td aop-td--desc">*/}
                     {/*  {order.isFragile && <span className="aop-fragile">{t.aopFragile}</span>}*/}

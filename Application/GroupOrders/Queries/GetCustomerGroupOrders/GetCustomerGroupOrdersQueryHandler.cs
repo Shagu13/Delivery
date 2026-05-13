@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.GroupOrders.DTOs;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -26,9 +27,9 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             .OrderByDescending(g => g.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        var cityGeo     = (await _context.Cities   .AsNoTracking().ToListAsync(cancellationToken))
+        var cityGeo     = (await _context.Cities   .AsNoTracking().Where(c => c.DateDeleted == null).ToListAsync(cancellationToken))
                             .GroupBy(c => c.CityName)    .ToDictionary(g => g.Key, g => g.First().CityNameGeo);
-        var districtGeo = (await _context.Districts.AsNoTracking().ToListAsync(cancellationToken))
+        var districtGeo = (await _context.Districts.AsNoTracking().Where(d => d.DateDeleted == null).ToListAsync(cancellationToken))
                             .GroupBy(d => d.DistrictName).ToDictionary(g => g.Key, g => g.First().DistrictNameGeo);
 
         return groupOrders.Select(go => new AdminGroupOrderDto(
@@ -67,7 +68,6 @@ public sealed class GetCustomerGroupOrdersQueryHandler
                     RecipientAddress:                 o.RecipientAddress,
                     Description:                      o.Description,
                     IsFragile:                        o.IsFragile,
-                    IsDeliveryAddressInCityItself:    o.IsDeliveryAddressInCityItself,
                     Status:                           o.Status,
                     ProductPaymentStatus:             o.ProductPaymentStatus,
                     WhoPaysForCompanyService:         o.WhoPaysForCompanyService,

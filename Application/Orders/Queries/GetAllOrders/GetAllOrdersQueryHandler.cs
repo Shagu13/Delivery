@@ -67,6 +67,12 @@ public sealed class GetAllOrdersQueryHandler
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);
 
+        // Build Georgian-name lookup dictionaries (active records only)
+        var cityGeo     = (await _context.Cities    .AsNoTracking().Where(c => c.DateDeleted == null).ToListAsync(cancellationToken))
+                            .GroupBy(c => c.CityName)    .ToDictionary(g => g.Key, g => g.First().CityNameGeo);
+        var districtGeo = (await _context.Districts .AsNoTracking().Where(d => d.DateDeleted == null).ToListAsync(cancellationToken))
+                            .GroupBy(d => d.DistrictName).ToDictionary(g => g.Key, g => g.First().DistrictNameGeo);
+
         var items = entities
             .Select(o => new AdminOrderListDto(
                 Id:                       o.Id,
@@ -79,7 +85,9 @@ public sealed class GetAllOrdersQueryHandler
                 RecipientLastName:        o.RecipientLastName,
                 RecipientPhone:           o.RecipientPhone,
                 RecipientCity:            o.RecipientCity,
+                RecipientCityGeo:         cityGeo.GetValueOrDefault(o.RecipientCity),
                 RecipientDistrict:        o.RecipientDistrict,
+                RecipientDistrictGeo:     districtGeo.GetValueOrDefault(o.RecipientDistrict),
                 RecipientAddress:         o.RecipientAddress,
                 Description:              o.Description,
                 IsFragile:                o.IsFragile,

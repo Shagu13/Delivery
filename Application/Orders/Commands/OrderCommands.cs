@@ -32,3 +32,9 @@ public sealed record SetOrderCompanyServicePriceCommand(Guid OrderId, decimal Pr
 
 /// <summary>Admin sets (or updates) the default company service price for a district.</summary>
 public sealed record SetDistrictCompanyServicePriceCommand(Guid DistrictId, decimal? Price) : IRequest;
+
+/// <summary>
+/// Admin sets the territory classification for a district.
+/// IsCapitalTerritory and IsCityTerritory are mutually exclusive.
+/// </summary>
+public sealed record SetDistrictTerritoryCommand(Guid DistrictId, bool IsCapitalTerritory, bool IsCityTerritory) : IRequest;

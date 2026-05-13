@@ -1,6 +1,6 @@
 using Domain.Enums;
 
-namespace Application.GroupOrders.Queries.GetAllGroupOrders;
+namespace Application.GroupOrders.DTOs;
 
 /// <summary>Full group order representation for the admin dashboard.</summary>
 public sealed record AdminGroupOrderDto(
@@ -43,11 +43,6 @@ public sealed record AdminOrderDto(
     string RecipientAddress,
     string? Description,
     bool   IsFragile,
-    /// <summary>
-    /// True when the delivery is within the city itself (City == District was chosen in form).
-    /// Drives the pricing tier (Capital / City / District).
-    /// </summary>
-    bool   IsDeliveryAddressInCityItself,
     OrderStatus   Status,
     PaymentStatus ProductPaymentStatus,
     ServicePayer  WhoPaysForCompanyService,

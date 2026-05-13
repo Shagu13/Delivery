@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -26,6 +26,219 @@ function useIsMobile(breakpoint = 768) {
         return () => mq.removeEventListener('change', handler);
     }, [breakpoint]);
     return isMobile;
+}
+
+// ── SwipeButton ───────────────────────────────────────────────────────────────
+// Replaces tap buttons to prevent accidental triggers on mobile.
+// Desktop users can still drag to confirm — it works with mouse too.
+
+type SwipeVariant = 'primary' | 'success';
+
+interface SwipeButtonProps {
+    label: string;
+    onSwipe: () => void;
+    disabled?: boolean;
+    variant?: SwipeVariant;
+}
+
+function SwipeButton({ label, onSwipe, disabled = false, variant = 'primary' }: SwipeButtonProps) {
+    const trackRef = useRef<HTMLDivElement>(null);
+    const [offset, setOffset] = useState(0);
+    const [swipeState, setSwipeState] = useState<'idle' | 'confirmed'>('idle');
+    const startXRef = useRef<number | null>(null);
+
+    const HANDLE_SIZE = 48;
+    const PADDING = 4;
+    const THRESHOLD = 0.82;
+
+    const getMaxTravel = useCallback(() => {
+        if (!trackRef.current) return 200;
+        return trackRef.current.offsetWidth - HANDLE_SIZE - PADDING * 2;
+    }, []);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        if (disabled || swipeState === 'confirmed') return;
+        startXRef.current = e.clientX;
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (startXRef.current === null || swipeState === 'confirmed') return;
+        const maxTravel = getMaxTravel();
+        const dx = Math.max(0, Math.min(e.clientX - startXRef.current, maxTravel));
+        setOffset(dx);
+
+        if (dx / maxTravel >= THRESHOLD) {
+            startXRef.current = null;
+            setOffset(maxTravel);
+            setSwipeState('confirmed');
+            // Brief confirmed flash, then fire
+            setTimeout(() => {
+                onSwipe();
+                setTimeout(() => {
+                    setSwipeState('idle');
+                    setOffset(0);
+                }, 500);
+            }, 280);
+        }
+    };
+
+    const handlePointerUp = () => {
+        if (swipeState === 'confirmed') return;
+        startXRef.current = null;
+        setOffset(0); // spring back via CSS transition
+    };
+
+    const maxTravel = getMaxTravel();
+    const progress = maxTravel > 0 ? offset / maxTravel : 0;
+    const isSnappingBack = swipeState === 'idle' && offset === 0;
+
+    // Colour tokens per variant
+    const palette: Record<SwipeVariant, { bg: string; fill: string; handle: string; labelColor: string }> = {
+        primary: {
+            bg: 'var(--color-accent-dim)',
+            fill: 'var(--color-accent)',
+            handle: 'var(--color-accent)',
+            labelColor: 'var(--color-accent)',
+        },
+        success: {
+            bg: '#d1fae5',
+            fill: '#10b981',
+            handle: '#059669',
+            labelColor: '#065f46',
+        },
+    };
+    const c = palette[variant];
+
+    return (
+        <div
+            ref={trackRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{
+                position: 'relative',
+                height: '56px',
+                borderRadius: '100px',
+                background: disabled ? 'var(--color-bg-3)' : c.bg,
+                overflow: 'hidden',
+                userSelect: 'none',
+                cursor: disabled ? 'not-allowed' : 'ew-resize',
+                opacity: disabled ? 0.55 : 1,
+                touchAction: 'none',
+                WebkitTapHighlightColor: 'transparent',
+            }}
+        >
+            {/* Progress fill */}
+            <div
+                style={{
+                    position: 'absolute',
+                    top: 0, left: 0, bottom: 0,
+                    width: `${PADDING + HANDLE_SIZE + offset}px`,
+                    background: swipeState === 'confirmed'
+                        ? c.fill
+                        : `${c.fill}4d`,   // ~30% opacity while dragging
+                    borderRadius: '100px',
+                    transition: isSnappingBack
+                        ? 'width 0.4s cubic-bezier(0.34,1.56,0.64,1)'
+                        : 'none',
+                    pointerEvents: 'none',
+                }}
+            />
+
+            {/* Slide hint text — fades out as handle moves */}
+            {swipeState === 'idle' && (
+                <span
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingLeft: `${HANDLE_SIZE + PADDING * 2 + 8}px`,
+                        fontSize: '0.875rem',
+                        fontWeight: 700,
+                        color: c.labelColor,
+                        letterSpacing: '0.02em',
+                        pointerEvents: 'none',
+                        opacity: Math.max(0, 1 - progress * 2.5),
+                        transition: isSnappingBack ? 'opacity 0.3s' : 'none',
+                    }}
+                >
+                    {label}
+                </span>
+            )}
+
+            {/* Confirmed checkmark */}
+            {swipeState === 'confirmed' && (
+                <span
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.25rem',
+                        color: '#fff',
+                        fontWeight: 700,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    ✓
+                </span>
+            )}
+
+            {/* Drag handle */}
+            <div
+                style={{
+                    position: 'absolute',
+                    top: PADDING,
+                    left: PADDING,
+                    width: `${HANDLE_SIZE}px`,
+                    height: `${HANDLE_SIZE}px`,
+                    borderRadius: '100px',
+                    background: disabled ? 'var(--color-border)' : c.handle,
+                    transform: `translateX(${offset}px)`,
+                    transition: isSnappingBack
+                        ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1)'
+                        : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: swipeState === 'confirmed'
+                        ? '0 2px 12px rgba(0,0,0,0.22)'
+                        : '0 2px 8px rgba(0,0,0,0.15)',
+                    pointerEvents: 'none',
+                    fontSize: swipeState === 'confirmed' ? '1rem' : '1.5rem',
+                    color: '#fff',
+                    lineHeight: 1,
+                }}
+            >
+                {swipeState === 'confirmed' ? '✓' : '›'}
+            </div>
+
+            {/* "Swipe" hint arrow row — only shows when idle & not dragging */}
+            {swipeState === 'idle' && offset === 0 && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: `${PADDING + HANDLE_SIZE + 8}px`,
+                        transform: 'translateY(-50%)',
+                        display: 'flex',
+                        gap: '3px',
+                        opacity: 0.35,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    {['›', '›', '›'].map((ch, i) => (
+                        <span key={i} style={{ fontSize: '0.7rem', color: c.labelColor }}>{ch}</span>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 // ── Root component ────────────────────────────────────────────────────────────
@@ -289,25 +502,28 @@ function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct
                         </div>
                         <div className="courier-card__footer">
                             {go.status === 'CourierAssignedToPickUp' && (
-                                <button
-                                    className="courier-card__btn courier-card__btn--primary"
+                                <SwipeButton
+                                    label="🚗 Swipe — On My Way"
+                                    variant="primary"
                                     disabled={busyId === go.id}
-                                    onClick={() => onAct(go.id, () => markPickingUp(token, go.id), 'On the way to pickup.')}
-                                >🚗 On My Way</button>
+                                    onSwipe={() => onAct(go.id, () => markPickingUp(token, go.id), 'On the way to pickup.')}
+                                />
                             )}
                             {go.status === 'CourierOnTheWayToPickUp' && (
-                                <button
-                                    className="courier-card__btn courier-card__btn--primary"
+                                <SwipeButton
+                                    label="✅ Swipe — Picked Up"
+                                    variant="primary"
                                     disabled={busyId === go.id}
-                                    onClick={() => onAct(go.id, () => markPickedUp(token, go.id), 'Packages picked up.')}
-                                >✅ Picked Up</button>
+                                    onSwipe={() => onAct(go.id, () => markPickedUp(token, go.id), 'Packages picked up.')}
+                                />
                             )}
                             {go.status === 'CourierDeliveringToWarehouse' && (
-                                <button
-                                    className="courier-card__btn courier-card__btn--success"
+                                <SwipeButton
+                                    label="🏭 Swipe — Delivered to Warehouse"
+                                    variant="success"
                                     disabled={busyId === go.id}
-                                    onClick={() => onAct(go.id, () => markDeliveredToWarehouse(token, go.id), 'Delivered to warehouse.')}
-                                >🏭 Delivered to Warehouse</button>
+                                    onSwipe={() => onAct(go.id, () => markDeliveredToWarehouse(token, go.id), 'Delivered to warehouse.')}
+                                />
                             )}
                         </div>
                     </div>
@@ -393,18 +609,20 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                             </div>
                             <div className="courier-card__footer">
                                 {order.status === 'CourierAssignedToDeliver' && (
-                                    <button
-                                        className="courier-card__btn courier-card__btn--primary"
+                                    <SwipeButton
+                                        label="📥 Swipe — Confirm Receipt"
+                                        variant="primary"
                                         disabled={isBusy}
-                                        onClick={() => onAct(order.id, () => markOrderReceived(token, order.id), 'Marked as received.')}
-                                    >📥 Confirm Receipt</button>
+                                        onSwipe={() => onAct(order.id, () => markOrderReceived(token, order.id), 'Marked as received.')}
+                                    />
                                 )}
                                 {order.status === 'CourierRecievedOrderToDeliver' && (
-                                    <button
-                                        className="courier-card__btn courier-card__btn--success"
+                                    <SwipeButton
+                                        label="✅ Swipe — Mark as Delivered"
+                                        variant="success"
                                         disabled={isBusy}
-                                        onClick={() => onAct(order.id, () => markOrderDelivered(token, order.id), 'Order delivered to recipient.')}
-                                    >✅ Mark as Delivered</button>
+                                        onSwipe={() => onAct(order.id, () => markOrderDelivered(token, order.id), 'Order delivered to recipient.')}
+                                    />
                                 )}
                             </div>
                         </div>

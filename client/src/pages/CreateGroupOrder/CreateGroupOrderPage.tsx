@@ -59,7 +59,6 @@ const EMPTY_PACKAGE: OrderItemRequest = {
     isFragile:                    false,
     productPaymentStatus:         'NotPaid',
     whoPaysForCompanyService:     'Sender',
-    isDeliveryAddressInCityItself: false,
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -102,12 +101,9 @@ function validate(
             errors[`orders[${i}].recipientCity`] = `"${pkg.recipientCity}" is not a valid city.`;
         }
 
-        // District / sub-district validation
+        // District validation
         if (!pkg.recipientDistrict.trim()) {
-            // Give a context-aware error message
-            errors[`orders[${i}].recipientDistrict`] = pkg.isDeliveryAddressInCityItself
-                ? `Sub-district within ${pkg.recipientCity} is required.`
-                : 'District is required.';
+            errors[`orders[${i}].recipientDistrict`] = 'District is required.';
         } else if (
             cityDistrictCache[pkg.recipientCity] &&
             !cityDistrictCache[pkg.recipientCity].has(pkg.recipientDistrict)
@@ -256,8 +252,6 @@ export function CreateGroupOrderPage() {
                 ...EMPTY_PACKAGE,
                 ...o,
                 description: o.description ?? '',
-                // Excel imports always come in with normal district selection
-                isDeliveryAddressInCityItself: false,
             }));
 
             // Build district cache for all unique cities found in the import

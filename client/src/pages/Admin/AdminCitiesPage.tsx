@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   type City, type District,
-  fetchCities, fetchDistricts, setDistrictServicePrice,
+  fetchCities, fetchDistricts, setDistrictServicePrice, setDistrictTerritory,
   createCity, createDistrict, editCity, editDistrict,
   deleteCity, deleteDistrict,
 } from '../../api/cities';
@@ -76,6 +76,7 @@ export default function AdminCitiesPage({ token }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkValue, setBulkValue]     = useState('');
   const [bulkSaving, setBulkSaving]   = useState(false);
+  const [bulkTerritorySaving, setBulkTerritorySaving] = useState(false);
 
   // modals
   const [showAddCity, setShowAddCity]         = useState(false);
@@ -176,6 +177,25 @@ export default function AdminCitiesPage({ token }: Props) {
       setError('Failed to update one or more district prices');
     } finally {
       setBulkSaving(false);
+    }
+  }
+
+  async function saveBulkTerritory(isCapital: boolean, isCity: boolean) {
+    if (selectedIds.size === 0) return;
+    setBulkTerritorySaving(true);
+    setError('');
+    try {
+      await Promise.all([...selectedIds].map(id => setDistrictTerritory(id, isCapital, isCity, token)));
+      setDistricts(prev => prev.map(d =>
+        selectedIds.has(d.id)
+          ? { ...d, isCapitalTerritory: isCapital, isCityTerritory: isCity }
+          : d
+      ));
+      setSelectedIds(new Set());
+    } catch {
+      setError('Failed to update territory for one or more districts');
+    } finally {
+      setBulkTerritorySaving(false);
     }
   }
 
@@ -305,13 +325,15 @@ export default function AdminCitiesPage({ token }: Props) {
               {/* bulk action bar */}
               {selectedIds.size > 0 && (
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
+                  display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
                   marginBottom: '0.75rem', padding: '0.6rem 0.9rem',
                   background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
                 }}>
                   <span style={{ fontSize: '0.85rem', color: '#1d4ed8', fontWeight: 500 }}>
                     {selectedIds.size} district{selectedIds.size > 1 ? 's' : ''} selected
                   </span>
+
+                  {/* ── Price ── */}
                   <input
                     type="number"
                     value={bulkValue}
@@ -330,11 +352,56 @@ export default function AdminCitiesPage({ token }: Props) {
                       fontSize: '0.85rem', fontWeight: 500,
                     }}
                   >
-                    {bulkSaving ? 'Saving…' : 'Apply to all selected'}
+                    {bulkSaving ? 'Saving…' : 'Set price'}
+                  </button>
+
+                  <span style={{ width: 1, height: 22, background: '#bfdbfe', flexShrink: 0 }} />
+
+                  {/* ── Territory ── */}
+                  <span style={{ fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 500 }}>Territory:</span>
+                  <button
+                    onClick={() => saveBulkTerritory(true, false)}
+                    disabled={bulkTerritorySaving}
+                    style={{
+                      padding: '0.3rem 0.75rem', borderRadius: 6,
+                      background: bulkTerritorySaving ? '#fde68a' : '#fef3c7',
+                      color: '#92400e', border: '1px solid #fcd34d',
+                      cursor: bulkTerritorySaving ? 'not-allowed' : 'pointer',
+                      fontSize: '0.82rem', fontWeight: 600,
+                    }}
+                  >
+                    {bulkTerritorySaving ? '…' : '⭐ Capital'}
                   </button>
                   <button
+                    onClick={() => saveBulkTerritory(false, true)}
+                    disabled={bulkTerritorySaving}
+                    style={{
+                      padding: '0.3rem 0.75rem', borderRadius: 6,
+                      background: bulkTerritorySaving ? '#bbf7d0' : '#dcfce7',
+                      color: '#14532d', border: '1px solid #86efac',
+                      cursor: bulkTerritorySaving ? 'not-allowed' : 'pointer',
+                      fontSize: '0.82rem', fontWeight: 600,
+                    }}
+                  >
+                    {bulkTerritorySaving ? '…' : '🏙 City'}
+                  </button>
+                  <button
+                    onClick={() => saveBulkTerritory(false, false)}
+                    disabled={bulkTerritorySaving}
+                    style={{
+                      padding: '0.3rem 0.75rem', borderRadius: 6,
+                      background: bulkTerritorySaving ? '#f3f4f6' : '#f9fafb',
+                      color: '#6b7280', border: '1px solid #d1d5db',
+                      cursor: bulkTerritorySaving ? 'not-allowed' : 'pointer',
+                      fontSize: '0.82rem', fontWeight: 600,
+                    }}
+                  >
+                    {bulkTerritorySaving ? '…' : '🏘 District'}
+                  </button>
+
+                  <button
                     onClick={() => { setSelectedIds(new Set()); setBulkValue(''); }}
-                    style={{ padding: '0.3rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }}
+                    style={{ padding: '0.3rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}
                   >
                     Clear
                   </button>
@@ -355,6 +422,7 @@ export default function AdminCitiesPage({ token }: Props) {
                       />
                     </th>
                     <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>District</th>
+                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Territory</th>
                     <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Company Service Price (₾)</th>
                     <th style={{ padding: '0.6rem 0.75rem', width: 60, borderBottom: '1px solid #ddd' }} />
                   </tr>
@@ -368,6 +436,27 @@ export default function AdminCitiesPage({ token }: Props) {
                           <input type="checkbox" checked={isChecked} onChange={() => toggleSelect(d.id)} style={{ cursor: 'pointer' }} />
                         </td>
                         <td style={{ padding: '0.6rem 0.75rem' }}>{districtLabel(d)}</td>
+                        <td style={{ padding: '0.6rem 0.75rem' }}>
+                          {d.isCapitalTerritory ? (
+                            <span style={{
+                              display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
+                              background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d',
+                              fontSize: '0.78rem', fontWeight: 600,
+                            }}>⭐ Capital</span>
+                          ) : d.isCityTerritory ? (
+                            <span style={{
+                              display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
+                              background: '#dcfce7', color: '#14532d', border: '1px solid #86efac',
+                              fontSize: '0.78rem', fontWeight: 600,
+                            }}>🏙 City</span>
+                          ) : (
+                            <span style={{
+                              display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
+                              background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb',
+                              fontSize: '0.78rem', fontWeight: 600,
+                            }}>🏘 District</span>
+                          )}
+                        </td>
                         <td style={{ padding: '0.6rem 0.75rem' }}>
                           {editingId === d.id ? (
                             <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -572,11 +661,13 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
   const { lang } = useLanguage();
   const cityDisplayName = (lang === 'ka' && city.cityNameGeo) ? city.cityNameGeo : city.cityName;
 
-  const [districtName, setDistrictName]       = useState('');
-  const [districtNameGeo, setDistrictNameGeo] = useState('');
-  const [price, setPrice]                     = useState('');
-  const [submitting, setSubmitting]           = useState(false);
-  const [error, setError]                     = useState('');
+  const [districtName,       setDistrictName]       = useState('');
+  const [districtNameGeo,    setDistrictNameGeo]    = useState('');
+  const [price,              setPrice]              = useState('');
+  const [isCapitalTerritory, setIsCapitalTerritory] = useState(false);
+  const [isCityTerritory,    setIsCityTerritory]    = useState(false);
+  const [submitting,         setSubmitting]         = useState(false);
+  const [error,              setError]              = useState('');
   const firstRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { firstRef.current?.focus(); }, []);
@@ -584,6 +675,10 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!districtName.trim()) { setError('English name is required.'); return; }
+    if (isCapitalTerritory && isCityTerritory) {
+      setError('A district cannot be both Capital Territory and City Territory.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
@@ -592,6 +687,8 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
         districtName.trim(),
         districtNameGeo.trim() || null,
         price === '' ? null : Number(price),
+        isCapitalTerritory,
+        isCityTerritory,
         token,
       );
       onCreated(district);
@@ -604,6 +701,13 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
     }
   }
 
+  const CHECKBOX_ROW: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '0.45rem 0.65rem', borderRadius: 7,
+    border: '1px solid #d1d5db', fontSize: '0.88rem',
+    cursor: 'pointer', userSelect: 'none',
+  };
+
   return (
     <Modal title={`Add District — ${cityDisplayName}`} onClose={onClose}>
       <form onSubmit={handleSubmit}>
@@ -615,6 +719,20 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
         </Field>
         <Field label="Company service price (₾)">
           <input style={INPUT} type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="Leave empty to set later" />
+        </Field>
+        <Field label="Pricing territory">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={CHECKBOX_ROW}>
+              <input type="checkbox" checked={isCapitalTerritory}
+                onChange={e => { setIsCapitalTerritory(e.target.checked); if (e.target.checked) setIsCityTerritory(false); }} />
+              <span>Capital territory <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>(uses Capital price tier)</span></span>
+            </label>
+            <label style={CHECKBOX_ROW}>
+              <input type="checkbox" checked={isCityTerritory}
+                onChange={e => { setIsCityTerritory(e.target.checked); if (e.target.checked) setIsCapitalTerritory(false); }} />
+              <span>City territory <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>(uses City price tier)</span></span>
+            </label>
+          </div>
         </Field>
         {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
@@ -696,11 +814,13 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (updated: District) => void;
 }) {
-  const [districtName, setDistrictName]       = useState(district.districtName);
-  const [districtNameGeo, setDistrictNameGeo] = useState(district.districtNameGeo ?? '');
-  const [price, setPrice]                     = useState(district.companyServicePrice != null ? String(district.companyServicePrice) : '');
-  const [submitting, setSubmitting]           = useState(false);
-  const [error, setError]                     = useState('');
+  const [districtName,       setDistrictName]       = useState(district.districtName);
+  const [districtNameGeo,    setDistrictNameGeo]    = useState(district.districtNameGeo ?? '');
+  const [price,              setPrice]              = useState(district.companyServicePrice != null ? String(district.companyServicePrice) : '');
+  const [isCapitalTerritory, setIsCapitalTerritory] = useState(district.isCapitalTerritory);
+  const [isCityTerritory,    setIsCityTerritory]    = useState(district.isCityTerritory);
+  const [submitting,         setSubmitting]         = useState(false);
+  const [error,              setError]              = useState('');
   const firstRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { firstRef.current?.focus(); }, []);
@@ -708,12 +828,16 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!districtName.trim()) { setError('English name is required.'); return; }
+    if (isCapitalTerritory && isCityTerritory) {
+      setError('A district cannot be both Capital Territory and City Territory.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     const newPrice = price === '' ? null : Number(price);
     try {
-      await editDistrict(district.id, districtName.trim(), districtNameGeo.trim() || null, newPrice, token);
-      onSaved({ ...district, districtName: districtName.trim(), districtNameGeo: districtNameGeo.trim() || undefined, companyServicePrice: newPrice });
+      await editDistrict(district.id, districtName.trim(), districtNameGeo.trim() || null, newPrice, isCapitalTerritory, isCityTerritory, token);
+      onSaved({ ...district, districtName: districtName.trim(), districtNameGeo: districtNameGeo.trim() || undefined, companyServicePrice: newPrice, isCapitalTerritory, isCityTerritory });
     } catch (err) {
       setError(err instanceof Error && err.message === 'CONFLICT'
         ? `A district named "${districtName}" already exists in this city.`
@@ -722,6 +846,13 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
       setSubmitting(false);
     }
   }
+
+  const CHECKBOX_ROW: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '0.45rem 0.65rem', borderRadius: 7,
+    border: '1px solid #d1d5db', fontSize: '0.88rem',
+    cursor: 'pointer', userSelect: 'none',
+  };
 
   return (
     <Modal title="Edit District" onClose={onClose}>
@@ -734,6 +865,20 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
         </Field>
         <Field label="Company service price (₾)">
           <input style={INPUT} type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="Leave empty to clear" />
+        </Field>
+        <Field label="Pricing territory">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={CHECKBOX_ROW}>
+              <input type="checkbox" checked={isCapitalTerritory}
+                onChange={e => { setIsCapitalTerritory(e.target.checked); if (e.target.checked) setIsCityTerritory(false); }} />
+              <span>Capital territory <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>(uses Capital price tier)</span></span>
+            </label>
+            <label style={CHECKBOX_ROW}>
+              <input type="checkbox" checked={isCityTerritory}
+                onChange={e => { setIsCityTerritory(e.target.checked); if (e.target.checked) setIsCapitalTerritory(false); }} />
+              <span>City territory <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>(uses City price tier)</span></span>
+            </label>
+          </div>
         </Field>
         {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>

@@ -339,6 +339,12 @@ namespace Persistence.Migrations
                     b.Property<string>("DistrictNameGeo")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsCapitalTerritory")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCityTerritory")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DateDeleted");
@@ -486,9 +492,6 @@ namespace Persistence.Migrations
 
                     b.Property<Guid>("GroupOrderId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("IsDeliveryAddressInCityItself")
-                        .HasColumnType("bit");
 
                     b.Property<bool>("IsFragile")
                         .HasColumnType("bit");

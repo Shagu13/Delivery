@@ -9,6 +9,20 @@ export interface District {
   districtName: string;
   districtNameGeo?: string;
   companyServicePrice: number | null;
+  isCapitalTerritory: boolean;
+  isCityTerritory: boolean;
+}
+
+export interface AllDistrictEntry {
+  districtId: string;
+  districtName: string;
+  districtNameGeo?: string;
+  cityId: string;
+  cityName: string;
+  cityNameGeo?: string;
+  companyServicePrice: number | null;
+  isCapitalTerritory: boolean;
+  isCityTerritory: boolean;
 }
 
 export async function fetchCities(): Promise<City[]> {
@@ -20,6 +34,12 @@ export async function fetchCities(): Promise<City[]> {
 export async function fetchDistricts(cityId: string): Promise<District[]> {
   const res = await fetch(`/api/cities/${cityId}/districts`);
   if (!res.ok) throw new Error('Failed to fetch districts');
+  return res.json();
+}
+
+export async function fetchAllDistrictsFlat(): Promise<AllDistrictEntry[]> {
+  const res = await fetch('/api/cities/all-districts');
+  if (!res.ok) throw new Error('Failed to fetch all districts');
   return res.json();
 }
 
@@ -37,6 +57,23 @@ export async function setDistrictServicePrice(
     body: JSON.stringify({ price }),
   });
   if (!res.ok) throw new Error('Failed to update district service price');
+}
+
+export async function setDistrictTerritory(
+  districtId: string,
+  isCapitalTerritory: boolean,
+  isCityTerritory: boolean,
+  token: string
+): Promise<void> {
+  const res = await fetch(`/api/cities/districts/${districtId}/territory`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ isCapitalTerritory, isCityTerritory }),
+  });
+  if (!res.ok) throw new Error('Failed to update district territory');
 }
 
 export async function createCity(
@@ -62,6 +99,8 @@ export async function createDistrict(
   districtName: string,
   districtNameGeo: string | null,
   companyServicePrice: number | null,
+  isCapitalTerritory: boolean,
+  isCityTerritory: boolean,
   token: string
 ): Promise<District> {
   const res = await fetch(`/api/cities/${cityId}/districts`, {
@@ -70,7 +109,7 @@ export async function createDistrict(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ districtName, districtNameGeo, companyServicePrice }),
+    body: JSON.stringify({ districtName, districtNameGeo, companyServicePrice, isCapitalTerritory, isCityTerritory }),
   });
   if (res.status === 409) throw new Error('CONFLICT');
   if (!res.ok) throw new Error('Failed to create district');
@@ -101,6 +140,8 @@ export async function editDistrict(
   districtName: string,
   districtNameGeo: string | null,
   companyServicePrice: number | null,
+  isCapitalTerritory: boolean,
+  isCityTerritory: boolean,
   token: string
 ): Promise<void> {
   const res = await fetch(`/api/cities/districts/${districtId}`, {
@@ -109,7 +150,7 @@ export async function editDistrict(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ districtName, districtNameGeo, companyServicePrice }),
+    body: JSON.stringify({ districtName, districtNameGeo, companyServicePrice, isCapitalTerritory, isCityTerritory }),
   });
   if (res.status === 409) throw new Error('CONFLICT');
   if (res.status === 404) throw new Error('NOT_FOUND');
