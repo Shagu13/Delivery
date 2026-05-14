@@ -17,9 +17,21 @@ public sealed record CourierOrderDto(
     OrderStatus   Status,
     PaymentStatus ProductPaymentStatus,
     ServicePayer  WhoPaysForCompanyService,
+    /// <summary>
+    /// Cash amount the courier must collect from the recipient for the product (COD).
+    /// Only set when ProductPaymentStatus == NotPaid AND WhoPaysForCompanyService == Recipient.
+    /// </summary>
+    decimal? AmountToCollectForPackage,
+    /// <summary>
+    /// The company's courier service fee for this order.
+    /// Needed so the courier knows how much to collect when WhoPaysForCompanyService == Recipient.
+    /// </summary>
+    decimal CompanyServicePrice,
     DateTime  CreatedAt,
     DateTime? PickedUpFromWarehouseAt,
     DateTime? DeliveredAt,
     DateTime? DeliveryDateFrom,
-    DateTime? DeliveryDateTo
+    DateTime? DeliveryDateTo,
+    PostponeReason? PostponeReason,
+    DateTime?       PostponedAt
 );

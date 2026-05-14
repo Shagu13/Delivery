@@ -39,7 +39,7 @@ public sealed class TrackingNumberGenerator : ITrackingNumberGenerator
                 var result = await command.ExecuteScalarAsync(cancellationToken);
                 var sequence = Convert.ToInt64(result);
                 var suffix = Guid.NewGuid().ToString("N")[..4].ToUpper();
-                results.Add($"TN-{sequence:D8}-{suffix}");
+                results.Add($"{sequence:D6}-{suffix}");
             }
 
             return results;

@@ -1,3 +1,4 @@
+using Domain.Enums;
 using MediatR;
 
 namespace Application.Orders.Commands;
@@ -8,15 +9,17 @@ public sealed record SendOrderToCityCommand(Guid OrderId) : IRequest;
 /// <summary>Admin assigns last-mile delivery courier.</summary>
 public sealed record AssignCourierToOrderCommand(Guid OrderId, Guid CourierId) : IRequest;
 
-/// <summary>Courier confirms receipt of order for last-mile delivery. Order → CourierRecievedOrderToDeliver.</summary>
-public sealed record MarkOrderReceivedCommand(Guid OrderId, string CourierUserId) : IRequest;
+/// <summary>Courier picks up the order and starts delivering. Order → CourierDeliveringTheOrderToRecipient.</summary>
+public sealed record MarkOrderDeliveringCommand(Guid OrderId, string CourierUserId) : IRequest;
 
-/// <summary>
-/// Courier confirms delivery to recipient. Order → DeliveredToRecipient.
-/// (The intermediate OrderIsBeingDeliveredToRecipient step has been removed — courier
-/// goes directly from CourierRecievedOrderToDeliver to DeliveredToRecipient.)
-/// </summary>
+/// <summary>Courier confirms delivery to recipient. Order → DeliveredToRecipient.</summary>
 public sealed record MarkOrderDeliveredCommand(Guid OrderId, string CourierUserId) : IRequest;
+
+/// <summary>Courier marks a delivery attempt as failed. Order → DeliveryPostponed.</summary>
+public sealed record PostponeOrderCommand(Guid OrderId, string CourierUserId, PostponeReason Reason) : IRequest;
+
+/// <summary>Courier retries a postponed delivery. Order → CourierDeliveringTheOrderToRecipient.</summary>
+public sealed record RetryDeliveryCommand(Guid OrderId, string CourierUserId) : IRequest;
 
 /// <summary>Admin cancels any single order at any stage. Order → CancelledByAdmin.</summary>
 public sealed record CancelOrderByAdminCommand(Guid OrderId) : IRequest;

@@ -23,19 +23,16 @@ export interface SettlementPreview {
     totalCompanyServiceRevenue: number;
     totalCourierSalary: number;
     totalCompanyNetIncome: number;
+    /** How much the courier must transfer to the company: cash collected − salary. */
+    totalCourierTransferToCompany: number;
     orders: SettlementOrderLine[];
-    incompleteOrderTrackingNumbers: string[];  // TN's that still need financial data
+    incompleteOrderTrackingNumbers: string[];
 }
 
+/** All financial totals are computed server-side; only the identity fields are required. */
 export interface CreateSettlementRequest {
     courierId: string;
     date: string;                              // "YYYY-MM-DD"
-    totalOrdersPickedUp: number;
-    totalOrdersDelivered: number;
-    totalAmountOfCashCollected: number | null;
-    totalCompanyServiceRevenue: number;
-    totalCourierSalary: number;
-    totalCompanyNetIncome: number;
 }
 
 export interface CreateSettlementResponse {

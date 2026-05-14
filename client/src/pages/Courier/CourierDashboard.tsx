@@ -1,16 +1,20 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
+
 import {
     fetchMyPickups, markPickingUp,
     markPickedUp, markDeliveredToWarehouse,
 } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
 import {
-    fetchMyDeliveries, markOrderReceived, markOrderDelivered,
+    fetchMyDeliveries, markOrderDelivering, markOrderDelivered,
+    postponeOrder, retryDelivery,
 } from '../../api/orders';
-import type { CourierOrder } from '../../api/orders';
+import type { CourierOrder, PostponeReason } from '../../api/orders';
+import { POSTPONE_REASON_LABELS } from '../../api/orders';
 import '../../styles/dashboard.css';
+import { CourierHistoryPage } from './CourierHistoryPage';
 
 
 // ── Media query hook ──────────────────────────────────────────────────────────
@@ -46,14 +50,22 @@ function SwipeButton({ label, onSwipe, disabled = false, variant = 'primary' }: 
     const [offset, setOffset] = useState(0);
     const [swipeState, setSwipeState] = useState<'idle' | 'confirmed'>('idle');
     const startXRef = useRef<number | null>(null);
+    // maxTravel stored in state — updated by ResizeObserver, never read from ref during render
+    const [maxTravel, setMaxTravel] = useState(200);
 
     const HANDLE_SIZE = 48;
     const PADDING = 4;
     const THRESHOLD = 0.82;
 
-    const getMaxTravel = useCallback(() => {
-        if (!trackRef.current) return 200;
-        return trackRef.current.offsetWidth - HANDLE_SIZE - PADDING * 2;
+    // Keep maxTravel in sync with the track element's actual width
+    useEffect(() => {
+        const el = trackRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(([entry]) => {
+            setMaxTravel(entry.contentRect.width - HANDLE_SIZE - PADDING * 2);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
     }, []);
 
     const handlePointerDown = (e: React.PointerEvent) => {
@@ -64,7 +76,6 @@ function SwipeButton({ label, onSwipe, disabled = false, variant = 'primary' }: 
 
     const handlePointerMove = (e: React.PointerEvent) => {
         if (startXRef.current === null || swipeState === 'confirmed') return;
-        const maxTravel = getMaxTravel();
         const dx = Math.max(0, Math.min(e.clientX - startXRef.current, maxTravel));
         setOffset(dx);
 
@@ -72,7 +83,6 @@ function SwipeButton({ label, onSwipe, disabled = false, variant = 'primary' }: 
             startXRef.current = null;
             setOffset(maxTravel);
             setSwipeState('confirmed');
-            // Brief confirmed flash, then fire
             setTimeout(() => {
                 onSwipe();
                 setTimeout(() => {
@@ -86,10 +96,10 @@ function SwipeButton({ label, onSwipe, disabled = false, variant = 'primary' }: 
     const handlePointerUp = () => {
         if (swipeState === 'confirmed') return;
         startXRef.current = null;
-        setOffset(0); // spring back via CSS transition
+        setOffset(0);
     };
 
-    const maxTravel = getMaxTravel();
+    // maxTravel now comes from state — no ref access during render
     const progress = maxTravel > 0 ? offset / maxTravel : 0;
     const isSnappingBack = swipeState === 'idle' && offset === 0;
 
@@ -248,7 +258,7 @@ export function CourierDashboard() {
     const navigate = useNavigate();
     const isMobile = useIsMobile();
 
-    const [view, setView] = useState<'pickups' | 'deliveries'>('pickups');
+    const [view, setView] = useState<'pickups' | 'deliveries' | 'history'>('pickups');
 
     const [pickups, setPickups] = useState<AdminGroupOrder[]>([]);
     const [pickupLoading, setPickupLoading] = useState(false);
@@ -266,27 +276,58 @@ export function CourierDashboard() {
         setTimeout(() => setToast(null), 3500);
     };
 
-    const loadPickups = useCallback(async () => {
+    const loadPickups = async () => {
         if (!token) return;
         setPickupLoading(true); setPickupError(null);
         try { setPickups(await fetchMyPickups(token)); }
         catch { setPickupError('Failed to load pickups.'); }
         finally { setPickupLoading(false); }
-    }, [token]);
+    };
 
-    const loadDeliveries = useCallback(async () => {
+    const loadDeliveries = async () => {
         if (!token) return;
         setDeliveriesLoading(true); setDeliveriesError(null);
         try { setDeliveries(await fetchMyDeliveries(token)); }
         catch { setDeliveriesError('Failed to load deliveries.'); }
         finally { setDeliveriesLoading(false); }
+    };
+
+    useEffect(() => {
+        if (!token) return;
+        let cancelled = false;
+        const run = async () => {
+            setPickupLoading(true); setPickupError(null);
+            try {
+                const data = await fetchMyPickups(token);
+                if (!cancelled) setPickups(data);
+            } catch {
+                if (!cancelled) setPickupError('Failed to load pickups.');
+            } finally {
+                if (!cancelled) setPickupLoading(false);
+            }
+        };
+        run();
+        return () => { cancelled = true; };
     }, [token]);
 
+    useEffect(() => {
+        if (!token) return;
+        let cancelled = false;
+        const run = async () => {
+            setDeliveriesLoading(true); setDeliveriesError(null);
+            try {
+                const data = await fetchMyDeliveries(token);
+                if (!cancelled) setDeliveries(data);
+            } catch {
+                if (!cancelled) setDeliveriesError('Failed to load deliveries.');
+            } finally {
+                if (!cancelled) setDeliveriesLoading(false);
+            }
+        };
+        run();
+        return () => { cancelled = true; };
+    }, [token]);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { loadPickups(); }, [loadPickups]);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
 
     async function act(id: string, fn: () => Promise<void>, msg: string) {
         setBusyId(id);
@@ -339,92 +380,63 @@ export function CourierDashboard() {
                 {/* Content */}
                 <main className="mobile-content">
                     {toast && <div className="dashboard__toast">{toast}</div>}
-                    {view === 'pickups' && <PickupsPanel    {...pickupProps} />}
-                    {view === 'deliveries' && <DeliveriesPanel {...deliveryProps} />}
-                </main>
 
-                {/* Bottom tab bar */}
-                <nav className="mobile-tabs">
-                    <button
-                        className={`mobile-tab ${view === 'pickups' ? 'mobile-tab--active' : ''}`}
-                        onClick={() => setView('pickups')}
-                    >
-                        <svg width="22" height="22" viewBox="0 0 16 16" fill="none">
-                            <rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-                            <path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.4" />
-                        </svg>
-                        Pickups
-                        {pickups.length > 0 && (
-                            <span style={{
-                                background: 'var(--color-accent)', color: '#fff',
-                                borderRadius: '100px', fontSize: '0.6rem', fontWeight: 700,
-                                padding: '1px 6px', lineHeight: 1.5,
-                            }}>
-                                {pickups.length}
-                            </span>
-                        )}
-                    </button>
-                    <button
-                        className={`mobile-tab ${view === 'deliveries' ? 'mobile-tab--active' : ''}`}
-                        onClick={() => setView('deliveries')}
-                    >
-                        <svg width="22" height="22" viewBox="0 0 16 16" fill="none">
-                            <path d="M2 8h12M10 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Deliveries
-                        {deliveries.length > 0 && (
-                            <span style={{
-                                background: 'var(--color-accent)', color: '#fff',
-                                borderRadius: '100px', fontSize: '0.6rem', fontWeight: 700,
-                                padding: '1px 6px', lineHeight: 1.5,
-                            }}>
-                                {deliveries.length}
-                            </span>
-                        )}
-                    </button>
-                </nav>
+                    {/* Tab switcher */}
+                    <div className="mobile-tabs">
+                             <button className={`mobile-tab${view === 'pickups' ? ' mobile-tab--active' : ''}`}
+                                     onClick={() => setView('pickups')}>
+                                 📦 Pickups
+                             </button>
+                             <button className={`mobile-tab${view === 'deliveries' ? ' mobile-tab--active' : ''}`}
+                                     onClick={() => setView('deliveries')}>
+                                 🚚 Deliveries
+                             </button>
+                            <button className={`mobile-tab${view === 'history' ? ' mobile-tab--active' : ''}`}
+                                     onClick={() => setView('history')}>
+                                 📋 History
+                             </button>
+                         </div>
+
+                         {view === 'pickups'    && <PickupsPanel    {...pickupProps} />}
+                         {view === 'deliveries' && <DeliveriesPanel {...deliveryProps} />}
+                         {view === 'history'    && <CourierHistoryPage />}
+                </main>
             </div>
         );
     }
 
-    // ── Desktop layout (unchanged) ────────────────────────────────────────────
+    // Desktop layout
     return (
         <div className="dashboard">
             <aside className="sidebar">
-                <div className="sidebar__logo">
-                    <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
-                        <rect width="28" height="28" rx="6" fill="currentColor" />
-                        <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    Delivery
+                <div className="sidebar__top">
+                    <div className="sidebar__logo">
+                        <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
+                            <rect width="28" height="28" rx="6" fill="currentColor" />
+                            <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                        Delivery
+                    </div>
+                    <nav className="sidebar__nav">
+                        <button className={`sidebar__link${view === 'pickups' ? ' sidebar__link--active' : ''}`}
+                            onClick={() => setView('pickups')}>
+                            📦 Pickups
+                        </button>
+                        <button className={`sidebar__link${view === 'deliveries' ? ' sidebar__link--active' : ''}`}
+                            onClick={() => setView('deliveries')}>
+                            🚚 Deliveries
+                        </button>
+                        <button className={`sidebar__link${view === 'history' ? ' sidebar__link--active' : ''}`}
+                            onClick={() => setView('history')}>
+                            📋 History
+                        </button>
+                    </nav>
                 </div>
-                <span className="sidebar__role-badge">Courier</span>
-                <div className="sidebar__divider" />
-                <nav className="sidebar__nav">
-                    <button
-                        className={`sidebar__link ${view === 'pickups' ? 'sidebar__link--active' : ''}`}
-                        onClick={() => setView('pickups')}
-                    >
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-                            <path d="M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.4" />
-                        </svg>
-                        My Pickups
-                    </button>
-                    <button
-                        className={`sidebar__link ${view === 'deliveries' ? 'sidebar__link--active' : ''}`}
-                        onClick={() => setView('deliveries')}
-                    >
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path d="M2 8h12M10 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        My Deliveries
-                    </button>
-                </nav>
-                <div className="sidebar__bottom">
-                    <div className="sidebar__user">
-                        <span className="sidebar__avatar">{initials}</span>
-                        <span className="sidebar__username">{user?.firstName} {user?.lastName}</span>
+                <div className="sidebar__user">
+                    <div className="sidebar__avatar">{initials}</div>
+                    <div className="sidebar__user-info">
+                        <span className="sidebar__user-name">{user?.firstName} {user?.lastName}</span>
+                        <span className="sidebar__user-role">Courier</span>
                     </div>
                     <button className="sidebar__signout" onClick={handleSignOut}>Sign out</button>
                 </div>
@@ -434,6 +446,7 @@ export function CourierDashboard() {
                 {toast && <div className="dashboard__toast">{toast}</div>}
                 {view === 'pickups' && <PickupsPanel    {...pickupProps} />}
                 {view === 'deliveries' && <DeliveriesPanel {...deliveryProps} />}
+                {view === 'history' && <CourierHistoryPage />}
             </main>
         </div>
     );
@@ -545,9 +558,33 @@ interface DeliveriesPanelProps {
 }
 
 function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: DeliveriesPanelProps) {
+    const [postponingId, setPostponingId] = useState<string | null>(null);
+    // ID of the order waiting for cash-collection confirmation before marking delivered
+    const [collectConfirmOrderId, setCollectConfirmOrderId] = useState<string | null>(null);
+
     if (loading) return <div className="dashboard__loader">Loading deliveries…</div>;
     if (error) return <div className="dashboard__error">{error}</div>;
     if (!deliveries.length) return <div className="dashboard__empty">No active deliveries assigned to you.</div>;
+
+    // Returns true when the order requires cash collection confirmation before delivery
+    const needsCollectConfirm = (order: CourierOrder) =>
+        order.whoPaysForCompanyService === 'Recipient' && (
+            // Case 1: product unpaid — collect product amount + courier fee
+            (order.productPaymentStatus === 'NotPaid' &&
+                order.amountToCollectForPackage != null &&
+                order.amountToCollectForPackage > 0) ||
+            // Case 2: product already paid — collect courier fee only
+            (order.productPaymentStatus === 'Paid' &&
+                order.companyServicePrice > 0)
+        );
+
+    // Total amount the courier must collect for a given order
+    const collectTotal = (order: CourierOrder): number => {
+        if (order.productPaymentStatus === 'NotPaid' && order.amountToCollectForPackage != null) {
+            return order.amountToCollectForPackage + order.companyServicePrice;
+        }
+        return order.companyServicePrice;
+    };
 
     return (
         <div className="dashboard__section">
@@ -595,6 +632,15 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                                             : `⚠ Collect${order.whoPaysForCompanyService === 'Recipient' ? ' + courier fee' : ''}`}
                                     </span>
                                 </div>
+                                {/* Show COD amount prominently when applicable */}
+                                {needsCollectConfirm(order) && (
+                                    <div className="courier-card__row">
+                                        <span className="courier-card__label">💰 Collect</span>
+                                        <span className="courier-card__value" style={{ color: '#dc2626', fontWeight: 700 }}>
+                                            ₾{collectTotal(order).toFixed(2)}
+                                        </span>
+                                    </div>
+                                )}
                                 {order.deliveryDateFrom && order.deliveryDateTo && (
                                     <div className="courier-card__row">
                                         <span className="courier-card__label">📅 Window</span>
@@ -605,29 +651,311 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                                         </span>
                                     </div>
                                 )}
+                                {order.status === 'DeliveryPostponed' && order.postponeReason && (
+                                    <div className="courier-card__row">
+                                        <span className="courier-card__label">⏸ Postponed</span>
+                                        <span className="courier-card__value" style={{ color: '#f97316' }}>
+                                            {POSTPONE_REASON_LABELS[order.postponeReason]}
+                                        </span>
+                                    </div>
+                                )}
                                 {order.description && <div className="courier-card__note">{order.description}</div>}
                             </div>
                             <div className="courier-card__footer">
                                 {order.status === 'CourierAssignedToDeliver' && (
                                     <SwipeButton
-                                        label="📥 Swipe — Confirm Receipt"
+                                        label="🚗 Swipe — Picked Up, On My Way"
                                         variant="primary"
                                         disabled={isBusy}
-                                        onSwipe={() => onAct(order.id, () => markOrderReceived(token, order.id), 'Marked as received.')}
+                                        onSwipe={() => onAct(order.id, () => markOrderDelivering(token, order.id), 'On the way to recipient.')}
                                     />
                                 )}
-                                {order.status === 'CourierRecievedOrderToDeliver' && (
+                                {order.status === 'CourierDeliveringTheOrderToRecipient' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <SwipeButton
+                                            label="✅ Swipe — Delivered to Recipient"
+                                            variant="success"
+                                            disabled={isBusy}
+                                            onSwipe={() => {
+                                                // If cash collection is required, show confirmation first
+                                                if (needsCollectConfirm(order)) {
+                                                    setCollectConfirmOrderId(order.id);
+                                                } else {
+                                                    onAct(order.id, () => markOrderDelivered(token, order.id), 'Order delivered to recipient.');
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            disabled={isBusy}
+                                            onClick={() => setPostponingId(order.id)}
+                                            style={{
+                                                padding: '10px',
+                                                borderRadius: '8px',
+                                                border: '1px solid #f97316',
+                                                background: 'transparent',
+                                                color: '#f97316',
+                                                fontWeight: 600,
+                                                fontSize: '0.85rem',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            ⏸ Could Not Deliver — Postpone
+                                        </button>
+                                    </div>
+                                )}
+                                {order.status === 'DeliveryPostponed' && (
                                     <SwipeButton
-                                        label="✅ Swipe — Mark as Delivered"
-                                        variant="success"
+                                        label="🔄 Swipe — Retry Delivery"
+                                        variant="primary"
                                         disabled={isBusy}
-                                        onSwipe={() => onAct(order.id, () => markOrderDelivered(token, order.id), 'Order delivered to recipient.')}
+                                        onSwipe={() => onAct(order.id, () => retryDelivery(token, order.id), 'Retrying delivery.')}
                                     />
                                 )}
                             </div>
+
+                            {/* Cash collection confirmation modal */}
+                            {collectConfirmOrderId === order.id && (
+                                <CollectConfirmModal
+                                    order={order}
+                                    isBusy={isBusy}
+                                    onCancel={() => setCollectConfirmOrderId(null)}
+                                    onConfirm={() => {
+                                        setCollectConfirmOrderId(null);
+                                        onAct(order.id, () => markOrderDelivered(token, order.id), 'Order delivered to recipient.');
+                                    }}
+                                />
+                            )}
+
+                            {/* Postpone reason modal */}
+                            {postponingId === order.id && (
+                                <PostponeModal
+                                    isBusy={isBusy}
+                                    onCancel={() => setPostponingId(null)}
+                                    onConfirm={(reason) => {
+                                        setPostponingId(null);
+                                        onAct(order.id, () => postponeOrder(token, order.id, reason), 'Delivery postponed.');
+                                    }}
+                                />
+                            )}
                         </div>
                     );
                 })}
+            </div>
+        </div>
+    );
+}
+
+// ── CollectConfirmModal ───────────────────────────────────────────────────────
+// Shown before marking an order as delivered when cash collection is required.
+
+interface CollectConfirmModalProps {
+    order: CourierOrder;
+    isBusy: boolean;
+    onCancel: () => void;
+    onConfirm: () => void;
+}
+
+function CollectConfirmModal({ order, isBusy, onCancel, onConfirm }: CollectConfirmModalProps) {
+    const isCase1 = order.productPaymentStatus === 'NotPaid' &&
+        order.amountToCollectForPackage != null &&
+        order.amountToCollectForPackage > 0;
+
+    const total = isCase1
+        ? order.amountToCollectForPackage! + order.companyServicePrice
+        : order.companyServicePrice;
+
+    return (
+        <div style={{
+            position: 'absolute', inset: 0, zIndex: 10,
+            background: 'rgba(0,0,0,0.50)',
+            borderRadius: 'inherit',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
+        }}>
+            <div style={{
+                background: 'var(--color-bg)',
+                borderRadius: '14px',
+                padding: '24px 20px',
+                width: '100%',
+                maxWidth: '340px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.28)',
+                textAlign: 'center',
+            }}>
+                {/* Icon */}
+                <div style={{
+                    width: 52, height: 52,
+                    borderRadius: '50%',
+                    background: '#fef3c7',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.6rem',
+                    margin: '0 auto 14px',
+                }}>
+                    💰
+                </div>
+
+                <h3 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700 }}>
+                    Cash Collection Required
+                </h3>
+
+                <p style={{ margin: '0 0 12px', fontSize: '0.875rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                    Did you collect the following amount from the recipient?
+                </p>
+
+                {/* Breakdown for Case 1 (product unpaid + recipient pays fee) */}
+                {isCase1 && (
+                    <div style={{
+                        margin: '0 0 8px',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        background: 'var(--color-bg-2, #f9fafb)',
+                        border: '1px solid var(--color-border)',
+                        textAlign: 'left',
+                        fontSize: '0.85rem',
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: 'var(--color-text-muted)' }}>Product amount</span>
+                            <span style={{ fontWeight: 600 }}>₾{order.amountToCollectForPackage!.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--color-border)' }}>
+                            <span style={{ color: 'var(--color-text-muted)' }}>Courier fee</span>
+                            <span style={{ fontWeight: 600 }}>₾{order.companyServicePrice.toFixed(2)}</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Total amount highlight */}
+                <div style={{
+                    margin: '8px 0 20px',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    background: '#fef9c3',
+                    border: '1px solid #fde047',
+                    display: 'inline-block',
+                    width: '100%',
+                }}>
+                    <div style={{ fontSize: '0.75rem', color: '#92400e', marginBottom: 2, fontWeight: 600 }}>
+                        {isCase1 ? 'TOTAL TO COLLECT' : 'COURIER FEE TO COLLECT'}
+                    </div>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#92400e', letterSpacing: '-0.5px' }}>
+                        ₾{total.toFixed(2)}
+                    </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                        onClick={onCancel}
+                        disabled={isBusy}
+                        style={{
+                            flex: 1, padding: '11px', borderRadius: '8px',
+                            border: '1px solid var(--color-border)',
+                            background: 'transparent', cursor: 'pointer',
+                            fontSize: '0.875rem', fontWeight: 600,
+                        }}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        disabled={isBusy}
+                        onClick={onConfirm}
+                        style={{
+                            flex: 1, padding: '11px', borderRadius: '8px',
+                            border: 'none',
+                            background: '#10b981',
+                            color: '#fff',
+                            cursor: isBusy ? 'not-allowed' : 'pointer',
+                            fontWeight: 700, fontSize: '0.875rem',
+                            opacity: isBusy ? 0.6 : 1,
+                        }}
+                    >
+                        ✓ Yes, Collected
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── PostponeModal ─────────────────────────────────────────────────────────────
+
+interface PostponeModalProps {
+    isBusy: boolean;
+    onCancel: () => void;
+    onConfirm: (reason: PostponeReason) => void;
+}
+
+function PostponeModal({ isBusy, onCancel, onConfirm }: PostponeModalProps) {
+    const [selected, setSelected] = useState<PostponeReason | null>(null);
+
+    return (
+        <div style={{
+            position: 'absolute', inset: 0, zIndex: 10,
+            background: 'rgba(0,0,0,0.45)',
+            borderRadius: 'inherit',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
+        }}>
+            <div style={{
+                background: 'var(--color-bg)',
+                borderRadius: '12px',
+                padding: '20px',
+                width: '100%',
+                maxWidth: '340px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+            }}>
+                <h3 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 700 }}>
+                    Why could you not deliver?
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                    {(Object.keys(POSTPONE_REASON_LABELS) as PostponeReason[]).map(reason => (
+                        <button
+                            key={reason}
+                            onClick={() => setSelected(reason)}
+                            style={{
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: selected === reason
+                                    ? '2px solid var(--color-accent)'
+                                    : '1px solid var(--color-border)',
+                                background: selected === reason
+                                    ? 'var(--color-accent-dim)'
+                                    : 'transparent',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                fontSize: '0.875rem',
+                                fontWeight: selected === reason ? 600 : 400,
+                            }}
+                        >
+                            {POSTPONE_REASON_LABELS[reason]}
+                        </button>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        onClick={onCancel}
+                        style={{
+                            flex: 1, padding: '10px', borderRadius: '8px',
+                            border: '1px solid var(--color-border)',
+                            background: 'transparent', cursor: 'pointer',
+                            fontSize: '0.875rem',
+                        }}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        disabled={!selected || isBusy}
+                        onClick={() => selected && onConfirm(selected)}
+                        style={{
+                            flex: 1, padding: '10px', borderRadius: '8px',
+                            border: 'none',
+                            background: selected ? '#f97316' : 'var(--color-bg-3)',
+                            color: selected ? '#fff' : 'var(--color-text-muted)',
+                            cursor: selected ? 'pointer' : 'not-allowed',
+                            fontWeight: 700, fontSize: '0.875rem',
+                        }}
+                    >
+                        Confirm
+                    </button>
+                </div>
             </div>
         </div>
     );

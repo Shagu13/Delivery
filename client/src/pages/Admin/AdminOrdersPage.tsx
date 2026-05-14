@@ -252,9 +252,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
 
-  const [bulkMode,  setBulkMode]  = useState<'price' | 'salary' | null>(null);
-  const [bulkValue, setBulkValue] = useState('');
-  const [bulkBusy,  setBulkBusy]  = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkPrice,     setBulkPrice]     = useState('');
+  const [bulkSalary,    setBulkSalary]    = useState('');
+  const [bulkBusy,      setBulkBusy]      = useState(false);
   const [toast,     setToast]     = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -357,21 +358,28 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   });
 
   const handleBulkApply = async () => {
-    if (!bulkMode || !bulkValue || selected.size === 0) return;
-    const amount = parseFloat(bulkValue);
-    if (isNaN(amount) || amount < 0) return;
+    const price  = bulkPrice  ? parseFloat(bulkPrice)  : null;
+    const salary = bulkSalary ? parseFloat(bulkSalary) : null;
+    if ((price  !== null && (isNaN(price)  || price  < 0)) ||
+        (salary !== null && (isNaN(salary) || salary < 0))) return;
+    if (price === null && salary === null) return;
+    if (selected.size === 0) return;
+
     setBulkBusy(true);
     try {
       const ids = [...selected];
-      await Promise.all(ids.map(id =>
-        bulkMode === 'price'
-          ? setCompanyServicePrice(token, id, amount)
-          : setCourierSalary(token, id, amount)
-      ));
-      const label = bulkMode === 'price' ? t.aopBulkLabelPrice : t.aopBulkLabelSalary;
-      showToast(t.aopBulkSuccess(label, amount.toFixed(2), ids.length));
-      setBulkMode(null);
-      setBulkValue('');
+      await Promise.all(ids.flatMap(id => [
+        ...(price  !== null ? [setCompanyServicePrice(token, id, price)]  : []),
+        ...(salary !== null ? [setCourierSalary(token, id, salary)]       : []),
+      ]));
+      const parts = [
+        price  !== null ? `service price ₾${price.toFixed(2)}`  : '',
+        salary !== null ? `salary ₾${salary.toFixed(2)}`        : '',
+      ].filter(Boolean).join(' + ');
+      showToast(`Set ${parts} on ${ids.length} order${ids.length !== 1 ? 's' : ''}.`);
+      setShowBulkModal(false);
+      setBulkPrice('');
+      setBulkSalary('');
       setSelected(new Set());
       await Promise.all([
         load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page }),
@@ -384,7 +392,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     }
   };
 
-  const cancelBulk = () => { setBulkMode(null); setBulkValue(''); };
+  const cancelBulk = () => { setShowBulkModal(false); setBulkPrice(''); setBulkSalary(''); };
 
   const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced;
   const clearAll = () => {
@@ -515,15 +523,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             {t.aopNSelected(selected.size)}
           </span>
 
-          {bulkMode === null && (
+          {!showBulkModal && (
             <>
               <button className="aop-bulk-btn aop-bulk-btn--price"
-                onClick={() => { setBulkMode('price'); setBulkValue(''); }}>
-                {t.aopSetSvcPrice}
-              </button>
-              <button className="aop-bulk-btn aop-bulk-btn--salary"
-                onClick={() => { setBulkMode('salary'); setBulkValue(''); }}>
-                {t.aopSetSalary}
+                onClick={() => setShowBulkModal(true)}>
+                💰 Set Prices
               </button>
               <button className="aop-bulk-btn aop-bulk-btn--ghost"
                 onClick={() => setSelected(new Set())}>
@@ -532,27 +536,32 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             </>
           )}
 
-          {bulkMode !== null && (
+          {showBulkModal && (
             <div className="aop-bulk-input-row">
-              <span className="aop-bulk-label">
-                {bulkMode === 'price' ? t.aopBulkLabelPrice : t.aopBulkLabelSalary}
-                {' '}{t.aopBulkFor(selected.size)}
-              </span>
+              <span className="aop-bulk-label">Service Price</span>
               <div className="aop-bulk-input-wrap">
                 <span className="aop-bulk-currency">₾</span>
                 <input
                   className="aop-bulk-input"
-                  type="number" min="0" step="0.01" placeholder="0.00"
-                  value={bulkValue} autoFocus
-                  onChange={e => setBulkValue(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter')  void handleBulkApply();
-                    if (e.key === 'Escape') cancelBulk();
-                  }}
+                  type="number" min="0" step="0.01" placeholder="unchanged"
+                  value={bulkPrice} autoFocus
+                  onChange={e => setBulkPrice(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') cancelBulk(); }}
+                />
+              </div>
+              <span className="aop-bulk-label" style={{ marginLeft: 8 }}>Courier Salary</span>
+              <div className="aop-bulk-input-wrap">
+                <span className="aop-bulk-currency">₾</span>
+                <input
+                  className="aop-bulk-input"
+                  type="number" min="0" step="0.01" placeholder="unchanged"
+                  value={bulkSalary}
+                  onChange={e => setBulkSalary(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') void handleBulkApply(); if (e.key === 'Escape') cancelBulk(); }}
                 />
               </div>
               <button className="aop-bulk-btn aop-bulk-btn--apply"
-                disabled={bulkBusy || !bulkValue} onClick={handleBulkApply}>
+                disabled={bulkBusy || (!bulkPrice && !bulkSalary)} onClick={handleBulkApply}>
                 {bulkBusy ? t.aopSaving : t.aopApply}
               </button>
               <button className="aop-bulk-btn aop-bulk-btn--ghost"

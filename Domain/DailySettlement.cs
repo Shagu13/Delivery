@@ -17,7 +17,7 @@ public class DailySettlement
     /// <summary>
     /// Total packages the courier picked up from senders on this day.
     /// Populated by summing <see cref="GroupOrder.NumberOfPackages"/> across all
-    /// GroupOrders the courier picked up (status reached CourierDeliveringToWarehouse) on this day.
+    /// GroupOrders the courier picked up on this day.
     /// </summary>
     public int TotalOrdersPickedUp { get; set; } = 0;
 
@@ -48,6 +48,13 @@ public class DailySettlement
     /// Sum of CourierSalary across all delivered orders.
     /// </summary>
     public decimal TotalCourierSalary { get; set; } = 0;
+
+    /// <summary>
+    /// How much cash the courier must transfer to the company at end of day.
+    /// TotalAmountOfCashCollected - TotalCourierSalary.
+    /// The courier keeps their salary from the collected cash and hands over the rest.
+    /// </summary>
+    public decimal TotalCourierTransferToCompany { get; set; } = 0;
 
     // ── Meta ─────────────────────────────────────────────────────────────────
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

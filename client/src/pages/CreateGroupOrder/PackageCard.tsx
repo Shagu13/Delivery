@@ -7,7 +7,7 @@ interface PackageCardProps {
   data: OrderItemRequest;
   errors: ValidationErrors;
   canRemove: boolean;
-  onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean) => void;
+  onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
   onRemove: (index: number) => void;
 }
 
@@ -21,6 +21,11 @@ export function PackageCard({
 }: PackageCardProps) {
   const fieldError = (field: string) => errors[`orders[${index}].${field}`];
 
+  // Whether the COD collection amount field should be shown
+  const showCollectAmount =
+    data.productPaymentStatus === 'NotPaid' &&
+    data.whoPaysForCompanyService === 'Recipient';
+
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCityChange = (cityName: string) => {
     onChange(index, 'recipientCity', cityName);
@@ -29,6 +34,22 @@ export function PackageCard({
 
   const handleDistrictChange = (districtName: string) => {
     onChange(index, 'recipientDistrict', districtName);
+  };
+
+  const handlePaymentStatusChange = (value: string) => {
+    onChange(index, 'productPaymentStatus', value);
+    // Clear amount when conditions no longer apply
+    if (value !== 'NotPaid') {
+      onChange(index, 'amountToCollectForPackage', 0);
+    }
+  };
+
+  const handleServicePayerChange = (value: string) => {
+    onChange(index, 'whoPaysForCompanyService', value);
+    // Clear amount when conditions no longer apply
+    if (value !== 'Recipient') {
+      onChange(index, 'amountToCollectForPackage', 0);
+    }
   };
 
   return (
@@ -139,7 +160,7 @@ export function PackageCard({
               <select
                 className="form-field__input"
                 value={data.productPaymentStatus}
-                onChange={e => onChange(index, 'productPaymentStatus', e.target.value)}
+                onChange={e => handlePaymentStatusChange(e.target.value)}
               >
                 <option value="NotPaid">Not Paid</option>
                 <option value="Paid">Paid</option>
@@ -153,13 +174,41 @@ export function PackageCard({
               <select
                 className="form-field__input"
                 value={data.whoPaysForCompanyService}
-                onChange={e => onChange(index, 'whoPaysForCompanyService', e.target.value)}
+                onChange={e => handleServicePayerChange(e.target.value)}
               >
                 <option value="Sender">Sender</option>
                 <option value="Recipient">Recipient</option>
               </select>
             </div>
           </div>
+
+          {/* COD collection amount — only shown when recipient pays and product is not pre-paid */}
+          {showCollectAmount && (
+            <div className="form-field">
+              <label className="form-field__label">
+                Amount to Collect from Recipient (₾){' '}
+                <span className="form-field__required">*</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="form-field__input"
+                value={data.amountToCollectForPackage ?? ''}
+                onChange={e => {
+                  const val = parseFloat(e.target.value);
+                  onChange(index, 'amountToCollectForPackage', isNaN(val) ? 0 : val);
+                }}
+                placeholder="e.g. 45.00"
+              />
+              <p className="form-field__hint" style={{ marginTop: 4, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                💰 The courier will collect this amount + the courier fee from the recipient upon delivery.
+              </p>
+              {fieldError('amountToCollectForPackage') && (
+                <p className="form-field__error">{fieldError('amountToCollectForPackage')}</p>
+              )}
+            </div>
+          )}
 
           {/* Fragile toggle */}
           <label className="package-card__fragile-toggle">

@@ -65,7 +65,8 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
 
     const { status } = groupOrder;
     const isCancelledOrDone =
-        status === 'CancelledByAdmin' || status === 'CancelledBySender' || status === 'OrderNotAccepted';
+        status === 'CancelledByAdmin' || status === 'CancelledBySender' ||
+        status === 'OrderNotAccepted' || status === 'AllDelivered';
 
     return (
         <div className="go-actions" onClick={e => e.stopPropagation()}>

@@ -37,6 +37,13 @@ public class Order
     /// <summary>Which party pays the company's courier service fee (საკურიერო).</summary>
     public ServicePayer WhoPaysForCompanyService { get; set; } = ServicePayer.Sender;
 
+    /// <summary>
+    /// The cash amount the courier must collect from the recipient for the product itself (COD).
+    /// Only meaningful when ProductPaymentStatus == NotPaid AND WhoPaysForCompanyService == Recipient.
+    /// Null when not applicable.
+    /// </summary>
+    public decimal? AmountToCollectForPackage { get; set; }
+
     // ── Financials (admin-managed) ───────────────────────────────────────────
     /// <summary>
     /// The price the company charges for delivering this order.
@@ -77,7 +84,7 @@ public class Order
 
     /// <summary>
     /// Auto-filled when courier confirms receipt of a non-Tbilisi order
-    /// (status → CourierRecievedOrderToDeliver). Set to received date + 1 day.
+    /// (status → CourierDeliveringTheOrderToRecipient). Set to received date + 1 day.
     /// </summary>
     public DateTime? DeliveryDateFrom { get; set; }
 
@@ -86,6 +93,13 @@ public class Order
     /// Set to received date + 4 days.
     /// </summary>
     public DateTime? DeliveryDateTo { get; set; }
+
+    // ── Postpone info ─────────────────────────────────────────────────────────
+    /// <summary>Reason the courier could not complete the last delivery attempt.</summary>
+    public PostponeReason? PostponeReason { get; set; }
+
+    /// <summary>Timestamp of the most recent postponement.</summary>
+    public DateTime? PostponedAt { get; set; }
 
     // ── Navigation ───────────────────────────────────────────────────────────
     public ICollection<TrackingEvent> TrackingEvents { get; set; } = new List<TrackingEvent>();

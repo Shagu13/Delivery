@@ -13,6 +13,12 @@ public sealed record SettlementPreviewDto(
     decimal  TotalCourierSalary,
     decimal  TotalCompanyNetIncome,
 
+    /// <summary>
+    /// How much cash the courier must transfer to the company at end of day.
+    /// TotalAmountOfCashCollected - TotalCourierSalary.
+    /// </summary>
+    decimal  TotalCourierTransferToCompany,
+
     IReadOnlyList<SettlementOrderLineDto> Orders,
 
     /// <summary>Tracking numbers of delivered orders that still have missing/zero financial data.</summary>

@@ -10,7 +10,7 @@ public sealed class SettlementsController : BaseController
     // ── GET /api/settlements/preview?courierId={id}&date={yyyy-MM-dd}  (Admin) ─
     /// <summary>
     /// Returns aggregated order data for a courier on a given date, ready to
-    /// be reviewed and edited before creating a settlement record.
+    /// be reviewed before creating a settlement record.
     /// </summary>
     [HttpGet("preview")]
     [Authorize(Roles = "Admin")]
@@ -27,9 +27,10 @@ public sealed class SettlementsController : BaseController
 
     // ── POST /api/settlements  (Admin) ────────────────────────────────────────
     /// <summary>
-    /// Creates a DailySettlement record from admin-confirmed (and potentially
-    /// edited) totals. All delivered orders for the day must already have full
-    /// financial data (CourierSalary, CompanyServicePrice, CompanyRevenue > 0).
+    /// Creates a DailySettlement record for the given courier and date.
+    /// All financial totals (cash collected, courier salary, company revenue,
+    /// transfer to company) are computed server-side from delivered orders —
+    /// the caller only needs to supply the courier ID and date.
     /// </summary>
     [HttpPost]
     [Authorize(Roles = "Admin")]
@@ -40,16 +41,8 @@ public sealed class SettlementsController : BaseController
         [FromBody] CreateSettlementRequest request,
         CancellationToken ct)
     {
-        var id = await Sender.Send(new CreateDailySettlementCommand(
-            CourierId:                  request.CourierId,
-            Date:                       request.Date,
-            TotalOrdersPickedUp:        request.TotalOrdersPickedUp,
-            TotalOrdersDelivered:       request.TotalOrdersDelivered,
-            TotalAmountOfCashCollected: request.TotalAmountOfCashCollected,
-            TotalCompanyServiceRevenue: request.TotalCompanyServiceRevenue,
-            TotalCourierSalary:         request.TotalCourierSalary,
-            TotalCompanyNetIncome:      request.TotalCompanyNetIncome
-        ), ct);
+        var id = await Sender.Send(
+            new CreateDailySettlementCommand(request.CourierId, request.Date), ct);
 
         return CreatedAtAction(
             nameof(GetPreview),
@@ -61,11 +54,5 @@ public sealed class SettlementsController : BaseController
 // ── Local request model ────────────────────────────────────────────────────────
 public sealed record CreateSettlementRequest(
     Guid     CourierId,
-    DateOnly Date,
-    int      TotalOrdersPickedUp,
-    int      TotalOrdersDelivered,
-    decimal? TotalAmountOfCashCollected,
-    decimal  TotalCompanyServiceRevenue,
-    decimal  TotalCourierSalary,
-    decimal  TotalCompanyNetIncome
+    DateOnly Date
 );

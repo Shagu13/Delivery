@@ -10,15 +10,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-    public DbSet<Courier>          Couriers         => Set<Courier>();
-    public DbSet<Customer>         Customers        => Set<Customer>();
-    public DbSet<Warehouse>        Warehouses       => Set<Warehouse>();
-    public DbSet<GroupOrder>       GroupOrders      => Set<GroupOrder>();
-    public DbSet<Order>            Orders           => Set<Order>();
-    public DbSet<TrackingEvent>    TrackingEvents   => Set<TrackingEvent>();
-    public DbSet<City>             Cities           => Set<City>();
-    public DbSet<District>         Districts        => Set<District>();
-    public DbSet<DailySettlement>  DailySettlements => Set<DailySettlement>();
+    public DbSet<Courier> Couriers => Set<Courier>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
+    public DbSet<GroupOrder> GroupOrders => Set<GroupOrder>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<TrackingEvent> TrackingEvents => Set<TrackingEvent>();
+    public DbSet<City> Cities => Set<City>();
+    public DbSet<District> Districts => Set<District>();
+    public DbSet<DailySettlement> DailySettlements => Set<DailySettlement>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -137,6 +137,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(o => o.CompanyServicePrice).HasColumnType("decimal(18,2)");
             e.Property(o => o.CompanyRevenue).HasColumnType("decimal(18,2)");
             e.Property(o => o.AmountOfCashCollected).HasColumnType("decimal(18,2)");
+            e.Property(o => o.AmountToCollectForPackage).HasColumnType("decimal(18,2)");
         });
 
         // ── DailySettlement ───────────────────────────────────────────────────
@@ -152,6 +153,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(d => d.TotalCompanyServiceRevenue).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCompanyNetIncome).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCourierSalary).HasColumnType("decimal(18,2)");
+            e.Property(d => d.TotalCourierTransferToCompany).HasColumnType("decimal(18,2)");
         });
 
         // ── TrackingEvent ─────────────────────────────────────────────────────

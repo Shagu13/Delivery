@@ -62,6 +62,7 @@ public sealed class GroupOrdersController : BaseController
                         o.IsFragile,
                         o.ProductPaymentStatus,
                         o.WhoPaysForCompanyService,
+                        o.AmountToCollectForPackage,
                         o.CompanyServicePrice))
                     .ToList(),
                 CustomerId: customerId
@@ -243,6 +244,16 @@ public sealed class GroupOrdersController : BaseController
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         await Sender.Send(new MarkDeliveredToWarehouseCommand(id, userId), ct);
         return NoContent();
+    }
+
+    [HttpGet("my-pickup-history")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(typeof(IReadOnlyList<CourierPickupHistoryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyPickupHistory(CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var result = await Sender.Send(new GetCourierPickupHistoryQuery(userId), ct);
+        return Ok(result);
     }
 
     // ══════════════════════════════════════════════════════════════════════════

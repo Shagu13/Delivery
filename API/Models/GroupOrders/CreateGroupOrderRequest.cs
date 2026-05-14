@@ -33,5 +33,6 @@ public sealed record OrderItemRequest(
     /// actual sub-district chosen in the third picker.
     /// </summary>
     bool IsDeliveryAddressInCityItself = false,
+    decimal? AmountToCollectForPackage = null,
     decimal? CompanyServicePrice = null
 );

@@ -12,6 +12,11 @@ export interface OrderItemRequest {
     isFragile: boolean;
     productPaymentStatus: PaymentStatus;
     whoPaysForCompanyService: ServicePayer;
+    /**
+     * Cash amount the courier must collect from the recipient for the product (COD).
+     * Only required when productPaymentStatus === 'NotPaid' AND whoPaysForCompanyService === 'Recipient'.
+     */
+    amountToCollectForPackage?: number;
     companyServicePrice?: number; // admin override — omit to use auto-pricing
 }
 

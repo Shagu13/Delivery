@@ -87,13 +87,14 @@ file static class OrderCourierGuard
     }
 }
 
-// ── MarkOrderReceived ─────────────────────────────────────────────────────────
-public sealed class MarkOrderReceivedCommandHandler : IRequestHandler<MarkOrderReceivedCommand>
+// ── MarkOrderDelivering ───────────────────────────────────────────────────────
+// Courier picks up the order from warehouse and starts delivering.
+public sealed class MarkOrderDeliveringCommandHandler : IRequestHandler<MarkOrderDeliveringCommand>
 {
     private readonly IAppDbContext _context;
-    public MarkOrderReceivedCommandHandler(IAppDbContext context) => _context = context;
+    public MarkOrderDeliveringCommandHandler(IAppDbContext context) => _context = context;
 
-    public async Task Handle(MarkOrderReceivedCommand request, CancellationToken cancellationToken)
+    public async Task Handle(MarkOrderDeliveringCommand request, CancellationToken cancellationToken)
     {
         var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
             _context, request.OrderId, request.CourierUserId, cancellationToken);
@@ -101,17 +102,17 @@ public sealed class MarkOrderReceivedCommandHandler : IRequestHandler<MarkOrderR
         if (order.Status != OrderStatus.CourierAssignedToDeliver)
             throw new ConflictException($"Expected CourierAssignedToDeliver. Current: {order.Status}.");
 
-        var receivedAt = DateTime.UtcNow;
+        var pickedUpAt = DateTime.UtcNow;
 
-        order.Status                 = OrderStatus.CourierRecievedOrderToDeliver;
-        order.PickedUpFromWarehouseAt = receivedAt;
+        order.Status                 = OrderStatus.CourierDeliveringTheOrderToRecipient;
+        order.PickedUpFromWarehouseAt = pickedUpAt;
 
         // Auto-fill delivery window for non-Tbilisi orders
-        const string tbilisi = "Tbilisi";   
+        const string tbilisi = "Tbilisi";
         if (!order.RecipientCity.Equals(tbilisi, StringComparison.OrdinalIgnoreCase))
         {
-            order.DeliveryDateFrom = receivedAt.Date.AddDays(1);
-            order.DeliveryDateTo   = receivedAt.Date.AddDays(4);
+            order.DeliveryDateFrom = pickedUpAt.Date.AddDays(1);
+            order.DeliveryDateTo   = pickedUpAt.Date.AddDays(4);
         }
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -119,8 +120,6 @@ public sealed class MarkOrderReceivedCommandHandler : IRequestHandler<MarkOrderR
 }
 
 // ── MarkOrderDelivered ────────────────────────────────────────────────────────
-// NOTE: The intermediate "OrderIsBeingDeliveredToRecipient" step has been removed.
-// Courier goes directly from CourierRecievedOrderToDeliver → DeliveredToRecipient.
 public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrderDeliveredCommand>
 {
     private readonly IAppDbContext _context;
@@ -131,11 +130,75 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
             _context, request.OrderId, request.CourierUserId, cancellationToken);
 
-        if (order.Status != OrderStatus.CourierRecievedOrderToDeliver)
-            throw new ConflictException($"Expected CourierRecievedOrderToDeliver. Current: {order.Status}.");
+        if (order.Status != OrderStatus.CourierDeliveringTheOrderToRecipient)
+            throw new ConflictException($"Expected CourierDeliveringTheOrderToRecipient. Current: {order.Status}.");
 
-        order.Status      = OrderStatus.DeliveredToRecipient;
-        order.DeliveredAt = DateTime.UtcNow;
+        order.Status        = OrderStatus.DeliveredToRecipient;
+
+        // Auto-populate AmountOfCashCollected when the recipient is paying cash on delivery.
+        // Case 1 — product unpaid, recipient pays fee: collect product amount + courier fee.
+        // Case 2 — product pre-paid, recipient pays fee only: collect courier fee.
+        if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
+        {
+            if (order.ProductPaymentStatus == PaymentStatus.NotPaid &&
+                order.AmountToCollectForPackage.HasValue)
+            {
+                order.AmountOfCashCollected = order.AmountToCollectForPackage.Value
+                                            + order.CompanyServicePrice;
+            }
+            else if (order.ProductPaymentStatus == PaymentStatus.Paid)
+            {
+                order.AmountOfCashCollected = order.CompanyServicePrice;
+            }
+        }
+
+        order.DeliveredAt    = DateTime.UtcNow;
+        order.PostponeReason = null;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Auto-close the parent GroupOrder when all packages are done
+        await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId, cancellationToken);
+    }
+}
+
+// ── PostponeOrder ─────────────────────────────────────────────────────────────
+public sealed class PostponeOrderCommandHandler : IRequestHandler<PostponeOrderCommand>
+{
+    private readonly IAppDbContext _context;
+    public PostponeOrderCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(PostponeOrderCommand request, CancellationToken cancellationToken)
+    {
+        var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
+            _context, request.OrderId, request.CourierUserId, cancellationToken);
+
+        if (order.Status != OrderStatus.CourierDeliveringTheOrderToRecipient)
+            throw new ConflictException($"Expected CourierDeliveringTheOrderToRecipient. Current: {order.Status}.");
+
+        order.Status        = OrderStatus.DeliveryPostponed;
+        order.PostponeReason = request.Reason;
+        order.PostponedAt   = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}
+
+// ── RetryDelivery ─────────────────────────────────────────────────────────────
+public sealed class RetryDeliveryCommandHandler : IRequestHandler<RetryDeliveryCommand>
+{
+    private readonly IAppDbContext _context;
+    public RetryDeliveryCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(RetryDeliveryCommand request, CancellationToken cancellationToken)
+    {
+        var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
+            _context, request.OrderId, request.CourierUserId, cancellationToken);
+
+        if (order.Status != OrderStatus.DeliveryPostponed)
+            throw new ConflictException($"Expected DeliveryPostponed. Current: {order.Status}.");
+
+        order.Status        = OrderStatus.CourierDeliveringTheOrderToRecipient;
+        order.PostponeReason = null;
+        order.PostponedAt   = null;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
@@ -161,6 +224,42 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
 
         order.Status = OrderStatus.CancelledByAdmin;
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Auto-close the parent GroupOrder when all packages are done
+        await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId, cancellationToken);
+    }
+}
+
+// ── Shared: auto-close GroupOrder ─────────────────────────────────────────────
+file static class GroupOrderCloser
+{
+    private static readonly OrderStatus[] TerminalStatuses =
+    {
+        OrderStatus.DeliveredToRecipient,
+        OrderStatus.CancelledByAdmin,
+        OrderStatus.CancelledBySender,
+    };
+
+    internal static async Task TryCloseGroupOrderAsync(
+        IAppDbContext context,
+        Guid groupOrderId,
+        CancellationToken ct)
+    {
+        var allStatuses = await context.Orders
+            .Where(o => o.GroupOrderId == groupOrderId)
+            .Select(o => o.Status)
+            .ToListAsync(ct);
+
+        if (allStatuses.Count == 0) return;
+        if (!allStatuses.All(s => TerminalStatuses.Contains(s))) return;
+
+        var groupOrder = await context.GroupOrders
+            .FirstOrDefaultAsync(g => g.Id == groupOrderId, ct);
+
+        if (groupOrder is null || groupOrder.Status == OrderStatus.AllDelivered) return;
+
+        groupOrder.Status = OrderStatus.AllDelivered;
+        await context.SaveChangesAsync(ct);
     }
 }
 

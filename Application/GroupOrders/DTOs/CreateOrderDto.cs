@@ -17,5 +17,6 @@ public sealed record CreateOrderDto(
     bool           IsFragile,
     PaymentStatus  ProductPaymentStatus,
     ServicePayer   WhoPaysForCompanyService,
-    decimal?       CompanyServicePrice = null   // explicit override; null = use auto-pricing
+    decimal?       AmountToCollectForPackage = null, // amount courier must collect from recipient (COD)
+    decimal?       CompanyServicePrice = null        // explicit override; null = use auto-pricing
 );

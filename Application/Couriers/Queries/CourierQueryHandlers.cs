@@ -107,11 +107,12 @@ public sealed class GetCourierOrdersQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CourierUserId, cancellationToken)
             ?? throw new NotFoundException("Courier", request.CourierUserId);
 
-        // OrderIsBeingDeliveredToRecipient removed — only two active last-mile statuses remain
+        // Active last-mile statuses shown on the courier dashboard
         var activeStatuses = new[]
         {
             OrderStatus.CourierAssignedToDeliver,
-            OrderStatus.CourierRecievedOrderToDeliver,
+            OrderStatus.CourierDeliveringTheOrderToRecipient,
+            OrderStatus.DeliveryPostponed,
         };
 
         var orders = await _context.Orders
@@ -134,11 +135,15 @@ public sealed class GetCourierOrdersQueryHandler
             Status:                  o.Status,
             ProductPaymentStatus:    o.ProductPaymentStatus,
             WhoPaysForCompanyService: o.WhoPaysForCompanyService,
+            AmountToCollectForPackage: o.AmountToCollectForPackage,
+            CompanyServicePrice:     o.CompanyServicePrice,
             CreatedAt:               o.CreatedAt,
             PickedUpFromWarehouseAt: o.PickedUpFromWarehouseAt,
             DeliveredAt:             o.DeliveredAt,
             DeliveryDateFrom:        o.DeliveryDateFrom,
-            DeliveryDateTo:          o.DeliveryDateTo
+            DeliveryDateTo:          o.DeliveryDateTo,
+            PostponeReason:          o.PostponeReason,
+            PostponedAt:             o.PostponedAt
         )).ToList();
     }
 }

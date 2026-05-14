@@ -16,30 +16,8 @@ interface Props {
     token: string;
 }
 
-interface Totals {
-    totalOrdersPickedUp: string;
-    totalOrdersDelivered: string;
-    totalAmountOfCashCollected: string;
-    totalCompanyServiceRevenue: string;
-    totalCourierSalary: string;
-    totalCompanyNetIncome: string;
-}
-
 function todayIso(): string {
     return new Date().toISOString().slice(0, 10);
-}
-
-function toTotals(p: SettlementPreview): Totals {
-    return {
-        totalOrdersPickedUp:        String(p.totalOrdersPickedUp),
-        totalOrdersDelivered:       String(p.totalOrdersDelivered),
-        totalAmountOfCashCollected: p.totalAmountOfCashCollected > 0
-            ? p.totalAmountOfCashCollected.toFixed(2)
-            : '',
-        totalCompanyServiceRevenue: p.totalCompanyServiceRevenue.toFixed(2),
-        totalCourierSalary:         p.totalCourierSalary.toFixed(2),
-        totalCompanyNetIncome:      p.totalCompanyNetIncome.toFixed(2),
-    };
 }
 
 export function SettlementModal({
@@ -50,23 +28,20 @@ export function SettlementModal({
     courierFullName,
     token,
 }: Props) {
-    const [date,     setDate]     = useState(todayIso());
-    const [preview,  setPreview]  = useState<SettlementPreview | null>(null);
-    const [totals,   setTotals]   = useState<Totals | null>(null);
-    const [loading,  setLoading]  = useState(false);
-    const [saving,   setSaving]   = useState(false);
-    const [error,    setError]    = useState<string | null>(null);
+    const [date,    setDate]    = useState(todayIso());
+    const [preview, setPreview] = useState<SettlementPreview | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [saving,  setSaving]  = useState(false);
+    const [error,   setError]   = useState<string | null>(null);
 
     // ── Fetch preview whenever date changes ───────────────────────────────────
     const loadPreview = useCallback(async (d: string) => {
         setLoading(true);
         setError(null);
         setPreview(null);
-        setTotals(null);
         try {
             const data = await fetchSettlementPreview(courierId, d, token);
             setPreview(data);
-            setTotals(toTotals(data));
         } catch (err) {
             setError(err instanceof SettlementApiError ? err.message : 'Failed to load preview.');
         } finally {
@@ -92,26 +67,12 @@ export function SettlementModal({
         loadPreview(d);
     };
 
-    const handleTotalChange = (field: keyof Totals, value: string) => {
-        setTotals(prev => prev ? { ...prev, [field]: value } : prev);
-    };
-
     const handleSave = async () => {
-        if (!totals || !preview) return;
+        if (!preview) return;
         setSaving(true);
         setError(null);
         try {
-            const cashStr = totals.totalAmountOfCashCollected.trim();
-            await createSettlement({
-                courierId,
-                date,
-                totalOrdersPickedUp:        parseInt(totals.totalOrdersPickedUp, 10)  || 0,
-                totalOrdersDelivered:       parseInt(totals.totalOrdersDelivered, 10) || 0,
-                totalAmountOfCashCollected: cashStr ? parseFloat(cashStr) : null,
-                totalCompanyServiceRevenue: parseFloat(totals.totalCompanyServiceRevenue) || 0,
-                totalCourierSalary:         parseFloat(totals.totalCourierSalary)         || 0,
-                totalCompanyNetIncome:      parseFloat(totals.totalCompanyNetIncome)       || 0,
-            }, token);
+            await createSettlement({ courierId, date }, token);
             onCreated();
             onClose();
         } catch (err) {
@@ -188,57 +149,66 @@ export function SettlementModal({
                         </div>
                     )}
 
-                    {!loading && preview && totals && (
+                    {!loading && preview && (
                         <>
-                            {/* ── Editable totals ──────────────────────────── */}
+                            {/* ── Computed totals (read-only) ───────────────── */}
                             <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Settlement Totals — editable</legend>
+                                <legend className="modal__legend">Settlement Totals — computed from orders</legend>
                                 <div className="settlement-grid">
-                                    <SettlementField
+                                    <StatCard
                                         label="Packages Picked Up"
-                                        hint="Sum of GroupOrder.NumberOfPackages"
-                                        type="number"
-                                        value={totals.totalOrdersPickedUp}
-                                        onChange={v => handleTotalChange('totalOrdersPickedUp', v)}
+                                        hint="Sum of GroupOrder packages"
+                                        value={String(preview.totalOrdersPickedUp)}
                                     />
-                                    <SettlementField
+                                    <StatCard
                                         label="Orders Delivered"
-                                        hint="Count of DeliveredToRecipient orders"
-                                        type="number"
-                                        value={totals.totalOrdersDelivered}
-                                        onChange={v => handleTotalChange('totalOrdersDelivered', v)}
+                                        hint="DeliveredToRecipient count"
+                                        value={String(preview.totalOrdersDelivered)}
                                     />
-                                    <SettlementField
-                                        label="Cash Collected (₾)"
-                                        hint="Leave blank if no COD orders"
-                                        type="number"
-                                        value={totals.totalAmountOfCashCollected}
-                                        onChange={v => handleTotalChange('totalAmountOfCashCollected', v)}
-                                        placeholder="0.00"
+                                    <StatCard
+                                        label="Cash Collected"
+                                        hint="Sum of AmountOfCashCollected"
+                                        value={preview.totalAmountOfCashCollected > 0
+                                            ? `₾${preview.totalAmountOfCashCollected.toFixed(2)}`
+                                            : '—'}
                                     />
-                                    <SettlementField
-                                        label="Service Revenue (₾)"
+                                    <StatCard
+                                        label="Service Revenue"
                                         hint="Sum of CompanyServicePrice"
-                                        type="number"
-                                        value={totals.totalCompanyServiceRevenue}
-                                        onChange={v => handleTotalChange('totalCompanyServiceRevenue', v)}
+                                        value={`₾${preview.totalCompanyServiceRevenue.toFixed(2)}`}
                                     />
-                                    <SettlementField
-                                        label="Courier Salary (₾)"
+                                    <StatCard
+                                        label="Courier Salary"
                                         hint="Sum of CourierSalary"
-                                        type="number"
-                                        value={totals.totalCourierSalary}
-                                        onChange={v => handleTotalChange('totalCourierSalary', v)}
+                                        value={`₾${preview.totalCourierSalary.toFixed(2)}`}
+                                        accent="orange"
                                     />
-                                    <SettlementField
-                                        label="Company Net Income (₾)"
+                                    <StatCard
+                                        label="Company Net Income"
                                         hint="Revenue − Salary"
-                                        type="number"
-                                        value={totals.totalCompanyNetIncome}
-                                        onChange={v => handleTotalChange('totalCompanyNetIncome', v)}
+                                        value={`₾${preview.totalCompanyNetIncome.toFixed(2)}`}
+                                        accent={preview.totalCompanyNetIncome >= 0 ? 'green' : 'red'}
                                     />
                                 </div>
                             </fieldset>
+
+                            {/* ── Transfer to company highlight ─────────────── */}
+                            <div className="settlement-transfer-card">
+                                <div className="settlement-transfer-card__left">
+                                    <span className="settlement-transfer-card__icon">
+                                        <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                                            <path d="M2 8h12M10 5l4 3-4 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    </span>
+                                    <div>
+                                        <p className="settlement-transfer-card__label">Courier Transfer to Company</p>
+                                        <p className="settlement-transfer-card__hint">Cash Collected − Courier Salary</p>
+                                    </div>
+                                </div>
+                                <span className={`settlement-transfer-card__value${preview.totalCourierTransferToCompany < 0 ? ' settlement-transfer-card__value--negative' : ''}`}>
+                                    ₾{preview.totalCourierTransferToCompany.toFixed(2)}
+                                </span>
+                            </div>
 
                             {/* ── Orders table ─────────────────────────────── */}
                             {preview.orders.length > 0 && (
@@ -262,15 +232,15 @@ export function SettlementModal({
                                             </thead>
                                             <tbody>
                                                 {preview.orders.map(o => {
-                                                    const incomplete =
+                                                    const inc =
                                                         !o.courierSalary || o.courierSalary <= 0 ||
                                                         o.companyServicePrice <= 0 ||
                                                         o.companyRevenue == null;
                                                     return (
-                                                        <tr key={o.id} style={incomplete ? { background: 'rgba(239,68,68,0.06)' } : undefined}>
+                                                        <tr key={o.id} style={inc ? { background: 'rgba(239,68,68,0.06)' } : undefined}>
                                                             <td>
                                                                 <span className="tn-badge">{o.trackingNumber}</span>
-                                                                {incomplete && (
+                                                                {inc && (
                                                                     <span style={{ marginLeft: 6, color: '#ef4444', fontSize: '0.7rem', fontWeight: 700 }}>⚠</span>
                                                                 )}
                                                             </td>
@@ -370,77 +340,34 @@ export function SettlementModal({
                 @keyframes modal-fade-in { from{opacity:0} to{opacity:1} }
                 @keyframes modal-slide-up { from{opacity:0;transform:translate(-50%,calc(-50% + 16px))} to{opacity:1;transform:translate(-50%,-50%)} }
                 @keyframes spin { to{transform:rotate(360deg)} }
-                .settlement-modal {
-                    width: min(780px, calc(100vw - 32px));
-                }
-                .settlement-date-input {
-                    background: var(--color-bg-3);
-                    border: 1px solid var(--color-border);
-                    border-radius: var(--radius-sm);
-                    color: var(--color-text);
-                    font-size: 0.875rem;
-                    padding: 8px 12px;
-                    outline: none;
-                    transition: border-color var(--transition);
-                    font-family: var(--font-body);
-                }
-                .settlement-date-input:focus {
-                    border-color: var(--color-accent);
-                }
-                .settlement-warning {
-                    display: flex;
-                    align-items: flex-start;
-                    gap: 10px;
-                    background: rgba(251,191,36,0.1);
-                    border: 1px solid rgba(251,191,36,0.3);
-                    border-radius: var(--radius-sm);
-                    color: #d97706;
-                    font-size: 0.825rem;
-                    padding: 10px 14px;
-                    line-height: 1.5;
-                }
-                .settlement-warning svg { flex-shrink: 0; margin-top: 2px; }
-                .settlement-grid {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr 1fr;
-                    gap: 12px;
-                }
-                @media (max-width: 560px) {
-                    .settlement-grid { grid-template-columns: 1fr 1fr; }
-                }
-                .settlement-field { display: flex; flex-direction: column; gap: 4px; }
-                .settlement-field__label {
-                    font-size: 0.68rem;
-                    font-weight: 700;
-                    letter-spacing: 0.07em;
-                    text-transform: uppercase;
-                    color: var(--color-text-subtle);
-                }
-                .settlement-field__hint {
-                    font-size: 0.65rem;
-                    color: var(--color-text-subtle);
-                    opacity: 0.7;
-                    margin-bottom: 2px;
-                }
-                .settlement-field__input {
-                    background: var(--color-bg);
-                    border: 1px solid var(--color-border);
-                    border-radius: var(--radius-sm);
-                    color: var(--color-text);
-                    font-size: 0.9rem;
-                    font-weight: 600;
-                    font-family: 'Courier New', monospace;
-                    padding: 8px 10px;
-                    outline: none;
-                    transition: border-color var(--transition);
-                    width: 100%;
-                    box-sizing: border-box;
-                }
-                .settlement-field__input:focus {
-                    border-color: var(--color-accent);
-                }
-                .settlement-orders-table { font-size: 0.8rem; }
-                .settlement-orders-table th { font-size: 0.62rem; }
+                .settlement-modal { width: min(780px, calc(100vw - 32px)); }
+                .settlement-date-input { background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-size:0.875rem;padding:8px 12px;outline:none;transition:border-color var(--transition);font-family:var(--font-body); }
+                .settlement-date-input:focus { border-color:var(--color-accent); }
+                .settlement-warning { display:flex;align-items:flex-start;gap:10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:var(--radius-sm);color:#d97706;font-size:0.825rem;padding:10px 14px;line-height:1.5; }
+                .settlement-warning svg { flex-shrink:0;margin-top:2px; }
+                .settlement-grid { display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px; }
+                @media (max-width: 560px) { .settlement-grid { grid-template-columns:1fr 1fr; } }
+
+                /* ── Stat cards (read-only) ── */
+                .stat-card { display:flex;flex-direction:column;gap:3px;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:10px 12px; }
+                .stat-card__label { font-size:0.65rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--color-text-subtle); }
+                .stat-card__hint { font-size:0.6rem;color:var(--color-text-subtle);opacity:0.65; }
+                .stat-card__value { font-size:0.95rem;font-weight:700;font-family:'Courier New',monospace;color:var(--color-text);margin-top:2px; }
+                .stat-card__value--orange { color:#f97316; }
+                .stat-card__value--green  { color:#10b981; }
+                .stat-card__value--red    { color:#ef4444; }
+
+                /* ── Transfer to company card ── */
+                .settlement-transfer-card { display:flex;align-items:center;justify-content:space-between;gap:12px;background:rgba(196,127,23,0.08);border:1.5px solid rgba(196,127,23,0.35);border-radius:var(--radius-sm);padding:14px 16px; }
+                .settlement-transfer-card__left { display:flex;align-items:center;gap:10px; }
+                .settlement-transfer-card__icon { width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:rgba(196,127,23,0.15);border-radius:var(--radius-sm);color:var(--color-accent);flex-shrink:0; }
+                .settlement-transfer-card__label { font-size:0.8rem;font-weight:700;color:var(--color-text);margin:0 0 2px; }
+                .settlement-transfer-card__hint { font-size:0.65rem;color:var(--color-text-subtle);margin:0; }
+                .settlement-transfer-card__value { font-size:1.35rem;font-weight:800;font-family:'Courier New',monospace;color:var(--color-accent);white-space:nowrap; }
+                .settlement-transfer-card__value--negative { color:#ef4444; }
+
+                .settlement-orders-table { font-size:0.8rem; }
+                .settlement-orders-table th { font-size:0.62rem; }
             `}</style>
         </>,
         document.body
@@ -455,34 +382,24 @@ function Dash({ red = false }: { red?: boolean }) {
     );
 }
 
-function SettlementField({
+function StatCard({
     label,
     hint,
-    type,
     value,
-    onChange,
-    placeholder = '',
+    accent,
 }: {
     label: string;
     hint: string;
-    type: string;
     value: string;
-    onChange: (v: string) => void;
-    placeholder?: string;
+    accent?: 'orange' | 'green' | 'red';
 }) {
     return (
-        <div className="settlement-field">
-            <span className="settlement-field__label">{label}</span>
-            <span className="settlement-field__hint">{hint}</span>
-            <input
-                className="settlement-field__input"
-                type={type}
-                min="0"
-                step="0.01"
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                placeholder={placeholder}
-            />
+        <div className="stat-card">
+            <span className="stat-card__label">{label}</span>
+            <span className="stat-card__hint">{hint}</span>
+            <span className={`stat-card__value${accent ? ` stat-card__value--${accent}` : ''}`}>
+                {value}
+            </span>
         </div>
     );
 }

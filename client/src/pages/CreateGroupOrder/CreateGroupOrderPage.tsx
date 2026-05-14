@@ -59,6 +59,7 @@ const EMPTY_PACKAGE: OrderItemRequest = {
     isFragile:                    false,
     productPaymentStatus:         'NotPaid',
     whoPaysForCompanyService:     'Sender',
+    amountToCollectForPackage:    undefined,
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -110,6 +111,14 @@ function validate(
         ) {
             errors[`orders[${i}].recipientDistrict`] =
                 `"${pkg.recipientDistrict}" is not a valid district in ${pkg.recipientCity}.`;
+        }
+
+        // COD amount required when recipient pays and product is not pre-paid
+        if (pkg.productPaymentStatus === 'NotPaid' && pkg.whoPaysForCompanyService === 'Recipient') {
+            if (!pkg.amountToCollectForPackage || pkg.amountToCollectForPackage <= 0) {
+                errors[`orders[${i}].amountToCollectForPackage`] =
+                    'Amount to collect is required when recipient pays for an unpaid product.';
+            }
         }
     });
 
@@ -199,7 +208,7 @@ export function CreateGroupOrderPage() {
 
     // ── Package handlers ──────────────────────────────────────────────────────
     const handlePackageChange = useCallback(
-        (index: number, field: keyof OrderItemRequest, value: string | boolean) => {
+        (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => {
             setPackages(prev => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
             setErrors(prev => {
                 const n = { ...prev };
@@ -312,6 +321,11 @@ export function CreateGroupOrderPage() {
                 orders: packages.map(p => ({
                     ...p,
                     description: p.description?.trim() || undefined,
+                    // Only send amountToCollectForPackage when the conditions apply
+                    amountToCollectForPackage:
+                        p.productPaymentStatus === 'NotPaid' && p.whoPaysForCompanyService === 'Recipient'
+                            ? p.amountToCollectForPackage
+                            : undefined,
                 })),
                 // customerId is resolved server-side from the JWT — do not send it from the client
             };

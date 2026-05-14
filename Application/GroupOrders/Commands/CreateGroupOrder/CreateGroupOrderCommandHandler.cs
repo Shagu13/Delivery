@@ -1,6 +1,7 @@
 using Application.Common.Interfaces;
 using Application.GroupOrders.DTOs;
 using Domain;
+using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -114,6 +115,16 @@ public sealed class CreateGroupOrderCommandHandler
                 companyServicePrice = district?.CompanyServicePrice ?? 0;
             }
 
+            // ── AmountToCollectForPackage ──────────────────────────────────────
+            // Only store this value when the conditions that require collection are true.
+            // Otherwise keep it null to avoid confusion.
+            decimal? amountToCollect = null;
+            if (o.ProductPaymentStatus == PaymentStatus.NotPaid &&
+                o.AmountToCollectForPackage is > 0)
+            {
+                amountToCollect = o.AmountToCollectForPackage;
+            }
+
             groupOrder.Orders.Add(new Order
             {
                 RecipientFirstName            = o.RecipientFirstName,
@@ -126,6 +137,7 @@ public sealed class CreateGroupOrderCommandHandler
                 IsFragile                     = o.IsFragile,
                 ProductPaymentStatus          = o.ProductPaymentStatus,
                 WhoPaysForCompanyService      = o.WhoPaysForCompanyService,
+                AmountToCollectForPackage     = amountToCollect,
                 TrackingNumber                = trackingNumbers[i],
                 CompanyServicePrice           = companyServicePrice
             });

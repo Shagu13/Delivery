@@ -11,6 +11,7 @@ export const STATUS_COLORS: Record<string, [string, string]> = {
     CourierAssignedToDeliver: ['rgba(139,92,246,0.12)', '#8b5cf6'],
     CourierRecievedOrderToDeliver: ['rgba(249,115,22,0.12)', '#f97316'],
     DeliveredToRecipient: ['rgba(16,185,129,0.12)', '#10b981'],
+    AllDelivered:         ['rgba(16,185,129,0.15)', '#059669'],
     CancelledBySender: ['rgba(239,68,68,0.12)', '#ef4444'],
     OrderNotAccepted: ['rgba(239,68,68,0.12)', '#ef4444'],
     CancelledByAdmin: ['rgba(239,68,68,0.12)', '#ef4444'],

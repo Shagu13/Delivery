@@ -2,6 +2,7 @@ using API.Models.Orders;
 using Application.Common.Models;
 using Application.Courier.Queries;
 using Application.Orders.Commands;
+using Application.Orders.DTOs;
 using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
 using Application.Orders.Queries.GetOrderByTrackingNumber;
@@ -151,14 +152,14 @@ public sealed class OrdersController : BaseController
         return Ok(result);
     }
 
-    // ── PUT /api/orders/{id}/received  (Courier) ──────────────────────────────
-    [HttpPut("{id:guid}/received")]
+    // ── PUT /api/orders/{id}/delivering  (Courier) ────────────────────────────
+    [HttpPut("{id:guid}/delivering")]
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> MarkReceived(Guid id, CancellationToken ct)
+    public async Task<IActionResult> MarkDelivering(Guid id, CancellationToken ct)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        await Sender.Send(new MarkOrderReceivedCommand(id, userId), ct);
+        await Sender.Send(new MarkOrderDeliveringCommand(id, userId), ct);
         return NoContent();
     }
 
@@ -172,8 +173,41 @@ public sealed class OrdersController : BaseController
         await Sender.Send(new MarkOrderDeliveredCommand(id, userId), ct);
         return NoContent();
     }
+
+    // ── PUT /api/orders/{id}/postpone  (Courier) ──────────────────────────────
+    [HttpPut("{id:guid}/postpone")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Postpone(Guid id, [FromBody] PostponeOrderRequest request, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await Sender.Send(new PostponeOrderCommand(id, userId, request.Reason), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/orders/{id}/retry-delivery  (Courier) ────────────────────────
+    [HttpPut("{id:guid}/retry-delivery")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RetryDelivery(Guid id, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await Sender.Send(new RetryDeliveryCommand(id, userId), ct);
+        return NoContent();
+    }
+
+    [HttpGet("my-history")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(typeof(IReadOnlyList<CourierOrderHistoryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyDeliveryHistory(CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var result = await Sender.Send(new GetCourierDeliveryHistoryQuery(userId), ct);
+        return Ok(result);
+    }
 }
 
 // ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetCourierSalaryRequest(decimal Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
+public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);

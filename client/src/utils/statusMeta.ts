@@ -26,14 +26,16 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     CancelledBySender:               { short: 'Cancelled',        description: 'Order was cancelled by the sender.' },
 
     // ── Order (last-mile) flow ────────────────────────────────────────────────
-    AcceptedOrder:                   { short: 'Accepted',         description: 'Company received the order' },
-    OrderIsOnItsWayToRecipientsCity: { short: 'En Route',         description: 'Order is in transit to the recipient\'s city.' },
-    CourierAssignedToDeliver:        { short: 'Courier is Assigned',  description: 'A courier has been assigned for last-mile delivery.' },
-    CourierRecievedOrderToDeliver:   { short: 'With Courier',     description: 'Courier has picked up the order and is on the way to the recipient.' },
-    DeliveredToRecipient:            { short: 'Delivered',        description: 'Successfully delivered to the recipient.' },
+    AcceptedOrder:                          { short: 'Accepted',          description: 'Company received the order.' },
+    OrderIsOnItsWayToRecipientsCity:        { short: 'En Route',          description: 'Order is in transit to the recipient\'s city.' },
+    CourierAssignedToDeliver:               { short: 'Courier Assigned',  description: 'A courier has been assigned for last-mile delivery.' },
+    CourierDeliveringTheOrderToRecipient:   { short: 'Out for Delivery',  description: 'Courier has picked up the order and is on the way to the recipient.' },
+    DeliveryPostponed:                      { short: 'Postponed',         description: 'Delivery could not be completed — courier will retry.' },
+    DeliveredToRecipient:                   { short: 'Delivered',         description: 'Successfully delivered to the recipient.' },
 
     // ── Admin override ────────────────────────────────────────────────────────
     CancelledByAdmin:                { short: 'Cancelled',        description: 'Order was cancelled by the Company.' },
+    AllDelivered:                    { short: 'All Delivered',    description: 'All packages in this group have been delivered.' },
   },
 
   ka: {
@@ -49,14 +51,16 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     CancelledBySender:               { short: 'გაუქმებულია',        description: 'გამგზავნმა შეკვეთა გაუქმა.' },
 
     // ── Order (last-mile) flow ────────────────────────────────────────────────
-    AcceptedOrder:                   { short: 'მიღებულია',          description: 'კომპანიამ მიიღო შეკვეთა.' },
-    OrderIsOnItsWayToRecipientsCity: { short: 'გზაშია',             description: 'ამანათი მიმღების ქალაქისკენ მიდის.' },
-    CourierAssignedToDeliver:        { short: 'კურიერი დაინიშნა',          description: 'კურიერი დაინიშნა ბოლო მილის მიტანისთვის.' },
-    CourierRecievedOrderToDeliver:   { short: 'კურიერთანაა',        description: 'კურიერმა მიიღო ამანათი და მალე ჩაგბარდებათ.' },
-    DeliveredToRecipient:            { short: 'ჩაბარდა',            description: 'ამანათი წარმატებით ჩაბარდა მიმღებს.' },
+    AcceptedOrder:                          { short: 'მიღებულია',          description: 'კომპანიამ მიიღო შეკვეთა.' },
+    OrderIsOnItsWayToRecipientsCity:        { short: 'გზაშია',             description: 'ამანათი მიმღების ქალაქისკენ მიდის.' },
+    CourierAssignedToDeliver:               { short: 'კურიერი დაინიშნა',   description: 'კურიერი დაინიშნა ამანათის მისატანად.' },
+    CourierDeliveringTheOrderToRecipient:   { short: 'მიტანის პროცესში',   description: 'კურიერმა მიიღო ამანათი და მალე ჩაგბარდებათ.' },
+    DeliveryPostponed:                      { short: 'გადადებულია',        description: 'მიტანა ვერ შედგა — კურიერი ხელახლა შეეცდება.' },
+    DeliveredToRecipient:                   { short: 'ჩაბარდა',            description: 'ამანათი წარმატებით ჩაბარდა მიმღებს.' },
 
     // ── Admin override ────────────────────────────────────────────────────────
     CancelledByAdmin:                { short: 'გაუქმებულია',        description: 'კომპანიამ შეკვეთა გააუქმა.' },
+    AllDelivered:                    { short: 'ჩაბარდა სრულად',    description: 'ამ ჯგუფის ყველა ამანათი ჩაბარდა.' },
   },
 };
 

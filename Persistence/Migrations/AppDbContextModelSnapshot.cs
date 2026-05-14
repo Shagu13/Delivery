@@ -296,6 +296,9 @@ namespace Persistence.Migrations
                     b.Property<decimal>("TotalCourierSalary")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("TotalCourierTransferToCompany")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("TotalOrdersDelivered")
                         .HasColumnType("int");
 
@@ -462,6 +465,9 @@ namespace Persistence.Migrations
                     b.Property<decimal?>("AmountOfCashCollected")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal?>("AmountToCollectForPackage")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal?>("CompanyRevenue")
                         .HasColumnType("decimal(18,2)");
 
@@ -497,6 +503,12 @@ namespace Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("PickedUpFromWarehouseAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("PostponeReason")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PostponedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("ProductPaymentStatus")

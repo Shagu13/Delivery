@@ -12,10 +12,12 @@ export type OrderStatus =
     | 'AdminAcceptedOrderInWareHouse'
     | 'OrderIsOnItsWayToRecipientsCity'
     | 'CourierAssignedToDeliver'
-    | 'CourierRecievedOrderToDeliver'
+    | 'CourierDeliveringTheOrderToRecipient'
     | 'DeliveredToRecipient'
+    | 'DeliveryPostponed'
     | 'CancelledBySender'
-    | 'CancelledByAdmin';
+    | 'CancelledByAdmin'
+    | 'AllDelivered';
 
 export type PaymentStatus = 'Paid' | 'NotPaid';
 export type ServicePayer  = 'Sender' | 'Recipient';
@@ -123,3 +125,28 @@ export const assignCourierToGroupOrder = (token: string, id: string, courierId: 
 export const markPickingUp = (token: string, id: string) => groupOrderAction(token, id, 'picking-up');
 export const markPickedUp = (token: string, id: string) => groupOrderAction(token, id, 'picked-up');
 export const markDeliveredToWarehouse = (token: string, id: string) => groupOrderAction(token, id, 'delivered-to-warehouse');
+
+
+export interface CourierPickupHistory {
+    id: string;
+    senderFirstName: string;
+    senderLastName: string;
+    senderBusinessName: string;
+    pickUpCity: string;
+    pickUpDistrict: string;
+    pickUpAddress: string;
+    note: string | null;
+    numberOfPackages: number;
+    status: OrderStatus;
+    createdAt: string;
+    pickedUpAt: string | null;
+    deliveredToWarehouseAt: string | null;
+}
+
+export async function fetchMyPickupHistory(token: string): Promise<CourierPickupHistory[]> {
+    const res = await fetch(`${BASE}/my-pickup-history`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch pickup history');
+    return res.json();
+}

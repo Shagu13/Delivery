@@ -11,29 +11,36 @@ namespace Domain.Enums;
 ///
 /// Order (last-mile) path:
 ///   AdminAcceptedOrderInWareHouse → [non-Tbilisi: OrderIsOnItsWayToRecipientsCity →]
-///   CourierAssignedToDeliver → CourierRecievedOrderToDeliver → DeliveredToRecipient
+///   CourierAssignedToDeliver → CourierDeliveringTheOrderToRecipient
+///   → DeliveredToRecipient  |  DeliveryPostponed → CourierDeliveringTheOrderToRecipient (retry)
 ///   Terminal: CancelledByAdmin
 /// </summary>
 public enum OrderStatus
 {
     // ── Shared / GroupOrder ──────────────────────────────────────────────────
-    Pending                         = 0,
-    AcceptedGroupOrder              = 1,
-    OrderNotAccepted                = 2,
-    CourierAssignedToPickUp         = 3,
-    CourierOnTheWayToPickUp         = 4,
-    CourierDeliveringToWarehouse    = 5,
-    DeliveredToWarehouse            = 6,
-    AdminAcceptedOrderInWareHouse   = 7,
-    CancelledBySender               = 8,
+    Pending                              = 0,
+    AcceptedGroupOrder                   = 1,
+    OrderNotAccepted                     = 2,
+    CourierAssignedToPickUp              = 3,
+    CourierOnTheWayToPickUp              = 4,
+    CourierDeliveringToWarehouse         = 5,
+    DeliveredToWarehouse                 = 6,
+    AdminAcceptedOrderInWareHouse        = 7,
+    CancelledBySender                    = 8,
 
     // ── Order (last-mile) ────────────────────────────────────────────────────
-    AcceptedOrder                   = 9,
-    OrderIsOnItsWayToRecipientsCity = 10,
-    CourierAssignedToDeliver        = 11,
-    CourierRecievedOrderToDeliver   = 12,
-    DeliveredToRecipient            = 13,
+    AcceptedOrder                        = 9,
+    OrderIsOnItsWayToRecipientsCity      = 10,
+    CourierAssignedToDeliver             = 11,
+    CourierDeliveringTheOrderToRecipient = 12,
+    DeliveredToRecipient                 = 13,
 
     // ── Admin override (always available) ────────────────────────────────────
-    CancelledByAdmin                = 14,
+    CancelledByAdmin                     = 14,
+
+    // ── Delivery postponed by courier ────────────────────────────────────────
+    DeliveryPostponed                    = 15,
+
+    // ── GroupOrder terminal: every package delivered or cancelled ─────────────
+    AllDelivered                         = 16,
 }
