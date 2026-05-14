@@ -326,7 +326,7 @@ const STATUS_CLASS_MAP: Record<string, string> = {
   AdminAcceptedOrderInWareHouse:   'warehouse',
   OrderIsOnItsWayToRecipientsCity: 'onway',
   CourierAssignedToDeliver:        'assigned',
-  CourierRecievedOrderToDeliver:   'delivering',
+  CourierDeliveringTheOrderToRecipient: 'delivering',
   OrderIsBeingDeliveredToRecipient:'delivering',
   DeliveredToRecipient:            'delivered',
   CancelledBySender:               'cancelled',
@@ -344,15 +344,17 @@ function AdminOverview({ token }: { token: string }) {
 
   useEffect(() => {
     if (!token) return;
-    setLoading(true);
+    let cancelled = false;
     Promise.all([
       fetchGroupOrders(token).catch(() => [] as AdminGroupOrder[]),
       fetchCouriers(token).catch(() => [] as Courier[]),
     ]).then(([go, co]) => {
+      if (cancelled) return;
       setGroupOrders(go);
       setCouriersLocal(co);
       setLoading(false);
     });
+    return () => { cancelled = true; };
   }, [token]);
 
   const totalOrders   = groupOrders.reduce((sum, go) => sum + go.orders.length, 0);
@@ -363,7 +365,7 @@ function AdminOverview({ token }: { token: string }) {
     sum + go.orders.filter(o =>
       o.status === 'OrderIsOnItsWayToRecipientsCity' ||
       o.status === 'CourierAssignedToDeliver' ||
-      o.status === 'CourierRecievedOrderToDeliver'
+      o.status === 'CourierDeliveringTheOrderToRecipient'
     ).length, 0);
   const activeCouriers = couriers.filter(c => c.isAvailable).length;
 
@@ -440,7 +442,7 @@ function AdminOverview({ token }: { token: string }) {
 const ORDER_LEVEL_STATUSES = new Set([
   'OrderIsOnItsWayToRecipientsCity',
   'CourierAssignedToDeliver',
-  'CourierRecievedOrderToDeliver',
+  'CourierDeliveringTheOrderToRecipient',
   'DeliveredToRecipient',
   'CancelledByAdmin',
 ]);
@@ -456,7 +458,7 @@ const STATUS_PILLS = [
   { value: 'AdminAcceptedOrderInWareHouse',   label: 'pillWarehouseAccepted' },
   { value: 'OrderIsOnItsWayToRecipientsCity', label: 'pillSentToCity' },
   { value: 'CourierAssignedToDeliver',        label: 'pillCourierDelivery' },
-  { value: 'CourierRecievedOrderToDeliver',   label: 'pillCourierReceived' },
+  { value: 'CourierDeliveringTheOrderToRecipient', label: 'pillCourierReceived' },
   { value: 'DeliveredToRecipient',            label: 'pillDelivered' },
   { value: 'CancelledBySender',               label: 'pillCancelledSender' },
   { value: 'CancelledByAdmin',                label: 'pillCancelledAdmin' },
