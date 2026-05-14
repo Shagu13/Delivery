@@ -438,7 +438,7 @@ function EditProfileView({
         token,
       );
       // Re-fetch profile to get the latest data back
-      const updated = await import('../../api/customers').then(m => m.getMyProfile(token));
+      const updated = await getMyProfile(token);
       onSaved(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
