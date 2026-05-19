@@ -127,16 +127,9 @@ export function SettlementModal({
         setSaving(true);
         setError(null);
         try {
-            const cashStr = totals.totalAmountOfCashCollected.trim();
             await createSettlement({
                 courierId,
                 date,
-                totalOrdersPickedUp:        parseInt(totals.totalOrdersPickedUp, 10)  || 0,
-                totalOrdersDelivered:       parseInt(totals.totalOrdersDelivered, 10) || 0,
-                totalAmountOfCashCollected: cashStr ? parseFloat(cashStr) : null,
-                totalCompanyServiceRevenue: parseFloat(totals.totalCompanyServiceRevenue) || 0,
-                totalCourierSalary:         parseFloat(totals.totalCourierSalary)         || 0,
-                totalCompanyNetIncome:      parseFloat(totals.totalCompanyNetIncome)       || 0,
             }, token);
             onCreated();
             onClose();
