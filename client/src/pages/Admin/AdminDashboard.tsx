@@ -16,6 +16,7 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { getStatusMeta } from '../../utils/statusMeta';
 import '../../styles/dashboard.css';
+import { fetchSmsBalance } from '../../api/sms';
 
 type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities';
 
@@ -95,7 +96,7 @@ export function AdminDashboard() {
               <path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               <path d="M1 8h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-            Orders
+                      {t.topbarPackages}
           </button>
           <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -145,7 +146,7 @@ export function AdminDashboard() {
           <span className="dashboard__topbar-title">
             {activeView === 'overview'  && t.topbarOverview}
             {activeView === 'orders'    && t.topbarOrders}
-            {activeView === 'packages'  && 'Orders'}
+            {activeView === 'packages'  && t.topbarPackages}
             {activeView === 'couriers'  && t.topbarCouriers}
             {activeView === 'customers' && t.topbarCustomers}
             {activeView === 'cities'    && t.topbarCities}
@@ -337,106 +338,140 @@ const STATUS_CLASS_MAP: Record<string, string> = {
 // ── Sub-views ─────────────────────────────────────────────────────────────────
 
 function AdminOverview({ token }: { token: string }) {
-  const { t } = useLanguage();
-  const [groupOrders, setGroupOrders] = useState<AdminGroupOrder[]>([]);
-  const [couriers, setCouriersLocal] = useState<Courier[]>([]);
-  const [loading, setLoading] = useState(true);
+    const { t } = useLanguage();
+    const [groupOrders, setGroupOrders] = useState<AdminGroupOrder[]>([]);
+    const [couriers, setCouriersLocal] = useState<Courier[]>([]);
+    const [smsBalance, setSmsBalance] = useState<number | null>(null);
+    const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    Promise.all([
-      fetchGroupOrders(token).catch(() => [] as AdminGroupOrder[]),
-      fetchCouriers(token).catch(() => [] as Courier[]),
-    ]).then(([go, co]) => {
-      if (cancelled) return;
-      setGroupOrders(go);
-      setCouriersLocal(co);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [token]);
+    useEffect(() => {
+        if (!token) return;
+        let cancelled = false;
+        Promise.all([
+            fetchGroupOrders(token).catch(() => [] as AdminGroupOrder[]),
+            fetchCouriers(token).catch(() => [] as Courier[]),
+            fetchSmsBalance(token).catch(() => null as number | null),
+        ]).then(([go, co, sms]) => {
+            if (cancelled) return;
+            setGroupOrders(go);
+            setCouriersLocal(co);
+            setSmsBalance(sms);
+            setLoading(false);
+        });
+        return () => { cancelled = true; };
+    }, [token]);
 
-  const totalOrders   = groupOrders.reduce((sum, go) => sum + go.orders.length, 0);
-  const pendingPickup = groupOrders.filter(go =>
-    go.status === 'Pending' || go.status === 'AcceptedGroupOrder' || go.status === 'CourierAssignedToPickUp' || go.status === 'CourierOnTheWayToPickUp'
-  ).length;
-  const inTransit = groupOrders.reduce((sum, go) =>
-    sum + go.orders.filter(o =>
-      o.status === 'OrderIsOnItsWayToRecipientsCity' ||
-      o.status === 'CourierAssignedToDeliver' ||
-      o.status === 'CourierDeliveringTheOrderToRecipient'
-    ).length, 0);
-  const activeCouriers = couriers.filter(c => c.isAvailable).length;
+    const totalOrders = groupOrders.reduce((sum, go) => sum + go.orders.length, 0);
+    const pendingPickup = groupOrders.filter(go =>
+        go.status === 'Pending' || go.status === 'AcceptedGroupOrder' ||
+        go.status === 'CourierAssignedToPickUp' || go.status === 'CourierOnTheWayToPickUp'
+    ).length;
+    const inTransit = groupOrders.reduce((sum, go) =>
+        sum + go.orders.filter(o =>
+            o.status === 'OrderIsOnItsWayToRecipientsCity' ||
+            o.status === 'CourierAssignedToDeliver' ||
+            o.status === 'CourierDeliveringTheOrderToRecipient'
+        ).length, 0);
+    const activeCouriers = couriers.filter(c => c.isAvailable).length;
 
-  const recent = [...groupOrders]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 8);
+    const recent = [...groupOrders]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 8);
 
-  const stats = [
-    { label: t.overviewTotalOrders   ?? 'Total Orders',    value: loading ? '…' : String(totalOrders),   sub: t.overviewAllTime      ?? 'All time' },
-    { label: t.overviewPendingPickup ?? 'Pending Pickup',  value: loading ? '…' : String(pendingPickup), sub: t.overviewAwaitingCourier ?? 'Awaiting courier' },
-    { label: t.overviewInTransit     ?? 'In Transit',      value: loading ? '…' : String(inTransit),     sub: t.overviewActiveDeliveries ?? 'Active deliveries' },
-    { label: t.overviewActiveCouriers ?? 'Active Couriers', value: loading ? '…' : String(activeCouriers), sub: t.overviewAvailableNow ?? 'Available now' },
-  ];
+    const smsBalanceDisplay = loading
+        ? '…'
+        : smsBalance === null
+            ? '—'
+            : smsBalance.toLocaleString();
 
-  return (
-    <>
-      <div className="stat-grid">
-        {stats.map((s, i) => (
-          <div className="stat-card" key={s.label} style={{ animationDelay: `${i * 60}ms` }}>
-            <div className="stat-card__label">{s.label}</div>
-            <div className="stat-card__value">{s.value}</div>
-            <div className="stat-card__sub">{s.sub}</div>
-          </div>
-        ))}
-      </div>
-      <div className="content-card">
-        <div className="content-card__header">
-          <span className="content-card__title">{t.overviewRecentGroupOrders ?? 'Recent Group Orders'}</span>
-        </div>
-        {loading ? (
-          <div className="go-loading">
-            <div className="go-spinner" />
-          </div>
-        ) : recent.length === 0 ? (
-          <div className="empty-state">
-            <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
-              <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M12 16h16M12 22h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <span className="empty-state__text">{t.goEmptyState ?? 'Orders will appear here'}</span>
-          </div>
-        ) : (
-          <table className="courier-table">
-            <thead>
-              <tr>
-                <th>{t.goColBusiness ?? 'Business'}</th>
-                <th>{t.goColSender   ?? 'Sender'}</th>
-                <th>{t.goColCity     ?? 'City'}</th>
-                <th>{t.goColPackages ?? 'Packages'}</th>
-                <th>{t.goColStatus   ?? 'Status'}</th>
-                <th>{t.goColDate     ?? 'Date'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map(go => (
-                <tr key={go.id}>
-                  <td><span className="courier-name">{go.senderBusinessName}</span></td>
-                  <td><span className="courier-username">{go.senderFirstName} {go.senderLastName}</span></td>
-                  <td>{go.pickUpCity}</td>
-                  <td>{go.numberOfPackages}</td>
-                  <td><StatusBadge status={go.status} /></td>
-                  <td><span className="courier-time">{formatDate(go.createdAt)}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </>
-  );
+    // Low balance warning threshold
+    const smsLow = smsBalance !== null && smsBalance < 50;
+
+    const stats = [
+        { label: t.overviewTotalOrders ?? 'Total Orders', value: loading ? '…' : String(totalOrders), sub: t.overviewAllTime ?? 'All time' },
+        { label: t.overviewPendingPickup ?? 'Pending Pickup', value: loading ? '…' : String(pendingPickup), sub: t.overviewAwaitingCourier ?? 'Awaiting courier' },
+        { label: t.overviewInTransit ?? 'In Transit', value: loading ? '…' : String(inTransit), sub: t.overviewActiveDeliveries ?? 'Active deliveries' },
+        { label: t.overviewActiveCouriers ?? 'Active Couriers', value: loading ? '…' : String(activeCouriers), sub: t.overviewAvailableNow ?? 'Available now' },
+        {
+            label: 'SMS Credits',
+            value: smsBalanceDisplay,
+            sub: smsLow ? '⚠️ Low balance' : 'UBill balance',
+            low: smsLow,
+        },
+    ];
+
+    return (
+        <>
+            <div className="stat-grid">
+                {stats.map((s, i) => (
+                    <div
+                        className="stat-card"
+                        key={s.label}
+                        style={{ animationDelay: `${i * 60}ms` }}
+                    >
+                        <div className="stat-card__label">{s.label}</div>
+                        <div
+                            className="stat-card__value"
+                            style={s.low ? { color: '#ef4444' } : undefined}
+                        >
+                            {s.value}
+                        </div>
+                        <div
+                            className="stat-card__sub"
+                            style={s.low ? { color: '#ef4444' } : undefined}
+                        >
+                            {s.sub}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div className="content-card">
+                <div className="content-card__header">
+                    <span className="content-card__title">{t.overviewRecentGroupOrders ?? 'Recent Group Orders'}</span>
+                </div>
+                {loading ? (
+                    <div className="go-loading">
+                        <div className="go-spinner" />
+                    </div>
+                ) : recent.length === 0 ? (
+                    <div className="empty-state">
+                        <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
+                            <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
+                            <path d="M12 16h16M12 22h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                        <span className="empty-state__text">{t.goEmptyState ?? 'Orders will appear here'}</span>
+                    </div>
+                ) : (
+                    <table className="courier-table">
+                        <thead>
+                            <tr>
+                                <th>{t.goColBusiness ?? 'Business'}</th>
+                                <th>{t.goColSender ?? 'Sender'}</th>
+                                <th>{t.goColCity ?? 'City'}</th>
+                                <th>{t.goColPackages ?? 'Packages'}</th>
+                                <th>{t.goColStatus ?? 'Status'}</th>
+                                <th>{t.goColDate ?? 'Date'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recent.map(go => (
+                                <tr key={go.id}>
+                                    <td><span className="courier-name">{go.senderBusinessName}</span></td>
+                                    <td><span className="courier-username">{go.senderFirstName} {go.senderLastName}</span></td>
+                                    <td>{go.pickUpCity}</td>
+                                    <td>{go.numberOfPackages}</td>
+                                    <td><StatusBadge status={go.status} /></td>
+                                    <td><span className="courier-time">{formatDate(go.createdAt)}</span></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+        </>
+    );
 }
+
 
 // Statuses that live on individual orders (not on the GroupOrder itself)
 const ORDER_LEVEL_STATUSES = new Set([
@@ -633,9 +668,10 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   return (
     <div className="content-card" style={{ overflow: 'hidden' }}>
 
-      {/* Search */}
-      <div className="go-toolbar go-toolbar--search">
-        <div className="go-search">
+      {/* Search + Location filter (combined row) */}
+      <div className="go-toolbar go-toolbar--search" style={{ flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
+        {/* Search */}
+        <div className="go-search" style={{ flexShrink: 0 }}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
             <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
             <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
@@ -655,23 +691,12 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
             </button>
           )}
         </div>
-        {!loading && !error && (
-          <span className="go-count">
-            {filterParty === 'recipient' && hasLocationFilter
-              ? (() => {
-                  const n = visibleOrders.reduce((sum, go) => sum + visibleOrdersFor(go).length, 0);
-                  return `${n} order${n !== 1 ? 's' : ''}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`;
-                })()
-              : `${t.goOrderCount(visibleOrders.length, groupOrders.length)}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`
-            }
-          </span>
-        )}
-      </div>
 
-      {/* Location filter */}
-      <div className="go-toolbar go-toolbar--filters">
-        <span className="go-filter-label">{t.goFilterByLocation}</span>
-        <div className="go-filter-chain">
+        {/* Divider */}
+        <div style={{ width: 1, height: 28, background: 'var(--color-border)', flexShrink: 0, alignSelf: 'center' }} />
+
+        {/* Location filter inline */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap', flex: 1 }}>
           <div className="go-filter-step">
             <span className="go-step-label">{t.goParty}</span>
             <div className="go-seg">
@@ -687,7 +712,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
               </button>
             </div>
           </div>
-          <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ marginBottom: 6 }}><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
           <div className="go-filter-step">
             <span className="go-step-label">{t.goCity}</span>
             <div className="go-select-wrap">
@@ -701,7 +726,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
           </div>
           {filterCity && (
             <>
-              <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ marginBottom: 6 }}><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <div className="go-filter-step">
                 <span className="go-step-label">{t.goDistrict}</span>
                 <div className="go-select-wrap">
@@ -715,12 +740,25 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
               </div>
             </>
           )}
+          {hasLocationFilter && (
+            <button className="go-clear-btn" onClick={clearAll} style={{ alignSelf: 'flex-end' }}>
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+              {t.goClear}
+            </button>
+          )}
         </div>
-        {hasLocationFilter && (
-          <button className="go-clear-btn" onClick={clearAll}>
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-            {t.goClear}
-          </button>
+
+        {/* Count */}
+        {!loading && !error && (
+          <span className="go-count" style={{ alignSelf: 'center', marginLeft: 'auto' }}>
+            {filterParty === 'recipient' && hasLocationFilter
+              ? (() => {
+                  const n = visibleOrders.reduce((sum, go) => sum + visibleOrdersFor(go).length, 0);
+                  return `${n} order${n !== 1 ? 's' : ''}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`;
+                })()
+              : `${t.goOrderCount(visibleOrders.length, groupOrders.length)}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`
+            }
+          </span>
         )}
       </div>
 

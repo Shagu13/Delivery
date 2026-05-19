@@ -30,13 +30,13 @@ public static class DependencyInjectionPersistence
         // AddIdentityCore only sets up user/role management — JWT stays as the auth scheme
         services.AddIdentityCore<ApplicationUser>(options =>
         {
-            options.Password.RequireDigit = true;
-            options.Password.RequiredLength = 8;
-            options.Password.RequireUppercase = true;
-            options.Password.RequireNonAlphanumeric = false;
-            options.Lockout.MaxFailedAccessAttempts = 5;
-            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-            options.User.RequireUniqueEmail = true;
+            options.Password.RequireDigit            = true;
+            options.Password.RequiredLength          = 8;
+            options.Password.RequireUppercase        = true;
+            options.Password.RequireNonAlphanumeric  = false;
+            options.Lockout.MaxFailedAccessAttempts  = 5;
+            options.Lockout.DefaultLockoutTimeSpan   = TimeSpan.FromMinutes(15);
+            options.User.RequireUniqueEmail          = true;
         })
         .AddRoles<IdentityRole>()
         .AddEntityFrameworkStores<AppDbContext>()
@@ -52,6 +52,7 @@ public static class DependencyInjectionPersistence
 
         var roleManager = sp.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
+        var config      = sp.GetRequiredService<IConfiguration>();
 
         foreach (var role in new[] { "Admin", "Courier", "Customer" })
         {
@@ -59,22 +60,38 @@ public static class DependencyInjectionPersistence
                 await roleManager.CreateAsync(new IdentityRole(role));
         }
 
+        // Read admin phone from config so it can be changed without a code deploy.
+        // Set "AdminSeed:PhoneNumber" in appsettings or environment variables.
+        // Example: "995599000000"
+        // Leave empty to skip — SMS alerts simply won't fire until a number is set.
+        var adminPhone = config["AdminSeed:PhoneNumber"];
+
         const string adminUsername = "admin";
-        if (await userManager.FindByNameAsync(adminUsername) is null)
+        var existing = await userManager.FindByNameAsync(adminUsername);
+
+        if (existing is null)
         {
             var admin = new ApplicationUser
             {
-                UserName = adminUsername,
-                Email = "admin@dilodelivery.com",
+                UserName    = adminUsername,
+                Email       = "admin@dilodelivery.com",
                 NormalizedEmail = "ADMIN@DILODELIVERY.COM",
-                FirstName = "System",
-                LastName = "Admin",
-                Role = "Admin"
+                FirstName   = "System",
+                LastName    = "Admin",
+                Role        = "Admin",
+                PhoneNumber = string.IsNullOrWhiteSpace(adminPhone) ? null : adminPhone
             };
 
             var result = await userManager.CreateAsync(admin, "Admin@12345");
             if (result.Succeeded)
                 await userManager.AddToRoleAsync(admin, "Admin");
+        }
+        else if (!string.IsNullOrWhiteSpace(adminPhone)
+                 && existing.PhoneNumber != adminPhone)
+        {
+            // Update phone number if config value changed since last seed run.
+            existing.PhoneNumber = adminPhone;
+            await userManager.UpdateAsync(existing);
         }
     }
 }

@@ -4,6 +4,7 @@ using Domain;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Application.GroupOrders.Commands.CreateGroupOrder;
 
@@ -12,13 +13,19 @@ public sealed class CreateGroupOrderCommandHandler
 {
     private readonly IAppDbContext _context;
     private readonly ITrackingNumberGenerator _trackingGen;
+    private readonly IAdminNotificationSmsService _adminSms;
+    private readonly ILogger<CreateGroupOrderCommandHandler> _logger;
 
     public CreateGroupOrderCommandHandler(
         IAppDbContext context,
-        ITrackingNumberGenerator trackingGen)
+        ITrackingNumberGenerator trackingGen,
+        IAdminNotificationSmsService adminSms,
+        ILogger<CreateGroupOrderCommandHandler> logger)
     {
-        _context     = context;
+        _context = context;
         _trackingGen = trackingGen;
+        _adminSms = adminSms;
+        _logger = logger;
     }
 
     public async Task<CreateGroupOrderResultDto> Handle(
@@ -46,36 +53,23 @@ public sealed class CreateGroupOrderCommandHandler
 
         var groupOrder = new GroupOrder
         {
-            CustomerId         = dto.CustomerId,
-            SenderFirstName    = dto.SenderFirstName,
-            SenderLastName     = dto.SenderLastName,
-            SenderIdNumber     = dto.SenderIdNumber,
+            CustomerId = dto.CustomerId,
+            SenderFirstName = dto.SenderFirstName,
+            SenderLastName = dto.SenderLastName,
+            SenderIdNumber = dto.SenderIdNumber,
             SenderBusinessName = dto.SenderBusinessName,
-            SenderPhone        = dto.SenderPhone,
-            PickUpCity         = dto.PickUpCity,
-            PickUpDistrict     = dto.PickUpDistrict,
-            PickUpAddress      = dto.PickUpAddress,
-            Note               = dto.Note,
-            NumberOfPackages   = dto.Orders.Count
+            SenderPhone = dto.SenderPhone,
+            PickUpCity = dto.PickUpCity,
+            PickUpDistrict = dto.PickUpDistrict,
+            PickUpAddress = dto.PickUpAddress,
+            Note = dto.Note,
+            NumberOfPackages = dto.Orders.Count
         };
 
         for (int i = 0; i < dto.Orders.Count; i++)
         {
             var o = dto.Orders[i];
 
-            // ── Determine CompanyServicePrice ─────────────────────────────────
-            //
-            // Priority 1 – explicit per-order override (must be > 0).
-            //
-            // Priority 2 – customer's negotiated tier price, driven by the
-            //   recipient district's territory flags (set by admin per district):
-            //   IsCapitalTerritory → CompanyServiceCapitalPrice
-            //   IsCityTerritory    → CompanyServiceCityPrice
-            //   neither            → CompanyServiceDistrictPrice
-            //   (unknown district also falls back to CompanyServiceDistrictPrice)
-            //
-            // Priority 3 – District.CompanyServicePrice (DB default for that district).
-            //
             decimal companyServicePrice;
 
             var district = districts.FirstOrDefault(d =>
@@ -83,41 +77,27 @@ public sealed class CreateGroupOrderCommandHandler
 
             if (o.CompanyServicePrice.HasValue && o.CompanyServicePrice.Value > 0)
             {
-                // Priority 1: explicit override wins.
                 companyServicePrice = o.CompanyServicePrice.Value;
             }
             else if (customer is not null)
             {
                 bool isCapital = district?.IsCapitalTerritory == true;
-                bool isCity    = district?.IsCityTerritory    == true;
+                bool isCity = district?.IsCityTerritory == true;
 
                 if (isCapital && customer.CompanyServiceCapitalPrice is > 0)
-                {
                     companyServicePrice = customer.CompanyServiceCapitalPrice!.Value;
-                }
                 else if (isCity && customer.CompanyServiceCityPrice is > 0)
-                {
                     companyServicePrice = customer.CompanyServiceCityPrice!.Value;
-                }
                 else if (customer.CompanyServiceDistrictPrice is > 0)
-                {
                     companyServicePrice = customer.CompanyServiceDistrictPrice!.Value;
-                }
                 else
-                {
-                    // Priority 3: fall back to the district's DB default.
                     companyServicePrice = district?.CompanyServicePrice ?? 0;
-                }
             }
             else
             {
-                // No customer — use district default.
                 companyServicePrice = district?.CompanyServicePrice ?? 0;
             }
 
-            // ── AmountToCollectForPackage ──────────────────────────────────────
-            // Only store this value when the conditions that require collection are true.
-            // Otherwise keep it null to avoid confusion.
             decimal? amountToCollect = null;
             if (o.ProductPaymentStatus == PaymentStatus.NotPaid &&
                 o.AmountToCollectForPackage is > 0)
@@ -127,27 +107,42 @@ public sealed class CreateGroupOrderCommandHandler
 
             groupOrder.Orders.Add(new Order
             {
-                RecipientFirstName            = o.RecipientFirstName,
-                RecipientLastName             = o.RecipientLastName,
-                RecipientPhone                = o.RecipientPhone,
-                RecipientCity                 = o.RecipientCity,
-                RecipientDistrict             = o.RecipientDistrict,
-                RecipientAddress              = o.RecipientAddress,
-                Description                   = o.Description,
-                IsFragile                     = o.IsFragile,
-                ProductPaymentStatus          = o.ProductPaymentStatus,
-                WhoPaysForCompanyService      = o.WhoPaysForCompanyService,
-                AmountToCollectForPackage     = amountToCollect,
-                TrackingNumber                = trackingNumbers[i],
-                CompanyServicePrice           = companyServicePrice
+                RecipientFirstName = o.RecipientFirstName,
+                RecipientLastName = o.RecipientLastName,
+                RecipientPhone = o.RecipientPhone,
+                RecipientCity = o.RecipientCity,
+                RecipientDistrict = o.RecipientDistrict,
+                RecipientAddress = o.RecipientAddress,
+                Description = o.Description,
+                IsFragile = o.IsFragile,
+                ProductPaymentStatus = o.ProductPaymentStatus,
+                WhoPaysForCompanyService = o.WhoPaysForCompanyService,
+                AmountToCollectForPackage = amountToCollect,
+                TrackingNumber = trackingNumbers[i],
+                CompanyServicePrice = companyServicePrice
             });
         }
 
         _context.GroupOrders.Add(groupOrder);
         await _context.SaveChangesAsync(cancellationToken);
 
+        // ── Notify admin via SMS ──────────────────────────────────────────────
+        // Order is already saved at this point. If SMS fails it is logged and
+        // swallowed — it must never surface as an error to the sender.
+        try
+        {
+            await _adminSms.SendNewGroupOrderNotificationAsync(groupOrder, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to send admin SMS notification for GroupOrder {GroupOrderId}",
+                groupOrder.Id);
+        }
+
         return new CreateGroupOrderResultDto(
-            GroupOrderId:       groupOrder.Id,
+            GroupOrderId: groupOrder.Id,
             SenderBusinessName: groupOrder.SenderBusinessName,
             Orders: groupOrder.Orders
                 .Select(o => new CreatedOrderDto(o.Id, o.TrackingNumber,

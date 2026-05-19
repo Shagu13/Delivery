@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Infrastructure.Services;
+using Infrastructure.Sms;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,13 +29,13 @@ public static class DependencyInjectionInfrastructure
             {
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
+                    ValidateIssuer           = true,
+                    ValidateAudience         = true,
+                    ValidateLifetime         = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtSettings.Issuer,
-                    ValidAudience = jwtSettings.Audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(
+                    ValidIssuer              = jwtSettings.Issuer,
+                    ValidAudience            = jwtSettings.Audience,
+                    IssuerSigningKey         = new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(jwtSettings.Secret)),
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
@@ -42,13 +43,14 @@ public static class DependencyInjectionInfrastructure
 
         services.AddAuthorization();
 
+        // ── Cache ────────────────────────────────────────────────────────────
         var redisConnection = configuration.GetConnectionString("Redis");
         if (!string.IsNullOrWhiteSpace(redisConnection))
         {
             services.AddStackExchangeRedisCache(options =>
             {
                 options.Configuration = redisConnection;
-                options.InstanceName = "DeliveryApp:";
+                options.InstanceName  = "DeliveryApp:";
             });
         }
         else
@@ -58,6 +60,12 @@ public static class DependencyInjectionInfrastructure
 
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<ICacheService, CacheService>();
+
+        // ── SMS ──────────────────────────────────────────────────────────────
+        // HttpClient is registered via the factory so it participates in
+        // connection pooling and handler lifetime management.
+        services.AddHttpClient<ISmsService, SmsService>();
+        services.AddScoped<IAdminNotificationSmsService, AdminNotificationSmsService>();
 
         return services;
     }

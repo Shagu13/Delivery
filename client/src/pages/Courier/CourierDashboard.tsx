@@ -434,10 +434,6 @@ export function CourierDashboard() {
                 </div>
                 <div className="sidebar__user">
                     <div className="sidebar__avatar">{initials}</div>
-                    <div className="sidebar__user-info">
-                        <span className="sidebar__user-name">{user?.firstName} {user?.lastName}</span>
-                        <span className="sidebar__user-role">Courier</span>
-                    </div>
                     <button className="sidebar__signout" onClick={handleSignOut}>Sign out</button>
                 </div>
             </aside>

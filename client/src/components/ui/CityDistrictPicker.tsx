@@ -105,8 +105,12 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
     const lc = (s: string) => s.toLowerCase();
     const cityLabel = (c: City) => lang === 'ka' && c.cityNameGeo ? c.cityNameGeo : c.cityName;
     const districtLabel = (d: District) => lang === 'ka' && d.districtNameGeo ? d.districtNameGeo : d.districtName;
-    const filteredCities = cities.filter(c => lc(cityLabel(c)).includes(lc(citySearch)));
-    const filteredDistricts = districts.filter(d => lc(districtLabel(d)).includes(lc(districtSearch)));
+    const filteredCities = cities.filter(c =>
+      lc(cityLabel(c)).includes(lc(citySearch)) || lc(c.cityName).includes(lc(citySearch))
+    );
+    const filteredDistricts = districts.filter(d =>
+      lc(districtLabel(d)).includes(lc(districtSearch)) || lc(d.districtName).includes(lc(districtSearch))
+    );
 
   const clearCity = useCallback(() => {
     setCitySearch(''); onCityChange(''); setSelectedCityId(null); setDistrictSearch(''); onDistrictChange('');
