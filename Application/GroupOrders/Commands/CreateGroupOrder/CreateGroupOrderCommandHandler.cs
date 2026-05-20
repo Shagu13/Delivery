@@ -22,10 +22,10 @@ public sealed class CreateGroupOrderCommandHandler
         IAdminNotificationSmsService adminSms,
         ILogger<CreateGroupOrderCommandHandler> logger)
     {
-        _context = context;
+        _context     = context;
         _trackingGen = trackingGen;
-        _adminSms = adminSms;
-        _logger = logger;
+        _adminSms    = adminSms;
+        _logger      = logger;
     }
 
     public async Task<CreateGroupOrderResultDto> Handle(
@@ -42,28 +42,42 @@ public sealed class CreateGroupOrderCommandHandler
             : null;
 
         // Load the districts referenced by orders so we can fall back to their default price
-        // when the customer has no negotiated tier price.
         var districtNames = dto.Orders.Select(o => o.RecipientDistrict).Distinct().ToList();
         var districts = await _context.Districts
             .AsNoTracking()
             .Where(d => districtNames.Contains(d.DistrictName))
             .ToListAsync(cancellationToken);
 
+        // Load all weight price tiers referenced by orders (bulk — avoids N+1)
+        var tierIds = dto.Orders
+            .Select(o => o.WeightPriceTierId)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+
+        var weightTiers = tierIds.Count > 0
+            ? await _context.WeightPriceTiers
+                .AsNoTracking()
+                .Where(t => tierIds.Contains(t.Id) && t.DateDeleted == null)
+                .ToListAsync(cancellationToken)
+            : new List<WeightPriceTier>();
+
         var trackingNumbers = await _trackingGen.GenerateManyAsync(dto.Orders.Count, cancellationToken);
 
         var groupOrder = new GroupOrder
         {
-            CustomerId = dto.CustomerId,
-            SenderFirstName = dto.SenderFirstName,
-            SenderLastName = dto.SenderLastName,
-            SenderIdNumber = dto.SenderIdNumber,
+            CustomerId         = dto.CustomerId,
+            SenderFirstName    = dto.SenderFirstName,
+            SenderLastName     = dto.SenderLastName,
+            SenderIdNumber     = dto.SenderIdNumber,
             SenderBusinessName = dto.SenderBusinessName,
-            SenderPhone = dto.SenderPhone,
-            PickUpCity = dto.PickUpCity,
-            PickUpDistrict = dto.PickUpDistrict,
-            PickUpAddress = dto.PickUpAddress,
-            Note = dto.Note,
-            NumberOfPackages = dto.Orders.Count
+            SenderPhone        = dto.SenderPhone,
+            PickUpCity         = dto.PickUpCity,
+            PickUpDistrict     = dto.PickUpDistrict,
+            PickUpAddress      = dto.PickUpAddress,
+            Note               = dto.Note,
+            NumberOfPackages   = dto.Orders.Count
         };
 
         for (int i = 0; i < dto.Orders.Count; i++)
@@ -72,30 +86,45 @@ public sealed class CreateGroupOrderCommandHandler
 
             decimal companyServicePrice;
 
-            var district = districts.FirstOrDefault(d =>
-                d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
-
+            // ── Step 1: explicit override from sender/admin ───────────────────
             if (o.CompanyServicePrice.HasValue && o.CompanyServicePrice.Value > 0)
             {
                 companyServicePrice = o.CompanyServicePrice.Value;
             }
-            else if (customer is not null)
+            // ── Step 2: weight tier with IsStandard = false ───────────────────
+            else if (o.WeightPriceTierId.HasValue
+                && weightTiers.FirstOrDefault(t => t.Id == o.WeightPriceTierId.Value) is { IsStandard: false } customTier
+                && customTier.CustomPrice is > 0)
             {
-                bool isCapital = district?.IsCapitalTerritory == true;
-                bool isCity = district?.IsCityTerritory == true;
-
-                if (isCapital && customer.CompanyServiceCapitalPrice is > 0)
-                    companyServicePrice = customer.CompanyServiceCapitalPrice!.Value;
-                else if (isCity && customer.CompanyServiceCityPrice is > 0)
-                    companyServicePrice = customer.CompanyServiceCityPrice!.Value;
-                else if (customer.CompanyServiceDistrictPrice is > 0)
-                    companyServicePrice = customer.CompanyServiceDistrictPrice!.Value;
-                else
-                    companyServicePrice = district?.CompanyServicePrice ?? 0;
+                companyServicePrice = customTier.CustomPrice!.Value;
             }
+            // ── Step 3: standard pricing (customer negotiated → district fallback)
             else
             {
-                companyServicePrice = district?.CompanyServicePrice ?? 0;
+                var district = districts.FirstOrDefault(d =>
+                    d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
+
+                if (customer is not null)
+                {
+                    bool isCapital = district?.IsCapitalTerritory == true;
+                    bool isCity    = district?.IsCityTerritory    == true;
+
+                    if (isCapital && customer.CompanyServiceCapitalPrice is > 0)
+                        companyServicePrice = customer.CompanyServiceCapitalPrice!.Value;
+                    else if (isCity && customer.CompanyServiceCityPrice is > 0)
+                        companyServicePrice = customer.CompanyServiceCityPrice!.Value;
+                    else if (customer.CompanyServiceDistrictPrice is > 0)
+                        companyServicePrice = customer.CompanyServiceDistrictPrice!.Value;
+                    else
+                        companyServicePrice = district?.CompanyServicePrice ?? 0;
+                }
+                else
+                {
+                    companyServicePrice = districts
+                        .FirstOrDefault(d => d.DistrictName.Equals(
+                            o.RecipientDistrict, StringComparison.OrdinalIgnoreCase))
+                        ?.CompanyServicePrice ?? 0;
+                }
             }
 
             decimal? amountToCollect = null;
@@ -107,19 +136,20 @@ public sealed class CreateGroupOrderCommandHandler
 
             groupOrder.Orders.Add(new Order
             {
-                RecipientFirstName = o.RecipientFirstName,
-                RecipientLastName = o.RecipientLastName,
-                RecipientPhone = o.RecipientPhone,
-                RecipientCity = o.RecipientCity,
-                RecipientDistrict = o.RecipientDistrict,
-                RecipientAddress = o.RecipientAddress,
-                Description = o.Description,
-                IsFragile = o.IsFragile,
-                ProductPaymentStatus = o.ProductPaymentStatus,
-                WhoPaysForCompanyService = o.WhoPaysForCompanyService,
+                RecipientFirstName        = o.RecipientFirstName,
+                RecipientLastName         = o.RecipientLastName,
+                RecipientPhone            = o.RecipientPhone,
+                RecipientCity             = o.RecipientCity,
+                RecipientDistrict         = o.RecipientDistrict,
+                RecipientAddress          = o.RecipientAddress,
+                Description               = o.Description,
+                IsFragile                 = o.IsFragile,
+                ProductPaymentStatus      = o.ProductPaymentStatus,
+                WhoPaysForCompanyService  = o.WhoPaysForCompanyService,
                 AmountToCollectForPackage = amountToCollect,
-                TrackingNumber = trackingNumbers[i],
-                CompanyServicePrice = companyServicePrice
+                TrackingNumber            = trackingNumbers[i],
+                CompanyServicePrice       = companyServicePrice,
+                WeightPriceTierId         = o.WeightPriceTierId,
             });
         }
 
@@ -127,8 +157,6 @@ public sealed class CreateGroupOrderCommandHandler
         await _context.SaveChangesAsync(cancellationToken);
 
         // ── Notify admin via SMS ──────────────────────────────────────────────
-        // Order is already saved at this point. If SMS fails it is logged and
-        // swallowed — it must never surface as an error to the sender.
         try
         {
             await _adminSms.SendNewGroupOrderNotificationAsync(groupOrder, cancellationToken);
@@ -142,7 +170,7 @@ public sealed class CreateGroupOrderCommandHandler
         }
 
         return new CreateGroupOrderResultDto(
-            GroupOrderId: groupOrder.Id,
+            GroupOrderId:       groupOrder.Id,
             SenderBusinessName: groupOrder.SenderBusinessName,
             Orders: groupOrder.Orders
                 .Select(o => new CreatedOrderDto(o.Id, o.TrackingNumber,

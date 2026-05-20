@@ -17,8 +17,9 @@ import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { getStatusMeta } from '../../utils/statusMeta';
 import '../../styles/dashboard.css';
 import { fetchSmsBalance } from '../../api/sms';
+import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers';
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -121,7 +122,16 @@ export function AdminDashboard() {
               <path d="M8 11v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
             {t.sidebarCities}
-          </button>
+                  </button>
+                  <button
+                      className={`sidebar__link ${activeView === 'weightTiers' ? 'sidebar__link--active' : ''}`}
+                      onClick={() => goTo('weightTiers')}
+                  >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M2 8h12M5 5l-3 3 3 3M11 5l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {t.sidebarWeightTiers}
+                  </button>
         </nav>
         <div className="sidebar__footer">
           <LanguageToggle className="sidebar__lang-toggle" />
@@ -149,7 +159,8 @@ export function AdminDashboard() {
             {activeView === 'packages'  && t.topbarPackages}
             {activeView === 'couriers'  && t.topbarCouriers}
             {activeView === 'customers' && t.topbarCustomers}
-            {activeView === 'cities'    && t.topbarCities}
+            {activeView === 'cities' && t.topbarCities}
+            {activeView === 'weightTiers' && t.topbarWeightTiers}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
@@ -166,7 +177,10 @@ export function AdminDashboard() {
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} />}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} />}
-          {activeView === 'cities'    && <AdminCitiesPage token={token ?? ''} />}
+                  {activeView === 'cities' && <AdminCitiesPage token={token ?? ''} />}
+                  {activeView === 'weightTiers' && token && (
+                      <AdminWeightPriceTiersPage token={token} />
+                  )}
         </main>
       </div>
 

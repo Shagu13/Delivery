@@ -18,5 +18,6 @@ public sealed record CreateOrderDto(
     PaymentStatus  ProductPaymentStatus,
     ServicePayer   WhoPaysForCompanyService,
     decimal?       AmountToCollectForPackage = null, // amount courier must collect from recipient (COD)
-    decimal?       CompanyServicePrice = null        // explicit override; null = use auto-pricing
+    decimal?       CompanyServicePrice       = null, // explicit override; null = use auto-pricing
+    Guid?          WeightPriceTierId         = null  // selected weight tier; drives pricing when tier.IsStandard = false
 );

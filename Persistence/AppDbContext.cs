@@ -10,15 +10,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-    public DbSet<Courier> Couriers => Set<Courier>();
-    public DbSet<Customer> Customers => Set<Customer>();
-    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
-    public DbSet<GroupOrder> GroupOrders => Set<GroupOrder>();
-    public DbSet<Order> Orders => Set<Order>();
-    public DbSet<TrackingEvent> TrackingEvents => Set<TrackingEvent>();
-    public DbSet<City> Cities => Set<City>();
-    public DbSet<District> Districts => Set<District>();
-    public DbSet<DailySettlement> DailySettlements => Set<DailySettlement>();
+    public DbSet<Courier>          Couriers          => Set<Courier>();
+    public DbSet<Customer>         Customers         => Set<Customer>();
+    public DbSet<Warehouse>        Warehouses        => Set<Warehouse>();
+    public DbSet<GroupOrder>       GroupOrders       => Set<GroupOrder>();
+    public DbSet<Order>            Orders            => Set<Order>();
+    public DbSet<TrackingEvent>    TrackingEvents    => Set<TrackingEvent>();
+    public DbSet<City>             Cities            => Set<City>();
+    public DbSet<District>         Districts         => Set<District>();
+    public DbSet<DailySettlement>  DailySettlements  => Set<DailySettlement>();
+    public DbSet<WeightPriceTier>  WeightPriceTiers  => Set<WeightPriceTier>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -122,6 +123,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
              .HasForeignKey(o => o.WarehouseId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(o => o.TrackingEvents).WithOne()
              .HasForeignKey(t => t.OrderId).OnDelete(DeleteBehavior.Cascade);
+            // WeightPriceTier: soft-delete is on the tier, not a hard FK constraint
+            e.HasOne(o => o.WeightPriceTier).WithMany()
+             .HasForeignKey(o => o.WeightPriceTierId).OnDelete(DeleteBehavior.SetNull);
             e.Property(o => o.RecipientFirstName).HasMaxLength(100).IsRequired();
             e.Property(o => o.RecipientLastName).HasMaxLength(100).IsRequired();
             e.Property(o => o.RecipientPhone).HasMaxLength(20).IsRequired();
@@ -187,6 +191,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(d => d.DateDeleted);
             e.Property(d => d.DistrictName).HasMaxLength(100).IsRequired();
             e.Property(d => d.CompanyServicePrice).HasColumnType("decimal(18,2)");
+        });
+
+        // ── WeightPriceTier ───────────────────────────────────────────────────
+        modelBuilder.Entity<WeightPriceTier>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.HasIndex(t => t.DateDeleted);
+            e.HasIndex(t => new { t.MinWeightKg, t.MaxWeightKg });
+            e.Property(t => t.Label).HasMaxLength(100);
+            e.Property(t => t.MinWeightKg).HasColumnType("decimal(18,3)");
+            e.Property(t => t.MaxWeightKg).HasColumnType("decimal(18,3)");
+            e.Property(t => t.CustomPrice).HasColumnType("decimal(18,2)");
         });
     }
 }

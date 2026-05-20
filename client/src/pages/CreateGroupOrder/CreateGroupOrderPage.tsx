@@ -4,6 +4,8 @@ import { getMyProfile } from '../../api/customers';
 import type { Customer } from '../../api/customers';
 import { fetchCities, fetchDistricts } from '../../api/cities';
 import type { City } from '../../api/cities';
+import { fetchWeightPriceTiers } from '../../api/weightPriceTiers';
+import type { WeightPriceTier } from '../../api/weightPriceTiers';
 import type {
     CreateGroupOrderRequest,
     CreateGroupOrderResponse,
@@ -63,6 +65,7 @@ const EMPTY_PACKAGE: OrderItemRequest = {
     productPaymentStatus:         'NotPaid',
     whoPaysForCompanyService:     'Recipient',
     amountToCollectForPackage:    undefined,
+    weightPriceTierId:            undefined,
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -148,6 +151,15 @@ export function CreateGroupOrderPage() {
 
     const [prefilled,       setPrefilled]       = useState(false);
     const [pickupModalOpen, setPickupModalOpen] = useState(false);
+
+    // ── Weight price tiers ─────────────────────────────────────────────────────
+    const [weightTiers, setWeightTiers] = useState<WeightPriceTier[]>([]);
+
+    useEffect(() => {
+        fetchWeightPriceTiers()
+            .then(setWeightTiers)
+            .catch(() => {}); // silently ignore — weight tier selector just won't show
+    }, []);
 
     // ── City / district cache for frontend validation ─────────────────────────
     const [cities,            setCities]            = useState<City[]>([]);
@@ -336,6 +348,8 @@ export function CreateGroupOrderPage() {
                             : undefined,
                     // Send the computed/confirmed company service price
                     companyServicePrice: p.companyServicePrice ?? undefined,
+                    // Send the selected weight tier id for backend pricing resolution
+                    weightPriceTierId: p.weightPriceTierId || undefined,
                 })),
                 // customerId is resolved server-side from the JWT — do not send it from the client
             };
@@ -351,7 +365,6 @@ export function CreateGroupOrderPage() {
                         mapped[key.toLowerCase()] = (messages as string[])[0];
                     });
                     setErrors(mapped);
-                    // Scroll to first backend validation error after state update
                     setTimeout(() => {
                         document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }, 50);
@@ -533,6 +546,7 @@ export function CreateGroupOrderPage() {
                                         errors={errors}
                                         canRemove={packages.length > 1}
                                         customerPricing={customerPricing}
+                                        weightTiers={weightTiers}
                                         onChange={handlePackageChange}
                                         onRemove={removePackage}
                                     />

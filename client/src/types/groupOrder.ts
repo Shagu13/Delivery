@@ -17,7 +17,8 @@ export interface OrderItemRequest {
      * Only required when productPaymentStatus === 'NotPaid' AND whoPaysForCompanyService === 'Recipient'.
      */
     amountToCollectForPackage?: number;
-    companyServicePrice?: number; // admin override — omit to use auto-pricing
+    companyServicePrice?: number;     // admin override — omit to use auto-pricing
+    weightPriceTierId?: string;       // selected weight tier — drives pricing on the backend
 }
 
 export interface CreateGroupOrderRequest {

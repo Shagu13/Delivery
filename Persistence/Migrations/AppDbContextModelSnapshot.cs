@@ -559,6 +559,9 @@ namespace Persistence.Migrations
                     b.Property<Guid?>("WarehouseId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("WeightPriceTierId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("WhoPaysForCompanyService")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -578,6 +581,8 @@ namespace Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("WarehouseId");
+
+                    b.HasIndex("WeightPriceTierId");
 
                     b.HasIndex("RecipientCity", "RecipientDistrict");
 
@@ -641,6 +646,43 @@ namespace Persistence.Migrations
                     b.HasIndex("City");
 
                     b.ToTable("Warehouses");
+                });
+
+            modelBuilder.Entity("Domain.WeightPriceTier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("CustomPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("DateDeleted")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsStandard")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("MaxWeightKg")
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("MinWeightKg")
+                        .HasColumnType("decimal(18,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DateDeleted");
+
+                    b.HasIndex("MinWeightKg", "MaxWeightKg");
+
+                    b.ToTable("WeightPriceTiers");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -862,11 +904,18 @@ namespace Persistence.Migrations
                         .HasForeignKey("WarehouseId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Domain.WeightPriceTier", "WeightPriceTier")
+                        .WithMany()
+                        .HasForeignKey("WeightPriceTierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Courier");
 
                     b.Navigation("GroupOrder");
 
                     b.Navigation("Warehouse");
+
+                    b.Navigation("WeightPriceTier");
                 });
 
             modelBuilder.Entity("Domain.TrackingEvent", b =>

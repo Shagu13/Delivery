@@ -1,6 +1,8 @@
 import { FormField } from '../../components/ui/FormField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import type { District } from '../../api/cities';
+import type { WeightPriceTier } from '../../api/weightPriceTiers';
+import { tierLabel } from '../../api/weightPriceTiers';
 import type { OrderItemRequest, ValidationErrors } from '../../types/groupOrder';
 import { useLanguage } from '../../contexts/useLanguage';
 
@@ -16,6 +18,7 @@ interface PackageCardProps {
   errors: ValidationErrors;
   canRemove: boolean;
   customerPricing?: CustomerPricing | null;
+  weightTiers?: WeightPriceTier[];
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
   onRemove: (index: number) => void;
 }
@@ -26,6 +29,7 @@ export function PackageCard({
   errors,
   canRemove,
   customerPricing,
+  weightTiers = [],
   onChange,
   onRemove,
 }: PackageCardProps) {
@@ -33,8 +37,24 @@ export function PackageCard({
   const fieldError = (field: string) => errors[`orders[${index}].${field}`];
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  /** Compute company service fee from customer pricing tiers or district default. */
-  const computeServiceFee = (district: District): number => {
+
+  /**
+   * Compute company service fee.
+   * Priority:
+   *  1. Weight tier with IsStandard = false → tier.customPrice (flat, ignores destination)
+   *  2. Customer negotiated price based on district territory flags
+   *  3. District default price
+   */
+  const computeServiceFee = (district: District, tierId?: string): number => {
+    // Weight tier custom price takes priority
+    if (tierId) {
+      const tier = weightTiers.find(t => t.id === tierId);
+      if (tier && !tier.isStandard && (tier.customPrice ?? 0) > 0) {
+        return tier.customPrice!;
+      }
+    }
+
+    // Standard path: customer negotiated → district fallback
     if (customerPricing) {
       if (district.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
         return customerPricing.companyServiceCapitalPrice!;
@@ -61,20 +81,34 @@ export function PackageCard({
 
   const handleDistrictSelect = (district: District | null) => {
     if (district) {
-      const fee = computeServiceFee(district);
+      const fee = computeServiceFee(district, data.weightPriceTierId);
       onChange(index, 'companyServicePrice', fee);
     } else {
       onChange(index, 'companyServicePrice', 0);
     }
   };
 
+  const handleWeightTierChange = (tierId: string) => {
+    // Store the tier id
+    onChange(index, 'weightPriceTierId', tierId);
+
+    // Recompute service fee if district is already selected
+    if (data.recipientDistrict) {
+      const selectedTier = tierId ? weightTiers.find(t => t.id === tierId) : undefined;
+      if (selectedTier && !selectedTier.isStandard && (selectedTier.customPrice ?? 0) > 0) {
+        // Non-standard tier → flat price, no district needed
+        onChange(index, 'companyServicePrice', selectedTier.customPrice!);
+      }
+      // Standard tier or no tier → service fee stays as-is (district-based)
+      // It will be recalculated on the backend anyway
+    }
+  };
+
   const handlePaymentStatusChange = (value: string) => {
     onChange(index, 'productPaymentStatus', value);
     if (value === 'NotPaid') {
-      // Auto-select Recipient as the service payer when parcel is not pre-paid
       onChange(index, 'whoPaysForCompanyService', 'Recipient');
     } else {
-      // Clear amount when no longer NotPaid
       onChange(index, 'amountToCollectForPackage', 0);
     }
   };
@@ -178,6 +212,33 @@ export function PackageCard({
         <fieldset className="fieldset">
           <legend className="fieldset__legend">{t.cgoPackageOptions}</legend>
 
+          {/* Weight tier selector */}
+          {weightTiers.length > 0 && (
+            <div className="form-field">
+              <label className="form-field__label">
+                {t.cgoWeightTier} <span className="form-field__required">*</span>
+              </label>
+              <select
+                className="form-field__input"
+                value={data.weightPriceTierId ?? ''}
+                onChange={e => handleWeightTierChange(e.target.value)}
+              >
+                <option value="">{t.cgoWeightTierPlaceholder}</option>
+                {weightTiers.map(tier => (
+                  <option key={tier.id} value={tier.id}>
+                    {tierLabel(tier)}
+                    {!tier.isStandard && tier.customPrice != null
+                      ? ` — ₾${tier.customPrice.toFixed(2)}`
+                      : ''}
+                  </option>
+                ))}
+              </select>
+              {fieldError('weightPriceTierId') && (
+                <p className="form-field__error">{fieldError('weightPriceTierId')}</p>
+              )}
+            </div>
+          )}
+
           {/* Payment & service fee */}
           <div className="grid grid--2">
             <div className="form-field">
@@ -259,7 +320,6 @@ export function PackageCard({
               </div>
             </div>
           ) : (
-            /* Paid — no parcel COD, but service fee still shown */
             <div className="form-field">
               <label className="form-field__label">{t.cgoServiceFee}</label>
               <input

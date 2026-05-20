@@ -30,6 +30,16 @@ public class Order
     /// <summary>Whether the product is made of glass or other easily breakable material.</summary>
     public bool IsFragile { get; set; } = false;
 
+    // ── Weight tier ───────────────────────────────────────────────────────────
+    /// <summary>
+    /// The weight tier the sender selected when placing this order.
+    /// Null when no weight tier was chosen (orders placed before this feature, or not applicable).
+    /// Used to determine pricing: if the tier's IsStandard = false, the tier's CustomPrice
+    /// overrides all other pricing logic for this order.
+    /// </summary>
+    public Guid? WeightPriceTierId { get; set; }
+    public WeightPriceTier? WeightPriceTier { get; set; }
+
     // ── Payment ──────────────────────────────────────────────────────────────
     /// <summary>Replaces the former bool IsPaid. Tracks whether product payment has been collected.</summary>
     public PaymentStatus ProductPaymentStatus { get; set; } = PaymentStatus.NotPaid;
@@ -47,9 +57,10 @@ public class Order
     // ── Financials (admin-managed) ───────────────────────────────────────────
     /// <summary>
     /// The price the company charges for delivering this order.
-    /// Auto-filled on creation using the recipient district's territory flags
-    /// (IsCapitalTerritory / IsCityTerritory) to select the customer's negotiated tier,
-    /// falling back to District.CompanyServicePrice.
+    /// Auto-filled on creation using:
+    ///   1. WeightPriceTier.CustomPrice if tier exists and IsStandard = false
+    ///   2. Customer negotiated tier (capital / city / district)
+    ///   3. District.CompanyServicePrice fallback
     /// Admin can override at any time.
     /// </summary>
     public decimal CompanyServicePrice { get; set; } = 0;

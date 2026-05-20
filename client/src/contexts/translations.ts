@@ -153,7 +153,13 @@ const en = {
   topbarCustomers:     'Customers',
   topbarCities:        'Cities & Districts',
   addCourier:          'Add Courier',
+    // ── Admin sidebar (weight tiers) ──────────────────────────────────────────
+    sidebarWeightTiers: 'Weight Pricing',
+    topbarWeightTiers: 'Weight-Based Pricing',
 
+    // ── Create Group Order — weight tier field ────────────────────────────────
+    cgoWeightTier: 'Package weight',
+    cgoWeightTierPlaceholder: 'Select weight range…',
   // ── City/District picker ──────────────────────────────────────────────────
   cdpNoCityMatch:      (q: string) => `No match for "${q}"`,
   cdpNoCities:         'No cities available',
@@ -370,7 +376,7 @@ const en = {
   cgoImporting:             'Importing…',
   cgoImported:              (n: number): string => `${n} package${n !== 1 ? 's' : ''} imported`,
   cgoClearReset:            'Clear & reset',
-  cgoAddPackage:            '+ Add Another Package',
+  cgoAddPackage:            'Add Another Package',
   // Package card
   cgoPackageLabel:          'Package',
   cgoRemove:                'Remove',
@@ -684,7 +690,13 @@ const ka: typeof en = {
   topbarCustomers:     'მომხმარებლები',
   topbarCities:        'ქალაქები და რაიონები',
   addCourier:          'კურიერის დამატება',
+    // ── Admin sidebar (weight tiers) ──────────────────────────────────────────
+    sidebarWeightTiers: 'წონის ფასები',
+    topbarWeightTiers: 'წონაზე დაფუძნებული ფასები',
 
+    // ── Create Group Order — weight tier field ────────────────────────────────
+    cgoWeightTier: 'ამანათის წონა',
+    cgoWeightTierPlaceholder: 'აირჩიეთ წონის დიაპაზონი…',
   // ── City/District picker ──────────────────────────────────────────────────
   cdpNoCityMatch:      (q: string) => `"${q}" — შედეგი ვერ მოიძებნა`,
   cdpNoCities:         'ქალაქები არ არის',
@@ -730,7 +742,7 @@ const ka: typeof en = {
   aopFragile:          'მტვრევადი',
   aopNotSet:           'არ არის',
   aopPaid:             '✓ გადახდილი',
-  aopUnpaid:           '✗ გადაუხდელი',
+  aopUnpaid:           '✗ გადასახდელი',
   aopLoadingOrders:    'შეკვეთები იტვირთება…',
   aopFailedLoad:       'შეკვეთების ჩატვირთვა ვერ მოხერხდა.',
   aopNoOrdersMatch:    'ფილტრებით შეკვეთები ვერ მოიძებნა.',
@@ -776,7 +788,7 @@ const ka: typeof en = {
   goThPaid:                'გადახდა',
   goThActions:             'მოქმედება',
   goPaid:                  '✓ გადახდილი',
-  goUnpaid:                '✗ გადაუხდელი',
+  goUnpaid:                '✗ გადასახდელი',
   goNote:                  'შენიშვნა',
   goPkgs:                  (n: number) => `${n} ამანათი`,
   // Status pill labels
@@ -901,7 +913,7 @@ const ka: typeof en = {
   cgoImporting:             'იმპორტირება…',
   cgoImported:              (n: number): string => `${n} ამანათი შემოტანილია`,
   cgoClearReset:            'გასუფთავება და განახლება',
-  cgoAddPackage:            '+ სხვა ამანათის დამატება',
+  cgoAddPackage:            'სხვა ამანათის დამატება',
   // Package card
   cgoPackageLabel:          'ამანათი',
   cgoRemove:                'წაშლა',
@@ -916,7 +928,7 @@ const ka: typeof en = {
   cgoDescPlaceholder:       'შიგთავსი, სპეციალური მოვლა…',
   cgoPackageOptions:        'ამანათის პარამეტრები',
   cgoPaymentStatus:         'გადახდის სტატუსი',
-  cgoNotPaid:               'გადაუხდელი',
+  cgoNotPaid:               'გადასახდელი',
   cgoPaid:                  'გადახდილი',
   cgoWhoPays:               'ვინ იხდის საკურიეროს',
   cgoSender:                'გამგზავნი',
@@ -937,7 +949,7 @@ const ka: typeof en = {
   cgoErrDistrict:           'რაიონი სავალდებულოა.',
   cgoErrAddress:            'ქუჩის მისამართი სავალდებულოა.',
   cgoErrNoteMax:            'შენიშვნა არ უნდა აღემატებოდეს 500 სიმბოლოს.',
-  cgoErrParcelPrice:        'ამანათის ფასი სავალდებულოა, როცა პროდუქტი გადაუხდელია.',
+  cgoErrParcelPrice:        'ამანათის ფასი სავალდებულოა, როცა პროდუქტის ღირებულება გადასახდელია.',
   cgoErrServiceFee:         'საკურიერო მომსახურების ფასი სავალდებულოა. აირჩიეთ რაიონი ავტომატური შევსებისთვის.',
   cgoErrInvalidCity:        (city: string): string => `"${city}" არ არის ვალიდური ქალაქი.`,
   cgoErrInvalidDistrict:    (d: string, city: string): string => `"${d}" არ არის ვალიდური რაიონი ქალაქ ${city}-ში.`,

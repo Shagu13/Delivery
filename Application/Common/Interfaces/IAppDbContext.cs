@@ -14,5 +14,6 @@ public interface IAppDbContext
     DbSet<City>                 Cities            { get; }
     DbSet<District>             Districts         { get; }
     DbSet<DailySettlement>      DailySettlements  { get; }
+    DbSet<WeightPriceTier>      WeightPriceTiers  { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
