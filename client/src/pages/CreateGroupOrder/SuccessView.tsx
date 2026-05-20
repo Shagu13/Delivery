@@ -1,4 +1,5 @@
 import type { CreateGroupOrderResponse } from '../../types/groupOrder';
+import { useLanguage } from '../../contexts/useLanguage';
 
 interface SuccessViewProps {
   result: CreateGroupOrderResponse;
@@ -6,6 +7,8 @@ interface SuccessViewProps {
 }
 
 export function SuccessView({ result, onNewOrder }: SuccessViewProps) {
+  const { t } = useLanguage();
+
   const copyToClipboard = async (text: string) => {
     await navigator.clipboard.writeText(text).catch(() => null);
   };
@@ -24,12 +27,10 @@ export function SuccessView({ result, onNewOrder }: SuccessViewProps) {
             />
           </svg>
         </div>
-        <h2 className="success-view__title">Order Placed</h2>
-        <p className="success-view__subtitle">
-          Your group order has been received. Share each tracking number with the recipient.
-        </p>
+        <h2 className="success-view__title">{t.cgoSuccessTitle}</h2>
+        <p className="success-view__subtitle">{t.cgoSuccessSubtitle}</p>
         <div className="success-view__order-id">
-          Order ID:{' '}
+          {t.cgoSuccessOrderId}{' '}
           <button
             type="button"
             className="success-view__copy-btn"
@@ -43,7 +44,7 @@ export function SuccessView({ result, onNewOrder }: SuccessViewProps) {
 
       <div className="tracking-list">
         <h3 className="tracking-list__heading">
-          {result.orders.length} Tracking Number{result.orders.length !== 1 ? 's' : ''}
+          {t.cgoSuccessTrackingHeading(result.orders.length)}
         </h3>
         <div className="tracking-list__items">
           {result.orders.map(order => (
@@ -81,7 +82,7 @@ export function SuccessView({ result, onNewOrder }: SuccessViewProps) {
       </div>
 
       <button type="button" className="btn btn--ghost success-view__new" onClick={onNewOrder}>
-        Place Another Order
+        {t.cgoSuccessNewOrder}
       </button>
     </div>
   );

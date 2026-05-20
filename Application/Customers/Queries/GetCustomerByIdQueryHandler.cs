@@ -71,8 +71,11 @@ internal static class CustomerProjection
         c.City,
         c.District,
         c.Address,
-        c.ApplicationUser.Email!,   // ← email is the login identifier
+        c.ApplicationUser.Email!,
         c.IsActive,
-        c.CreatedAt
+        c.CreatedAt,
+        c.CompanyServiceCapitalPrice,
+        c.CompanyServiceCityPrice,
+        c.CompanyServiceDistrictPrice
     );
 }

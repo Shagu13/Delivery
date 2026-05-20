@@ -36,6 +36,9 @@ export interface Customer {
   businessName: string; phoneNumber: string;
   city: string; district: string; address: string;
   email: string; isActive: boolean; createdAt: string;
+  companyServiceCapitalPrice:  number | null;
+  companyServiceCityPrice:     number | null;
+  companyServiceDistrictPrice: number | null;
 }
 
 export interface AdminCustomer extends Customer {
@@ -58,6 +61,7 @@ export interface CustomerOrder {
   recipientDistrict: string; recipientDistrictGeo?: string; recipientAddress: string;
   description: string | null; status: string;
   isPaid: boolean; createdAt: string;
+  companyServicePrice?: number;
 }
 
 export interface CustomerGroupOrder {

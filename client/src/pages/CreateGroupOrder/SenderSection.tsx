@@ -1,6 +1,7 @@
 import { FormField } from '../../components/ui/FormField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import type { ValidationErrors } from '../../types/groupOrder';
+import { useLanguage } from '../../contexts/useLanguage';
 
 interface SenderData {
   senderFirstName:    string;
@@ -39,13 +40,15 @@ export function SenderSection({
   onUseOtherAddressChange,
   onOpenPickupModal,
 }: SenderSectionProps) {
+  const { t } = useLanguage();
+
   return (
     <section className="form-section">
       <div className="form-section__header">
-        <span className="form-section__number">01</span>
+        <span className="form-section__number">{t.cgoSenderNum}</span>
         <div>
-          <h2 className="form-section__title">Sender Details</h2>
-          <p className="form-section__desc">Your personal information and pickup location</p>
+          <h2 className="form-section__title">{t.cgoSenderTitle}</h2>
+          <p className="form-section__desc">{t.cgoSenderDesc}</p>
         </div>
       </div>
 
@@ -55,52 +58,52 @@ export function SenderSection({
             <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
             <path d="M8 5v3.5M8 11h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
           </svg>
-          Pre-filled from your saved profile — you can still edit any field below.
+          {t.cgoPrefillBanner}
         </div>
       )}
 
       <div className="form-section__body">
         {/* Personal Information */}
         <fieldset className="fieldset">
-          <legend className="fieldset__legend">Personal Information</legend>
+          <legend className="fieldset__legend">{t.cgoPersonalInfo}</legend>
 
           <div className="grid grid--2">
             <FormField
-              label="First Name" required
+              label={t.cgoFirstName} required
               value={data.senderFirstName}
               onChange={e => onChange('senderFirstName', e.target.value)}
               error={errors.senderFirstName}
-              placeholder="e.g. John" maxLength={100}
+              placeholder="e.g. გიორგი" maxLength={100}
             />
             <FormField
-              label="Last Name" required
+              label={t.cgoLastName} required
               value={data.senderLastName}
               onChange={e => onChange('senderLastName', e.target.value)}
               error={errors.senderLastName}
-              placeholder="e.g. Smith" maxLength={100}
+              placeholder="e.g. ბერიძე" maxLength={100}
             />
           </div>
 
           <FormField
-            label="Business / Page Name" required
+            label={t.cgoBusinessName} required
             value={data.senderBusinessName}
             onChange={e => onChange('senderBusinessName', e.target.value)}
             error={errors.senderBusinessName}
-            placeholder="e.g. My Online Shop, Nike Georgia, Gadget Store GE"
+            placeholder={t.cgoBusinessPlaceholder}
             maxLength={150}
           />
 
           <div className="grid grid--2">
             <FormField
-              label="ID Number"
+              label={t.cgoIdNumber}
               value={data.senderIdNumber ?? ''}
               onChange={e => onChange('senderIdNumber', e.target.value)}
               error={errors.senderIdNumber}
-              placeholder="National ID / Passport (optional)"
+              placeholder={t.cgoIdPlaceholder}
               maxLength={50}
             />
             <FormField
-              label="Phone Number" required type="tel"
+              label={t.cgoPhone} required type="tel"
               value={data.senderPhone}
               onChange={e => onChange('senderPhone', e.target.value)}
               error={errors.senderPhone}
@@ -111,9 +114,8 @@ export function SenderSection({
 
         {/* Pickup Location */}
         <fieldset className="fieldset">
-          <legend className="fieldset__legend">Pickup Location</legend>
+          <legend className="fieldset__legend">{t.cgoPickupLocation}</legend>
 
-          {/* Use Other Address button (only shown when profile was pre-filled) */}
           {prefilled && onOpenPickupModal && (
             <div className="other-address-row">
               <button
@@ -124,7 +126,7 @@ export function SenderSection({
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                   <path d="M8 1C5.24 1 3 3.24 3 6c0 3.75 5 9 5 9s5-5.25 5-9c0-2.76-2.24-5-5-5zm0 6.5A1.5 1.5 0 1 1 8 4a1.5 1.5 0 0 1 0 3z" fill="currentColor" />
                 </svg>
-                {useOtherAddress ? 'Change pickup address' : 'Use a different pickup address for this order'}
+                {useOtherAddress ? t.cgoChangePickup : t.cgoDifferentPickup}
               </button>
               {useOtherAddress && onUseOtherAddressChange && (
                 <button
@@ -132,13 +134,12 @@ export function SenderSection({
                   className="btn btn--ghost other-address-reset"
                   onClick={() => onUseOtherAddressChange(false)}
                 >
-                  Reset to registered address
+                  {t.cgoResetAddress}
                 </button>
               )}
             </div>
           )}
 
-          {/* Pickup fields — always shown; locked to registered address unless toggle is on */}
           <CityDistrictPicker
             cityValue={data.pickUpCity}
             districtValue={data.pickUpDistrict}
@@ -148,6 +149,33 @@ export function SenderSection({
             }}
             onDistrictChange={districtName => onChange('pickUpDistrict', districtName)}
             cityError={errors.pickUpCity}
+            districtError={errors.pickUpDistrict}
+            disabled={prefilled && !useOtherAddress}
+          />
+
+          <FormField
+            label={t.cgoStreetAddress} required
+            value={data.pickUpAddress}
+            onChange={e => onChange('pickUpAddress', e.target.value)}
+            error={errors.pickUpAddress}
+            placeholder={t.cgoStreetPlaceholder} maxLength={250}
+            disabled={prefilled && !useOtherAddress}
+          />
+
+          <FormField
+            as="textarea"
+            label={t.cgoNoteCourier}
+            value={data.note}
+            onChange={e => onChange('note', e.target.value)}
+            error={errors.note}
+            placeholder={t.cgoNotePlaceholder}
+            rows={3} maxLength={500}
+          />
+        </fieldset>
+      </div>
+    </section>
+  );
+}
             districtError={errors.pickUpDistrict}
             disabled={prefilled && !useOtherAddress}
           />

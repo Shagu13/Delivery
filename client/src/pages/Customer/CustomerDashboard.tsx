@@ -294,7 +294,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    {['Tracking #', 'Recipient', 'City', 'Address', 'Status', 'Paid'].map(h => (
+                    {['Tracking #', 'Recipient', 'City', 'Address', 'Status', 'Paid', 'Service Fee'].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600,
                         fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
                         color: 'var(--color-text-subtle)' }}>
@@ -331,6 +331,9 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                         }}>
                           {o.isPaid ? 'Paid' : 'Unpaid'}
                         </span>
+                      </td>
+                      <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
+                        {o.companyServicePrice != null ? `₾${o.companyServicePrice.toFixed(2)}` : '—'}
                       </td>
                     </tr>
                   ))}

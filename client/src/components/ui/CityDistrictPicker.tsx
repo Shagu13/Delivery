@@ -10,6 +10,7 @@ interface Props {
   districtValue: string;
   onCityChange: (cityName: string) => void;
   onDistrictChange: (districtName: string) => void;
+  onDistrictSelect?: (district: District | null) => void;
   cityError?: string;
   districtError?: string;
   disabled?: boolean;
@@ -42,7 +43,7 @@ function DropdownPortal({ anchorRef, open, children }: DropdownPortalProps) {
   return createPortal(<div className="cdp-portal" style={style}>{children}</div>, document.body);
 }
 
-export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onDistrictChange, cityError, districtError, disabled = false }: Props) {
+export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onDistrictChange, onDistrictSelect, cityError, districtError, disabled = false }: Props) {
     const { t, lang } = useLanguage();
 
   const [cities,           setCities]           = useState<City[]>([]);
@@ -113,13 +114,13 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
     );
 
   const clearCity = useCallback(() => {
-    setCitySearch(''); onCityChange(''); setSelectedCityId(null); setDistrictSearch(''); onDistrictChange('');
+    setCitySearch(''); onCityChange(''); setSelectedCityId(null); setDistrictSearch(''); onDistrictChange(''); onDistrictSelect?.(null);
     cityInputRef.current?.focus();
-  }, [onCityChange, onDistrictChange]);
+  }, [onCityChange, onDistrictChange, onDistrictSelect]);
 
   const clearDistrict = useCallback(() => {
-    setDistrictSearch(''); onDistrictChange(''); districtInputRef.current?.focus();
-  }, [onDistrictChange]);
+    setDistrictSearch(''); onDistrictChange(''); onDistrictSelect?.(null); districtInputRef.current?.focus();
+  }, [onDistrictChange, onDistrictSelect]);
 
     const selectCity = useCallback((city: City) => {
         setCitySearch(cityLabel(city));   
@@ -134,8 +135,9 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
     const selectDistrict = useCallback((d: District) => {
         setDistrictSearch(districtLabel(d));  
         setDistrictOpen(false);
-        onDistrictChange(d.districtName);     
-    }, [onDistrictChange, lang]);
+        onDistrictChange(d.districtName);
+        onDistrictSelect?.(d);
+    }, [onDistrictChange, onDistrictSelect, lang]);
 
   const handleCityKeyDown = (e: React.KeyboardEvent) => {
     if (!cityOpen) { if (e.key === 'ArrowDown' || e.key === 'Enter') setCityOpen(true); return; }

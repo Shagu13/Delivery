@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { createGroupOrder, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
 import { getMyProfile } from '../../api/customers';
+import type { Customer } from '../../api/customers';
 import { fetchCities, fetchDistricts } from '../../api/cities';
 import type { City } from '../../api/cities';
 import type {
@@ -10,6 +11,8 @@ import type {
     ValidationErrors,
 } from '../../types/groupOrder';
 import { useAuth } from '../../contexts/useAuth';
+import { useLanguage } from '../../contexts/useLanguage';
+import type { Translations } from '../../contexts/translations';
 import { SenderSection } from './SenderSection';
 import { PackageCard } from './PackageCard';
 import { SuccessView } from './SuccessView';
@@ -58,7 +61,7 @@ const EMPTY_PACKAGE: OrderItemRequest = {
     description:                  '',
     isFragile:                    false,
     productPaymentStatus:         'NotPaid',
-    whoPaysForCompanyService:     'Sender',
+    whoPaysForCompanyService:     'Recipient',
     amountToCollectForPackage:    undefined,
 };
 
@@ -69,55 +72,53 @@ function validate(
     packages: OrderItemRequest[],
     cities: City[],
     cityDistrictCache: Record<string, Set<string>>,
+    t: Translations,
 ): ValidationErrors {
     const errors: ValidationErrors = {};
 
-    const req = (key: string, val: string, label: string) => {
-        if (!val.trim()) errors[key] = `${label} is required.`;
+    const req = (key: string, val: string, errMsg: string) => {
+        if (!val.trim()) errors[key] = errMsg;
     };
 
-    req('senderFirstName',    sender.senderFirstName,    'First name');
-    req('senderLastName',     sender.senderLastName,     'Last name');
-    req('senderBusinessName', sender.senderBusinessName, 'Business or page name');
-    req('senderPhone',        sender.senderPhone,        'Phone number');
-    req('pickUpCity',         sender.pickUpCity,         'City');
-    req('pickUpDistrict',     sender.pickUpDistrict,     'District');
-    req('pickUpAddress',      sender.pickUpAddress,      'Street address');
+    req('senderFirstName',    sender.senderFirstName,    t.cgoErrFirstName);
+    req('senderLastName',     sender.senderLastName,     t.cgoErrLastName);
+    req('senderBusinessName', sender.senderBusinessName, t.cgoErrBusinessName);
+    req('senderPhone',        sender.senderPhone,        t.cgoErrPhone);
+    req('pickUpCity',         sender.pickUpCity,         t.cgoErrCity);
+    req('pickUpDistrict',     sender.pickUpDistrict,     t.cgoErrDistrict);
+    req('pickUpAddress',      sender.pickUpAddress,      t.cgoErrAddress);
 
-    if (sender.note.length > 500) errors.note = 'Note cannot exceed 500 characters.';
+    if (sender.note.length > 500) errors.note = t.cgoErrNoteMax;
 
     packages.forEach((pkg, i) => {
-        const p = (field: string, val: string, label: string) => {
-            if (!val.trim()) errors[`orders[${i}].${field}`] = `${label} is required.`;
+        const p = (field: string, val: string, errMsg: string) => {
+            if (!val.trim()) errors[`orders[${i}].${field}`] = errMsg;
         };
-        p('recipientFirstName', pkg.recipientFirstName, 'First name');
-        p('recipientLastName',  pkg.recipientLastName,  'Last name');
-        p('recipientPhone',     pkg.recipientPhone,     'Phone number');
-        p('recipientAddress',   pkg.recipientAddress,   'Street address');
+        p('recipientPhone',   pkg.recipientPhone,   t.cgoErrPhone);
+        p('recipientAddress', pkg.recipientAddress, t.cgoErrAddress);
 
-        // City existence check
         if (!pkg.recipientCity.trim()) {
-            errors[`orders[${i}].recipientCity`] = 'City is required.';
+            errors[`orders[${i}].recipientCity`] = t.cgoErrCity;
         } else if (cities.length > 0 && !cities.some(c => c.cityName === pkg.recipientCity)) {
-            errors[`orders[${i}].recipientCity`] = `"${pkg.recipientCity}" is not a valid city.`;
+            errors[`orders[${i}].recipientCity`] = t.cgoErrInvalidCity(pkg.recipientCity);
         }
 
-        // District validation
         if (!pkg.recipientDistrict.trim()) {
-            errors[`orders[${i}].recipientDistrict`] = 'District is required.';
+            errors[`orders[${i}].recipientDistrict`] = t.cgoErrDistrict;
         } else if (
             cityDistrictCache[pkg.recipientCity] &&
             !cityDistrictCache[pkg.recipientCity].has(pkg.recipientDistrict)
         ) {
             errors[`orders[${i}].recipientDistrict`] =
-                `"${pkg.recipientDistrict}" is not a valid district in ${pkg.recipientCity}.`;
+                t.cgoErrInvalidDistrict(pkg.recipientDistrict, pkg.recipientCity);
         }
 
-        // COD amount required when recipient pays and product is not pre-paid
-        if (pkg.productPaymentStatus === 'NotPaid' && pkg.whoPaysForCompanyService === 'Recipient') {
+        if (pkg.productPaymentStatus === 'NotPaid') {
             if (!pkg.amountToCollectForPackage || pkg.amountToCollectForPackage <= 0) {
-                errors[`orders[${i}].amountToCollectForPackage`] =
-                    'Amount to collect is required when recipient pays for an unpaid product.';
+                errors[`orders[${i}].amountToCollectForPackage`] = t.cgoErrParcelPrice;
+            }
+            if (!pkg.companyServicePrice || pkg.companyServicePrice <= 0) {
+                errors[`orders[${i}].companyServicePrice`] = t.cgoErrServiceFee;
             }
         }
     });
@@ -129,6 +130,7 @@ function validate(
 
 export function CreateGroupOrderPage() {
     const { user, token } = useAuth();
+    const { t } = useLanguage();
 
     const [sender,       setSender]       = useState<SenderFormData>(EMPTY_SENDER);
     const [useOtherAddr, setUseOtherAddr] = useState(false);
@@ -137,6 +139,7 @@ export function CreateGroupOrderPage() {
     const [submitting,   setSubmitting]   = useState(false);
     const [globalError,  setGlobalError]  = useState<string | null>(null);
     const [result,       setResult]       = useState<CreateGroupOrderResponse | null>(null);
+    const [customerPricing, setCustomerPricing] = useState<Pick<Customer, 'companyServiceCapitalPrice' | 'companyServiceCityPrice' | 'companyServiceDistrictPrice'> | null>(null);
 
     const [excelImporting, setExcelImporting] = useState(false);
     const [excelError,     setExcelError]     = useState<string | null>(null);
@@ -178,6 +181,11 @@ export function CreateGroupOrderPage() {
                     pickUpDistrict:     profile.district,
                     pickUpAddress:      profile.address,
                 }));
+                setCustomerPricing({
+                    companyServiceCapitalPrice:  profile.companyServiceCapitalPrice,
+                    companyServiceCityPrice:     profile.companyServiceCityPrice,
+                    companyServiceDistrictPrice: profile.companyServiceDistrictPrice,
+                });
                 setPrefilled(true);
             } catch {
                 // silently ignore
@@ -299,7 +307,7 @@ export function CreateGroupOrderPage() {
         e.preventDefault();
         setGlobalError(null);
 
-        const validationErrors = validate(sender, packages, cities, cityDistrictCache);
+        const validationErrors = validate(sender, packages, cities, cityDistrictCache, t);
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
             document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -321,11 +329,13 @@ export function CreateGroupOrderPage() {
                 orders: packages.map(p => ({
                     ...p,
                     description: p.description?.trim() || undefined,
-                    // Only send amountToCollectForPackage when the conditions apply
+                    // Send parcel price whenever the product is not pre-paid
                     amountToCollectForPackage:
-                        p.productPaymentStatus === 'NotPaid' && p.whoPaysForCompanyService === 'Recipient'
+                        p.productPaymentStatus === 'NotPaid'
                             ? p.amountToCollectForPackage
                             : undefined,
+                    // Send the computed/confirmed company service price
+                    companyServicePrice: p.companyServicePrice ?? undefined,
                 })),
                 // customerId is resolved server-side from the JWT — do not send it from the client
             };
@@ -348,7 +358,7 @@ export function CreateGroupOrderPage() {
                 }
                 setGlobalError(err.message);
             } else {
-                setGlobalError('An unexpected error occurred. Please try again.');
+                setGlobalError(t.cgoGlobalError);
             }
         } finally {
             setSubmitting(false);
@@ -401,12 +411,9 @@ export function CreateGroupOrderPage() {
         <div className="page">
             <main className="page__main">
                 <div className="page__intro">
-                    <p className="page__eyebrow">Pickup Request</p>
-                    <h1 className="page__title">Send Multiple Packages</h1>
-                    <p className="page__desc">
-                        Fill in your details and list all recipients. We'll generate a unique tracking number
-                        for each package.
-                    </p>
+                    <p className="page__eyebrow">{t.cgoEyebrow}</p>
+                    <h1 className="page__title">{t.cgoTitle}</h1>
+                    <p className="page__desc">{t.cgoDesc}</p>
                 </div>
 
                 <form className="order-form" onSubmit={handleSubmit} noValidate>
@@ -433,11 +440,11 @@ export function CreateGroupOrderPage() {
 
                     <section className="form-section">
                         <div className="form-section__header">
-                            <span className="form-section__number">02</span>
+                            <span className="form-section__number">{t.cgoPackagesNum}</span>
                             <div>
-                                <h2 className="form-section__title">Packages</h2>
+                                <h2 className="form-section__title">{t.cgoPackagesTitle}</h2>
                                 <p className="form-section__desc">
-                                    {packages.length} package{packages.length !== 1 ? 's' : ''} — up to 100 per order
+                                    {t.cgoPackagesDesc(packages.length)}
                                 </p>
                             </div>
                         </div>
@@ -453,8 +460,8 @@ export function CreateGroupOrderPage() {
                                         </svg>
                                     </div>
                                     <div className="excel-import__info">
-                                        <span className="excel-import__title">Bulk import via Excel</span>
-                                        <span className="excel-import__desc">Download the template, fill in recipients, then upload.</span>
+                                        <span className="excel-import__title">{t.cgoBulkTitle}</span>
+                                        <span className="excel-import__desc">{t.cgoBulkDesc}</span>
                                     </div>
                                 </div>
                                 <div className="excel-import__actions">
@@ -465,10 +472,10 @@ export function CreateGroupOrderPage() {
                                                     <circle cx="6.5" cy="6.5" r="6" stroke="currentColor" strokeWidth="1.2" />
                                                     <path d="M4 6.5l2 2 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
                                                 </svg>
-                                                {importedCount} package{importedCount !== 1 ? 's' : ''} imported
+                                                {t.cgoImported(importedCount)}
                                             </div>
                                             <button type="button" className="excel-import__clear" onClick={clearImport}>
-                                                Clear &amp; reset
+                                                {t.cgoClearReset}
                                             </button>
                                         </>
                                     ) : (
@@ -477,7 +484,7 @@ export function CreateGroupOrderPage() {
                                                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                                                     <path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                                                 </svg>
-                                                Download Template
+                                                {t.cgoDownloadTemplate}
                                             </button>
                                             <button
                                                 type="button"
@@ -486,13 +493,13 @@ export function CreateGroupOrderPage() {
                                                 disabled={excelImporting}
                                             >
                                                 {excelImporting ? (
-                                                    <><span className="btn__spinner btn__spinner--dark" />Importing…</>
+                                                    <><span className="btn__spinner btn__spinner--dark" />{t.cgoImporting}</>
                                                 ) : (
                                                     <>
                                                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                                                             <path d="M7 9V1M4 4l3-3 3 3M2 11h10M2 13h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                                                         </svg>
-                                                        Upload &amp; Import
+                                                        {t.cgoUploadImport}
                                                     </>
                                                 )}
                                             </button>
@@ -525,6 +532,7 @@ export function CreateGroupOrderPage() {
                                         data={pkg}
                                         errors={errors}
                                         canRemove={packages.length > 1}
+                                        customerPricing={customerPricing}
                                         onChange={handlePackageChange}
                                         onRemove={removePackage}
                                     />
@@ -536,7 +544,7 @@ export function CreateGroupOrderPage() {
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                                     </svg>
-                                    Add Another Package
+                                    {t.cgoAddPackage}
                                 </button>
                             )}
                         </div>
@@ -555,16 +563,16 @@ export function CreateGroupOrderPage() {
                     <div className="form-footer">
                         <div className="form-footer__summary">
                             <span className="form-footer__count">
-                                {packages.length} package{packages.length !== 1 ? 's' : ''}
+                                {t.cgoFooterCount(packages.length)}
                             </span>
-                            <span className="form-footer__hint">Ready to submit</span>
+                            <span className="form-footer__hint">{t.cgoFooterHint}</span>
                         </div>
                         <button type="submit" className="btn btn--primary" disabled={submitting}>
                             {submitting ? (
-                                <><span className="btn__spinner" />Placing Order…</>
+                                <><span className="btn__spinner" />{t.cgoSubmitting}</>
                             ) : (
                                 <>
-                                    Place Order
+                                    {t.cgoSubmit}
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
