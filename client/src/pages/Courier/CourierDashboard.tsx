@@ -323,7 +323,14 @@ function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelLocation}</span><span className="courier-card__value">{go.pickUpCity}, {go.pickUpDistrict}</span></div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelAddress}</span><span className="courier-card__value">{go.pickUpAddress}</span></div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelPackages}</span><span className="courier-card__value">{t.cdLabelPackageCount(go.numberOfPackages)}</span></div>
-                                        {go.senderPhone && <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelPhone}</span><span className="courier-card__value">{go.senderPhone}</span></div>}
+                                        {go.senderPhone && (
+                                            <div className="courier-card__row">
+                                                <span className="courier-card__label">{t.cdLabelPhone}</span>
+                                                <a href={`tel:${go.senderPhone}`} className="courier-card__phone-link">
+                                                    📞 {go.senderPhone}
+                                                </a>
+                                            </div>
+                                        )}
                                         {go.whenPackagePickedUpDate && <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelScheduled}</span><span className="courier-card__value">{new Date(go.whenPackagePickedUpDate).toLocaleDateString()}</span></div>}
                                         {go.note && <div className="courier-card__note">{go.note}</div>}
                                     </div>
@@ -420,7 +427,12 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                                             <span className="courier-card__label">{t.cdLabelSender}</span>
                                             <span className="courier-card__value">{order.senderBusinessName}</span>
                                         </div>
-                                        <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelPhone}</span><span className="courier-card__value">{order.recipientPhone}</span></div>
+                                        <div className="courier-card__row">
+                                                <span className="courier-card__label">{t.cdLabelPhone}</span>
+                                                <a href={`tel:${order.recipientPhone}`} className="courier-card__phone-link">
+                                                    📞 {order.recipientPhone}
+                                                </a>
+                                            </div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelLocation}</span><span className="courier-card__value">{order.recipientCity}, {order.recipientDistrict},</span></div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelAddress}</span><span className="courier-card__value">{order.recipientAddress}</span></div>
                                         <div className="courier-card__row">
