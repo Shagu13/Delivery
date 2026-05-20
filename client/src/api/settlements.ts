@@ -39,6 +39,23 @@ export interface CreateSettlementResponse {
     settlementId: string;
 }
 
+/** A daily settlement record as returned to the courier (no admin-only fields). */
+export interface CourierSettlementItem {
+    id: string;
+    date: string;                              // "YYYY-MM-DD"
+    totalOrdersPickedUp: number;
+    totalOrdersDelivered: number;
+    /** Total cash collected from recipients on this day. */
+    totalAmountOfCashCollected: number;
+    /** Sum of all delivery fees (company service price) for the day. */
+    totalCompanyServiceRevenue: number;
+    /** Courier's own salary earned that day. */
+    totalCourierSalary: number;
+    /** Amount the courier must hand over to the company (cash − salary). */
+    totalCourierTransferToCompany: number;
+    isTheDayClosed: boolean;
+}
+
 // ── Errors ────────────────────────────────────────────────────────────────────
 
 export class SettlementApiError extends Error {
@@ -92,4 +109,22 @@ export async function createSettlement(
         );
     }
     return res.json() as Promise<CreateSettlementResponse>;
+}
+
+/**
+ * Courier-facing: fetches all daily settlement records for the authenticated courier.
+ * Returns newest first. Requires a Courier-role JWT.
+ */
+export async function fetchMySettlements(token: string): Promise<CourierSettlementItem[]> {
+    const res = await fetch('/api/settlements/my', {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new SettlementApiError(
+            res.status,
+            body?.title ?? `Failed to load settlements (${res.status})`,
+        );
+    }
+    return res.json() as Promise<CourierSettlementItem[]>;
 }

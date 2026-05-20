@@ -2,6 +2,7 @@ using Application.Settlements.Commands;
 using Application.Settlements.Queries;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace API.Controllers;
 
@@ -22,6 +23,23 @@ public sealed class SettlementsController : BaseController
         CancellationToken ct)
     {
         var result = await Sender.Send(new GetSettlementPreviewQuery(courierId, date), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/settlements/my  (Courier) ───────────────────────────────────
+    /// <summary>
+    /// Returns all daily settlement records that belong to the authenticated courier,
+    /// newest first. The courier can use this to review their salary history and
+    /// the cash amounts they collected from recipients.
+    /// </summary>
+    [HttpGet("my")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(typeof(IReadOnlyList<Application.Settlements.DTOs.CourierSettlementItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMy(CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var result = await Sender.Send(new GetMyCourierSettlementsQuery(userId), ct);
         return Ok(result);
     }
 

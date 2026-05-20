@@ -76,10 +76,8 @@ public sealed class AdminNotificationSmsService : IAdminNotificationSmsService
     private static string FormatNewGroupOrderMessage(GroupOrder groupOrder)
     {
         // Georgian message — concise enough for a single SMS (< 160 chars)
-        return $"📦 ახალი შეკვეთა #{groupOrder.Id.ToString()[..8].ToUpper()}\n" +
+        return $"📦 ახალი შეკვეთა \n" +
                $"გამგზავნი: {groupOrder.SenderBusinessName}\n" +
-               $"პაკეტები: {groupOrder.NumberOfPackages}\n" +
-               $"აყვანა: {groupOrder.PickUpCity}, {groupOrder.PickUpDistrict}\n" +
                $"ტელ: {groupOrder.SenderPhone}";
     }
 }

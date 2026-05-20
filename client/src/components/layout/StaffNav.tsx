@@ -61,7 +61,7 @@ export function StaffNav() {
                             )}
                         </button>
                     )}
-                    <span className="nav__user">{user?.username}</span>
+                    {user?.role !== 'Courier' && <span className="nav__user">{user?.username}</span>}
                 </nav>
             </div>
 
