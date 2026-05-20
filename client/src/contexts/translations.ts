@@ -786,7 +786,7 @@ const ka: typeof en = {
   // Pickups panel
   cdPickupsTitle:            'აქტიური გატანები',
   cdPickupsLoading:          'გატანები იტვირთება…',
-  cdPickupsEmpty:            'ისტორია ვერ მოიძებნა.',
+  cdPickupsEmpty:            'გატანა ვერ მოიძებნა,იხილეთ ისტორია.',
   cdPickupStatusAssigned:    'დაინიშნა',
   cdPickupStatusOnWay:       'გზაშია',
   cdPickupStatusToWarehouse: 'საწყობისკენ',
@@ -800,7 +800,7 @@ const ka: typeof en = {
   // Deliveries panel
   cdDeliveriesTitle:         'აქტიური მიტანები',
   cdDeliveriesLoading:       'მიტანები იტვირთება…',
-  cdDeliveriesEmpty:         'ისტორია ვერ მოიძებნა.',
+  cdDeliveriesEmpty:         'მიტანა ვერ მოიძებნა,იხილეთ ისტორია.',
   cdDeliveryStatusAssigned:  'დაინიშნა',
   cdDeliveryStatusInTransit: 'გზაშია',
   cdDeliveryStatusPostponed: 'გადავადდა',

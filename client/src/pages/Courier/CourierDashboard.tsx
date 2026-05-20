@@ -369,10 +369,7 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
     if (!deliveries.length) return <div className="dashboard__empty">{t.cdDeliveriesEmpty}</div>;
 
     const needsCollect = (o: CourierOrder) =>
-        o.whoPaysForCompanyService === 'Recipient' && (
-            (o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null && o.amountToCollectForPackage > 0) ||
-            (o.productPaymentStatus === 'Paid' && o.companyServicePrice > 0)
-        );
+        o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
 
     const collectTotal = (o: CourierOrder) =>
         o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null
