@@ -1,7 +1,7 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Couriers.DTOs;
 using Application.GroupOrders.DTOs;
-using Application.Orders.DTOs;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -117,6 +117,7 @@ public sealed class GetCourierOrdersQueryHandler
 
         var orders = await _context.Orders
             .AsNoTracking()
+            .Include(o => o.GroupOrder)
             .Where(o => o.CourierId == courier.Id && activeStatuses.Contains(o.Status))
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -124,6 +125,7 @@ public sealed class GetCourierOrdersQueryHandler
         return orders.Select(o => new CourierOrderDto(
             Id:                      o.Id,
             TrackingNumber:          o.TrackingNumber,
+            SenderBusinessName:      o.GroupOrder?.SenderBusinessName,
             RecipientFirstName:      o.RecipientFirstName,
             RecipientLastName:       o.RecipientLastName,
             RecipientPhone:          o.RecipientPhone,

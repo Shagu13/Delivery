@@ -1,11 +1,12 @@
 using Domain.Enums;
 
-namespace Application.Orders.DTOs;
+namespace Application.Couriers.DTOs;
 
 /// <summary>Order as seen by the courier responsible for last-mile delivery.</summary>
 public sealed record CourierOrderDto(
     Guid   Id,
     string TrackingNumber,
+    string? SenderBusinessName,
     string RecipientFirstName,
     string RecipientLastName,
     string RecipientPhone,

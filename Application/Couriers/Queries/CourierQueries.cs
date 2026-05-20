@@ -1,6 +1,6 @@
 using MediatR;
 using Application.GroupOrders.DTOs;
-using Application.Orders.DTOs;
+using Application.Couriers.DTOs;
 
 namespace Application.Courier.Queries;
 

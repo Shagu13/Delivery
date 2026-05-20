@@ -347,11 +347,11 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
     const [postponingId, setPostponingId] = useState<string | null>(null);
     const [collectConfirmOrderId, setCollectConfirmOrderId] = useState<string | null>(null);
 
-    const STATUS_LABEL: Record<string, string> = {
-        CourierAssignedToDeliver:             t.cdDeliveryStatusAssigned,
-        CourierDeliveringTheOrderToRecipient: t.cdDeliveryStatusInTransit,
-        DeliveryPostponed:                    t.cdDeliveryStatusPostponed,
-    };
+    //const STATUS_LABEL: Record<string, string> = {
+    //    CourierAssignedToDeliver:             t.cdDeliveryStatusAssigned,
+    //    CourierDeliveringTheOrderToRecipient: t.cdDeliveryStatusInTransit,
+    //    DeliveryPostponed:                    t.cdDeliveryStatusPostponed,
+    //};
 
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
@@ -396,7 +396,6 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                                 <div className="courier-card__collapse-right">
                                     {mustCollect && <span className="courier-card__collapse-collect">₾{total.toFixed(2)}</span>}
                                     {order.isFragile && <span className="courier-card__collapse-badge courier-card__collapse-badge--warn">{t.cdLabelFragile}</span>}
-                                    <span className={`courier-card__collapse-badge${order.status === 'DeliveryPostponed' ? ' courier-card__collapse-badge--warn' : ''}`}>{STATUS_LABEL[order.status] ?? order.status}</span>
                                     <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
                                 </div>
                             </button>
@@ -404,14 +403,10 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                             {isExpanded && (
                                 <>
                                     <div className="courier-card__body">
-                                        <div className="courier-card__header">
-                                            <div className="courier-card__business" style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M10 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                                                {order.trackingNumber}
-                                                {order.isFragile && <span style={{ marginLeft: 8, color: '#f97316', fontSize: '0.78rem', fontFamily: 'var(--font-body)' }}>{t.cdLabelFragile}</span>}
-                                            </div>
+                                        <div className="courier-card__row">
+                                            <span className="courier-card__label">{t.cdLabelSender}</span>
+                                            <span className="courier-card__value">{order.senderBusinessName}</span>
                                         </div>
-                                        <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelRecipient}</span><span className="courier-card__value">{order.recipientFirstName} {order.recipientLastName}</span></div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelPhone}</span><span className="courier-card__value">{order.recipientPhone}</span></div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelLocation}</span><span className="courier-card__value">{order.recipientCity}, {order.recipientDistrict},</span></div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelAddress}</span><span className="courier-card__value">{order.recipientAddress}</span></div>

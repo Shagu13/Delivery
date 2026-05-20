@@ -22,6 +22,7 @@ export const POSTPONE_REASON_LABELS: Record<PostponeReason, string> = {
 export interface CourierOrder {
     id: string;
     trackingNumber: string;
+    senderBusinessName: string | null;
     recipientFirstName: string;
     recipientLastName: string;
     recipientPhone: string;
