@@ -332,6 +332,7 @@ const en = {
   cdTabPay:                 '💰 Pay',
   cdRoleCourier:            'Courier',
   cdRetry:                  'Retry',
+  cdCollapseAll:            '↑ Collapse all',
 
     // Shared field labels
   cdLabelSender: '🏪 Sender',
@@ -765,6 +766,7 @@ const ka: typeof en = {
   cdTabPay:                 '💰 ანგარიშსწორება',
   cdRoleCourier:            'კურიერი',
   cdRetry:                  'ხელახლა',
+  cdCollapseAll:            '↑ ყველას დახურვა',
 
     // Shared field labels
   cdLabelSender: '🏪 გამგზავნი',

@@ -134,19 +134,19 @@ export function CourierDashboard() {
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
-    const loadPickups = async () => {
+    const loadPickups = async (silent = false) => {
         if (!token) return;
-        setPickupLoading(true); setPickupError(null);
+        if (!silent) { setPickupLoading(true); setPickupError(null); }
         try { setPickups(await fetchMyPickups(token)); }
-        catch { setPickupError(t.cdPickupsLoading); }
-        finally { setPickupLoading(false); }
+        catch { if (!silent) setPickupError(t.cdPickupsLoading); }
+        finally { if (!silent) setPickupLoading(false); }
     };
-    const loadDeliveries = async () => {
+    const loadDeliveries = async (silent = false) => {
         if (!token) return;
-        setDeliveriesLoading(true); setDeliveriesError(null);
+        if (!silent) { setDeliveriesLoading(true); setDeliveriesError(null); }
         try { setDeliveries(await fetchMyDeliveries(token)); }
-        catch { setDeliveriesError(t.cdDeliveriesLoading); }
-        finally { setDeliveriesLoading(false); }
+        catch { if (!silent) setDeliveriesError(t.cdDeliveriesLoading); }
+        finally { if (!silent) setDeliveriesLoading(false); }
     };
 
     useEffect(() => {
@@ -173,7 +173,7 @@ export function CourierDashboard() {
 
     async function act(id: string, fn: () => Promise<void>, msg: string) {
         setBusyId(id);
-        try { await fn(); showToast(msg); loadPickups(); loadDeliveries(); }
+        try { await fn(); showToast(msg); loadPickups(true); loadDeliveries(true); }
         catch (e: unknown) { showToast(e instanceof Error ? e.message : t.cdToastFailed); }
         finally { setBusyId(null); }
     }
@@ -289,7 +289,15 @@ function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct
 
     return (
         <div className="dashboard__section">
-            <h2 className="dashboard__title">{t.cdPickupsTitle}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <h2 className="dashboard__title" style={{ margin: 0 }}>{t.cdPickupsTitle}</h2>
+                {expandedIds.size > 0 && (
+                    <button onClick={() => setExpandedIds(new Set())}
+                        style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+                        {t.cdCollapseAll}
+                    </button>
+                )}
+            </div>
             <div className="courier-cards">
                 {pickups.map(go => {
                     const isExpanded = expandedIds.has(go.id);
@@ -373,7 +381,15 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
 
     return (
         <div className="dashboard__section">
-            <h2 className="dashboard__title">{t.cdDeliveriesTitle}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <h2 className="dashboard__title" style={{ margin: 0 }}>{t.cdDeliveriesTitle}</h2>
+                {expandedIds.size > 0 && (
+                    <button onClick={() => setExpandedIds(new Set())}
+                        style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+                        {t.cdCollapseAll}
+                    </button>
+                )}
+            </div>
             <div className="courier-cards">
                 {deliveries.map(order => {
                     const isBusy = busyId === order.id;
