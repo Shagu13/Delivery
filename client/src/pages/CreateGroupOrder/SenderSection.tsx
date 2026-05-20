@@ -176,30 +176,4 @@ export function SenderSection({
     </section>
   );
 }
-            districtError={errors.pickUpDistrict}
-            disabled={prefilled && !useOtherAddress}
-          />
 
-          <FormField
-            label="Street Address" required
-            value={data.pickUpAddress}
-            onChange={e => onChange('pickUpAddress', e.target.value)}
-            error={errors.pickUpAddress}
-            placeholder="e.g. 12 Rustaveli Avenue, Apt 4" maxLength={250}
-            disabled={prefilled && !useOtherAddress}
-          />
-
-          <FormField
-            as="textarea"
-            label="Note for Courier"
-            value={data.note}
-            onChange={e => onChange('note', e.target.value)}
-            error={errors.note}
-            placeholder="Any special instructions for pickup…"
-            rows={3} maxLength={500}
-          />
-        </fieldset>
-      </div>
-    </section>
-  );
-}
