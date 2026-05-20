@@ -268,6 +268,70 @@ export function CourierDashboard() {
     );
 }
 
+// ── Map helper ───────────────────────────────────────────────────────────────
+function mapUrl(city: string, district: string, address: string) {
+    const q = encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
+    return `https://www.google.com/maps/search/?api=1&query=${q}`;
+}
+
+// ── Route toolbar ──────────────────────────────────────────────────────────
+interface Stop { city: string; district: string; address: string; }
+
+function buildGoogleRouteUrl(stops: Stop[], origin?: string) {
+    const dest = encodeURIComponent(`${stops[stops.length-1].address}, ${stops[stops.length-1].district}, ${stops[stops.length-1].city}, Georgia`);
+    const orig = origin ?? encodeURIComponent(`${stops[0].address}, ${stops[0].district}, ${stops[0].city}, Georgia`);
+    const midStops = origin ? stops.slice(0, -1) : stops.slice(1, -1);
+    const wps = midStops.map(s => encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`)).join('|');
+    return `https://www.google.com/maps/dir/?api=1&origin=${orig}&destination=${dest}${wps ? `&waypoints=${wps}` : ''}&travelmode=driving`;
+}
+
+function buildYandexRouteUrl(stops: Stop[], origin?: string) {
+    const pts = stops.map(s => encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`));
+    const all = origin ? [encodeURIComponent(origin), ...pts] : pts;
+    return `https://yandex.com/maps/?mode=routes&rtext=${all.join('~')}&rtt=auto`;
+}
+
+function RouteToolbar({ stops, onClear }: { stops: Stop[]; onClear: () => void }) {
+    const [locState, setLocState] = useState<'idle' | 'loading' | 'ready' | 'denied'>('idle');
+    const [currentLoc, setCurrentLoc] = useState<string | undefined>(undefined);
+
+    if (stops.length < 2) return null;
+
+    const requestLocation = () => {
+        if (!navigator.geolocation) { setLocState('denied'); return; }
+        setLocState('loading');
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                setCurrentLoc(`${pos.coords.latitude},${pos.coords.longitude}`);
+                setLocState('ready');
+            },
+            () => setLocState('denied'),
+            { timeout: 8000 }
+        );
+    };
+
+    return (
+        <div className="route-toolbar">
+            <span className="route-toolbar__count">{stops.length} stops</span>
+            {locState === 'idle' && (
+                <button onClick={requestLocation} className="route-toolbar__btn route-toolbar__btn--loc">
+                    📍 Use my location
+                </button>
+            )}
+            {locState === 'loading' && <span className="route-toolbar__count">Locating…</span>}
+            {locState === 'denied' && <span className="route-toolbar__count" style={{ color: '#f97316' }}>Location denied</span>}
+            {locState === 'ready' && <span className="route-toolbar__count" style={{ color: '#10b981' }}>📍 Location set</span>}
+            <a href={buildGoogleRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--google">
+                🗺 Google Maps
+            </a>
+            <a href={buildYandexRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandex">
+                🗺 Yandex Maps
+            </a>
+            <button onClick={onClear} className="route-toolbar__clear">✕</button>
+        </div>
+    );
+}
+
 // ── Pickups Panel ─────────────────────────────────────────────────────────────
 interface PickupsPanelProps {
     pickups: AdminGroupOrder[]; loading: boolean; error: string | null;
@@ -278,10 +342,12 @@ interface PickupsPanelProps {
 function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct }: PickupsPanelProps) {
     const { t } = useLanguage();
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
+    const toggleSelect = (id: string) =>
+        setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
 
     if (loading) return <div className="dashboard__loader">{t.cdPickupsLoading}</div>;
     if (error)   return <div className="dashboard__error">{error} <button onClick={onRefresh}>{t.cdRetry}</button></div>;
@@ -301,18 +367,23 @@ function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct
             <div className="courier-cards">
                 {pickups.map(go => {
                     const isExpanded = expandedIds.has(go.id);
+                    const isSelected = selectedIds.has(go.id);
                     return (
-                        <div key={go.id} className="courier-card">
-                            <button className="courier-card__collapse-row" onClick={() => toggle(go.id)} aria-expanded={isExpanded}>
-                                <div className="courier-card__collapse-icon">📦</div>
-                                <div className="courier-card__collapse-info">
-                                    <span className="courier-card__collapse-primary">{go.pickUpCity}, {go.pickUpDistrict},</span>
-                                    <span className="courier-card__collapse-secondary">{go.pickUpAddress}</span>
-                                </div>
-                                <div className="courier-card__collapse-right">
-                                    <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
-                                </div>
-                            </button>
+                        <div key={go.id} className={`courier-card${isSelected ? ' courier-card--selected' : ''}`}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(go.id)}
+                                    style={{ width: 18, height: 18, marginLeft: 12, cursor: 'pointer', accentColor: 'var(--color-accent)', flexShrink: 0 }} />
+                                <button className="courier-card__collapse-row" style={{ flex: 1 }} onClick={() => toggle(go.id)} aria-expanded={isExpanded}>
+                                    <div className="courier-card__collapse-icon">📦</div>
+                                    <div className="courier-card__collapse-info">
+                                        <span className="courier-card__collapse-primary">{go.pickUpCity}, {go.pickUpDistrict},</span>
+                                        <span className="courier-card__collapse-secondary">{go.pickUpAddress}</span>
+                                    </div>
+                                    <div className="courier-card__collapse-right">
+                                        <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
+                                    </div>
+                                </button>
+                            </div>
                             {isExpanded && (
                                 <>
                                     <div className="courier-card__body">
@@ -321,7 +392,12 @@ function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct
                                             <span className="courier-card__value">{go.senderBusinessName || `${go.senderFirstName} ${go.senderLastName}`}</span>
                                         </div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelLocation}</span><span className="courier-card__value">{go.pickUpCity}, {go.pickUpDistrict}</span></div>
-                                        <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelAddress}</span><span className="courier-card__value">{go.pickUpAddress}</span></div>
+                                        <div className="courier-card__row">
+                                            <span className="courier-card__label">{t.cdLabelAddress}</span>
+                                            <a href={mapUrl(go.pickUpCity, go.pickUpDistrict, go.pickUpAddress)} target="_blank" rel="noopener noreferrer" className="courier-card__map-link">
+                                                📍 {go.pickUpAddress}
+                                            </a>
+                                        </div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelPackages}</span><span className="courier-card__value">{t.cdLabelPackageCount(go.numberOfPackages)}</span></div>
                                         {go.senderPhone && (
                                             <div className="courier-card__row">
@@ -359,17 +435,14 @@ interface DeliveriesPanelProps {
 function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: DeliveriesPanelProps) {
     const { t } = useLanguage();
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [postponingId, setPostponingId] = useState<string | null>(null);
     const [collectConfirmOrderId, setCollectConfirmOrderId] = useState<string | null>(null);
 
-    //const STATUS_LABEL: Record<string, string> = {
-    //    CourierAssignedToDeliver:             t.cdDeliveryStatusAssigned,
-    //    CourierDeliveringTheOrderToRecipient: t.cdDeliveryStatusInTransit,
-    //    DeliveryPostponed:                    t.cdDeliveryStatusPostponed,
-    //};
-
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
+    const toggleSelect = (id: string) =>
+        setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
 
     if (loading) return <div className="dashboard__loader">{t.cdDeliveriesLoading}</div>;
     if (error)   return <div className="dashboard__error">{error}</div>;
@@ -398,27 +471,32 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                 {deliveries.map(order => {
                     const isBusy = busyId === order.id;
                     const isExpanded = expandedIds.has(order.id);
+                    const isSelected = selectedIds.has(order.id);
                     const mustCollect = needsCollect(order);
                     const total = collectTotal(order);
                     return (
-                        <div key={order.id} className="courier-card" style={{ position: 'relative' }}>
+                        <div key={order.id} className={`courier-card${isSelected ? ' courier-card--selected' : ''}`} style={{ position: 'relative' }}>
                             {/* Collapsed row */}
-                            <button className="courier-card__collapse-row" onClick={() => toggle(order.id)} aria-expanded={isExpanded}>
-                                <div className="courier-card__collapse-icon">
-                                    {order.isFragile ? '🥚' : '🚚'}
-                                </div>
-                                <div className="courier-card__collapse-info">
-                                    <span className="courier-card__collapse-primary">
-                                        {order.recipientCity}, {order.recipientDistrict},
-                                    </span>
-                                    <span className="courier-card__collapse-secondary">{order.recipientAddress}</span>
-                                </div>
-                                <div className="courier-card__collapse-right">
-                                    {mustCollect && <span className="courier-card__collapse-collect">₾{total.toFixed(2)}</span>}
-                                    {order.isFragile && <span className="courier-card__collapse-badge courier-card__collapse-badge--warn">{t.cdLabelFragile}</span>}
-                                    <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
-                                </div>
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(order.id)}
+                                    style={{ width: 18, height: 18, marginLeft: 12, cursor: 'pointer', accentColor: 'var(--color-accent)', flexShrink: 0 }} />
+                                <button className="courier-card__collapse-row" style={{ flex: 1 }} onClick={() => toggle(order.id)} aria-expanded={isExpanded}>
+                                    <div className="courier-card__collapse-icon">
+                                        {order.isFragile ? '🥚' : '🚚'}
+                                    </div>
+                                    <div className="courier-card__collapse-info">
+                                        <span className="courier-card__collapse-primary">
+                                            {order.recipientCity}, {order.recipientDistrict},
+                                        </span>
+                                        <span className="courier-card__collapse-secondary">{order.recipientAddress}</span>
+                                    </div>
+                                    <div className="courier-card__collapse-right">
+                                        {mustCollect && <span className="courier-card__collapse-collect">₾{total.toFixed(2)}</span>}
+                                        {order.isFragile && <span className="courier-card__collapse-badge courier-card__collapse-badge--warn">{t.cdLabelFragile}</span>}
+                                        <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
+                                    </div>
+                                </button>
+                            </div>
 
                             {isExpanded && (
                                 <>
@@ -434,7 +512,12 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                                                 </a>
                                             </div>
                                         <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelLocation}</span><span className="courier-card__value">{order.recipientCity}, {order.recipientDistrict},</span></div>
-                                        <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelAddress}</span><span className="courier-card__value">{order.recipientAddress}</span></div>
+                                        <div className="courier-card__row">
+                                            <span className="courier-card__label">{t.cdLabelAddress}</span>
+                                            <a href={mapUrl(order.recipientCity, order.recipientDistrict, order.recipientAddress)} target="_blank" rel="noopener noreferrer" className="courier-card__map-link">
+                                                📍 {order.recipientAddress}
+                                            </a>
+                                        </div>
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelPayment}</span>
                                             <span className="courier-card__value">
@@ -486,11 +569,15 @@ function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: D
                     );
                 })}
             </div>
+            <RouteToolbar
+                stops={deliveries.filter(o => selectedIds.has(o.id)).map(o => ({ city: o.recipientCity, district: o.recipientDistrict, address: o.recipientAddress }))}
+                onClear={() => setSelectedIds(new Set())}
+            />
         </div>
     );
 }
 
-// ── CollectConfirmModal ───────────────────────────────────────────────────────
+// ── CollectConfirmModal
 interface CollectConfirmModalProps { order: CourierOrder; isBusy: boolean; onCancel: () => void; onConfirm: () => void; }
 
 function CollectConfirmModal({ order, isBusy, onCancel, onConfirm }: CollectConfirmModalProps) {
