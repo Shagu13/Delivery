@@ -47,6 +47,7 @@ function StatusBadge({ status }: { status: string }) {
 export function CustomerDashboard() {
   const { user, token, signOut } = useAuth();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [view, setView] = useState<View>('overview');
 
   // shared state fetched once
@@ -84,17 +85,17 @@ export function CustomerDashboard() {
           </svg>
           Delivery
         </div>
-        <span className="sidebar__role-badge">Customer</span>
+        <span className="sidebar__role-badge">{t.custRoleBadge}</span>
 
         <div className="sidebar__divider" />
-        <p className="sidebar__section-label">My Account</p>
+        <p className="sidebar__section-label">{t.custMyAccount}</p>
 
         <nav className="sidebar__nav">
           {([
-            ['overview',  'Overview',      overviewIcon],
-            ['shipments', 'My Shipments',  shipmentsIcon],
-            ['profile',   'Edit Profile',  profileIcon],
-            ['password',  'Password',      lockIcon],
+            ['overview',  t.sidebarOverview,      overviewIcon],
+            ['shipments', t.custNavShipments,      shipmentsIcon],
+            ['profile',   t.custNavProfile,        profileIcon],
+            ['password',  t.custNavPassword,       lockIcon],
           ] as [View, string, React.ReactNode][]).map(([v, label, icon]) => (
             <button
               key={v}
@@ -106,7 +107,7 @@ export function CustomerDashboard() {
           ))}
         </nav>
 
-        <div className="sidebar__footer">
+          <div className="sidebar__footer">
           <div className="sidebar__user">
             <div className="sidebar__avatar">{initials}</div>
             <div className="sidebar__user-info">
@@ -117,7 +118,7 @@ export function CustomerDashboard() {
             </div>
           </div>
           <button className="sidebar__logout" onClick={handleSignOut}>
-            {logoutIcon} Sign out
+            {logoutIcon} {t.signOut}
           </button>
         </div>
       </aside>
@@ -126,17 +127,17 @@ export function CustomerDashboard() {
       <div className="dashboard__body">
         <div className="dashboard__topbar">
           <span className="dashboard__topbar-title">
-            {view === 'overview'  && 'Overview'}
-            {view === 'shipments' && 'My Shipments'}
-            {view === 'profile'   && 'Edit Profile'}
-            {view === 'password'  && 'Change Password'}
+            {view === 'overview'  && t.sidebarOverview}
+            {view === 'shipments' && t.custNavShipments}
+            {view === 'profile'   && t.custNavProfile}
+            {view === 'password'  && t.custTopbarPassword}
           </span>
           {view === 'shipments' && (
             <a href="/send" className="btn-primary">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
-              New Shipment
+              {t.custNewShipment}
             </a>
           )}
         </div>
@@ -187,13 +188,14 @@ function OverviewView({
   recentOrders: CustomerGroupOrder[];
   onViewAll: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <>
       <div className="stat-grid">
         {[
-          { label: 'Total Shipments',   value: totalPackages, sub: 'All time packages' },
-          { label: 'Active',            value: active,        sub: 'In transit' },
-          { label: 'Delivered',         value: delivered,     sub: 'Completed' },
+          { label: t.custStatTotalShipments, value: totalPackages, sub: t.custStatAllTime },
+          { label: t.custStatActive,         value: active,        sub: t.custStatInTransit },
+          { label: t.custStatDelivered,      value: delivered,     sub: t.custStatCompleted },
         ].map((s, i) => (
           <div className="stat-card" key={s.label} style={{ animationDelay: `${i * 60}ms` }}>
             <div className="stat-card__label">{s.label}</div>
@@ -206,11 +208,11 @@ function OverviewView({
       <div className="content-card">
         <div className="content-card__header">
           <span className="content-card__title">
-            Welcome back{profile ? `, ${profile.firstName}` : ''}
+            {profile ? t.custWelcomeBack(profile.firstName) : t.custWelcomeBackAnon}
           </span>
           {recentOrders.length > 0 && (
             <button className="btn-ghost" onClick={onViewAll} style={{ fontSize: '0.8rem' }}>
-              View all
+              {t.custViewAll}
             </button>
           )}
         </div>
@@ -221,8 +223,8 @@ function OverviewView({
               <path d="M20 4L36 12V28L20 36L4 28V12L20 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
               <path d="M20 4v32M4 12l16 8 16-8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="empty-state__text">No shipments yet</span>
-            <a href="/send" className="btn-primary" style={{ marginTop: 12 }}>Send a Package</a>
+            <span className="empty-state__text">{t.custNoShipmentsYet}</span>
+            <a href="/send" className="btn-primary" style={{ marginTop: 12 }}>{t.custSendPackage}</a>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -238,7 +240,7 @@ function OverviewView({
 
 function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const cityName     = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
   const districtName = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
 
@@ -246,15 +248,15 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
     return (
       <div className="content-card">
         <div className="content-card__header">
-          <span className="content-card__title">My Shipments</span>
+          <span className="content-card__title">{t.custNavShipments}</span>
         </div>
         <div className="empty-state">
           <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
             <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
             <path d="M12 16h16M12 22h10M12 28h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <span className="empty-state__text">No shipments yet — send your first package</span>
-          <a href="/send" className="btn-primary" style={{ marginTop: 12 }}>Send a Package</a>
+          <span className="empty-state__text">{t.custNoShipmentsHint}</span>
+          <a href="/send" className="btn-primary" style={{ marginTop: 12 }}>{t.custSendPackage}</a>
         </div>
       </div>
     );
@@ -273,7 +275,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                 {go.senderBusinessName}
               </span>
               <span style={{ color: 'var(--color-text-subtle)', fontSize: '0.8rem' }}>
-                {go.numberOfPackages} package{go.numberOfPackages !== 1 ? 's' : ''}
+                {t.custPkg(go.numberOfPackages)}
                 {' · '}{cityName(go.pickUpCity, go.pickUpCityGeo)}, {districtName(go.pickUpDistrict, go.pickUpDistrictGeo)}
               </span>
             </div>
@@ -294,7 +296,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    {['Tracking #', 'Recipient', 'City', 'Address', 'Status', 'Paid', 'Service Fee'].map(h => (
+                    {[t.custThTracking, t.custThRecipient, t.custThCity, t.custThAddress, t.custThStatus, t.custThPaid, t.custThServiceFee].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600,
                         fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
                         color: 'var(--color-text-subtle)' }}>
@@ -329,7 +331,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                           background: o.isPaid ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
                           color: o.isPaid ? '#10b981' : '#ef4444',
                         }}>
-                          {o.isPaid ? 'Paid' : 'Unpaid'}
+                          {o.isPaid ? t.custPaid : t.custUnpaid}
                         </span>
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
@@ -350,13 +352,13 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
 // ── Small overview table ───────────────────────────────────────────────────────
 
 function GroupOrderTable({ orders }: { orders: CustomerGroupOrder[] }) {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const cityName = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
       <thead>
         <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-          {['Business', 'Packages', 'City / District', 'Status', 'Date'].map(h => (
+          {[t.custThBusiness, t.custThPackages, t.custThCityDistrict, t.custThStatus, t.custThDate].map(h => (
             <th key={h} style={{ padding: '10px 20px', textAlign: 'left', fontWeight: 600,
               fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
               color: 'var(--color-text-subtle)' }}>
@@ -397,6 +399,7 @@ function EditProfileView({
   token: string;
   onSaved: (updated: Customer) => void;
 }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState<ProfileForm>({
     firstName:    profile.firstName,
     lastName:     profile.lastName,
@@ -421,13 +424,13 @@ function EditProfileView({
 
   const validate = (): boolean => {
     const e: Partial<Record<keyof ProfileForm, string>> = {};
-    if (!form.firstName.trim())    e.firstName    = 'Required.';
-    if (!form.lastName.trim())     e.lastName     = 'Required.';
-    if (!form.businessName.trim()) e.businessName = 'Required.';
-    if (!form.phoneNumber.trim())  e.phoneNumber  = 'Required.';
-    if (!form.city.trim())         e.city         = 'Required.';
-    if (!form.district.trim())     e.district     = 'Required.';
-    if (!form.address.trim())      e.address      = 'Required.';
+    if (!form.firstName.trim())    e.firstName    = t.custRequired;
+    if (!form.lastName.trim())     e.lastName     = t.custRequired;
+    if (!form.businessName.trim()) e.businessName = t.custRequired;
+    if (!form.phoneNumber.trim())  e.phoneNumber  = t.custRequired;
+    if (!form.city.trim())         e.city         = t.custRequired;
+    if (!form.district.trim())     e.district     = t.custRequired;
+    if (!form.address.trim())      e.address      = t.custRequired;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -446,7 +449,7 @@ function EditProfileView({
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
-      setApiError(err instanceof CustomerApiError ? err.message : 'Failed to save changes.');
+      setApiError(err instanceof CustomerApiError ? err.message : t.custSaveFailed);
     } finally {
       setSaving(false);
     }
@@ -455,14 +458,14 @@ function EditProfileView({
   return (
     <div className="content-card" style={{ maxWidth: 640 }}>
       <div className="content-card__header">
-        <span className="content-card__title">Edit Profile</span>
+        <span className="content-card__title">{t.custEditProfileTitle}</span>
         {saved && (
           <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
               <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Saved
+            {t.custSaved}
           </span>
         )}
       </div>
@@ -474,23 +477,23 @@ function EditProfileView({
 
         <p style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em',
           textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 12 }}>
-          Personal Information
+          {t.custPersonalInfo}
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          <FormField label="First name"  value={form.firstName}  onChange={set('firstName')}  error={errors.firstName} />
-          <FormField label="Last name"   value={form.lastName}   onChange={set('lastName')}   error={errors.lastName} />
+          <FormField label={t.firstName}  value={form.firstName}  onChange={set('firstName')}  error={errors.firstName} />
+          <FormField label={t.lastName}   value={form.lastName}   onChange={set('lastName')}   error={errors.lastName} />
         </div>
-        <FormField label="Business / page name" value={form.businessName} onChange={set('businessName')} error={errors.businessName} />
+        <FormField label={t.businessName} value={form.businessName} onChange={set('businessName')} error={errors.businessName} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-          <FormField label="ID number (optional)" value={form.idNumber}    onChange={set('idNumber')}    error={errors.idNumber} />
-          <FormField label="Phone number"          value={form.phoneNumber} onChange={set('phoneNumber')} error={errors.phoneNumber} />
+          <FormField label={t.custIdNumberOpt} value={form.idNumber}    onChange={set('idNumber')}    error={errors.idNumber} />
+          <FormField label={t.phoneNumber}     value={form.phoneNumber} onChange={set('phoneNumber')} error={errors.phoneNumber} />
         </div>
 
         <div style={{ height: 1, background: 'var(--color-border)', margin: '8px 0 20px' }} />
 
         <p style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em',
           textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 12 }}>
-          Default Pickup Address
+          {t.custDefaultPickup}
         </p>
         <CityDistrictPicker
           cityValue={form.city}
@@ -500,11 +503,11 @@ function EditProfileView({
           cityError={errors.city}
           districtError={errors.district}
         />
-        <FormField label="Street address" value={form.address} onChange={set('address')} error={errors.address} placeholder="e.g. 12 Rustaveli Ave" />
+        <FormField label={t.streetAddress} value={form.address} onChange={set('address')} error={errors.address} placeholder={t.phStreetAddress} />
 
         <div style={{ marginTop: 8 }}>
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
+            {saving ? t.custSaving : t.custSaveChanges}
           </button>
         </div>
       </div>
@@ -515,6 +518,7 @@ function EditProfileView({
 // ── Change Password ───────────────────────────────────────────────────────────
 
 function ChangePasswordView({ token }: { token: string }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState({
     currentPassword: '', newPassword: '', confirmNewPassword: '',
   });
@@ -532,11 +536,11 @@ function ChangePasswordView({ token }: { token: string }) {
 
   const validate = (): boolean => {
     const e: Partial<typeof form> = {};
-    if (!form.currentPassword)                         e.currentPassword    = 'Current password is required.';
-    if (form.newPassword.length < 8)                   e.newPassword        = 'At least 8 characters.';
-    else if (!/[A-Z]/.test(form.newPassword))          e.newPassword        = 'Must contain an uppercase letter.';
-    else if (!/[0-9]/.test(form.newPassword))          e.newPassword        = 'Must contain a number.';
-    if (form.newPassword !== form.confirmNewPassword)  e.confirmNewPassword = 'Passwords do not match.';
+    if (!form.currentPassword)                         e.currentPassword    = t.custErrCurrentPwdRequired;
+    if (form.newPassword.length < 8)                   e.newPassword        = t.custErrNewPwdShort;
+    else if (!/[A-Z]/.test(form.newPassword))          e.newPassword        = t.custErrNewPwdUppercase;
+    else if (!/[0-9]/.test(form.newPassword))          e.newPassword        = t.custErrNewPwdNumber;
+    if (form.newPassword !== form.confirmNewPassword)  e.confirmNewPassword = t.errPasswordMismatch;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -549,7 +553,7 @@ function ChangePasswordView({ token }: { token: string }) {
       setForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
       setDone(true);
     } catch (err) {
-      setApiError(err instanceof CustomerApiError ? err.message : 'Failed to change password.');
+      setApiError(err instanceof CustomerApiError ? err.message : t.custChangePwdFailed);
     } finally {
       setSaving(false);
     }
@@ -558,14 +562,14 @@ function ChangePasswordView({ token }: { token: string }) {
   return (
     <div className="content-card" style={{ maxWidth: 480 }}>
       <div className="content-card__header">
-        <span className="content-card__title">Change Password</span>
+        <span className="content-card__title">{t.custChangePassword}</span>
         {done && (
           <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
               <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Password updated
+            {t.custPasswordUpdated}
           </span>
         )}
       </div>
@@ -576,28 +580,28 @@ function ChangePasswordView({ token }: { token: string }) {
         )}
 
         <FormField
-          label="Current password" type="password"
+          label={t.custCurrentPassword} type="password"
           value={form.currentPassword} onChange={set('currentPassword')}
           error={errors.currentPassword} autoComplete="current-password"
         />
         <FormField
-          label="New password" type="password"
+          label={t.custNewPassword} type="password"
           value={form.newPassword} onChange={set('newPassword')}
           error={errors.newPassword}
-          placeholder="Min 8 chars, 1 uppercase, 1 number"
+          placeholder={t.custNewPasswordPh}
           autoComplete="new-password"
         />
         <FormField
-          label="Confirm new password" type="password"
+          label={t.custConfirmNewPassword} type="password"
           value={form.confirmNewPassword} onChange={set('confirmNewPassword')}
           error={errors.confirmNewPassword}
-          placeholder="Repeat new password"
+          placeholder={t.custRepeatNewPassword}
           autoComplete="new-password"
         />
 
         <div style={{ marginTop: 8 }}>
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Updating…' : 'Update Password'}
+            {saving ? t.custUpdating : t.custUpdatePassword}
           </button>
         </div>
       </div>

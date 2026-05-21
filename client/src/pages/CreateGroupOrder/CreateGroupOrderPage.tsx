@@ -322,7 +322,9 @@ export function CreateGroupOrderPage() {
         const validationErrors = validate(sender, packages, cities, cityDistrictCache, t);
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
-            document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 50);
             return;
         }
 
