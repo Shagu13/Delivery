@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { setCourierSalary, setCompanyServicePrice } from '../../api/orders';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
@@ -453,7 +453,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   };
 
   const handleEditSaved = () => {
-    showToast('Order updated successfully.');
+    showToast(t.aopOrderUpdated);
     void load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page });
   };
 
@@ -575,7 +575,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           {!showBulkModal && (
             <>
               <button className="aop-bulk-btn aop-bulk-btn--price" onClick={() => setShowBulkModal(true)}>
-                💰 Set Prices
+                {t.aopSetPrices}
               </button>
               <button className="aop-bulk-btn aop-bulk-btn--ghost" onClick={() => setSelected(new Set())}>
                 {t.aopDeselectAll}
@@ -585,23 +585,23 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
           {showBulkModal && (
             <div className="aop-bulk-input-row">
-              <span className="aop-bulk-label">Service Price</span>
+              <span className="aop-bulk-label">{t.aopBulkSvcLabel}</span>
               <div className="aop-bulk-input-wrap">
                 <span className="aop-bulk-currency">₾</span>
                 <input
                   className="aop-bulk-input"
-                  type="number" min="0" step="0.01" placeholder="unchanged"
+                  type="number" min="0" step="0.01" placeholder={t.aopUnchangedPh}
                   value={bulkPrice} autoFocus
                   onChange={e => setBulkPrice(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Escape') cancelBulk(); }}
                 />
               </div>
-              <span className="aop-bulk-label" style={{ marginLeft: 8 }}>Courier Salary</span>
+              <span className="aop-bulk-label" style={{ marginLeft: 8 }}>{t.aopBulkSalLabel}</span>
               <div className="aop-bulk-input-wrap">
                 <span className="aop-bulk-currency">₾</span>
                 <input
                   className="aop-bulk-input"
-                  type="number" min="0" step="0.01" placeholder="unchanged"
+                  type="number" min="0" step="0.01" placeholder={t.aopUnchangedPh}
                   value={bulkSalary}
                   onChange={e => setBulkSalary(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleBulkApply(); if (e.key === 'Escape') cancelBulk(); }}
@@ -640,14 +640,14 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                     title={allSelected ? t.aopDeselectAll : t.aopSelectAll}
                   />
                 </th>
-                <th className="aop-th">Track</th>
-                <th className="aop-th">Sender</th>
-                <th className="aop-th">Recipient</th>
-                <th className="aop-th">Phone</th>
-                <th className="aop-th">City / District</th>
-                <th className="aop-th">Status</th>
-                <th className="aop-th aop-th--num" title="Who pays company service fee">Payer</th>
-                <th className="aop-th aop-th--num" title="COD — Cash on delivery amount">COD ₾</th>
+                <th className="aop-th">{t.aopThTracking}</th>
+                <th className="aop-th">{t.aopThSender}</th>
+                <th className="aop-th">{t.aopThRecipient}</th>
+                <th className="aop-th">{t.aopThPhone}</th>
+                <th className="aop-th">{t.aopThCityDistrict}</th>
+                <th className="aop-th">{t.aopThStatus}</th>
+                <th className="aop-th aop-th--num" title={t.aopThPayerTitle}>{t.aopThPayer}</th>
+                <th className="aop-th aop-th--num">{t.aopThCod}</th>
                 <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>
                 <th className="aop-th aop-th--num">{t.aopThSalary}</th>
                 <th className="aop-th aop-th--num">{t.aopThRevenue}</th>
@@ -698,8 +698,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       </span>
                     </td>
                     <td className="aop-td aop-td--num">
-                      <span className={`aop-payer-badge${rcptPays ? ' aop-payer-badge--rcpt' : ''}`} title={rcptPays ? 'Recipient pays service fee' : 'Sender pays service fee'}>
-                        {rcptPays ? 'Rcpt' : 'Sndr'}
+                      <span className={`aop-payer-badge${rcptPays ? ' aop-payer-badge--rcpt' : ''}`} title={rcptPays ? t.aopPayerRcptTitle : t.aopPayerSndrTitle}>
+                        {rcptPays ? t.aopRcpt : t.aopSndr}
                       </span>
                     </td>
                     <td className="aop-td aop-td--num">
@@ -736,7 +736,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       <button
                         className="aop-edit-btn"
                         onClick={e => handleEditClick(e, order)}
-                        title="Edit order"
+                        title={t.aopEditOrderTitle}
                       >
                         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                           <path d="M11.5 2.5a1.5 1.5 0 012.12 2.12l-8 8L3 13.5l.88-2.62 8-8z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>

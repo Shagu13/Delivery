@@ -4,6 +4,7 @@ import {
   getCustomers,
   setCustomerCompanyPrice,
 } from '../../api/customers';
+import { useLanguage } from '../../contexts/useLanguage';
 
 interface Props {
   token: string;
@@ -15,11 +16,12 @@ interface EditState {
   districtPrice: string;
 }
 
-function priceDisplay(v: number | null) {
-  return v != null ? `₾${v}` : <em style={{ color: '#999' }}>default</em>;
+function priceDisplay(v: number | null, defaultLabel: string) {
+  return v != null ? `₾${v}` : <em style={{ color: '#999' }}>{defaultLabel}</em>;
 }
 
 export default function AdminCustomersPage({ token }: Props) {
+  const { t } = useLanguage();
   const [customers, setCustomers]       = useState<AdminCustomer[]>([]);
   const [search, setSearch]             = useState('');
   const [page, setPage]                 = useState(1);
@@ -39,7 +41,7 @@ export default function AdminCustomersPage({ token }: Props) {
       setCustomers(result.items as AdminCustomer[]);
       setTotalPages(result.totalPages || 1);
     } catch {
-      setError('Failed to load customers');
+      setError(t.acupLoadFail);
     } finally {
       setLoading(false);
     }
@@ -77,7 +79,7 @@ export default function AdminCustomersPage({ token }: Props) {
       ));
       setEditingId(null);
     } catch {
-      setError('Failed to save prices');
+      setError(t.acupSaveFail);
     } finally {
       setSaving(false);
     }
@@ -90,11 +92,11 @@ export default function AdminCustomersPage({ token }: Props) {
 
   return (
     <div style={{ padding: '1.5rem' }}>
-      <h2 style={{ marginBottom: '1rem' }}>Customers</h2>
+      <h2 style={{ marginBottom: '1rem' }}>{t.acupTitle}</h2>
 
       <input
         type="text"
-        placeholder="Search by name, business, city, email…"
+        placeholder={t.acupSearchPh}
         value={search}
         onChange={e => { setSearch(e.target.value); setPage(1); }}
         style={{
@@ -106,14 +108,14 @@ export default function AdminCustomersPage({ token }: Props) {
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
       {loading ? (
-        <p>Loading…</p>
+        <p>{t.loading}</p>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
           <thead>
             <tr style={{ background: '#f5f5f5' }}>
               {[
-                'Business', 'Name', 'Phone', 'City', 'District', 'Email', 'Active',
-                'Capital (₾)', 'City (₾)', 'District (₾)', '',
+                t.acupThBusiness, t.acupThName, t.acupThPhone, t.acupThCity, t.acupThDistrict, t.acupThEmail, t.acupThActive,
+                t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, '',
               ].map((h, i) => (
                 <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
                   {h}
@@ -130,7 +132,7 @@ export default function AdminCustomersPage({ token }: Props) {
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.city}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.district}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.email}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.isActive ? '✓' : '✗'}</td>
+                <td style={{ padding: '0.6rem 0.75rem' }}>{c.isActive ? t.acupActive : t.acupInactive}</td>
 
                 {editingId === c.id ? (
                   <>
@@ -158,26 +160,26 @@ export default function AdminCustomersPage({ token }: Props) {
                     <td style={{ padding: '0.6rem 0.75rem' }}>
                       <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button
-                          onClick={() => saveEdit(c.id)} disabled={saving}
-                          style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}
-                        >Save</button>
-                        <button
-                          onClick={() => setEditingId(null)}
-                          style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer' }}
-                        >✕</button>
+                            onClick={() => saveEdit(c.id)} disabled={saving}
+                            style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}
+                          >{t.save}</button>
+                          <button
+                            onClick={() => setEditingId(null)}
+                            style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer' }}
+                          >✕</button>
                       </span>
                     </td>
                   </>
                 ) : (
                   <>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCapitalPrice)}</td>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCityPrice)}</td>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceDistrictPrice)}</td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCapitalPrice, t.acupDefault)}</td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCityPrice, t.acupDefault)}</td>
+                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceDistrictPrice, t.acupDefault)}</td>
                     <td style={{ padding: '0.6rem 0.75rem' }}>
                       <button
                         onClick={() => startEdit(c)}
                         style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
-                      >Edit</button>
+                      >{t.edit}</button>
                     </td>
                   </>
                 )}
@@ -192,8 +194,8 @@ export default function AdminCustomersPage({ token }: Props) {
           disabled={page <= 1}
           onClick={() => { const p = page - 1; setPage(p); void load(p, search); }}
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
-        >← Prev</button>
-        <span>Page {page} / {totalPages}</span>
+        >{t.acupPrev}</button>
+        <span>{t.acupPage(page, totalPages)}</span>
         <button
           disabled={page >= totalPages}
           onClick={() => { const p = page + 1; setPage(p); void load(p, search); }}

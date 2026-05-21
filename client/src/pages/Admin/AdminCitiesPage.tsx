@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   type City, type District,
   fetchCities, fetchDistricts, setDistrictServicePrice, setDistrictTerritory,
@@ -55,7 +55,7 @@ const INPUT: React.CSSProperties = {
 
 // ── main component ────────────────────────────────────────────────────────────
 export default function AdminCitiesPage({ token }: Props) {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
 
   const cityLabel     = (c: City)     => (lang === 'ka' && c.cityNameGeo)     ? c.cityNameGeo     : c.cityName;
   const districtLabel = (d: District) => (lang === 'ka' && d.districtNameGeo) ? d.districtNameGeo : d.districtName;
@@ -92,7 +92,7 @@ export default function AdminCitiesPage({ token }: Props) {
     let cancelled = false;
     fetchCities()
       .then(data => { if (!cancelled) setCities(data); })
-      .catch(() => { if (!cancelled) setError('Failed to load cities'); })
+      .catch(() => { if (!cancelled) setError(t.acpLoadFailed); })
       .finally(() => { if (!cancelled) setLoadingCities(false); });
     return () => { cancelled = true; };
   }, []);
@@ -111,7 +111,7 @@ export default function AdminCitiesPage({ token }: Props) {
       const d = await fetchDistricts(city.id);
       setDistricts(d);
     } catch {
-      setError('Failed to load districts');
+      setError(t.acpLoadDistrictsFailed);
     } finally {
       setLoadingDistricts(false);
     }
@@ -134,7 +134,7 @@ export default function AdminCitiesPage({ token }: Props) {
       ));
       setEditingId(null);
     } catch {
-      setError('Failed to save district price');
+      setError(t.acpSaveDistrictPriceFail);
     } finally {
       setSaving(false);
     }
@@ -174,7 +174,7 @@ export default function AdminCitiesPage({ token }: Props) {
       setSelectedIds(new Set());
       setBulkValue('');
     } catch {
-      setError('Failed to update one or more district prices');
+      setError(t.acpBulkPriceUpdateFail);
     } finally {
       setBulkSaving(false);
     }
@@ -193,7 +193,7 @@ export default function AdminCitiesPage({ token }: Props) {
       ));
       setSelectedIds(new Set());
     } catch {
-      setError('Failed to update territory for one or more districts');
+      setError(t.acpBulkTerritoryFail);
     } finally {
       setBulkTerritorySaving(false);
     }
@@ -203,7 +203,7 @@ export default function AdminCitiesPage({ token }: Props) {
 
   return (
     <div style={{ padding: '1.5rem' }}>
-      <h2 style={{ marginBottom: '1rem' }}>Cities &amp; Districts</h2>
+      <h2 style={{ marginBottom: '1rem' }}>{t.acpTitle}</h2>
 
       {error && (
         <p style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '0.5rem 0.75rem', marginBottom: '1rem' }}>
@@ -216,10 +216,10 @@ export default function AdminCitiesPage({ token }: Props) {
         {/* ── City sidebar ─────────────────────────────────────────────────── */}
         <div style={{ minWidth: 200, flexShrink: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em' }}>CITIES</h3>
+            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em' }}>{t.acpCitiesHeader}</h3>
             <button
               onClick={() => setShowAddCity(true)}
-              title="Add city"
+              title={t.acpAddCityBtn}
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
                 padding: '0.2rem 0.55rem', borderRadius: 6,
@@ -227,7 +227,7 @@ export default function AdminCitiesPage({ token }: Props) {
                 border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
               }}
             >
-              + City
+              {t.acpAddCityBtn}
             </button>
           </div>
 
@@ -236,7 +236,7 @@ export default function AdminCitiesPage({ token }: Props) {
             type="text"
             value={citySearch}
             onChange={e => setCitySearch(e.target.value)}
-            placeholder="Search cities…"
+            placeholder={t.acpSearchCitiesPh}
             style={{
               width: '100%', boxSizing: 'border-box',
               padding: '0.4rem 0.6rem', marginBottom: '0.5rem',
@@ -248,7 +248,7 @@ export default function AdminCitiesPage({ token }: Props) {
           {loadingCities ? (
             <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Loading…</p>
           ) : filteredCities.length === 0 ? (
-            <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>No cities match.</p>
+            <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{t.acpNoCitiesMatch}</p>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: '70vh', overflowY: 'auto' }}>
               {filteredCities.map(c => (
@@ -299,7 +299,7 @@ export default function AdminCitiesPage({ token }: Props) {
         {/* ── District panel ───────────────────────────────────────────────── */}
         <div style={{ flex: 1 }}>
           {!selectedCity ? (
-            <p style={{ color: '#9ca3af' }}>Select a city to manage its districts.</p>
+            <p style={{ color: '#9ca3af' }}>{t.acpSelectCityHint}</p>
           ) : loadingDistricts ? (
             <p>Loading districts…</p>
           ) : (
@@ -307,7 +307,7 @@ export default function AdminCitiesPage({ token }: Props) {
               {/* heading + Add District button */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em' }}>
-                  DISTRICTS — {cityLabel(selectedCity).toUpperCase()}
+                  {t.acpThDistrict.toUpperCase()} — {cityLabel(selectedCity).toUpperCase()}
                 </h3>
                 <button
                   onClick={() => setShowAddDistrict(true)}
@@ -318,7 +318,7 @@ export default function AdminCitiesPage({ token }: Props) {
                     border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
                   }}
                 >
-                  + District
+                  {t.acpAddDistrictBtn}
                 </button>
               </div>
 
@@ -330,7 +330,7 @@ export default function AdminCitiesPage({ token }: Props) {
                   background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
                 }}>
                   <span style={{ fontSize: '0.85rem', color: '#1d4ed8', fontWeight: 500 }}>
-                    {selectedIds.size} district{selectedIds.size > 1 ? 's' : ''} selected
+                    {t.acpNDistrictsSelected(selectedIds.size)}
                   </span>
 
                   {/* ── Price ── */}
@@ -338,7 +338,7 @@ export default function AdminCitiesPage({ token }: Props) {
                     type="number"
                     value={bulkValue}
                     onChange={e => setBulkValue(e.target.value)}
-                    placeholder="New price (₾)"
+                    placeholder={t.acpNewPricePh}
                     style={{ width: 130, padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #93c5fd', fontSize: '0.85rem' }}
                   />
                   <button
@@ -352,13 +352,13 @@ export default function AdminCitiesPage({ token }: Props) {
                       fontSize: '0.85rem', fontWeight: 500,
                     }}
                   >
-                    {bulkSaving ? 'Saving…' : 'Set price'}
+                    {bulkSaving ? t.loading : t.acpSetPrice}
                   </button>
 
                   <span style={{ width: 1, height: 22, background: '#bfdbfe', flexShrink: 0 }} />
 
                   {/* ── Territory ── */}
-                  <span style={{ fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 500 }}>Territory:</span>
+                  <span style={{ fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 500 }}>{t.acpTerritoryLabel}</span>
                   <button
                     onClick={() => saveBulkTerritory(true, false)}
                     disabled={bulkTerritorySaving}
@@ -370,7 +370,7 @@ export default function AdminCitiesPage({ token }: Props) {
                       fontSize: '0.82rem', fontWeight: 600,
                     }}
                   >
-                    {bulkTerritorySaving ? '…' : '⭐ Capital'}
+                    {bulkTerritorySaving ? '…' : t.acpCapitalBadge}
                   </button>
                   <button
                     onClick={() => saveBulkTerritory(false, true)}
@@ -383,7 +383,7 @@ export default function AdminCitiesPage({ token }: Props) {
                       fontSize: '0.82rem', fontWeight: 600,
                     }}
                   >
-                    {bulkTerritorySaving ? '…' : '🏙 City'}
+                    {bulkTerritorySaving ? '…' : t.acpCityBadge}
                   </button>
                   <button
                     onClick={() => saveBulkTerritory(false, false)}
@@ -396,14 +396,14 @@ export default function AdminCitiesPage({ token }: Props) {
                       fontSize: '0.82rem', fontWeight: 600,
                     }}
                   >
-                    {bulkTerritorySaving ? '…' : '🏘 District'}
+                    {bulkTerritorySaving ? '…' : t.acpDistrictBadge}
                   </button>
 
                   <button
                     onClick={() => { setSelectedIds(new Set()); setBulkValue(''); }}
                     style={{ padding: '0.3rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}
                   >
-                    Clear
+                    {t.goClear}
                   </button>
                 </div>
               )}
@@ -418,12 +418,12 @@ export default function AdminCitiesPage({ token }: Props) {
                         ref={el => { if (el) el.indeterminate = someSelected; }}
                         onChange={toggleSelectAll}
                         style={{ cursor: 'pointer' }}
-                        title="Select all"
+                        title={t.aopSelectAll}
                       />
                     </th>
-                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>District</th>
-                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Territory</th>
-                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Company Service Price (₾)</th>
+                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t.acpThDistrict}</th>
+                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t.acpThTerritory}</th>
+                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t.acpThServicePrice}</th>
                     <th style={{ padding: '0.6rem 0.75rem', width: 60, borderBottom: '1px solid #ddd' }} />
                   </tr>
                 </thead>
@@ -442,19 +442,19 @@ export default function AdminCitiesPage({ token }: Props) {
                               display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
                               background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d',
                               fontSize: '0.78rem', fontWeight: 600,
-                            }}>⭐ Capital</span>
+                            }}>{t.acpCapitalBadge}</span>
                           ) : d.isCityTerritory ? (
                             <span style={{
                               display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
                               background: '#dcfce7', color: '#14532d', border: '1px solid #86efac',
                               fontSize: '0.78rem', fontWeight: 600,
-                            }}>🏙 City</span>
+                            }}>{t.acpCityBadge}</span>
                           ) : (
                             <span style={{
                               display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
                               background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb',
                               fontSize: '0.78rem', fontWeight: 600,
-                            }}>🏘 District</span>
+                            }}>{t.acpDistrictBadge}</span>
                           )}
                         </td>
                         <td style={{ padding: '0.6rem 0.75rem' }}>
@@ -463,12 +463,12 @@ export default function AdminCitiesPage({ token }: Props) {
                               <input
                                 type="number" value={editValue}
                                 onChange={e => setEditValue(e.target.value)}
-                                placeholder="null = 0"
+                                placeholder={t.acpNullPricePh}
                                 style={{ width: 90, padding: '0.25rem', borderRadius: 6, border: '1px solid #ccc' }}
                               />
                               <button onClick={() => saveEdit(d.id)} disabled={saving}
                                 style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}>
-                                Save
+                                {t.save}
                               </button>
                               <button onClick={() => setEditingId(null)}
                                 style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer' }}>
@@ -476,7 +476,7 @@ export default function AdminCitiesPage({ token }: Props) {
                               </button>
                             </span>
                           ) : (
-                            <span>{d.companyServicePrice != null ? `₾${d.companyServicePrice}` : <em style={{ color: '#999' }}>not set</em>}</span>
+                            <span>{d.companyServicePrice != null ? `₾${d.companyServicePrice}` : <em style={{ color: '#999' }}>{t.acpNotSet}</em>}</span>
                           )}
                         </td>
                         <td style={{ padding: '0.6rem 0.75rem' }}>
@@ -485,14 +485,14 @@ export default function AdminCitiesPage({ token }: Props) {
                               onClick={() => setEditingDistrict(d)}
                               style={{ padding: '0.2rem 0.55rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.8rem' }}
                             >
-                              ✎ Edit
+                              ✎ {t.edit}
                             </button>
                             <button
                               onClick={() => setDeletingDistrict(d)}
                               style={{ padding: '0.2rem 0.55rem', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', cursor: 'pointer', fontSize: '0.8rem', color: '#dc2626' }}
-                            >
-                              🗑 Delete
-                            </button>
+                                            >
+                                              🗑 {t.delete}
+                                            </button>
                           </span>
                         </td>
                       </tr>
@@ -561,9 +561,8 @@ export default function AdminCitiesPage({ token }: Props) {
       {/* ── Confirm Delete City modal ─────────────────────────────────────── */}
       {deletingCity && (
         <ConfirmDeleteModal
-          title="Delete City"
-          message={`Are you sure you want to delete "${cityLabel(deletingCity)}"? All its districts will also be deleted.`}
-          token={token}
+          title={t.acpDeleteCityTitle}
+          message={t.acpDeleteCityMsg(cityLabel(deletingCity))}
           onClose={() => setDeletingCity(null)}
           onConfirm={async () => {
             await deleteCity(deletingCity.id, token);
@@ -580,9 +579,8 @@ export default function AdminCitiesPage({ token }: Props) {
       {/* ── Confirm Delete District modal ─────────────────────────────────── */}
       {deletingDistrict && (
         <ConfirmDeleteModal
-          title="Delete District"
-          message={`Are you sure you want to delete "${districtLabel(deletingDistrict)}"?`}
-          token={token}
+          title={t.acpDeleteDistrictTitle}
+          message={t.acpDeleteDistrictMsg(districtLabel(deletingDistrict))}
           onClose={() => setDeletingDistrict(null)}
           onConfirm={async () => {
             await deleteDistrict(deletingDistrict.id, token);
@@ -601,6 +599,7 @@ function AddCityModal({ token, onClose, onCreated }: {
   onClose: () => void;
   onCreated: (city: City) => void;
 }) {
+  const { t } = useLanguage();
   const [cityName, setCityName]       = useState('');
   const [cityNameGeo, setCityNameGeo] = useState('');
   const [submitting, setSubmitting]   = useState(false);
@@ -611,7 +610,7 @@ function AddCityModal({ token, onClose, onCreated }: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!cityName.trim()) { setError('English name is required.'); return; }
+    if (!cityName.trim()) { setError(t.acpErrEnglishRequired); return; }
     setSubmitting(true);
     setError('');
     try {
@@ -619,31 +618,31 @@ function AddCityModal({ token, onClose, onCreated }: {
       onCreated(city);
     } catch (err) {
       setError(err instanceof Error && err.message === 'CONFLICT'
-        ? `A city named "${cityName}" already exists.`
-        : 'Failed to create city.');
+        ? t.acpErrCityConflict(cityName)
+        : t.acpErrCityFail);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal title="Add City" onClose={onClose}>
+    <Modal title={t.acpAddCityTitle} onClose={onClose}>
       <form onSubmit={handleSubmit}>
-        <Field label="English name" required>
-          <input ref={firstRef} style={INPUT} value={cityName} onChange={e => setCityName(e.target.value)} placeholder="e.g. Kutaisi" />
+        <Field label={t.acpEnglishName} required>
+          <input ref={firstRef} style={INPUT} value={cityName} onChange={e => setCityName(e.target.value)} placeholder={t.acpCityNamePh} />
         </Field>
-        <Field label="Georgian name">
-          <input style={INPUT} value={cityNameGeo} onChange={e => setCityNameGeo(e.target.value)} placeholder="e.g. ქუთაისი" />
+        <Field label={t.acpGeorgianName}>
+          <input style={INPUT} value={cityNameGeo} onChange={e => setCityNameGeo(e.target.value)} placeholder={t.acpCityNameGeoPh} />
         </Field>
         {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button type="button" onClick={onClose}
             style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
-            Cancel
+            {t.cancel}
           </button>
           <button type="submit" disabled={submitting}
             style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
-            {submitting ? 'Creating…' : 'Create City'}
+            {submitting ? t.submitting : t.acpCreateCityBtn}
           </button>
         </div>
       </form>
@@ -658,7 +657,7 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
   onClose: () => void;
   onCreated: (district: District) => void;
 }) {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const cityDisplayName = (lang === 'ka' && city.cityNameGeo) ? city.cityNameGeo : city.cityName;
 
   const [districtName,       setDistrictName]       = useState('');
@@ -674,9 +673,9 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!districtName.trim()) { setError('English name is required.'); return; }
+    if (!districtName.trim()) { setError(t.acpErrEnglishRequired); return; }
     if (isCapitalTerritory && isCityTerritory) {
-      setError('A district cannot be both Capital Territory and City Territory.');
+      setError(t.acpErrBothTerritory);
       return;
     }
     setSubmitting(true);
@@ -694,8 +693,8 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
       onCreated(district);
     } catch (err) {
       setError(err instanceof Error && err.message === 'CONFLICT'
-        ? `"${districtName}" already exists in ${cityDisplayName}.`
-        : 'Failed to create district.');
+        ? t.acpErrDistrictConflict(districtName, cityDisplayName)
+        : t.acpErrDistrictFail);
     } finally {
       setSubmitting(false);
     }
@@ -709,28 +708,28 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
   };
 
   return (
-    <Modal title={`Add District — ${cityDisplayName}`} onClose={onClose}>
+    <Modal title={t.acpAddDistrictTitle(cityDisplayName)} onClose={onClose}>
       <form onSubmit={handleSubmit}>
-        <Field label="English name" required>
-          <input ref={firstRef} style={INPUT} value={districtName} onChange={e => setDistrictName(e.target.value)} placeholder="e.g. Saburtalo" />
+        <Field label={t.acpEnglishName} required>
+          <input ref={firstRef} style={INPUT} value={districtName} onChange={e => setDistrictName(e.target.value)} placeholder={t.acpDistrictNamePh} />
         </Field>
-        <Field label="Georgian name">
-          <input style={INPUT} value={districtNameGeo} onChange={e => setDistrictNameGeo(e.target.value)} placeholder="e.g. საბურთალო" />
+        <Field label={t.acpGeorgianName}>
+          <input style={INPUT} value={districtNameGeo} onChange={e => setDistrictNameGeo(e.target.value)} placeholder={t.acpDistrictNameGeoPh} />
         </Field>
-        <Field label="Company service price (₾)">
-          <input style={INPUT} type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="Leave empty to set later" />
+        <Field label={t.acpServicePriceLabel}>
+          <input style={INPUT} type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder={t.acpServicePricePh} />
         </Field>
-        <Field label="Pricing territory">
+        <Field label={t.acpPricingTerritory}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={CHECKBOX_ROW}>
               <input type="checkbox" checked={isCapitalTerritory}
                 onChange={e => { setIsCapitalTerritory(e.target.checked); if (e.target.checked) setIsCityTerritory(false); }} />
-              <span>Capital territory <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>(uses Capital price tier)</span></span>
+              <span>{t.acpCapitalTerritory} <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{t.acpCapitalTerritoryHint}</span></span>
             </label>
             <label style={CHECKBOX_ROW}>
               <input type="checkbox" checked={isCityTerritory}
                 onChange={e => { setIsCityTerritory(e.target.checked); if (e.target.checked) setIsCapitalTerritory(false); }} />
-              <span>City territory <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>(uses City price tier)</span></span>
+              <span>{t.acpCityTerritory} <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{t.acpCityTerritoryHint}</span></span>
             </label>
           </div>
         </Field>
@@ -738,11 +737,11 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button type="button" onClick={onClose}
             style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
-            Cancel
+            {t.cancel}
           </button>
           <button type="submit" disabled={submitting}
             style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
-            {submitting ? 'Creating…' : 'Create District'}
+            {submitting ? t.submitting : t.acpCreateDistrictBtn}
           </button>
         </div>
       </form>
@@ -757,6 +756,7 @@ function EditCityModal({ token, city, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (updated: City) => void;
 }) {
+  const { t } = useLanguage();
   const [cityName, setCityName]       = useState(city.cityName);
   const [cityNameGeo, setCityNameGeo] = useState(city.cityNameGeo ?? '');
   const [submitting, setSubmitting]   = useState(false);
@@ -767,7 +767,7 @@ function EditCityModal({ token, city, onClose, onSaved }: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!cityName.trim()) { setError('English name is required.'); return; }
+    if (!cityName.trim()) { setError(t.acpErrEnglishRequired); return; }
     setSubmitting(true);
     setError('');
     try {
@@ -775,31 +775,31 @@ function EditCityModal({ token, city, onClose, onSaved }: {
       onSaved({ ...city, cityName: cityName.trim(), cityNameGeo: cityNameGeo.trim() || undefined });
     } catch (err) {
       setError(err instanceof Error && err.message === 'CONFLICT'
-        ? `A city named "${cityName}" already exists.`
-        : 'Failed to update city.');
+        ? t.acpErrCityConflict(cityName)
+        : t.acpErrCityUpdateFail);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal title="Edit City" onClose={onClose}>
+    <Modal title={t.acpEditCityTitle} onClose={onClose}>
       <form onSubmit={handleSubmit}>
-        <Field label="English name" required>
+        <Field label={t.acpEnglishName} required>
           <input ref={firstRef} style={INPUT} value={cityName} onChange={e => setCityName(e.target.value)} />
         </Field>
-        <Field label="Georgian name">
+        <Field label={t.acpGeorgianName}>
           <input style={INPUT} value={cityNameGeo} onChange={e => setCityNameGeo(e.target.value)} />
         </Field>
         {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button type="button" onClick={onClose}
             style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
-            Cancel
+            {t.cancel}
           </button>
           <button type="submit" disabled={submitting}
             style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
-            {submitting ? 'Saving…' : 'Save Changes'}
+            {submitting ? t.loading : t.awptSaveBtn}
           </button>
         </div>
       </form>
@@ -814,6 +814,7 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (updated: District) => void;
 }) {
+  const { t } = useLanguage();
   const [districtName,       setDistrictName]       = useState(district.districtName);
   const [districtNameGeo,    setDistrictNameGeo]    = useState(district.districtNameGeo ?? '');
   const [price,              setPrice]              = useState(district.companyServicePrice != null ? String(district.companyServicePrice) : '');
@@ -827,9 +828,9 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!districtName.trim()) { setError('English name is required.'); return; }
+    if (!districtName.trim()) { setError(t.acpErrEnglishRequired); return; }
     if (isCapitalTerritory && isCityTerritory) {
-      setError('A district cannot be both Capital Territory and City Territory.');
+      setError(t.acpErrBothTerritory);
       return;
     }
     setSubmitting(true);
@@ -840,8 +841,8 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
       onSaved({ ...district, districtName: districtName.trim(), districtNameGeo: districtNameGeo.trim() || undefined, companyServicePrice: newPrice, isCapitalTerritory, isCityTerritory });
     } catch (err) {
       setError(err instanceof Error && err.message === 'CONFLICT'
-        ? `A district named "${districtName}" already exists in this city.`
-        : 'Failed to update district.');
+        ? t.acpErrDistrictConflictEdit(districtName)
+        : t.acpErrDistrictUpdateFail);
     } finally {
       setSubmitting(false);
     }
@@ -855,28 +856,28 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
   };
 
   return (
-    <Modal title="Edit District" onClose={onClose}>
+    <Modal title={t.acpEditDistrictTitle} onClose={onClose}>
       <form onSubmit={handleSubmit}>
-        <Field label="English name" required>
+        <Field label={t.acpEnglishName} required>
           <input ref={firstRef} style={INPUT} value={districtName} onChange={e => setDistrictName(e.target.value)} />
         </Field>
-        <Field label="Georgian name">
+        <Field label={t.acpGeorgianName}>
           <input style={INPUT} value={districtNameGeo} onChange={e => setDistrictNameGeo(e.target.value)} />
         </Field>
-        <Field label="Company service price (₾)">
-          <input style={INPUT} type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="Leave empty to clear" />
+        <Field label={t.acpServicePriceLabel}>
+          <input style={INPUT} type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder={t.acpServicePriceEditPh} />
         </Field>
-        <Field label="Pricing territory">
+        <Field label={t.acpPricingTerritory}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={CHECKBOX_ROW}>
               <input type="checkbox" checked={isCapitalTerritory}
                 onChange={e => { setIsCapitalTerritory(e.target.checked); if (e.target.checked) setIsCityTerritory(false); }} />
-              <span>Capital territory <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>(uses Capital price tier)</span></span>
+              <span>{t.acpCapitalTerritory} <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{t.acpCapitalTerritoryHint}</span></span>
             </label>
             <label style={CHECKBOX_ROW}>
               <input type="checkbox" checked={isCityTerritory}
                 onChange={e => { setIsCityTerritory(e.target.checked); if (e.target.checked) setIsCapitalTerritory(false); }} />
-              <span>City territory <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>(uses City price tier)</span></span>
+              <span>{t.acpCityTerritory} <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{t.acpCityTerritoryHint}</span></span>
             </label>
           </div>
         </Field>
@@ -884,11 +885,11 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button type="button" onClick={onClose}
             style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
-            Cancel
+            {t.cancel}
           </button>
           <button type="submit" disabled={submitting}
             style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
-            {submitting ? 'Saving…' : 'Save Changes'}
+            {submitting ? t.loading : t.awptSaveBtn}
           </button>
         </div>
       </form>
@@ -897,13 +898,13 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
 }
 
 // ── Confirm Delete Modal ──────────────────────────────────────────────────────
-function ConfirmDeleteModal({ title, message, token: _token, onClose, onConfirm }: {
+function ConfirmDeleteModal({ title, message, onClose, onConfirm }: {
   title: string;
   message: string;
-  token: string;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }) {
+  const { t } = useLanguage();
   const [deleting, setDeleting] = useState(false);
   const [error, setError]       = useState('');
 
@@ -913,7 +914,7 @@ function ConfirmDeleteModal({ title, message, token: _token, onClose, onConfirm 
     try {
       await onConfirm();
     } catch {
-      setError('Failed to delete. Please try again.');
+      setError(t.awptErrDelete);
       setDeleting(false);
     }
   }
@@ -925,11 +926,11 @@ function ConfirmDeleteModal({ title, message, token: _token, onClose, onConfirm 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button onClick={onClose} disabled={deleting}
           style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
-          Cancel
+          {t.cancel}
         </button>
         <button onClick={handleConfirm} disabled={deleting}
           style={{ padding: '0.4rem 1rem', borderRadius: 7, background: deleting ? '#fca5a5' : '#dc2626', color: '#fff', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
-          {deleting ? 'Deleting…' : 'Delete'}
+          {deleting ? t.awptDeleting : t.delete}
         </button>
       </div>
     </Modal>

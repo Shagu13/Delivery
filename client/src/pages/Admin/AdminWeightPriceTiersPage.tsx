@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLanguage } from '../../contexts/useLanguage';
 import {
   type WeightPriceTier,
   fetchWeightPriceTiers,
@@ -90,6 +91,7 @@ function TierForm({
   onCancel: () => void;
   submitLabel: string;
 }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState<TierFormState>(initial ?? EMPTY_FORM);
   const firstRef = useRef<HTMLInputElement>(null);
   useEffect(() => { firstRef.current?.focus(); }, []);
@@ -107,38 +109,38 @@ function TierForm({
     <div>
       {/* Weight range */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <Field label="Min weight (kg)" required>
+        <Field label={t.awptMinWeight} required>
           <input
             ref={firstRef}
             style={INPUT} type="number" min="0" step="0.1"
             value={form.minWeightKg}
             onChange={e => set('minWeightKg', e.target.value)}
-            placeholder="e.g. 0"
+            placeholder={t.awptMinWeightPh}
           />
         </Field>
-        <Field label="Max weight (kg)" required>
+        <Field label={t.awptMaxWeight} required>
           <input
             style={INPUT} type="number" min="0" step="0.1"
             value={form.maxWeightKg}
             onChange={e => set('maxWeightKg', e.target.value)}
-            placeholder="e.g. 5"
+            placeholder={t.awptMaxWeightPh}
           />
         </Field>
       </div>
 
       {/* Optional label */}
-      <Field label="Label" hint='Optional display name shown to senders, e.g. "Light"'>
+      <Field label={t.awptLabelField} hint={t.awptLabelHint}>
         <input
           style={INPUT}
           value={form.label}
           onChange={e => set('label', e.target.value)}
-          placeholder='e.g. Light, Medium, Heavy'
+          placeholder={t.awptLabelPh}
           maxLength={100}
         />
       </Field>
 
       {/* Pricing mode */}
-      <Field label="Pricing mode" required>
+      <Field label={t.awptPricingMode} required>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label style={CHECKBOX_ROW}>
             <input
@@ -146,9 +148,9 @@ function TierForm({
               onChange={() => set('isStandard', true)}
             />
             <span>
-              Standard pricing
+              {t.awptStandardMode}
               <span style={{ color: '#6b7280', fontSize: '0.78rem', display: 'block' }}>
-                Uses the customer's negotiated rate or district default — same as current logic.
+                {t.awptStandardModeHint}
               </span>
             </span>
           </label>
@@ -158,9 +160,9 @@ function TierForm({
               onChange={() => set('isStandard', false)}
             />
             <span>
-              Custom flat price
+              {t.awptCustomMode}
               <span style={{ color: '#6b7280', fontSize: '0.78rem', display: 'block' }}>
-                Overrides all pricing — same flat rate regardless of destination or customer.
+                {t.awptCustomModeHint}
               </span>
             </span>
           </label>
@@ -169,12 +171,12 @@ function TierForm({
 
       {/* Custom price — only when not standard */}
       {!form.isStandard && (
-        <Field label="Custom price (₾)" required hint="Applied to every order in this weight range.">
+        <Field label={t.awptCustomPrice} required hint={t.awptCustomPriceHint}>
           <input
             style={INPUT} type="number" min="0.01" step="0.01"
             value={form.customPrice}
             onChange={e => set('customPrice', e.target.value)}
-            placeholder="e.g. 8.00"
+            placeholder={t.awptCustomPricePh}
           />
         </Field>
       )}
@@ -188,7 +190,7 @@ function TierForm({
           type="button" onClick={onCancel}
           style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}
         >
-          Cancel
+          {t.cancel}
         </button>
         <button
           type="button"
@@ -196,7 +198,7 @@ function TierForm({
           disabled={submitting}
           style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#d97706' : 'var(--color-accent, #c47f17)', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}
         >
-          {submitting ? 'Saving…' : submitLabel}
+          {submitting ? t.awptLoading : submitLabel}
         </button>
       </div>
     </div>
@@ -209,16 +211,17 @@ function CreateTierModal({ token, onClose, onCreated }: {
   onClose: () => void;
   onCreated: (tier: WeightPriceTier) => void;
 }) {
+  const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState('');
 
   async function handleSubmit(form: TierFormState) {
     const min = parseFloat(form.minWeightKg);
     const max = parseFloat(form.maxWeightKg);
-    if (isNaN(min) || isNaN(max)) { setError('Weight values must be valid numbers.'); return; }
-    if (max <= min) { setError('Max weight must be greater than min weight.'); return; }
+    if (isNaN(min) || isNaN(max)) { setError(t.awptErrWeightNumbers); return; }
+    if (max <= min) { setError(t.awptErrMaxWeight); return; }
     if (!form.isStandard && (!form.customPrice || parseFloat(form.customPrice) <= 0)) {
-      setError('Custom price must be greater than 0.'); return;
+      setError(t.awptErrCustomPrice); return;
     }
     setSubmitting(true);
     setError('');
@@ -232,20 +235,20 @@ function CreateTierModal({ token, onClose, onCreated }: {
       }, token);
       onCreated(tier);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create tier.');
+      setError(err instanceof Error ? err.message : t.awptErrCreate);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal title="Add Weight Price Tier" onClose={onClose}>
+    <Modal title={t.awptAddModalTitle} onClose={onClose}>
       <TierForm
         submitting={submitting}
         error={error}
         onSubmit={handleSubmit}
         onCancel={onClose}
-        submitLabel="Create Tier"
+        submitLabel={t.awptCreateBtn}
       />
     </Modal>
   );
@@ -258,6 +261,7 @@ function EditTierModal({ token, tier, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (updated: WeightPriceTier) => void;
 }) {
+  const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState('');
 
@@ -272,10 +276,10 @@ function EditTierModal({ token, tier, onClose, onSaved }: {
   async function handleSubmit(form: TierFormState) {
     const min = parseFloat(form.minWeightKg);
     const max = parseFloat(form.maxWeightKg);
-    if (isNaN(min) || isNaN(max)) { setError('Weight values must be valid numbers.'); return; }
-    if (max <= min) { setError('Max weight must be greater than min weight.'); return; }
+    if (isNaN(min) || isNaN(max)) { setError(t.awptErrWeightNumbers); return; }
+    if (max <= min) { setError(t.awptErrMaxWeight); return; }
     if (!form.isStandard && (!form.customPrice || parseFloat(form.customPrice) <= 0)) {
-      setError('Custom price must be greater than 0.'); return;
+      setError(t.awptErrCustomPrice); return;
     }
     setSubmitting(true);
     setError('');
@@ -290,21 +294,21 @@ function EditTierModal({ token, tier, onClose, onSaved }: {
       }, token);
       onSaved(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update tier.');
+      setError(err instanceof Error ? err.message : t.awptErrUpdate);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal title="Edit Weight Price Tier" onClose={onClose}>
+    <Modal title={t.awptEditModalTitle} onClose={onClose}>
       <TierForm
         initial={initial}
         submitting={submitting}
         error={error}
         onSubmit={handleSubmit}
         onCancel={onClose}
-        submitLabel="Save Changes"
+        submitLabel={t.awptSaveBtn}
       />
     </Modal>
   );
@@ -317,6 +321,7 @@ function ConfirmDeleteModal({ tier, token, onClose, onDeleted }: {
   onClose: () => void;
   onDeleted: (id: string) => void;
 }) {
+  const { t } = useLanguage();
   const [deleting, setDeleting] = useState(false);
   const [error, setError]       = useState('');
 
@@ -327,26 +332,25 @@ function ConfirmDeleteModal({ tier, token, onClose, onDeleted }: {
       await deleteWeightPriceTier(tier.id, token);
       onDeleted(tier.id);
     } catch {
-      setError('Failed to delete. Please try again.');
+      setError(t.awptErrDelete);
       setDeleting(false);
     }
   }
 
   return (
-    <Modal title="Delete Weight Tier" onClose={onClose}>
+    <Modal title={t.awptDeleteModalTitle} onClose={onClose}>
       <p style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', color: '#374151' }}>
-        Are you sure you want to delete the tier <strong>{tierLabel(tier)}</strong>?
-        This will not affect existing orders that used this tier.
+        {t.awptDeleteMsg(tierLabel(tier))}
       </p>
       {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button onClick={onClose} disabled={deleting}
           style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
-          Cancel
+          {t.cancel}
         </button>
         <button onClick={handleConfirm} disabled={deleting}
           style={{ padding: '0.4rem 1rem', borderRadius: 7, background: deleting ? '#fca5a5' : '#dc2626', color: '#fff', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
-          {deleting ? 'Deleting…' : 'Delete Tier'}
+          {deleting ? t.awptDeleting : t.awptDeleteTierBtn}
         </button>
       </div>
     </Modal>
@@ -355,6 +359,7 @@ function ConfirmDeleteModal({ tier, token, onClose, onDeleted }: {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AdminWeightPriceTiersPage({ token }: Props) {
+  const { t } = useLanguage();
   const [tiers,   setTiers]   = useState<WeightPriceTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -367,10 +372,10 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
     let cancelled = false;
     fetchWeightPriceTiers()
       .then(data => { if (!cancelled) setTiers(data); })
-      .catch(() => { if (!cancelled) setError('Failed to load weight price tiers.'); })
+      .catch(() => { if (!cancelled) setError(t.awptLoadFail); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [t]);
 
   const BADGE = (isStandard: boolean): React.CSSProperties => ({
     display: 'inline-block',
@@ -388,8 +393,7 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--color-text-subtle)' }}>
-            Define weight ranges that senders choose from when creating orders.
-            The selected tier determines how the service fee is calculated.
+            {t.awptDesc}
           </p>
         </div>
         <button
@@ -404,7 +408,7 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
             <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          Add Tier
+          {t.awptAddBtn}
         </button>
       </div>
 
@@ -417,7 +421,7 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
       {loading ? (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-subtle)' }}>
           <div className="go-spinner" style={{ margin: '0 auto 0.5rem' }} />
-          Loading tiers…
+          {t.awptLoading}
         </div>
       ) : tiers.length === 0 ? (
         <div style={{
@@ -425,15 +429,15 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
           borderRadius: 12, color: 'var(--color-text-subtle)',
         }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚖️</div>
-          <p style={{ margin: 0, fontWeight: 600 }}>No weight price tiers yet</p>
+          <p style={{ margin: 0, fontWeight: 600 }}>{t.awptEmptyTitle}</p>
           <p style={{ margin: '0.25rem 0 1rem', fontSize: '0.85rem' }}>
-            Create your first tier so senders can select their package weight.
+            {t.awptEmptyHint}
           </p>
           <button
             onClick={() => setShowCreate(true)}
             style={{ padding: '0.45rem 1.2rem', borderRadius: 8, background: 'var(--color-accent, #c47f17)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
           >
-            Add First Tier
+            {t.awptAddFirstBtn}
           </button>
         </div>
       ) : (
@@ -446,7 +450,7 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
           }}>
             <thead>
               <tr style={{ background: 'var(--color-bg-2, #f9fafb)', borderBottom: '1px solid var(--color-border)' }}>
-                {['Label', 'Weight Range', 'Pricing Mode', 'Custom Price', 'Actions'].map(h => (
+                {[t.awptThLabel, t.awptThRange, t.awptThPricing, t.awptThPrice, t.awptThActions].map(h => (
                   <th key={h} style={{ padding: '0.65rem 1rem', textAlign: 'left', fontWeight: 700, fontSize: '0.78rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
@@ -464,7 +468,7 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <span style={BADGE(tier.isStandard)}>
-                      {tier.isStandard ? 'Standard' : 'Custom flat price'}
+                      {tier.isStandard ? t.awptStandard : t.awptCustomFlat}
                     </span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
@@ -478,13 +482,13 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
                         onClick={() => setEditing(tier)}
                         style={{ padding: '4px 12px', borderRadius: 6, background: 'var(--color-bg-3, #f3f4f6)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
                       >
-                        Edit
+                        {t.edit}
                       </button>
                       <button
                         onClick={() => setDeleting(tier)}
                         style={{ padding: '4px 12px', borderRadius: 6, background: '#fee2e2', border: '1px solid #fecaca', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
                       >
-                        Delete
+                        {t.delete}
                       </button>
                     </div>
                   </td>
