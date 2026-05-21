@@ -50,6 +50,22 @@ export interface CourierOrder {
     postponedAt: string | null;
 }
 
+export interface UpdateOrderRequest {
+    recipientFirstName: string;
+    recipientLastName: string;
+    recipientPhone: string;
+    recipientCity: string;
+    recipientDistrict: string;
+    recipientAddress: string;
+    description: string | null;
+    isFragile: boolean;
+    whoPaysForCompanyService: string;   // "Sender" | "Recipient"
+    productPaymentStatus: string;       // "Paid" | "NotPaid"
+    amountToCollectForPackage: number | null;
+    companyServicePrice: number;
+    courierSalary: number | null;
+}
+
 async function orderAction(token: string, id: string, action: string, body?: object): Promise<void> {
     const res = await fetch(`${BASE}/${id}/${action}`, {
         method: 'PUT',
@@ -74,6 +90,21 @@ export const setCourierSalary       = (token: string, id: string, salary: number
     orderAction(token, id, 'courier-salary', { salary });
 export const setCompanyServicePrice = (token: string, id: string, price: number) =>
     orderAction(token, id, 'company-service-price', { price });
+
+export async function updateOrder(token: string, id: string, data: UpdateOrderRequest): Promise<void> {
+    const res = await fetch(`${BASE}/${id}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Unknown error' }));
+        throw new Error(err.title ?? 'Update failed');
+    }
+}
 
 // ── Courier ───────────────────────────────────────────────────────────────────
 export const markOrderDelivering = (token: string, id: string) => orderAction(token, id, 'delivering');

@@ -7,6 +7,8 @@ export interface SettlementOrderLine {
     recipientCity: string;
     recipientDistrict: string;
     companyServicePrice: number;
+    /** "Sender" | "Recipient" — which party paid the service fee */
+    whoPaysForCompanyService: string;
     courierSalary: number | null;
     companyRevenue: number | null;
     amountOfCashCollected: number | null;
@@ -19,11 +21,17 @@ export interface SettlementPreview {
     date: string;                              // "YYYY-MM-DD"
     totalOrdersPickedUp: number;
     totalOrdersDelivered: number;
+    /** COD cash collected from recipients for the product itself. */
     totalAmountOfCashCollected: number;
+    /** Sum of ALL CompanyServicePrice values (regardless of who pays). */
     totalCompanyServiceRevenue: number;
+    /** Service fees collected in cash directly from recipients (WhoPaysForCompanyService == Recipient). */
+    totalServiceFeesCollectedFromRecipients: number;
+    /** Total cash the courier physically holds: COD + service fees from recipients. */
+    totalCashCourierHolds: number;
     totalCourierSalary: number;
     totalCompanyNetIncome: number;
-    /** How much the courier must transfer to the company: cash collected − salary. */
+    /** How much the courier must transfer to the company: totalCashCourierHolds − salary. */
     totalCourierTransferToCompany: number;
     orders: SettlementOrderLine[];
     incompleteOrderTrackingNumbers: string[];

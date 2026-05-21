@@ -63,7 +63,8 @@ public sealed class GroupOrdersController : BaseController
                         o.ProductPaymentStatus,
                         o.WhoPaysForCompanyService,
                         o.AmountToCollectForPackage,
-                        o.CompanyServicePrice))
+                        o.CompanyServicePrice,
+                        o.WeightPriceTierId))       
                     .ToList(),
                 CustomerId: customerId
             )
@@ -214,6 +215,33 @@ public sealed class GroupOrdersController : BaseController
         await Sender.Send(new SetGroupOrderPickupDateCommand(id, request.PickupDate), ct);
         return NoContent();
     }
+
+    // ── PUT /api/grouporders/{id}  (Admin — edit sender + pickup info) ──────────
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> UpdateGroupOrder(
+        Guid id,
+        [FromBody] UpdateGroupOrderRequest request,
+        CancellationToken ct)
+    {
+        await Sender.Send(new Application.GroupOrders.Commands.UpdateGroupOrder.UpdateGroupOrderCommand(
+            GroupOrderId:      id,
+            SenderFirstName:   request.SenderFirstName,
+            SenderLastName:    request.SenderLastName,
+            SenderIdNumber:    request.SenderIdNumber,
+            SenderBusinessName:request.SenderBusinessName,
+            SenderPhone:       request.SenderPhone,
+            PickUpCity:        request.PickUpCity,
+            PickUpDistrict:    request.PickUpDistrict,
+            PickUpAddress:     request.PickUpAddress,
+            Note:              request.Note
+        ), ct);
+        return NoContent();
+    }
+
 
     // ── Courier endpoints ──────────────────────────────────────────────────────
     [HttpPut("{id:guid}/picking-up")]
@@ -537,3 +565,16 @@ public sealed class GroupOrdersController : BaseController
 
 // ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetPickupDateRequest(DateTime PickupDate);
+
+public sealed record UpdateGroupOrderRequest(
+    string  SenderFirstName,
+    string  SenderLastName,
+    string? SenderIdNumber,
+    string  SenderBusinessName,
+    string  SenderPhone,
+    string  PickUpCity,
+    string  PickUpDistrict,
+    string  PickUpAddress,
+    string? Note
+);
+

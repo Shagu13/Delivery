@@ -8,14 +8,31 @@ public sealed record SettlementPreviewDto(
     int      TotalOrdersPickedUp,
     int      TotalOrdersDelivered,
 
+    /// <summary>Sum of AmountOfCashCollected — COD product payments collected from recipients.</summary>
     decimal  TotalAmountOfCashCollected,
+
+    /// <summary>Sum of ALL CompanyServicePrice values (regardless of who pays).</summary>
     decimal  TotalCompanyServiceRevenue,
+
+    /// <summary>
+    /// Sum of CompanyServicePrice for orders where WhoPaysForCompanyService == Recipient.
+    /// This is the service fee cash the courier collected directly from recipients.
+    /// </summary>
+    decimal  TotalServiceFeesCollectedFromRecipients,
+
+    /// <summary>
+    /// Total cash the courier physically holds:
+    /// TotalAmountOfCashCollected (COD) + TotalServiceFeesCollectedFromRecipients.
+    /// This is what the courier must account for at settlement.
+    /// </summary>
+    decimal  TotalCashCourierHolds,
+
     decimal  TotalCourierSalary,
     decimal  TotalCompanyNetIncome,
 
     /// <summary>
     /// How much cash the courier must transfer to the company at end of day.
-    /// TotalAmountOfCashCollected - TotalCourierSalary.
+    /// TotalCashCourierHolds - TotalCourierSalary.
     /// </summary>
     decimal  TotalCourierTransferToCompany,
 
@@ -32,6 +49,8 @@ public sealed record SettlementOrderLineDto(
     string    RecipientCity,
     string    RecipientDistrict,
     decimal   CompanyServicePrice,
+    /// <summary>"Sender" or "Recipient" — indicates who paid the service fee.</summary>
+    string    WhoPaysForCompanyService,
     decimal?  CourierSalary,
     decimal?  CompanyRevenue,
     decimal?  AmountOfCashCollected,

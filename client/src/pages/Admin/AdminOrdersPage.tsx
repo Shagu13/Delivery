@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
+import { EditOrderModal } from './EditOrderModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ export interface AdminOrderItem {
   status: string;
   productPaymentStatus: string;
   whoPaysForCompanyService: string;
+  amountToCollectForPackage: number | null;
   companyServicePrice: number;
   courierSalary: number | null;
   companyRevenue: number | null;
@@ -84,6 +86,51 @@ async function fetchUnpricedCount(token: string, courierId?: string): Promise<nu
 
 function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+}
+
+/** Truncate text at maxLen, showing title on hover */
+function Trunc({ text, max = 14, className }: { text: string; max?: number; className?: string }) {
+  if (!text) return <span style={{ opacity: 0.35 }}>—</span>;
+  if (text.length <= max) return <span className={className}>{text}</span>;
+  return (
+    <span className={className} title={text} style={{ cursor: 'default' }}>
+      {text.slice(0, max)}…
+    </span>
+  );
+}
+
+/** Tracking number cell: shows 8 chars, hover reveals full + copy button */
+function TrackingCell({ tn }: { tn: string }) {
+  const [hovered, setHovered] = useState(false);
+  const [copied,  setCopied]  = useState(false);
+
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(tn).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <span
+      className="tn-cell"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <span className="tn-badge tn-badge--compact" title={tn}>
+        {hovered ? tn : tn.slice(0, 8)}
+      </span>
+      {hovered && (
+        <button className="tn-copy" onClick={copy} title="Copy tracking number">
+          {copied
+            ? <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            : <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="1" width="10" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M3 4H2a1 1 0 00-1 1v10a1 1 0 001 1h9a1 1 0 001-1v-1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+          }
+        </button>
+      )}
+    </span>
+  );
 }
 
 // ── Courier picker dropdown ───────────────────────────────────────────────────
@@ -157,7 +204,7 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
             </svg>
             <span>{t.aopAllCouriers}</span>
             <svg className="cp-chevron" width="11" height="11" viewBox="0 0 12 12" fill="none">
-              <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
           </>
         )}
@@ -187,10 +234,7 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
           </div>
 
           <div className="cp-list">
-            <button
-              className={`cp-item${!selected ? ' cp-item--active' : ''}`}
-              onClick={() => handleSelect(null)}
-            >
+            <button className={`cp-item${!selected ? ' cp-item--active' : ''}`} onClick={() => handleSelect(null)}>
               <span className="cp-item-all-icon">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                   <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
@@ -201,9 +245,7 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
               <span className="cp-item-name">{t.aopAllCouriers}</span>
             </button>
 
-            {filtered.length === 0 && (
-              <div className="cp-empty">{t.aopNoCourierMatch(query)}</div>
-            )}
+            {filtered.length === 0 && <div className="cp-empty">{t.aopNoCourierMatch(query)}</div>}
 
             {filtered.map(c => (
               <button
@@ -256,7 +298,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [bulkPrice,     setBulkPrice]     = useState('');
   const [bulkSalary,    setBulkSalary]    = useState('');
   const [bulkBusy,      setBulkBusy]      = useState(false);
-  const [toast,     setToast]     = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const [toast,         setToast]         = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+
+  // Edit modal
+  const [editOrder,     setEditOrder]     = useState<AdminOrderItem | null>(null);
+  const [editOpen,      setEditOpen]      = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false });
@@ -317,8 +363,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const targetPage = filterChanged ? 1 : page;
-      if (filterChanged && page !== 1)  setPage(1);
-      if (filterChanged)                setSelected(new Set());
+      if (filterChanged && page !== 1) setPage(1);
+      if (filterChanged)               setSelected(new Set());
 
       void load({
         city:      filterCity     || undefined,
@@ -400,6 +446,17 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setFilterCourier(null); setFilterUnpriced(false);
   };
 
+  const handleEditClick = (e: React.MouseEvent, order: AdminOrderItem) => {
+    e.stopPropagation();
+    setEditOrder(order);
+    setEditOpen(true);
+  };
+
+  const handleEditSaved = () => {
+    showToast('Order updated successfully.');
+    void load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page });
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -427,11 +484,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           )}
         </div>
 
-        <CourierPicker
-          couriers={couriers}
-          selected={filterCourier}
-          onSelect={setFilterCourier}
-        />
+        <CourierPicker couriers={couriers} selected={filterCourier} onSelect={setFilterCourier} />
 
         <div className="go-select-wrap">
           <svg className="go-select-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -500,11 +553,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               {t.aopMissingFinancials(unpricedCount)}
             </span>
           )}
-          <button
-            className="aop-courier-banner__clear"
-            onClick={() => setFilterCourier(null)}
-            title={t.aopClearCourierTitle}
-          >
+          <button className="aop-courier-banner__clear" onClick={() => setFilterCourier(null)} title={t.aopClearCourierTitle}>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
@@ -525,12 +574,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
           {!showBulkModal && (
             <>
-              <button className="aop-bulk-btn aop-bulk-btn--price"
-                onClick={() => setShowBulkModal(true)}>
+              <button className="aop-bulk-btn aop-bulk-btn--price" onClick={() => setShowBulkModal(true)}>
                 💰 Set Prices
               </button>
-              <button className="aop-bulk-btn aop-bulk-btn--ghost"
-                onClick={() => setSelected(new Set())}>
+              <button className="aop-bulk-btn aop-bulk-btn--ghost" onClick={() => setSelected(new Set())}>
                 {t.aopDeselectAll}
               </button>
             </>
@@ -564,8 +611,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 disabled={bulkBusy || (!bulkPrice && !bulkSalary)} onClick={handleBulkApply}>
                 {bulkBusy ? t.aopSaving : t.aopApply}
               </button>
-              <button className="aop-bulk-btn aop-bulk-btn--ghost"
-                disabled={bulkBusy} onClick={cancelBulk}>
+              <button className="aop-bulk-btn aop-bulk-btn--ghost" disabled={bulkBusy} onClick={cancelBulk}>
                 {t.cancel}
               </button>
             </div>
@@ -575,12 +621,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
       {/* Table */}
       <div className="aop-table-wrap">
-        {loading && (
-          <div className="go-loading"><div className="go-spinner"/>{t.aopLoadingOrders}</div>
-        )}
-        {!loading && error && (
-          <div className="go-error">{error}</div>
-        )}
+        {loading && <div className="go-loading"><div className="go-spinner"/>{t.aopLoadingOrders}</div>}
+        {!loading && error && <div className="go-error">{error}</div>}
         {!loading && !error && orders.length === 0 && (
           <div className="go-loading" style={{ color: 'var(--color-text-subtle)' }}>
             {filterUnpriced ? t.aopAllPriced : t.aopNoOrdersMatch}
@@ -598,17 +640,19 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                     title={allSelected ? t.aopDeselectAll : t.aopSelectAll}
                   />
                 </th>
-                <th className="aop-th">{t.aopThTracking}</th>
-                <th className="aop-th">{t.aopThSender}</th>
-                <th className="aop-th">{t.aopThRecipient}</th>
-                <th className="aop-th">{t.aopThPhone}</th>
-                <th className="aop-th">{t.aopThCityDistrict}</th>
-              {/*  <th className="aop-th">{t.aopThDescription}</th>*/}
-                <th className="aop-th">{t.aopThStatus}</th>
+                <th className="aop-th">Track</th>
+                <th className="aop-th">Sender</th>
+                <th className="aop-th">Recipient</th>
+                <th className="aop-th">Phone</th>
+                <th className="aop-th">City / District</th>
+                <th className="aop-th">Status</th>
+                <th className="aop-th aop-th--num" title="Who pays company service fee">Payer</th>
+                <th className="aop-th aop-th--num" title="COD — Cash on delivery amount">COD ₾</th>
                 <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>
                 <th className="aop-th aop-th--num">{t.aopThSalary}</th>
                 <th className="aop-th aop-th--num">{t.aopThRevenue}</th>
                 <th className="aop-th">{t.aopThPaid}</th>
+                <th className="aop-th aop-th--edit" />
               </tr>
             </thead>
             <tbody>
@@ -618,6 +662,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 const statusMeta    = getStatusMeta(order.status, lang);
                 const missingPrice  = order.companyServicePrice === 0;
                 const missingSalary = order.courierSalary == null || order.courierSalary === 0;
+                const rcptPays      = order.whoPaysForCompanyService === 'Recipient';
                 return (
                   <tr key={order.id}
                     className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}`}
@@ -627,34 +672,41 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       <input type="checkbox" className="aop-checkbox" checked={isChecked}
                         onChange={() => toggleOne(order.id)}/>
                     </td>
-                    <td className="aop-td">
-                      <span className="tn-badge">{order.trackingNumber}</span>
+                    <td className="aop-td aop-td--tracking">
+                      <TrackingCell tn={order.trackingNumber} />
+                    </td>
+                    <td className="aop-td aop-td--sender">
+                      <Trunc text={order.senderBusinessName} max={13} className="aop-sender-biz" />
+                      <div className="aop-sender-name">
+                        <Trunc text={`${order.senderFirstName} ${order.senderLastName}`} max={12} />
+                      </div>
                     </td>
                     <td className="aop-td">
-                      <div className="aop-sender-biz">{order.senderBusinessName}</div>
-                      <div className="aop-sender-name">{order.senderFirstName} {order.senderLastName}</div>
-                    </td>
-                    <td className="aop-td">
-                      <div className="aop-name">{order.recipientFirstName} {order.recipientLastName}</div>
-                      <div className="aop-addr">{order.recipientAddress}</div>
+                      <Trunc text={`${order.recipientFirstName} ${order.recipientLastName}`} max={13} className="aop-name" />
+                      <div className="aop-addr" title={order.recipientAddress}>
+                        <Trunc text={order.recipientAddress} max={16} />
+                      </div>
                     </td>
                     <td className="aop-td aop-td--mono">{order.recipientPhone}</td>
                     <td className="aop-td">
                       <div className="aop-city">{lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity}</div>
                       <div className="aop-district">{lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict}</div>
                     </td>
-                    {/*<td className="aop-td aop-td--desc">*/}
-                    {/*  {order.isFragile && <span className="aop-fragile">{t.aopFragile}</span>}*/}
-                    {/*  {order.description && order.description !== 'Fragile – handle with care' && <span>{order.description}</span>}*/}
-                    {/*</td>*/}
                     <td className="aop-td">
-                      <span
-                        className="status-badge"
-                        style={{ background: bg, color }}
-                        title={statusMeta.description}
-                      >
+                      <span className="status-badge" style={{ background: bg, color }} title={statusMeta.description}>
                         {statusMeta.short}
                       </span>
+                    </td>
+                    <td className="aop-td aop-td--num">
+                      <span className={`aop-payer-badge${rcptPays ? ' aop-payer-badge--rcpt' : ''}`} title={rcptPays ? 'Recipient pays service fee' : 'Sender pays service fee'}>
+                        {rcptPays ? 'Rcpt' : 'Sndr'}
+                      </span>
+                    </td>
+                    <td className="aop-td aop-td--num">
+                      {order.amountToCollectForPackage != null
+                        ? <span className="aop-price aop-price--cod">₾{order.amountToCollectForPackage.toFixed(2)}</span>
+                        : <span className="aop-price aop-price--empty">—</span>
+                      }
                     </td>
                     <td className="aop-td aop-td--num">
                       {missingPrice
@@ -679,6 +731,17 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                         ? <span className="aop-paid">{t.aopPaid}</span>
                         : <span className="aop-unpaid">{t.aopUnpaid}</span>
                       }
+                    </td>
+                    <td className="aop-td aop-td--edit" onClick={e => e.stopPropagation()}>
+                      <button
+                        className="aop-edit-btn"
+                        onClick={e => handleEditClick(e, order)}
+                        title="Edit order"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                          <path d="M11.5 2.5a1.5 1.5 0 012.12 2.12l-8 8L3 13.5l.88-2.62 8-8z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
                     </td>
                   </tr>
                 );
@@ -712,155 +775,67 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         </div>
       )}
 
+      {/* Edit Order Modal */}
+      <EditOrderModal
+        order={editOrder}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onSaved={handleEditSaved}
+        token={token}
+      />
+
       <style>{`
         .aop-root { display: flex; flex-direction: column; min-height: 0; }
+        .aop-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; background: var(--color-bg); }
 
-        /* ── Toolbar ── */
-        .aop-toolbar {
-          display: flex; align-items: center; gap: 10px; padding: 12px 20px;
-          border-bottom: 1px solid var(--color-border); flex-wrap: wrap;
-          background: var(--color-bg);
-        }
-
-        /* ── Courier picker ── */
+        /* Courier picker */
         .cp-root { position: relative; }
-        .cp-trigger {
-          display: flex; align-items: center; gap: 7px;
-          background: var(--color-bg-3); border: 1px solid var(--color-border);
-          border-radius: var(--radius-sm); color: var(--color-text-subtle);
-          font-size: 0.8rem; font-weight: 500; padding: 7px 12px;
-          cursor: pointer; transition: all var(--transition); white-space: nowrap;
-          max-width: 240px;
-        }
+        .cp-trigger { display: flex; align-items: center; gap: 7px; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.8rem; font-weight: 500; padding: 7px 12px; cursor: pointer; transition: all var(--transition); white-space: nowrap; max-width: 240px; }
         .cp-trigger:hover { color: var(--color-text); border-color: var(--color-text-subtle); }
-        .cp-trigger--active {
-          background: rgba(59,130,246,0.08);
-          border-color: rgba(59,130,246,0.4); color: #3b82f6;
-        }
-        .cp-avatar {
-          width: 22px; height: 22px; border-radius: 50%;
-          background: #3b82f6; color: #fff;
-          font-size: 0.62rem; font-weight: 700;
-          display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0;
-        }
+        .cp-trigger--active { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.4); color: #3b82f6; }
+        .cp-avatar { width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 0.62rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .cp-trigger-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
         .cp-trigger-city { font-size: 0.74rem; opacity: 0.75; }
         .cp-chevron { margin-left: auto; flex-shrink: 0; }
-        .cp-clear {
-          margin-left: 2px; display: flex; align-items: center;
-          padding: 2px; border-radius: 3px; flex-shrink: 0;
-          cursor: pointer; opacity: 0.6;
-        }
+        .cp-clear { margin-left: 2px; display: flex; align-items: center; padding: 2px; border-radius: 3px; flex-shrink: 0; cursor: pointer; opacity: 0.6; }
         .cp-clear:hover { opacity: 1; }
-
-        .cp-dropdown {
-          position: absolute; top: calc(100% + 6px); left: 0; z-index: 100;
-          width: 280px; background: var(--color-bg-2);
-          border: 1px solid var(--color-border); border-radius: var(--radius-md);
-          box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-          animation: expand-in 0.12s ease both;
-        }
-        .cp-search-wrap {
-          display: flex; align-items: center; gap: 8px;
-          padding: 10px 12px; border-bottom: 1px solid var(--color-border);
-          color: var(--color-text-subtle);
-        }
-        .cp-search {
-          flex: 1; background: none; border: none; outline: none;
-          color: var(--color-text); font-size: 0.82rem;
-        }
+        .cp-dropdown { position: absolute; top: calc(100% + 6px); left: 0; z-index: 100; width: 280px; background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 8px 32px rgba(0,0,0,0.18); animation: expand-in 0.12s ease both; }
+        .cp-search-wrap { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--color-border); color: var(--color-text-subtle); }
+        .cp-search { flex: 1; background: none; border: none; outline: none; color: var(--color-text); font-size: 0.82rem; }
         .cp-search::placeholder { color: var(--color-text-subtle); }
-        .cp-search-clear {
-          background: none; border: none; cursor: pointer;
-          color: var(--color-text-subtle); padding: 0; display: flex;
-        }
+        .cp-search-clear { background: none; border: none; cursor: pointer; color: var(--color-text-subtle); padding: 0; display: flex; }
         .cp-search-clear:hover { color: var(--color-text); }
         .cp-list { max-height: 260px; overflow-y: auto; padding: 4px; }
-        .cp-item {
-          display: flex; align-items: center; gap: 10px; width: 100%;
-          background: none; border: none; border-radius: var(--radius-sm);
-          padding: 8px 10px; cursor: pointer; text-align: left;
-          transition: background var(--transition);
-        }
+        .cp-item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; border-radius: var(--radius-sm); padding: 8px 10px; cursor: pointer; text-align: left; transition: background var(--transition); }
         .cp-item:hover { background: var(--color-bg-3); }
         .cp-item--active { background: rgba(59,130,246,0.08); }
-        .cp-item-all-icon {
-          width: 28px; height: 28px; border-radius: 50%;
-          background: var(--color-bg-3); border: 1px solid var(--color-border);
-          display: flex; align-items: center; justify-content: center;
-          color: var(--color-text-subtle); flex-shrink: 0;
-        }
-        .cp-item-avatar {
-          width: 28px; height: 28px; border-radius: 50%;
-          background: #3b82f6; color: #fff;
-          font-size: 0.65rem; font-weight: 700;
-          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-        }
+        .cp-item-all-icon { width: 28px; height: 28px; border-radius: 50%; background: var(--color-bg-3); border: 1px solid var(--color-border); display: flex; align-items: center; justify-content: center; color: var(--color-text-subtle); flex-shrink: 0; }
+        .cp-item-avatar { width: 28px; height: 28px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .cp-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
         .cp-item-name { font-size: 0.82rem; font-weight: 600; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .cp-item-meta { font-size: 0.72rem; color: var(--color-text-subtle); }
         .cp-item-check { margin-left: auto; color: #3b82f6; flex-shrink: 0; }
         .cp-empty { font-size: 0.78rem; color: var(--color-text-subtle); text-align: center; padding: 16px 10px; }
 
-        /* ── Courier banner ── */
-        .aop-courier-banner {
-          display: flex; align-items: center; gap: 12px; padding: 10px 20px;
-          background: rgba(59,130,246,0.06); border-bottom: 1px solid rgba(59,130,246,0.2);
-          animation: expand-in 0.15s ease both;
-        }
-        .aop-courier-banner__avatar {
-          width: 32px; height: 32px; border-radius: 50%;
-          background: #3b82f6; color: #fff;
-          font-size: 0.7rem; font-weight: 700;
-          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-        }
+        /* Courier banner */
+        .aop-courier-banner { display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: rgba(59,130,246,0.06); border-bottom: 1px solid rgba(59,130,246,0.2); animation: expand-in 0.15s ease both; }
+        .aop-courier-banner__avatar { width: 32px; height: 32px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .aop-courier-banner__info { display: flex; flex-direction: column; gap: 1px; }
         .aop-courier-banner__name { font-size: 0.875rem; font-weight: 700; color: var(--color-text); }
         .aop-courier-banner__meta { font-size: 0.75rem; color: var(--color-text-subtle); }
-        .aop-courier-banner__unpriced {
-          margin-left: 8px; font-size: 0.75rem; font-weight: 600;
-          background: rgba(239,68,68,0.1); color: #ef4444;
-          border-radius: 100px; padding: 3px 10px;
-        }
-        .aop-courier-banner__clear {
-          margin-left: auto; background: none; border: none;
-          cursor: pointer; color: var(--color-text-subtle);
-          padding: 4px; border-radius: var(--radius-sm);
-          display: flex; align-items: center;
-          transition: color var(--transition);
-        }
+        .aop-courier-banner__unpriced { margin-left: 8px; font-size: 0.75rem; font-weight: 600; background: rgba(239,68,68,0.1); color: #ef4444; border-radius: 100px; padding: 3px 10px; }
+        .aop-courier-banner__clear { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--color-text-subtle); padding: 4px; border-radius: var(--radius-sm); display: flex; align-items: center; transition: color var(--transition); }
         .aop-courier-banner__clear:hover { color: var(--color-text); }
 
-        /* ── Unpriced toggle ── */
-        .aop-unpriced-btn {
-          display: flex; align-items: center; gap: 7px;
-          background: var(--color-bg-3); border: 1px solid var(--color-border);
-          border-radius: var(--radius-sm); color: var(--color-text-subtle);
-          font-size: 0.8rem; font-weight: 600; padding: 7px 13px;
-          cursor: pointer; transition: all var(--transition); white-space: nowrap;
-        }
-        .aop-unpriced-btn:hover:not(.aop-unpriced-btn--active) {
-          color: var(--color-text); border-color: var(--color-text-subtle);
-        }
-        .aop-unpriced-btn--active {
-          background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); color: #ef4444;
-        }
-        .aop-unpriced-badge {
-          display: inline-flex; align-items: center; justify-content: center;
-          min-width: 20px; height: 18px; padding: 0 5px;
-          background: #ef4444; color: #fff;
-          border-radius: 100px; font-size: 0.68rem; font-weight: 700; line-height: 1;
-        }
+        /* Unpriced toggle */
+        .aop-unpriced-btn { display: flex; align-items: center; gap: 7px; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.8rem; font-weight: 600; padding: 7px 13px; cursor: pointer; transition: all var(--transition); white-space: nowrap; }
+        .aop-unpriced-btn:hover:not(.aop-unpriced-btn--active) { color: var(--color-text); border-color: var(--color-text-subtle); }
+        .aop-unpriced-btn--active { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); color: #ef4444; }
+        .aop-unpriced-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 5px; background: #ef4444; color: #fff; border-radius: 100px; font-size: 0.68rem; font-weight: 700; }
         .aop-unpriced-badge--active { background: #fff; color: #ef4444; }
 
-        /* ── Bulk bar ── */
-        .aop-bulk-bar {
-          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-          padding: 10px 20px; background: var(--color-accent-dim);
-          border-bottom: 1px solid rgba(196,127,23,0.25);
-          animation: expand-in 0.15s ease both;
-        }
+        /* Bulk bar */
+        .aop-bulk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 20px; background: var(--color-accent-dim); border-bottom: 1px solid rgba(196,127,23,0.25); animation: expand-in 0.15s ease both; }
         .aop-bulk-count { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--color-accent); }
         .aop-bulk-btn { border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
         .aop-bulk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -875,41 +850,58 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-bulk-input { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.875rem; padding: 7px 10px 7px 26px; width: 130px; outline: none; transition: border-color var(--transition); }
         .aop-bulk-input:focus { border-color: var(--color-accent); }
 
-        /* ── Table ── */
+        /* Table */
         .aop-table-wrap { overflow-x: auto; flex: 1; }
-        .aop-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-        .aop-th { text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 10px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
-        .aop-th--check { width: 44px; padding-left: 20px; }
+        .aop-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1100px; }
+        .aop-th { text-align: left; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 9px 10px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; overflow: hidden; text-overflow: ellipsis; }
+        .aop-th--check { width: 40px; padding-left: 16px; }
         .aop-th--num { text-align: right; }
-        .aop-td { padding: 11px 14px; font-size: 0.82rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; cursor: pointer; }
-        .aop-td--check { padding-left: 20px; cursor: default; width: 44px; }
-        .aop-td--mono { font-family: 'Courier New', monospace; font-size: 0.78rem; }
-        .aop-td--num { text-align: right; }
-        .aop-td--desc { max-width: 180px; }
+        .aop-th--edit { width: 36px; }
+        .aop-td { padding: 9px 10px; font-size: 0.8rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; cursor: pointer; overflow: hidden; }
+        .aop-td--check { padding-left: 16px; cursor: default; width: 40px; }
+        .aop-td--tracking { width: 100px; }
+        .aop-td--sender { width: 120px; }
+        .aop-td--mono { font-family: 'Courier New', monospace; font-size: 0.76rem; width: 100px; }
+        .aop-td--num { text-align: right; width: 68px; }
+        .aop-td--edit { width: 36px; cursor: default; text-align: center; }
         .aop-tr { transition: background var(--transition); }
         .aop-tr:hover { background: var(--color-bg-3); }
         .aop-tr--selected { background: rgba(196,127,23,0.07) !important; }
         .aop-tr:last-child .aop-td { border-bottom: none; }
-        .aop-sender-biz { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
-        .aop-sender-name { font-size: 0.75rem; color: var(--color-text-subtle); margin-top: 1px; }
-        .aop-name { font-weight: 500; }
-        .aop-addr { font-size: 0.75rem; color: var(--color-text-subtle); margin-top: 1px; }
-        .aop-city { font-weight: 500; }
-        .aop-district { font-size: 0.75rem; color: var(--color-text-subtle); margin-top: 1px; }
-        .aop-fragile { display: inline-block; font-size: 0.68rem; font-weight: 700; background: rgba(249,115,22,0.12); color: #f97316; border-radius: 4px; padding: 1px 6px; margin-right: 5px; }
-        .aop-price { font-weight: 600; font-variant-numeric: tabular-nums; }
-        .aop-price--empty { color: var(--color-text-subtle); font-weight: 400; }
-        .aop-missing { font-size: 0.73rem; font-weight: 600; color: #ef4444; background: rgba(239,68,68,0.1); border-radius: 4px; padding: 2px 7px; }
-        .aop-paid   { color: #10b981; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
-        .aop-unpaid { color: #ef4444; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
-        .aop-checkbox { width: 15px; height: 15px; cursor: pointer; accent-color: var(--color-accent); }
 
-        /* ── Pagination ── */
+        /* Cell content */
+        .aop-sender-biz { font-weight: 600; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 100%; }
+        .aop-sender-name { font-size: 0.72rem; color: var(--color-text-subtle); margin-top: 1px; }
+        .aop-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        .aop-addr { font-size: 0.72rem; color: var(--color-text-subtle); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .aop-city { font-weight: 500; font-size: 0.8rem; }
+        .aop-district { font-size: 0.72rem; color: var(--color-text-subtle); margin-top: 1px; }
+        .aop-price { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.8rem; }
+        .aop-price--empty { color: var(--color-text-subtle); font-weight: 400; }
+        .aop-price--cod { color: #3b82f6; }
+        .aop-missing { font-size: 0.7rem; font-weight: 600; color: #ef4444; background: rgba(239,68,68,0.1); border-radius: 4px; padding: 2px 5px; }
+        .aop-paid   { color: #10b981; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+        .aop-unpaid { color: #ef4444; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+        .aop-checkbox { width: 14px; height: 14px; cursor: pointer; accent-color: var(--color-accent); }
+        .aop-payer-badge { display: inline-block; font-size: 0.62rem; font-weight: 700; border-radius: 3px; padding: 1px 5px; background: rgba(59,130,246,0.1); color: #3b82f6; white-space: nowrap; }
+        .aop-payer-badge--rcpt { background: rgba(196,127,23,0.12); color: var(--color-accent); }
+        .aop-edit-btn { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 4px 6px; cursor: pointer; color: var(--color-text-subtle); display: flex; align-items: center; transition: all var(--transition); }
+        .aop-edit-btn:hover { background: var(--color-bg-3); color: var(--color-accent); border-color: rgba(196,127,23,0.4); }
+
+        /* Tracking cell */
+        .tn-cell { position: relative; display: inline-flex; align-items: center; gap: 5px; }
+        .tn-badge--compact { font-family: 'Courier New', monospace; font-size: 0.72rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 2px 6px; color: var(--color-text-muted); white-space: nowrap; transition: all 0.1s; }
+        .tn-copy { background: none; border: 1px solid var(--color-border); border-radius: 3px; cursor: pointer; color: var(--color-text-subtle); padding: 2px 4px; display: flex; align-items: center; animation: expand-in 0.1s ease both; }
+        .tn-copy:hover { color: var(--color-accent); border-color: var(--color-accent); }
+
+        /* Pagination */
         .aop-pagination { display: flex; align-items: center; gap: 14px; justify-content: center; padding: 16px 20px; border-top: 1px solid var(--color-border); }
         .aop-page-btn { background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.82rem; font-weight: 600; padding: 7px 16px; cursor: pointer; transition: background var(--transition); }
         .aop-page-btn:hover:not(:disabled) { background: var(--color-bg-2); }
         .aop-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .aop-page-info { font-size: 0.82rem; color: var(--color-text-subtle); }
+
+        @keyframes expand-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
     </div>
   );

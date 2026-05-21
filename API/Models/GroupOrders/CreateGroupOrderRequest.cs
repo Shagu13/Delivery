@@ -34,5 +34,6 @@ public sealed record OrderItemRequest(
     /// </summary>
     bool IsDeliveryAddressInCityItself = false,
     decimal? AmountToCollectForPackage = null,
-    decimal? CompanyServicePrice = null
+    decimal? CompanyServicePrice = null,
+    Guid? WeightPriceTierId = null   // ← selected weight tier; drives pricing when tier.IsStandard = false
 );

@@ -65,9 +65,10 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
   const districtInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!cityValue) { setCitySearch(''); return; }
+    if (!cityValue) { setCitySearch(''); setSelectedCityId(null); return; }
     const match = cities.find(c => c.cityName === cityValue);
     setCitySearch(match ? (lang === 'ka' && match.cityNameGeo ? match.cityNameGeo : match.cityName) : cityValue);
+    if (match) setSelectedCityId(match.id);
   }, [cityValue, cities, lang]);
 
   useEffect(() => {

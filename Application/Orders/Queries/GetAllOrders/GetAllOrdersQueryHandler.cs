@@ -94,6 +94,7 @@ public sealed class GetAllOrdersQueryHandler
                 Status:                   o.Status.ToString(),
                 ProductPaymentStatus:     o.ProductPaymentStatus.ToString(),
                 WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
+                AmountToCollectForPackage:o.AmountToCollectForPackage,
                 CompanyServicePrice:      o.CompanyServicePrice,
                 CourierSalary:            o.CourierSalary,
                 CompanyRevenue:           o.CompanyRevenue,

@@ -41,6 +41,7 @@ export function AdminDashboard() {
   const [showCreateCourier, setShowCreateCourier] = useState(false);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -63,90 +64,103 @@ export function AdminDashboard() {
 
   return (
     <div className="dashboard">
-      <aside className="sidebar">
+      <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
         <div className="sidebar__logo">
           <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
             <rect width="28" height="28" rx="6" fill="currentColor" />
             <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          {t.appName}
+          <span className="sidebar__logo-text">{t.appName}</span>
         </div>
+        <button
+          className="sidebar__collapse-btn"
+          onClick={() => setSidebarCollapsed(v => !v)}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            {sidebarCollapsed
+              ? <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              : <path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            }
+          </svg>
+        </button>
         <span className="sidebar__role-badge">Admin</span>
         <div className="sidebar__divider" />
         <p className="sidebar__section-label">{t.sidebarManagement}</p>
         <nav className="sidebar__nav">
-          <button className={`sidebar__link ${activeView === 'overview' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('overview')}>
+          <button className={`sidebar__link ${activeView === 'overview' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('overview')} title={t.sidebarOverview}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
               <rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
               <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
               <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
             </svg>
-            {t.sidebarOverview}
+            <span className="sidebar__link-text">{t.sidebarOverview}</span>
           </button>
-          <button className={`sidebar__link ${activeView === 'orders' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('orders')}>
+          <button className={`sidebar__link ${activeView === 'orders' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('orders')} title={t.sidebarGroupOrders}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
               <path d="M4.5 5.5h7M4.5 8h5M4.5 10.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-            {t.sidebarGroupOrders}
+            <span className="sidebar__link-text">{t.sidebarGroupOrders}</span>
           </button>
-          <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')}>
+          <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')} title={t.topbarPackages}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               <path d="M1 8h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-                      {t.topbarPackages}
+            <span className="sidebar__link-text">{t.topbarPackages}</span>
           </button>
-          <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')}>
+          <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')} title={t.sidebarCouriers}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4" />
               <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            {t.sidebarCouriers}
-            {couriers.length > 0 && <span className="sidebar__badge">{couriers.length}</span>}
+            <span className="sidebar__link-text">{t.sidebarCouriers}</span>
+            {couriers.length > 0 && <span className="sidebar__badge sidebar__badge--count">{couriers.length}</span>}
           </button>
-          <button className={`sidebar__link ${activeView === 'customers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('customers')}>
+          <button className={`sidebar__link ${activeView === 'customers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('customers')} title={t.sidebarCustomers}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
               <circle cx="11" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M1 14c0-2.5 2-4 4.5-4M8 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            {t.sidebarCustomers}
+            <span className="sidebar__link-text">{t.sidebarCustomers}</span>
           </button>
-          <button className={`sidebar__link ${activeView === 'cities' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('cities')}>
+          <button className={`sidebar__link ${activeView === 'cities' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('cities')} title={t.sidebarCities}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="7" width="14" height="8" rx="1" stroke="currentColor" strokeWidth="1.4" />
               <path d="M4 7V5a4 4 0 018 0v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               <path d="M8 11v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-            {t.sidebarCities}
-                  </button>
-                  <button
-                      className={`sidebar__link ${activeView === 'weightTiers' ? 'sidebar__link--active' : ''}`}
-                      onClick={() => goTo('weightTiers')}
-                  >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                          <path d="M2 8h12M5 5l-3 3 3 3M11 5l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      {t.sidebarWeightTiers}
-                  </button>
+            <span className="sidebar__link-text">{t.sidebarCities}</span>
+          </button>
+          <button
+            className={`sidebar__link ${activeView === 'weightTiers' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('weightTiers')}
+            title={t.sidebarWeightTiers}
+          >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 8h12M5 5l-3 3 3 3M11 5l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="sidebar__link-text">{t.sidebarWeightTiers}</span>
+          </button>
         </nav>
         <div className="sidebar__footer">
           <LanguageToggle className="sidebar__lang-toggle" />
           <div className="sidebar__user">
             <div className="sidebar__avatar">{initials}</div>
-            <div className="sidebar__user-info">
+            <div className="sidebar__user-info sidebar__link-text">
               <div className="sidebar__user-name">{user?.firstName} {user?.lastName}</div>
               <div className="sidebar__user-handle">@{user?.username}</div>
             </div>
           </div>
-          <button className="sidebar__logout" onClick={handleSignOut}>
+          <button className="sidebar__logout" onClick={handleSignOut} title={t.signOut}>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            {t.signOut}
+            <span className="sidebar__link-text">{t.signOut}</span>
           </button>
         </div>
       </aside>
@@ -207,6 +221,30 @@ export function AdminDashboard() {
         .go-status-pill:hover:not(.go-status-pill--active) { background: var(--color-bg-3); color: var(--color-text); }
         .go-status-pill--active { background: var(--color-accent-dim); border-color: rgba(196,127,23,0.35); color: var(--color-accent); }
         .sidebar__badge { margin-left: auto; background: var(--color-accent-dim); color: var(--color-accent); border: 1px solid rgba(196,127,23,0.25); border-radius: 100px; font-size: 0.65rem; font-weight: 700; padding: 1px 7px; min-width: 20px; text-align: center; }
+        /* District multi-picker */
+        .dmp-root { position: relative; }
+        .dmp-trigger { display: inline-flex; align-items: center; gap: 6px; background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.8rem; font-weight: 500; padding: 7px 10px; cursor: pointer; transition: all var(--transition); min-width: 130px; white-space: nowrap; }
+        .dmp-trigger:hover:not(.dmp-trigger--disabled) { border-color: var(--color-text-subtle); color: var(--color-text); }
+        .dmp-trigger--active { background: var(--color-accent-dim); border-color: rgba(196,127,23,0.4); color: var(--color-accent); }
+        .dmp-trigger--disabled { opacity: 0.5; cursor: not-allowed; }
+        .dmp-label { flex: 1; text-align: left; }
+        .dmp-chevron { flex-shrink: 0; }
+        .dmp-clear { display: flex; align-items: center; padding: 1px; cursor: pointer; opacity: 0.6; }
+        .dmp-clear:hover { opacity: 1; }
+        .dmp-dropdown { position: absolute; top: calc(100% + 5px); left: 0; z-index: 50; min-width: 200px; background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 8px 28px rgba(0,0,0,0.16); animation: expand-in 0.12s ease both; }
+        .dmp-dropdown-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; border-bottom: 1px solid var(--color-border); }
+        .dmp-dropdown-title { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-subtle); flex: 1; }
+        .dmp-select-all { background: none; border: 1px solid var(--color-border); border-radius: 4px; color: var(--color-text-subtle); font-size: 0.7rem; font-weight: 600; padding: 2px 7px; cursor: pointer; transition: all var(--transition); }
+        .dmp-select-all:hover { background: var(--color-bg-3); color: var(--color-text); }
+        .dmp-list { display: flex; flex-direction: column; padding: 6px; max-height: 220px; overflow-y: auto; gap: 2px; }
+        .dmp-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; transition: background var(--transition); }
+        .dmp-item:hover { background: var(--color-bg-3); }
+        .dmp-item--checked { background: var(--color-accent-dim); }
+        .dmp-checkbox { width: 14px; height: 14px; accent-color: var(--color-accent); cursor: pointer; flex-shrink: 0; }
+        .dmp-item-label { flex: 1; font-size: 0.82rem; color: var(--color-text); }
+        .dmp-item-check { color: var(--color-accent); flex-shrink: 0; }
+        /* Sidebar link text (hidden when collapsed) */
+        .sidebar__link-text { transition: opacity 0.15s, width 0.2s; }
         .sidebar__lang-toggle { margin-bottom: 10px; width: 100%; justify-content: center; }
         .courier-table { width: 100%; border-collapse: collapse; }
         .courier-table th { text-align: left; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 12px 16px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); }
@@ -514,6 +552,113 @@ const STATUS_PILLS = [
   { value: 'OrderNotAccepted',                label: 'pillDeclined' },
 ] as const;
 
+// ── Multi-district checkbox dropdown ─────────────────────────────────────────
+
+interface DistrictMultiPickerProps {
+  available: string[];
+  selected: string[];
+  onChange: (districts: string[]) => void;
+  districtGeoMap: Record<string, string | undefined>;
+  locDistrict: (en: string, geo?: string | null) => string;
+  disabled?: boolean;
+}
+
+function DistrictMultiPicker({
+  available, selected, onChange, districtGeoMap, locDistrict, disabled
+}: DistrictMultiPickerProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggle = (d: string) => {
+    onChange(selected.includes(d) ? selected.filter(x => x !== d) : [...selected, d]);
+  };
+
+  const label = selected.length === 0
+    ? 'All Districts'
+    : selected.length === 1
+      ? locDistrict(selected[0], districtGeoMap[selected[0]])
+      : `${selected.length} districts`;
+
+  return (
+    <div className="dmp-root" ref={ref}>
+      <button
+        type="button"
+        className={`dmp-trigger${selected.length > 0 ? ' dmp-trigger--active' : ''}${disabled ? ' dmp-trigger--disabled' : ''}`}
+        onClick={() => !disabled && setOpen(v => !v)}
+        disabled={disabled}
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+          <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+          <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+          <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+          <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+        </svg>
+        <span className="dmp-label">{label}</span>
+        {selected.length > 0 && (
+          <span
+            className="dmp-clear"
+            role="button"
+            tabIndex={0}
+            title="Clear districts"
+            onClick={e => { e.stopPropagation(); onChange([]); }}
+            onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); onChange([]); }}}
+          >
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+              <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          </span>
+        )}
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="dmp-chevron">
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && !disabled && (
+        <div className="dmp-dropdown">
+          <div className="dmp-dropdown-header">
+            <span className="dmp-dropdown-title">Select districts</span>
+            {selected.length > 0 && (
+              <button className="dmp-select-all" type="button" onClick={() => onChange([])}>Clear all</button>
+            )}
+            {selected.length < available.length && (
+              <button className="dmp-select-all" type="button" onClick={() => onChange([...available])}>All</button>
+            )}
+          </div>
+          <div className="dmp-list">
+            {available.map(d => {
+              const checked = selected.includes(d);
+              return (
+                <label key={d} className={`dmp-item${checked ? ' dmp-item--checked' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(d)}
+                    className="dmp-checkbox"
+                  />
+                  <span className="dmp-item-label">{locDistrict(d, districtGeoMap[d])}</span>
+                  {checked && (
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="dmp-item-check">
+                      <path d="M2.5 7l3.5 3.5 5-5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
@@ -526,7 +671,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const [search,      setSearch]        = useState('');
   const [filterParty,    setFilterParty]    = useState<'sender' | 'recipient'>('sender');
   const [filterCity,     setFilterCity]     = useState('');
-  const [filterDistrict, setFilterDistrict] = useState('');
+  const [filterDistricts,setFilterDistricts] = useState<string[]>([]);
   const [filterStatus,   setFilterStatus]   = useState(initialStatus);
   const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
   const [actionToast,    setActionToast]    = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
@@ -577,8 +722,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     });
   };
 
-  const handlePartyChange = (party: 'sender' | 'recipient') => { setFilterParty(party); setFilterCity(''); setFilterDistrict(''); };
-  const handleCityChange  = (city: string) => { setFilterCity(city); setFilterDistrict(''); };
+  const handlePartyChange = (party: 'sender' | 'recipient') => { setFilterParty(party); setFilterCity(''); setFilterDistricts([]); };
+  const handleCityChange  = (city: string) => { setFilterCity(city); setFilterDistricts([]); };
 
   const availableCities = useMemo(() => {
     if (filterParty === 'sender') return [...new Set(groupOrders.map(go => go.pickUpCity))].sort();
@@ -619,34 +764,34 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
           if (go.status !== filterStatus) return false;
         }
       }
-      if (!filterCity && !filterDistrict) return true;
+      if (!filterCity && filterDistricts.length === 0) return true;
       if (filterParty === 'sender') {
-        if (filterCity     && go.pickUpCity     !== filterCity)     return false;
-        if (filterDistrict && go.pickUpDistrict !== filterDistrict) return false;
+        if (filterCity     && go.pickUpCity     !== filterCity)                                     return false;
+        if (filterDistricts.length > 0 && !filterDistricts.includes(go.pickUpDistrict)) return false;
         return true;
       }
       return go.orders.some(o => {
-        if (filterCity     && o.recipientCity     !== filterCity)     return false;
-        if (filterDistrict && o.recipientDistrict !== filterDistrict) return false;
+        if (filterCity                && o.recipientCity     !== filterCity)     return false;
+        if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
         return true;
       });
     });
-  }, [groupOrders, filterStatus, filterCity, filterDistrict, filterParty]);
+  }, [groupOrders, filterStatus, filterCity, filterDistricts, filterParty]);
 
-  const hasLocationFilter = filterCity || filterDistrict;
+  const hasLocationFilter = filterCity || filterDistricts.length > 0;
   const hasFilters        = search || hasLocationFilter || filterStatus;
-  const clearAll          = () => { setSearch(''); setFilterCity(''); setFilterDistrict(''); setFilterStatus(''); };
+  const clearAll          = () => { setSearch(''); setFilterCity(''); setFilterDistricts([]); setFilterStatus(''); };
 
   // Returns only the orders that match the active recipient city/district filter
   // (returns all orders when in sender mode or when no location filter is active)
   const visibleOrdersFor = useCallback((go: AdminGroupOrder) => {
-    if (filterParty !== 'recipient' || (!filterCity && !filterDistrict)) return go.orders;
+    if (filterParty !== 'recipient' || (!filterCity && filterDistricts.length === 0)) return go.orders;
     return go.orders.filter(o => {
-      if (filterCity     && o.recipientCity     !== filterCity)     return false;
-      if (filterDistrict && o.recipientDistrict !== filterDistrict) return false;
+      if (filterCity                && o.recipientCity     !== filterCity)     return false;
+      if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
       return true;
     });
-  }, [filterParty, filterCity, filterDistrict]);
+  }, [filterParty, filterCity, filterDistricts]);
 
   // Bulk-assign all selected orders to one courier in parallel
   const handleBulkAssign = async () => {
@@ -743,14 +888,14 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
               <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ marginBottom: 6 }}><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <div className="go-filter-step">
                 <span className="go-step-label">{t.goDistrict}</span>
-                <div className="go-select-wrap">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
-                  <select className="go-select" value={filterDistrict} onChange={e => setFilterDistrict(e.target.value)} disabled={availableDistricts.length === 0}>
-                    <option value="">{t.goAllDistricts}</option>
-                    {availableDistricts.map(d => <option key={d} value={d}>{locDistrict(d, districtGeoMap[d])}</option>)}
-                  </select>
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </div>
+                <DistrictMultiPicker
+                  available={availableDistricts}
+                  selected={filterDistricts}
+                  onChange={setFilterDistricts}
+                  districtGeoMap={districtGeoMap}
+                  locDistrict={locDistrict}
+                  disabled={availableDistricts.length === 0}
+                />
               </div>
             </>
           )}

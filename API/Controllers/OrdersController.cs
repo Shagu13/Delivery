@@ -6,6 +6,7 @@ using Application.Orders.DTOs;
 using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
 using Application.Orders.Queries.GetOrderByTrackingNumber;
+using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -77,6 +78,43 @@ public sealed class OrdersController : BaseController
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var result = await Sender.Send(new GetCourierOrdersQuery(userId), ct);
         return Ok(result);
+    }
+
+    // ── PUT /api/orders/{id}  (Admin — edit all fields) ──────────────────────
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> UpdateOrder(
+        Guid id,
+        [FromBody] UpdateOrderRequest request,
+        CancellationToken ct)
+    {
+        if (!Enum.TryParse<ServicePayer>(request.WhoPaysForCompanyService, out var payer))
+            return UnprocessableEntity("Invalid WhoPaysForCompanyService value.");
+
+        if (!Enum.TryParse<PaymentStatus>(request.ProductPaymentStatus, out var payStatus))
+            return UnprocessableEntity("Invalid ProductPaymentStatus value.");
+
+        await Sender.Send(new UpdateOrderCommand(
+            OrderId:                   id,
+            RecipientFirstName:        request.RecipientFirstName,
+            RecipientLastName:         request.RecipientLastName,
+            RecipientPhone:            request.RecipientPhone,
+            RecipientCity:             request.RecipientCity,
+            RecipientDistrict:         request.RecipientDistrict,
+            RecipientAddress:          request.RecipientAddress,
+            Description:               request.Description,
+            IsFragile:                 request.IsFragile,
+            WhoPaysForCompanyService:  payer,
+            ProductPaymentStatus:      payStatus,
+            AmountToCollectForPackage: request.AmountToCollectForPackage,
+            CompanyServicePrice:       request.CompanyServicePrice,
+            CourierSalary:             request.CourierSalary
+        ), ct);
+
+        return NoContent();
     }
 
     // ── PUT /api/orders/{id}/send-to-city  (Admin) ───────────────────────────
@@ -211,3 +249,19 @@ public sealed class OrdersController : BaseController
 public sealed record SetCourierSalaryRequest(decimal Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);
+
+public sealed record UpdateOrderRequest(
+    string   RecipientFirstName,
+    string   RecipientLastName,
+    string   RecipientPhone,
+    string   RecipientCity,
+    string   RecipientDistrict,
+    string   RecipientAddress,
+    string?  Description,
+    bool     IsFragile,
+    string   WhoPaysForCompanyService,  // "Sender" | "Recipient"
+    string   ProductPaymentStatus,      // "Paid" | "NotPaid"
+    decimal? AmountToCollectForPackage,
+    decimal  CompanyServicePrice,
+    decimal? CourierSalary
+);

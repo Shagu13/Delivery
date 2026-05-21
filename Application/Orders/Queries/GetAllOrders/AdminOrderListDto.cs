@@ -23,6 +23,9 @@ public sealed record AdminOrderListDto(
     string   Status,
     string   ProductPaymentStatus,
     string   WhoPaysForCompanyService,
+    // COD — cash the courier must collect from the recipient for the product itself.
+    // Only set when ProductPaymentStatus == NotPaid AND WhoPaysForCompanyService == Recipient.
+    decimal? AmountToCollectForPackage,
     // Financials
     decimal  CompanyServicePrice,
     decimal? CourierSalary,

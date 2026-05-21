@@ -34,7 +34,7 @@ public sealed class GetSettlementPreviewQueryHandler
             .OrderBy(o => o.DeliveredAt)
             .ToListAsync(cancellationToken);
 
-        // ── GroupOrders picked up on the day → drives TotalOrdersPickedUp ─────
+        // ── GroupOrders picked up on the day → drives TotalOrdersPickedUp ────
         var pickedUpPackages = await _context.GroupOrders
             .AsNoTracking()
             .Where(g => g.CourierId  == request.CourierId
@@ -43,14 +43,24 @@ public sealed class GetSettlementPreviewQueryHandler
             .SumAsync(g => (int?)g.NumberOfPackages, cancellationToken) ?? 0;
 
         // ── Financial totals ──────────────────────────────────────────────────
-        var totalCash       = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
-        var totalService    = orders.Sum(o => o.CompanyServicePrice);
-        var totalSalary     = orders.Sum(o => o.CourierSalary ?? 0m);
-        var totalNetIncome  = totalService - totalSalary;
+        // COD: cash collected from recipients for the product itself
+        var totalCodCash = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
 
-        // How much the courier must hand over to the company at end of day:
-        // courier keeps their salary from the cash they collected, rest goes back.
-        var totalTransfer   = totalCash - totalSalary;
+        // Service fees collected directly from recipients (in cash)
+        var totalServiceFeesFromRecipients = orders
+            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
+            .Sum(o => o.CompanyServicePrice);
+
+        // Total cash the courier physically holds
+        var totalCashCourierHolds = totalCodCash + totalServiceFeesFromRecipients;
+
+        // All service revenue (used for company accounting, regardless of payer)
+        var totalService   = orders.Sum(o => o.CompanyServicePrice);
+        var totalSalary    = orders.Sum(o => o.CourierSalary ?? 0m);
+        var totalNetIncome = totalService - totalSalary;
+
+        // How much the courier must hand over to the company
+        var totalCourierTransfer = totalCashCourierHolds - totalSalary;
 
         // ── Flag orders missing required financial data ────────────────────────
         var incomplete = orders
@@ -61,31 +71,34 @@ public sealed class GetSettlementPreviewQueryHandler
             .ToList();
 
         var lines = orders.Select(o => new SettlementOrderLineDto(
-            Id:                    o.Id,
-            TrackingNumber:        o.TrackingNumber,
-            RecipientName:         $"{o.RecipientFirstName} {o.RecipientLastName}",
-            RecipientCity:         o.RecipientCity,
-            RecipientDistrict:     o.RecipientDistrict,
-            CompanyServicePrice:   o.CompanyServicePrice,
-            CourierSalary:         o.CourierSalary,
-            CompanyRevenue:        o.CompanyRevenue,
-            AmountOfCashCollected: o.AmountOfCashCollected,
-            DeliveredAt:           o.DeliveredAt
+            Id:                       o.Id,
+            TrackingNumber:           o.TrackingNumber,
+            RecipientName:            $"{o.RecipientFirstName} {o.RecipientLastName}",
+            RecipientCity:            o.RecipientCity,
+            RecipientDistrict:        o.RecipientDistrict,
+            CompanyServicePrice:      o.CompanyServicePrice,
+            WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
+            CourierSalary:            o.CourierSalary,
+            CompanyRevenue:           o.CompanyRevenue,
+            AmountOfCashCollected:    o.AmountOfCashCollected,
+            DeliveredAt:              o.DeliveredAt
         )).ToList();
 
         return new SettlementPreviewDto(
-            CourierId:                     courier.Id,
-            CourierFullName:               $"{courier.FirstName} {courier.LastName}",
-            Date:                          request.Date,
-            TotalOrdersPickedUp:           pickedUpPackages,
-            TotalOrdersDelivered:          orders.Count,
-            TotalAmountOfCashCollected:    totalCash,
-            TotalCompanyServiceRevenue:    totalService,
-            TotalCourierSalary:            totalSalary,
-            TotalCompanyNetIncome:         totalNetIncome,
-            TotalCourierTransferToCompany: totalTransfer,
-            Orders:                        lines,
-            IncompleteOrderTrackingNumbers: incomplete
+            CourierId:                              courier.Id,
+            CourierFullName:                        $"{courier.FirstName} {courier.LastName}",
+            Date:                                   request.Date,
+            TotalOrdersPickedUp:                    pickedUpPackages,
+            TotalOrdersDelivered:                   orders.Count,
+            TotalAmountOfCashCollected:             totalCodCash,
+            TotalCompanyServiceRevenue:             totalService,
+            TotalServiceFeesCollectedFromRecipients:totalServiceFeesFromRecipients,
+            TotalCashCourierHolds:                  totalCashCourierHolds,
+            TotalCourierSalary:                     totalSalary,
+            TotalCompanyNetIncome:                  totalNetIncome,
+            TotalCourierTransferToCompany:          totalCourierTransfer,
+            Orders:                                 lines,
+            IncompleteOrderTrackingNumbers:         incomplete
         );
     }
 }
