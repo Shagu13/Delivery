@@ -12,10 +12,11 @@ import {
 import type { Customer, CustomerGroupOrder } from '../../api/customers';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
+import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
 import '../../styles/dashboard.css';
 
 
-type View = 'overview' | 'shipments' | 'profile' | 'password';
+type View = 'overview' | 'shipments' | 'profile' | 'password' | 'calculator';
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
@@ -92,10 +93,11 @@ export function CustomerDashboard() {
 
         <nav className="sidebar__nav">
           {([
-            ['overview',  t.sidebarOverview,      overviewIcon],
-            ['shipments', t.custNavShipments,      shipmentsIcon],
-            ['profile',   t.custNavProfile,        profileIcon],
-            ['password',  t.custNavPassword,       lockIcon],
+            ['overview',    t.sidebarOverview,      overviewIcon],
+            ['shipments',   t.custNavShipments,      shipmentsIcon],
+            ['calculator',  t.custNavCalculator,     calcIcon],
+            ['profile',     t.custNavProfile,        profileIcon],
+            ['password',    t.custNavPassword,       lockIcon],
           ] as [View, string, React.ReactNode][]).map(([v, label, icon]) => (
             <button
               key={v}
@@ -127,10 +129,11 @@ export function CustomerDashboard() {
       <div className="dashboard__body">
         <div className="dashboard__topbar">
           <span className="dashboard__topbar-title">
-            {view === 'overview'  && t.sidebarOverview}
-            {view === 'shipments' && t.custNavShipments}
-            {view === 'profile'   && t.custNavProfile}
-            {view === 'password'  && t.custTopbarPassword}
+            {view === 'overview'    && t.sidebarOverview}
+            {view === 'shipments'   && t.custNavShipments}
+            {view === 'calculator'  && t.custTopbarCalculator}
+            {view === 'profile'     && t.custNavProfile}
+            {view === 'password'    && t.custTopbarPassword}
           </span>
           {view === 'shipments' && (
             <a href="/send" className="btn-primary">
@@ -159,7 +162,8 @@ export function CustomerDashboard() {
                   onViewAll={() => setView('shipments')}
                 />
               )}
-              {view === 'shipments' && <ShipmentsView orders={orders} />}
+              {view === 'shipments'   && <ShipmentsView orders={orders} />}
+              {view === 'calculator'  && token && <PriceCalculatorCard token={token} />}
               {view === 'profile'   && profile && token && (
                 <EditProfileView
                   profile={profile}
@@ -624,6 +628,13 @@ const shipmentsIcon = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
     <path d="M8 1L14 4.5V11.5L8 15L2 11.5V4.5L8 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
     <path d="M8 1v14M2 4.5l6 3.5 6-3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const calcIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="1.5" y="1.5" width="13" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.4"/>
+    <path d="M4.5 5h7M4.5 8h3.5M10 7v3M11.5 8.5H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
   </svg>
 );
 

@@ -3,6 +3,7 @@ using Application.Common.Interfaces;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Orders.Commands;
 
@@ -34,11 +35,23 @@ public sealed class SendOrderToCityCommandHandler : IRequestHandler<SendOrderToC
 public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignCourierToOrderCommand>
 {
     private readonly IAppDbContext _context;
-    public AssignCourierToOrderCommandHandler(IAppDbContext context) => _context = context;
+    private readonly IRecipientNotificationSmsService _recipientSms;
+    private readonly ILogger<AssignCourierToOrderCommandHandler> _logger;
+
+    public AssignCourierToOrderCommandHandler(
+        IAppDbContext context,
+        IRecipientNotificationSmsService recipientSms,
+        ILogger<AssignCourierToOrderCommandHandler> logger)
+    {
+        _context      = context;
+        _recipientSms = recipientSms;
+        _logger       = logger;
+    }
 
     public async Task Handle(AssignCourierToOrderCommand request, CancellationToken cancellationToken)
     {
         var order = await _context.Orders
+            .Include(o => o.GroupOrder)
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
 
@@ -60,6 +73,24 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         order.CourierId = courier.Id;
         order.Status    = OrderStatus.CourierAssignedToDeliver;
         await _context.SaveChangesAsync(cancellationToken);
+
+        // ── Notify recipient via SMS ──────────────────────────────────────────
+        // Fire-and-forget inside a try/catch so SMS failure never rolls back the assignment.
+        try
+        {
+            await _recipientSms.SendCourierAssignedNotificationAsync(
+                order.RecipientPhone,
+                order.TrackingNumber,
+                order.GroupOrder.SenderBusinessName,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to send recipient SMS notification for order {OrderId} (tracking: {TrackingNumber})",
+                order.Id, order.TrackingNumber);
+        }
     }
 }
 

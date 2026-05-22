@@ -66,6 +66,7 @@ public static class DependencyInjectionInfrastructure
         // connection pooling and handler lifetime management.
         services.AddHttpClient<ISmsService, SmsService>();
         services.AddScoped<IAdminNotificationSmsService, AdminNotificationSmsService>();
+        services.AddScoped<IRecipientNotificationSmsService, RecipientNotificationSmsService>();
 
         return services;
     }

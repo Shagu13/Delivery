@@ -555,6 +555,7 @@ public sealed class GroupOrdersController : BaseController
                 ProductPaymentStatus:             o.ProductPaymentStatus.ToString(),
                 WhoPaysForCompanyService:         o.WhoPaysForCompanyService.ToString(),
                 CourierSalary:                    o.CourierSalary,
+                CompanyServicePrice:              o.CompanyServicePrice,
                 CourierId:                        o.CourierId,
                 CreatedAt:                        o.CreatedAt,
                 DeliveryDateFrom:                 o.DeliveryDateFrom,

@@ -18,8 +18,9 @@ import { getStatusMeta } from '../../utils/statusMeta';
 import '../../styles/dashboard.css';
 import { fetchSmsBalance } from '../../api/sms';
 import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
+import AdminHistoryPage, { isCompletedGroupOrder } from './AdminHistoryPage';
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history';
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -146,6 +147,17 @@ export function AdminDashboard() {
               </svg>
               <span className="sidebar__link-text">{t.sidebarWeightTiers}</span>
           </button>
+          <button
+            className={`sidebar__link ${activeView === 'history' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('history')}
+            title={t.sidebarHistory}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M8 5v3.5l2.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="sidebar__link-text">{t.sidebarHistory}</span>
+          </button>
         </nav>
         <div className="sidebar__footer">
           <LanguageToggle className="sidebar__lang-toggle" />
@@ -175,6 +187,7 @@ export function AdminDashboard() {
             {activeView === 'customers' && t.topbarCustomers}
             {activeView === 'cities' && t.topbarCities}
             {activeView === 'weightTiers' && t.topbarWeightTiers}
+            {activeView === 'history' && t.topbarHistory}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
@@ -195,6 +208,7 @@ export function AdminDashboard() {
                   {activeView === 'weightTiers' && token && (
                       <AdminWeightPriceTiersPage token={token} />
                   )}
+          {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
         </main>
       </div>
 
@@ -525,7 +539,7 @@ function AdminOverview({ token }: { token: string }) {
 }
 
 
-// Statuses that live on individual orders (not on the GroupOrder itself)
+// ── Statuses that live on individual orders (not on the GroupOrder itself)
 const ORDER_LEVEL_STATUSES = new Set([
   'OrderIsOnItsWayToRecipientsCity',
   'CourierAssignedToDeliver',
@@ -533,6 +547,9 @@ const ORDER_LEVEL_STATUSES = new Set([
   'DeliveredToRecipient',
   'CancelledByAdmin',
 ]);
+
+// Active-only view: exclude group orders that are fully completed
+// (same logic as AdminHistoryPage.isCompletedGroupOrder)
 
 const STATUS_PILLS = [
   { value: '',                                label: 'pillAll' },
@@ -546,10 +563,6 @@ const STATUS_PILLS = [
   { value: 'OrderIsOnItsWayToRecipientsCity', label: 'pillSentToCity' },
   { value: 'CourierAssignedToDeliver',        label: 'pillCourierDelivery' },
   { value: 'CourierDeliveringTheOrderToRecipient', label: 'pillCourierReceived' },
-  { value: 'DeliveredToRecipient',            label: 'pillDelivered' },
-  { value: 'CancelledBySender',               label: 'pillCancelledSender' },
-  { value: 'CancelledByAdmin',                label: 'pillCancelledAdmin' },
-  { value: 'OrderNotAccepted',                label: 'pillDeclined' },
 ] as const;
 
 // ── Multi-district checkbox dropdown ─────────────────────────────────────────
@@ -757,6 +770,10 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
 
   const visibleOrders = useMemo(() => {
     return groupOrders.filter(go => {
+      // Base rule: when no status pill is selected, show only active (non-completed) group orders.
+      // Completed orders (all delivered / all cancelled / declined) live in the History page.
+      if (!filterStatus && isCompletedGroupOrder(go)) return false;
+
       if (filterStatus) {
         if (ORDER_LEVEL_STATUSES.has(filterStatus)) {
           if (!go.orders.some(o => o.status === filterStatus)) return false;

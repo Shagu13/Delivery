@@ -91,13 +91,16 @@ public sealed class GetAllGroupOrdersQueryHandler
                     Status:                           o.Status,
                     ProductPaymentStatus:             o.ProductPaymentStatus,
                     WhoPaysForCompanyService:         o.WhoPaysForCompanyService,
+                    AmountToCollectForPackage:        o.AmountToCollectForPackage,
+                    AmountOfCashCollected:            o.AmountOfCashCollected,
                     CourierSalary:                    o.CourierSalary,
                     CompanyServicePrice:              o.CompanyServicePrice,
                     CompanyRevenue:                   o.CompanyRevenue,
                     CourierId:                        o.CourierId,
                     CreatedAt:                        o.CreatedAt,
                     DeliveryDateFrom:                 o.DeliveryDateFrom,
-                    DeliveryDateTo:                   o.DeliveryDateTo))
+                    DeliveryDateTo:                   o.DeliveryDateTo,
+                    DeliveredAt:                      o.DeliveredAt))
                 .ToList()
         )).ToList();
     }

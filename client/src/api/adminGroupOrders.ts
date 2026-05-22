@@ -38,6 +38,8 @@ export interface AdminOrder {
     status: OrderStatus;
     productPaymentStatus: PaymentStatus;
     whoPaysForCompanyService: ServicePayer;
+    amountToCollectForPackage: number | null;
+    amountOfCashCollected: number | null;
     companyServicePrice: number;
     courierSalary: number | null;
     companyRevenue: number | null;
@@ -45,6 +47,7 @@ export interface AdminOrder {
     createdAt: string;
     deliveryDateFrom: string | null;
     deliveryDateTo: string | null;
+    deliveredAt: string | null;
 }
 
 export interface AdminGroupOrder {

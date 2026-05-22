@@ -344,6 +344,11 @@ const en = {
   calcReset:               'Reset',
   calcLoading:             'Loading…',
   calcAllCities:           'All cities',
+  calcWeightTier:          'Package weight',
+  calcWeightTierHint:      'Non-standard weights have a fixed flat rate regardless of destination.',
+  calcStandardPrice:       'Standard delivery price',
+  calcFlatRate:            'Flat rate (weight)',
+  calcYourPrice:           'Your price',
 
   // ── Courier Dashboard ─────────────────────────────────────────────────────
   // Navigation
@@ -756,7 +761,9 @@ const en = {
   custNavShipments:          'My Shipments',
   custNavProfile:            'Edit Profile',
   custNavPassword:           'Password',
+  custNavCalculator:         'Price Calculator',
   custTopbarPassword:        'Change Password',
+  custTopbarCalculator:      'Price Calculator',
   custNewShipment:           'New Shipment',
   custStatTotalShipments:    'Total Shipments',
   custStatAllTime:           'All time packages',
@@ -807,6 +814,14 @@ const en = {
   custErrNewPwdShort:        'At least 8 characters.',
   custErrNewPwdUppercase:    'Must contain an uppercase letter.',
   custErrNewPwdNumber:       'Must contain a number.',
+
+  // ── Admin History ─────────────────────────────────────────────────────────
+  sidebarHistory:            'Order History',
+  topbarHistory:             'Order History',
+  pillAllDelivered:          'All Delivered',
+  goHistoryLoading:          'Loading history…',
+  goHistoryNoOrders:         'No completed orders yet.',
+  goHistoryNoMatch:          'No completed orders match your filters.',
 };
 
 const ka: typeof en = {
@@ -1151,6 +1166,11 @@ const ka: typeof en = {
   calcReset:               'გასუფთავება',
   calcLoading:             'იტვირთება…',
   calcAllCities:           'ყველა ქალაქი',
+  calcWeightTier:          'ამანათის წონა',
+  calcWeightTierHint:      'არასტანდარტულ წონებს გააჩნია ფიქსირებული ფასი მიმართულებისგან დამოუკიდებლად.',
+  calcStandardPrice:       'სტანდარტული მიწოდების ფასი',
+  calcFlatRate:            'ფიქსირებული ფასი (წონა)',
+  calcYourPrice:           'თქვენი ფასი',
 
   // ── Courier Dashboard ─────────────────────────────────────────────────────
   // Navigation
@@ -1563,7 +1583,9 @@ const ka: typeof en = {
   custNavShipments:          'ჩემი გზავნილები',
   custNavProfile:            'პროფილის რედაქტირება',
   custNavPassword:           'პაროლი',
+  custNavCalculator:         'ფასის კალკულატორი',
   custTopbarPassword:        'პაროლის შეცვლა',
+  custTopbarCalculator:      'ფასის კალკულატორი',
   custNewShipment:           'ახალი გზავნილი',
   custStatTotalShipments:    'სულ გზავნილები',
   custStatAllTime:           'ყველა ამანათი',
@@ -1614,6 +1636,14 @@ const ka: typeof en = {
   custErrNewPwdShort:        'მინიმუმ 8 სიმბოლო.',
   custErrNewPwdUppercase:    'უნდა შეიცავდეს ლათინურ დიდ ასოს.',
   custErrNewPwdNumber:       'უნდა შეიცავდეს ციფრს.',
+
+  // ── Admin History ─────────────────────────────────────────────────────────
+  sidebarHistory:            'შეკვეთების ისტორია',
+  topbarHistory:             'შეკვეთების ისტორია',
+  pillAllDelivered:          'ყველა ჩაბარდა',
+  goHistoryLoading:          'ისტორია იტვირთება…',
+  goHistoryNoOrders:         'დასრულებული შეკვეთები ჯერ არ არის.',
+  goHistoryNoMatch:          'ფილტრებით შეკვეთები ვერ მოიძებნა.',
 };
 
 export const translations = { en, ka } as const;

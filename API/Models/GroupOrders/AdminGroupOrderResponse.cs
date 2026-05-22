@@ -44,6 +44,8 @@ public sealed record AdminOrderResponse(
     string  ProductPaymentStatus,
     string  WhoPaysForCompanyService,
     decimal? CourierSalary,
+    /// <summary>Company service fee for this package — shown to the sender on their dashboard.</summary>
+    decimal  CompanyServicePrice,
     // Last-mile delivery courier (null until assigned)
     Guid?    CourierId,
     DateTime CreatedAt,

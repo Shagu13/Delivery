@@ -46,6 +46,10 @@ public sealed record AdminOrderDto(
     OrderStatus   Status,
     PaymentStatus ProductPaymentStatus,
     ServicePayer  WhoPaysForCompanyService,
+    /// <summary>COD: cash the courier must collect from the recipient for the product.</summary>
+    decimal?      AmountToCollectForPackage,
+    /// <summary>Cash the courier actually collected (set during settlement).</summary>
+    decimal?      AmountOfCashCollected,
     decimal?      CourierSalary,
     decimal       CompanyServicePrice,
     decimal?      CompanyRevenue,
@@ -53,5 +57,6 @@ public sealed record AdminOrderDto(
     Guid?    CourierId,
     DateTime CreatedAt,
     DateTime? DeliveryDateFrom,
-    DateTime? DeliveryDateTo
+    DateTime? DeliveryDateTo,
+    DateTime? DeliveredAt
 );
