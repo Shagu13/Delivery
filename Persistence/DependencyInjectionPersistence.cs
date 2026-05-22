@@ -66,7 +66,7 @@ public static class DependencyInjectionPersistence
         // Leave empty to skip — SMS alerts simply won't fire until a number is set.
         var adminPhone = config["AdminSeed:PhoneNumber"];
 
-        const string adminUsername = "admin";
+        const string adminUsername = "diloadmin";
         var existing = await userManager.FindByNameAsync(adminUsername);
 
         if (existing is null)
@@ -82,7 +82,7 @@ public static class DependencyInjectionPersistence
                 PhoneNumber = string.IsNullOrWhiteSpace(adminPhone) ? null : adminPhone
             };
 
-            var result = await userManager.CreateAsync(admin, "Admin@12345");
+            var result = await userManager.CreateAsync(admin, "Dilo@12345!@#$%");
             if (result.Succeeded)
                 await userManager.AddToRoleAsync(admin, "Admin");
         }
