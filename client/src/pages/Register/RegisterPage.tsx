@@ -83,7 +83,22 @@ export function RegisterPage() {
       });
       navigate('/login', { state: { registered: true } });
     } catch (err) {
-      setApiError(err instanceof CustomerApiError ? err.message : 'An unexpected error occurred.');
+      if (err instanceof CustomerApiError && err.errors) {
+        // Map field-level errors from the API onto the form fields so they
+        // appear inline (e.g. duplicate phone → red hint under the phone input).
+        const fieldMap: Partial<Record<keyof FormState, string>> = {};
+        for (const [key, messages] of Object.entries(err.errors)) {
+          const field = (key.charAt(0).toLowerCase() + key.slice(1)) as keyof FormState;
+          if (field in EMPTY) fieldMap[field] = messages[0];
+        }
+        if (Object.keys(fieldMap).length > 0) {
+          setErrors(prev => ({ ...prev, ...fieldMap }));
+        } else {
+          setApiError(err.message);
+        }
+      } else {
+        setApiError(err instanceof CustomerApiError ? err.message : 'An unexpected error occurred.');
+      }
     } finally {
       setLoading(false);
     }

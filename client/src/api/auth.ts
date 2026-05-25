@@ -27,3 +27,50 @@ export async function login(data: LoginRequest): Promise<AuthUser> {
 
   return response.json() as Promise<AuthUser>;
 }
+
+/**
+ * Sends a password-reset SMS to the given phone number.
+ * Always resolves — never rejects for unknown numbers.
+ */
+export async function forgotPassword(phoneNumber: string): Promise<void> {
+  const response = await fetch('/api/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phoneNumber }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new AuthError(
+      response.status,
+      body?.title ?? 'Something went wrong. Please try again.',
+    );
+  }
+}
+
+export interface ResetPasswordPayload {
+  code:               string;   // Short code from SMS link (?code=A3K9PQ2X1B)
+  newPassword:        string;
+  confirmNewPassword: string;
+}
+
+/**
+ * Submits the short reset code and new password.
+ * The server resolves the full Identity token internally.
+ */
+export async function resetPassword(data: ResetPasswordPayload): Promise<void> {
+  const response = await fetch('/api/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message =
+      body?.errors
+        ? Object.values(body.errors as Record<string, string[]>).flat()[0]
+        : body?.title ?? 'Failed to reset password. The link may have expired.';
+    throw new AuthError(response.status, message);
+  }
+}

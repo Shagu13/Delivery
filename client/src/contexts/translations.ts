@@ -115,6 +115,26 @@ const en = {
   loginSubmitting:     'Signing in…',
   loginSuccess:        'Account created! Sign in with your email below.',
   loginEmptyFields:    'Please enter your email / username and password.',
+  loginForgotPassword: 'Forgot password?',
+  loginPasswordResetSuccess: 'Password updated! Sign in with your new password.',
+
+  // ── Forgot password page ──────────────────────────────────────────────────
+  forgotPwdEyebrow:    'Account Recovery',
+  forgotPwdTitle:      'Forgot your password?',
+  forgotPwdHint:       'Enter your registered phone number and we\'ll send you a reset link via SMS.',
+  forgotPwdSubmit:     'Send Reset Link',
+  forgotPwdSubmitting: 'Sending…',
+  forgotPwdSent:       'If that number is registered, you\'ll receive an SMS with a reset link shortly. The link is valid for 2 hours.',
+  forgotPwdFailed:     'Something went wrong. Please try again.',
+  forgotPwdBackToLogin: '← Back to sign in',
+
+  // ── Reset password page ───────────────────────────────────────────────────
+  resetPwdEyebrow:     'New Password',
+  resetPwdTitle:       'Reset your password',
+  resetPwdSubmit:      'Set New Password',
+  resetPwdSubmitting:  'Saving…',
+  resetPwdFailed:      'Failed to reset password. The link may have expired or already been used.',
+  resetPwdInvalidLink: 'This reset link is invalid or incomplete. Please request a new one.',
 
   // ── Register page ─────────────────────────────────────────────────────────
   registerTitle:       'Create your account',
@@ -937,6 +957,26 @@ const ka: typeof en = {
   loginSubmitting:     'შესვლა…',
   loginSuccess:        'ანგარიში შეიქმნა! გაიარეთ ავტორიზაცია ქვემოთ.',
   loginEmptyFields:    'შეიყვანეთ ელ.ფოსტა/მომხმარებელი და პაროლი.',
+  loginForgotPassword: 'დაგავიწყდათ პაროლი?',
+  loginPasswordResetSuccess: 'პაროლი განახლდა! შედით ახალი პაროლით.',
+
+  // ── Forgot password page ──────────────────────────────────────────────────
+  forgotPwdEyebrow:    'ანგარიშის აღდგენა',
+  forgotPwdTitle:      'დაგავიწყდათ პაროლი?',
+  forgotPwdHint:       'შეიყვანეთ რეგისტრირებული ტელეფონის ნომერი და გამოგიგზავნით SMS-ს.',
+  forgotPwdSubmit:     'ბმულის გაგზავნა',
+  forgotPwdSubmitting: 'იგზავნება…',
+  forgotPwdSent:       'თუ ეს ნომერი რეგისტრირებულია, მალე მიიღებთ SMS-ს. ბმული მოქმედია 2 საათი.',
+  forgotPwdFailed:     'დაფიქსირდა შეცდომა. გთხოვთ სცადოთ ხელახლა.',
+  forgotPwdBackToLogin: '← უკან შესვლაზე',
+
+  // ── Reset password page ───────────────────────────────────────────────────
+  resetPwdEyebrow:     'ახალი პაროლი',
+  resetPwdTitle:       'პაროლის განახლება',
+  resetPwdSubmit:      'პაროლის დაყენება',
+  resetPwdSubmitting:  'ინახება…',
+  resetPwdFailed:      'პაროლის განახლება ვერ მოხერხდა. ბმული შეიძლება ამოიწურა ან უკვე გამოყენებულია.',
+  resetPwdInvalidLink: 'ეს ბმული არასწორია. გთხოვთ მოითხოვოთ ახალი.',
 
   // ── Register page ─────────────────────────────────────────────────────────
   registerTitle:       'შექმენით ანგარიში',

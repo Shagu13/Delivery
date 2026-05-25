@@ -4,6 +4,8 @@ import { LanguageProvider } from './contexts/LanguageProvider';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { CreateGroupOrderPage } from './pages/CreateGroupOrder/CreateGroupOrderPage';
 import { LoginPage } from './pages/Login/LoginPage';
+import { ForgotPasswordPage } from './pages/ForgotPassword/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPassword/ResetPasswordPage';
 import { AdminDashboard } from './pages/Admin/AdminDashboard';
 import { CourierDashboard } from './pages/Courier/CourierDashboard';
 import { CustomerDashboard } from './pages/Customer/CustomerDashboard';
@@ -19,9 +21,11 @@ export default function App() {
                     <AppLayout>
                         <Routes>
                             {/* Public */}
-                            <Route path="/"         element={<HomePage />} />
-                            <Route path="/login"    element={<LoginPage />} />
-                            <Route path="/register" element={<RegisterPage />} />
+                            <Route path="/"                  element={<HomePage />} />
+                            <Route path="/login"             element={<LoginPage />} />
+                            <Route path="/register"          element={<RegisterPage />} />
+                            <Route path="/forgot-password"   element={<ForgotPasswordPage />} />
+                            <Route path="/reset-password"    element={<ResetPasswordPage />} />
 
                             {/* Send packages — Customer only */}
                             <Route

@@ -42,6 +42,13 @@ public static class DependencyInjectionPersistence
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
 
+        // ── Password-reset token lifespan ─────────────────────────────────────
+        // Controls only the Identity DataProtection tokens (password reset,
+        // email confirmation).  JWT login tokens are NOT affected — those are
+        // configured separately in JwtTokenGenerator / JwtSettings.
+        services.Configure<DataProtectionTokenProviderOptions>(opt =>
+            opt.TokenLifespan = TimeSpan.FromHours(2));
+
         return services;
     }
 
@@ -66,7 +73,7 @@ public static class DependencyInjectionPersistence
         // Leave empty to skip — SMS alerts simply won't fire until a number is set.
         var adminPhone = config["AdminSeed:PhoneNumber"];
 
-        const string adminUsername = "diloadmin";
+        const string adminUsername = "admin";
         var existing = await userManager.FindByNameAsync(adminUsername);
 
         if (existing is null)
@@ -82,14 +89,13 @@ public static class DependencyInjectionPersistence
                 PhoneNumber = string.IsNullOrWhiteSpace(adminPhone) ? null : adminPhone
             };
 
-            var result = await userManager.CreateAsync(admin, "Dilo@12345!@#$%");
+            var result = await userManager.CreateAsync(admin, "Admin@12345");
             if (result.Succeeded)
                 await userManager.AddToRoleAsync(admin, "Admin");
         }
         else if (!string.IsNullOrWhiteSpace(adminPhone)
                  && existing.PhoneNumber != adminPhone)
         {
-            // Update phone number if config value changed since last seed run.
             existing.PhoneNumber = adminPhone;
             await userManager.UpdateAsync(existing);
         }

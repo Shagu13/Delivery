@@ -21,7 +21,8 @@ export function LoginPage() {
     navigate(dest, { replace: true });
   }, [isAuthenticated, user, navigate]);
 
-  const registered = (location.state as { registered?: boolean })?.registered === true;
+  const registered    = (location.state as { registered?:    boolean })?.registered    === true;
+  const passwordReset = (location.state as { passwordReset?: boolean })?.passwordReset === true;
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -68,6 +69,7 @@ export function LoginPage() {
         <p className="login-card__eyebrow">{t.loginEyebrow}</p>
         <h1 className="login-card__title">{t.loginTitle}</h1>
 
+        {/* Registration success banner */}
         {registered && (
           <div className="login-card__success" role="status">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -75,6 +77,17 @@ export function LoginPage() {
               <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             {t.loginSuccess}
+          </div>
+        )}
+
+        {/* Password reset success banner */}
+        {passwordReset && (
+          <div className="login-card__success" role="status">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {t.loginPasswordResetSuccess}
           </div>
         )}
 
@@ -108,6 +121,13 @@ export function LoginPage() {
             onChange={e => setPassword(e.target.value)}
             placeholder={t.phPassword}
           />
+
+          {/* Forgot password link — sits between field and submit button */}
+          <div className="login-form__forgot-wrap">
+            <Link to="/forgot-password" className="login-form__forgot">
+              {t.loginForgotPassword}
+            </Link>
+          </div>
 
           <button type="submit" className="login-form__submit" disabled={loading}>
             {loading ? <><span className="spinner" />{t.loginSubmitting}</> : t.loginSubmit}

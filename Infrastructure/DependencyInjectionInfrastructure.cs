@@ -65,8 +65,9 @@ public static class DependencyInjectionInfrastructure
         // HttpClient is registered via the factory so it participates in
         // connection pooling and handler lifetime management.
         services.AddHttpClient<ISmsService, SmsService>();
-        services.AddScoped<IAdminNotificationSmsService, AdminNotificationSmsService>();
+        services.AddScoped<IAdminNotificationSmsService,     AdminNotificationSmsService>();
         services.AddScoped<IRecipientNotificationSmsService, RecipientNotificationSmsService>();
+        services.AddScoped<IPasswordResetSmsService,         PasswordResetSmsService>();
 
         return services;
     }

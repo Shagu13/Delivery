@@ -20,6 +20,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<District>         Districts         => Set<District>();
     public DbSet<DailySettlement>  DailySettlements  => Set<DailySettlement>();
     public DbSet<WeightPriceTier>  WeightPriceTiers  => Set<WeightPriceTier>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -203,6 +204,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(t => t.MinWeightKg).HasColumnType("decimal(18,3)");
             e.Property(t => t.MaxWeightKg).HasColumnType("decimal(18,3)");
             e.Property(t => t.CustomPrice).HasColumnType("decimal(18,2)");
+        });
+
+        // ── PasswordResetToken ────────────────────────────────────────────────
+        modelBuilder.Entity<PasswordResetToken>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.HasIndex(t => t.Code).IsUnique();
+            e.HasIndex(t => t.UserId);
+            e.HasIndex(t => t.ExpiresAt);
+            e.Property(t => t.Code).HasMaxLength(20).IsRequired();
+            e.Property(t => t.UserId).HasMaxLength(450).IsRequired();
+            e.Property(t => t.IdentityToken).HasMaxLength(2000).IsRequired();
         });
     }
 }
