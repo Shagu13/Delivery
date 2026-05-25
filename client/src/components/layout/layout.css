@@ -23,6 +23,9 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    /* Safe area for notched devices */
+    padding-left: max(24px, env(safe-area-inset-left));
+    padding-right: max(24px, env(safe-area-inset-right));
 }
 
 .nav__inner {
@@ -43,6 +46,7 @@
     font-size: 1.1rem;
     color: var(--color-text);
     text-decoration: none;
+    flex-shrink: 0;
 }
 
 .nav__links {
@@ -62,6 +66,7 @@
     border: none;
     cursor: pointer;
     transition: color var(--transition), background var(--transition);
+    white-space: nowrap;
 }
 
     .nav__link:hover {
@@ -72,6 +77,10 @@
 .nav__link--cta {
     background: var(--color-accent);
     color: #fff;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    touch-action: manipulation;
 }
 
     .nav__link--cta:hover {
@@ -84,4 +93,57 @@
     font-size: 0.875rem;
     color: var(--color-text-muted);
     padding: 0 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE NAV
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Tablet (≤ 768px): hide middle nav links, keep logo + essentials ── */
+@media (max-width: 768px) {
+    .nav {
+        padding: 0 16px;
+        padding-left: max(16px, env(safe-area-inset-left));
+        padding-right: max(16px, env(safe-area-inset-right));
+    }
+    /* Hide "Home" and "Send Packages" text links — too crowded */
+    .nav__link:not(.nav__link--cta) {
+        display: none;
+    }
+    /* Keep language toggle visible */
+    .nav__links > *:first-child {
+        display: flex;
+    }
+    /* Keep the calculator icon button */
+    .nav__calc-btn {
+        display: flex !important;
+    }
+    /* Keep the CTA "Staff Login" button */
+    .nav__link--cta {
+        display: flex;
+        padding: 8px 14px;
+        font-size: 0.85rem;
+    }
+}
+
+/* ── Small mobile (≤ 430px): even more compact ── */
+@media (max-width: 430px) {
+    .nav {
+        height: 56px;
+        padding: 0 14px;
+        padding-left: max(14px, env(safe-area-inset-left));
+        padding-right: max(14px, env(safe-area-inset-right));
+    }
+    .nav__logo {
+        font-size: 1rem;
+        gap: 8px;
+    }
+    .nav__logo svg {
+        width: 24px;
+        height: 24px;
+    }
+    .nav__link--cta {
+        padding: 7px 12px;
+        font-size: 0.8rem;
+    }
 }

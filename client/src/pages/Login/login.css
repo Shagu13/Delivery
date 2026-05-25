@@ -2,8 +2,12 @@
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  /* Add top/bottom padding so card doesn't touch edges on small screens */
+  padding: 16px;
   background: var(--color-bg);
+  /* Safe area for notched devices */
+  padding-top: max(16px, env(safe-area-inset-top));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 .login-card {
@@ -66,6 +70,7 @@
   font-size: 0.85rem;
   font-weight: 500;
   padding: 11px 14px;
+  line-height: 1.4;
 }
 
 .login-form__submit {
@@ -86,6 +91,9 @@
   cursor: pointer;
   transition: background var(--transition), box-shadow var(--transition),
     transform var(--transition);
+  /* Good tap target for mobile */
+  min-height: 48px;
+  touch-action: manipulation;
 }
 
 .login-form__submit:hover:not(:disabled) {
@@ -124,6 +132,9 @@
   color: var(--color-text-muted);
   text-decoration: none;
   transition: color var(--transition);
+  /* Better tap area */
+  display: inline-block;
+  padding: 6px 4px;
 }
 
 .login-card__back a:hover {
@@ -145,5 +156,64 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Mobile (≤ 480px) ── */
+@media (max-width: 480px) {
+  .login-card {
+    padding: 28px 24px;
+    border-radius: 18px;
+    /* Disable animation on very small screens for perf */
+    animation: fade-up 0.3s ease both;
+  }
+  .login-card__logo {
+    margin-bottom: 24px;
+  }
+  .login-card__title {
+    font-size: 1.45rem;
+    margin-bottom: 22px;
+  }
+  .login-form {
+    gap: 14px;
+  }
+}
+
+/* ── Very small mobile (≤ 380px) ── */
+@media (max-width: 380px) {
+  .login-page {
+    padding: 12px;
+    align-items: flex-start;
+    padding-top: max(20px, env(safe-area-inset-top));
+  }
+  .login-card {
+    padding: 24px 18px;
+    border-radius: 16px;
+    /* Remove border on very tiny screens so it feels more native */
+    box-shadow: var(--shadow-sm);
+  }
+  .login-card__title {
+    font-size: 1.35rem;
+    margin-bottom: 20px;
+  }
+  .login-card__eyebrow {
+    font-size: 0.68rem;
+  }
+  .login-form {
+    gap: 12px;
+  }
+  .login-form__submit {
+    font-size: 0.9rem;
+    min-height: 50px;
+  }
+  .login-card__back {
+    margin-top: 16px;
+  }
+  .login-card__back a {
+    font-size: 0.8rem;
   }
 }
