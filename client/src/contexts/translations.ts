@@ -422,7 +422,8 @@ const en = {
   cgoClearReset:            'Clear & reset',
   cgoAddPackage:            'Add Another Package',
   // Package card
-  cgoPackageLabel:          'Package',
+  cgoPackageLabel: 'Package',
+  cgoNoRecipientYet: 'No recipient info yet — click to expand',
   cgoRemove:                'Remove',
   cgoRecipient:             'Recipient',
   cgoRecipientFirstName:    'First Name',
@@ -1266,7 +1267,8 @@ const ka: typeof en = {
   cgoClearReset:            'გასუფთავება და განახლება',
   cgoAddPackage:            'სხვა ამანათის დამატება',
   // Package card
-  cgoPackageLabel:          'ამანათი',
+  cgoPackageLabel: 'ამანათი',
+  cgoNoRecipientYet: 'მიმღების ინფო არ არის — დააჭირეთ გასახსნელად',
   cgoRemove:                'წაშლა',
   cgoRecipient:             'მიმღები',
   cgoRecipientFirstName:    'სახელი',

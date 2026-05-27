@@ -133,7 +133,7 @@ function validate(
 
 export function CreateGroupOrderPage() {
     const { user, token } = useAuth();
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
 
     const [sender,       setSender]       = useState<SenderFormData>(EMPTY_SENDER);
     const [useOtherAddr, setUseOtherAddr] = useState(false);
@@ -265,7 +265,7 @@ export function CreateGroupOrderPage() {
 
     // ── Excel handlers ────────────────────────────────────────────────────────
     const handleDownloadTemplate = async () => {
-        try { await downloadExcelTemplate(); }
+        try { await downloadExcelTemplate(lang); }
         catch { setExcelError('Could not download the template. Please try again.'); }
     };
 

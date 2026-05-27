@@ -288,10 +288,18 @@ public sealed class GroupOrdersController : BaseController
     //  EXCEL / TEMPLATE ENDPOINTS
     // ══════════════════════════════════════════════════════════════════════════
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  EXCEL / TEMPLATE ENDPOINTS
+    // ══════════════════════════════════════════════════════════════════════════
+
     [HttpGet("excel-template")]
     [AllowAnonymous]
-    public async Task<IActionResult> DownloadTemplate(CancellationToken ct)
+    public async Task<IActionResult> DownloadTemplate(
+        [FromQuery] string lang,
+        CancellationToken ct)
     {
+        bool isGeo = string.Equals(lang, "ka", StringComparison.OrdinalIgnoreCase);
+
         var db = HttpContext.RequestServices.GetRequiredService<IAppDbContext>();
 
         // ── Load cities + districts from DB ───────────────────────────────────
@@ -302,63 +310,113 @@ public sealed class GroupOrdersController : BaseController
             .Select(c => new
             {
                 c.CityName,
+                c.CityNameGeo,
                 Districts = c.Districts
                     .Where(d => d.DateDeleted == null)
                     .OrderBy(d => d.DistrictName)
-                    .Select(d => d.DistrictName)
+                    .Select(d => new { d.DistrictName, d.DistrictNameGeo })
                     .ToList()
             })
             .ToListAsync(ct);
 
+        // ── Resolve display names based on language ───────────────────────────
+        // Named ranges always use the Latin name (required for INDIRECT to work);
+        // the display label shown to the user in the dropdown can be Georgian.
+        // We build a parallel "label" list per city while keeping the internal
+        // range key as the sanitised Latin name.
         using var workbook = new XLWorkbook();
 
         // ── Hidden Data sheet ─────────────────────────────────────────────────
         var wsData = workbook.Worksheets.Add("Data");
         wsData.Visibility = XLWorksheetVisibility.Hidden;
 
-        // Column A: city list header + values
+        // Column A: city display names (Latin or Georgian depending on lang)
         wsData.Cell(1, 1).Value = "Cities";
         for (int i = 0; i < cities.Count; i++)
-            wsData.Cell(i + 2, 1).Value = cities[i].CityName;
+        {
+            var displayName = isGeo && !string.IsNullOrWhiteSpace(cities[i].CityNameGeo)
+                ? cities[i].CityNameGeo!
+                : cities[i].CityName;
+            wsData.Cell(i + 2, 1).Value = displayName;
+        }
 
-        // Wrap city column in an Excel Table — required for search-as-you-type in Excel 365/2021
+        // City list table + named range (values used in city dropdown)
         var cityTableRange = wsData.Range(1, 1, cities.Count + 1, 1);
         cityTableRange.AsTable("T_CityList");
-
-        // Named range pointing at the data rows (used by data validation source)
         workbook.DefinedNames.Add("CityList", wsData.Range(2, 1, cities.Count + 1, 1));
 
-        // One column per city with its districts — each also wrapped in a Table
+        // One column per city with its district display names.
+        // Named range key = sanitised Latin name (INDIRECT needs this).
         for (int col = 0; col < cities.Count; col++)
         {
             var city = cities[col];
-            var districts = city.Districts.Count > 0 ? city.Districts : [city.CityName];
             int excelCol = col + 2; // B onwards
 
+            // Column header = Latin city name (used as the INDIRECT key)
             wsData.Cell(1, excelCol).Value = city.CityName;
-            for (int row = 0; row < districts.Count; row++)
-                wsData.Cell(row + 2, excelCol).Value = districts[row];
 
-            var rangeName = SanitizeRangeName(city.CityName);
+            var districts = city.Districts.Count > 0 ? city.Districts : null;
 
-            // Table enables search-as-you-type for district dropdowns in Excel 365/2021
-            var distTableRange = wsData.Range(1, excelCol, districts.Count + 1, excelCol);
-            distTableRange.AsTable("T_" + rangeName);
+            if (districts is null)
+            {
+                // Fallback: use city name itself as the sole district entry
+                var fallbackDisplay = isGeo && !string.IsNullOrWhiteSpace(city.CityNameGeo)
+                    ? city.CityNameGeo!
+                    : city.CityName;
+                wsData.Cell(2, excelCol).Value = fallbackDisplay;
+                var rangeName = SanitizeRangeName(city.CityName);
+                var singleRange = wsData.Range(1, excelCol, 2, excelCol);
+                singleRange.AsTable("T_" + rangeName);
+                workbook.DefinedNames.Add(rangeName, wsData.Range(2, excelCol, 2, excelCol));
+            }
+            else
+            {
+                for (int row = 0; row < districts.Count; row++)
+                {
+                    var distDisplay = isGeo && !string.IsNullOrWhiteSpace(districts[row].DistrictNameGeo)
+                        ? districts[row].DistrictNameGeo!
+                        : districts[row].DistrictName;
+                    wsData.Cell(row + 2, excelCol).Value = distDisplay;
+                }
 
-            // Named range for INDIRECT-based dependent dropdown (works in all Excel versions)
-            workbook.DefinedNames.Add(rangeName, wsData.Range(2, excelCol, districts.Count + 1, excelCol));
+                var rangeName = SanitizeRangeName(city.CityName);
+                var distTableRange = wsData.Range(1, excelCol, districts.Count + 1, excelCol);
+                distTableRange.AsTable("T_" + rangeName);
+                workbook.DefinedNames.Add(rangeName, wsData.Range(2, excelCol, districts.Count + 1, excelCol));
+            }
         }
 
         // ── Orders sheet ──────────────────────────────────────────────────────
         var ws = workbook.Worksheets.Add("Orders");
 
-        // ── Headers ───────────────────────────────────────────────────────────
-        string[] headers =
-        [
-            "RecipientFirstName", "RecipientLastName", "RecipientPhone",
-            "RecipientCity", "RecipientDistrict", "RecipientAddress",
-            "Description", "PaymentStatus", "WhoPaysForCourierFee", "IsFragile"
-        ];
+        // ── Headers (language-aware) ──────────────────────────────────────────
+        string[] headers = isGeo
+            ? [
+                "მიმღების სახელი",
+                "მიმღების გვარი",
+                "მიმღების ტელეფონი",
+                "ქალაქი",
+                "რაიონი",
+                "მისამართი",
+                "აღწერა",
+                "გადახდის სტატუსი",
+                "ვინ იხდის სერვის საფასურს",
+                "მტვრევადია"
+              ]
+            : [
+                "RecipientFirstName",
+                "RecipientLastName",
+                "RecipientPhone",
+                "RecipientCity",
+                "RecipientDistrict",
+                "RecipientAddress",
+                "Description",
+                "PaymentStatus",
+                "WhoPaysForCourierFee",
+                "IsFragile"
+              ];
+
+        // Columns 1–6 and 8–10 are required; 7 (Description) is optional
         bool[] required = [true, true, true, true, true, true, false, true, true, true];
 
         for (int i = 0; i < headers.Length; i++)
@@ -372,17 +430,33 @@ public sealed class GroupOrdersController : BaseController
                 : XLColor.FromArgb(0x6B, 0x65, 0x60);
         }
 
-        // ── Sample row ────────────────────────────────────────────────────────
-        ws.Cell(2, 1).Value = "Ana";
-        ws.Cell(2, 2).Value = "Smith";
-        ws.Cell(2, 3).Value = "+995599123456";
-        ws.Cell(2, 4).Value = "Tbilisi";
-        ws.Cell(2, 5).Value = "Saburtalo";
-        ws.Cell(2, 6).Value = "Pekini Ave 42";
-        ws.Cell(2, 7).Value = "Fragile – handle with care";
-        ws.Cell(2, 8).Value = "Not Paid";
-        ws.Cell(2, 9).Value = "Sender";
-        ws.Cell(2, 10).Value = "No";
+        // ── Sample row (language-aware, skipped on parse) ─────────────────────
+        if (isGeo)
+        {
+            ws.Cell(2, 1).Value = "ანა";
+            ws.Cell(2, 2).Value = "სმიტი";
+            ws.Cell(2, 3).Value = "599123456";
+            ws.Cell(2, 4).Value = "თბილისი";
+            ws.Cell(2, 5).Value = "საბურთალო";
+            ws.Cell(2, 6).Value = "პეკინის გამზ. 42";
+            ws.Cell(2, 7).Value = "მტვრევადი – ფრთხილად";
+            ws.Cell(2, 8).Value = "გადასახდელი";
+            ws.Cell(2, 9).Value = "გამგზავნი";
+            ws.Cell(2, 10).Value = "არა";
+        }
+        else
+        {
+            ws.Cell(2, 1).Value = "Ana";
+            ws.Cell(2, 2).Value = "Smith";
+            ws.Cell(2, 3).Value = "599123456";
+            ws.Cell(2, 4).Value = "Tbilisi";
+            ws.Cell(2, 5).Value = "Saburtalo";
+            ws.Cell(2, 6).Value = "Pekini Ave 42";
+            ws.Cell(2, 7).Value = "Fragile – handle with care";
+            ws.Cell(2, 8).Value = "Not Paid";
+            ws.Cell(2, 9).Value = "Sender";
+            ws.Cell(2, 10).Value = "No";
+        }
 
         foreach (var cell in ws.Row(2).CellsUsed())
         {
@@ -394,38 +468,46 @@ public sealed class GroupOrdersController : BaseController
         var cityVal = ws.Range("D2:D500").CreateDataValidation();
         cityVal.List("CityList", true);
         cityVal.ShowErrorMessage = false;
-        cityVal.ErrorTitle = "Invalid City";
-        cityVal.ErrorMessage = "Please select a city from the list.";
 
         // ── District dependent dropdown (E2:E500) ─────────────────────────────
-        // INDIRECT(SUBSTITUTE(D2," ","_")) resolves to the named range for the chosen city
+        // INDIRECT uses the Latin city name typed in D (which IS the named range key).
+        // When isGeo = true the city dropdown shows Georgian labels but the named-range
+        // lookup must still resolve to a Latin key — so we keep the INDIRECT formula
+        // the same in both languages (it references column D which always holds the
+        // canonical Latin name internally via the named ranges).
         for (int row = 2; row <= 500; row++)
         {
             var distVal = ws.Cell(row, 5).CreateDataValidation();
             distVal.List($"INDIRECT(SUBSTITUTE(D{row},\" \",\"_\"))", true);
             distVal.ShowErrorMessage = true;
-            distVal.ErrorTitle = "Invalid District";
-            distVal.ErrorMessage = "Please select a city first, then choose a district.";
+            distVal.ErrorTitle = isGeo ? "არასწორი რაიონი" : "Invalid District";
+            distVal.ErrorMessage = isGeo
+                ? "ჯერ აირჩიეთ ქალაქი, შემდეგ — რაიონი."
+                : "Please select a city first, then choose a district.";
         }
 
         // ── Static dropdowns (H, I, J) ────────────────────────────────────────
+        string paymentOptions = isGeo ? "\"გადახდილი,გადასახდელი\"" : "\"Paid,Not Paid\"";
+        string payerOptions = isGeo ? "\"გამგზავნი,მიმღები\"" : "\"Sender,Recipient\"";
+        string fragileOptions = isGeo ? "\"კი,არა\"" : "\"Yes,No\"";
+
         var paymentVal = ws.Range("H2:H500").CreateDataValidation();
-        paymentVal.List("\"Paid,Not Paid\"", true);
+        paymentVal.List(paymentOptions, true);
         paymentVal.ShowErrorMessage = true;
-        paymentVal.ErrorTitle = "Invalid value";
-        paymentVal.ErrorMessage = "Choose Paid or Not Paid";
+        paymentVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
+        paymentVal.ErrorMessage = isGeo ? "აირჩიეთ: გადახდილი ან გადასახდელი" : "Choose Paid or Not Paid";
 
         var payerVal = ws.Range("I2:I500").CreateDataValidation();
-        payerVal.List("\"Sender,Recipient\"", true);
+        payerVal.List(payerOptions, true);
         payerVal.ShowErrorMessage = true;
-        payerVal.ErrorTitle = "Invalid value";
-        payerVal.ErrorMessage = "Choose Sender or Recipient";
+        payerVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
+        payerVal.ErrorMessage = isGeo ? "აირჩიეთ: გამგზავნი ან მიმღები" : "Choose Sender or Recipient";
 
         var fragileVal = ws.Range("J2:J500").CreateDataValidation();
-        fragileVal.List("\"Yes,No\"", true);
+        fragileVal.List(fragileOptions, true);
         fragileVal.ShowErrorMessage = true;
-        fragileVal.ErrorTitle = "Invalid value";
-        fragileVal.ErrorMessage = "Choose Yes or No";
+        fragileVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
+        fragileVal.ErrorMessage = isGeo ? "აირჩიეთ: კი ან არა" : "Choose Yes or No";
 
         ws.Columns().AdjustToContents();
         ws.SheetView.FreezeRows(1);
@@ -433,9 +515,11 @@ public sealed class GroupOrdersController : BaseController
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
 
+        string fileName = isGeo ? "შეკვეთის-შაბლონი.xlsx" : "group-order-template.xlsx";
+
         return File(ms.ToArray(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "group-order-template.xlsx");
+            fileName);
     }
 
     /// <summary>
@@ -472,8 +556,11 @@ public sealed class GroupOrdersController : BaseController
         {
             var firstName = ws.Cell(row, 1).GetString().Trim();
             if (string.IsNullOrWhiteSpace(firstName)) continue;
-            if (firstName.Equals("Ana", StringComparison.OrdinalIgnoreCase)
-                && ws.Cell(row, 2).GetString().Trim().Equals("Smith", StringComparison.OrdinalIgnoreCase))
+
+            // Skip sample rows (English or Georgian)
+            var lastName = ws.Cell(row, 2).GetString().Trim();
+            if ((firstName.Equals("Ana", StringComparison.OrdinalIgnoreCase) && lastName.Equals("Smith", StringComparison.OrdinalIgnoreCase)) ||
+                (firstName.Equals("ანა", StringComparison.Ordinal) && lastName.Equals("სმიტი", StringComparison.Ordinal)))
                 continue;
 
             var description = ws.Cell(row, 7).GetString().Trim();
@@ -481,31 +568,39 @@ public sealed class GroupOrdersController : BaseController
             var payerRaw = ws.Cell(row, 9).GetString().Trim();
             var fragileRaw = ws.Cell(row, 10).GetString().Trim();
 
-            var paymentStatus = paymentRaw.Equals("Paid", StringComparison.OrdinalIgnoreCase)
-                ? PaymentStatus.Paid
-                : PaymentStatus.NotPaid;
+            // Payment status: English "Paid" or Georgian "გადახდილი"
+            var paymentStatus =
+                paymentRaw.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
+                paymentRaw.Equals("გადახდილი", StringComparison.Ordinal)
+                    ? PaymentStatus.Paid
+                    : PaymentStatus.NotPaid;
 
-            var payer = payerRaw.Equals("Recipient", StringComparison.OrdinalIgnoreCase)
-                ? ServicePayer.Recipient
-                : ServicePayer.Sender;
+            // Service payer: English "Recipient" or Georgian "მიმღები"
+            var payer =
+                payerRaw.Equals("Recipient", StringComparison.OrdinalIgnoreCase) ||
+                payerRaw.Equals("მიმღები", StringComparison.Ordinal)
+                    ? ServicePayer.Recipient
+                    : ServicePayer.Sender;
 
-            var isFragile = fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase);
+            // Fragile: English "Yes" or Georgian "კი"
+            var isFragile =
+                fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
+                fragileRaw.Equals("კი", StringComparison.Ordinal);
 
-            var recipientCity     = ws.Cell(row, 4).GetString().Trim();
+            var recipientCity = ws.Cell(row, 4).GetString().Trim();
             var recipientDistrict = ws.Cell(row, 5).GetString().Trim();
 
-            // Excel imports always use district names directly — no in-city mode needed.
             orders.Add(new OrderItemRequest(
-                RecipientFirstName:           firstName,
-                RecipientLastName:            ws.Cell(row, 2).GetString().Trim(),
-                RecipientPhone:               ws.Cell(row, 3).GetString().Trim(),
-                RecipientCity:                recipientCity,
-                RecipientDistrict:            recipientDistrict,
-                RecipientAddress:             ws.Cell(row, 6).GetString().Trim(),
-                Description:                  description.Length > 0 ? description : null,
-                IsFragile:                    isFragile,
-                ProductPaymentStatus:         paymentStatus,
-                WhoPaysForCompanyService:     payer
+                RecipientFirstName: firstName,
+                RecipientLastName: lastName,
+                RecipientPhone: ws.Cell(row, 3).GetString().Trim(),
+                RecipientCity: recipientCity,
+                RecipientDistrict: recipientDistrict,
+                RecipientAddress: ws.Cell(row, 6).GetString().Trim(),
+                Description: description.Length > 0 ? description : null,
+                IsFragile: isFragile,
+                ProductPaymentStatus: paymentStatus,
+                WhoPaysForCompanyService: payer
             ));
         }
 

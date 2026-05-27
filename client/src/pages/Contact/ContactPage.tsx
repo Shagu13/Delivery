@@ -7,10 +7,7 @@ const LNG = 44.776115992151134;
 
 // OpenStreetMap embed — no API key needed, pin placed manually
 const MAP_SRC =
-    `https://www.openstreetmap.org/export/embed.html` +
-    `?bbox=${LNG - 0.008},${LAT - 0.005},${LNG + 0.008},${LAT + 0.005}` +
-    `&layer=mapnik` +
-    `&marker=${LAT},${LNG}`;
+    `https://www.google.com/maps?q=${LAT},${LNG}&output=embed`;
 
 const DIRECTIONS_URL =
     `https://www.google.com/maps/dir/?api=1&destination=${LAT},${LNG}`;

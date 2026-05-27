@@ -1,4 +1,5 @@
 import type { CreateGroupOrderRequest, CreateGroupOrderResponse, OrderItemRequest } from '../types/groupOrder';
+import type { Lang } from '../contexts/translations';
 
 export class ApiError extends Error {
     constructor(
@@ -36,16 +37,16 @@ export async function createGroupOrder(
     return response.json() as Promise<CreateGroupOrderResponse>;
 }
 
-/** Triggers a browser download of the blank Excel template. */
-export async function downloadExcelTemplate(): Promise<void> {
-    const response = await fetch('/api/grouporders/excel-template');
+/** Triggers a browser download of the blank Excel template in the given language. */
+export async function downloadExcelTemplate(lang: Lang = 'en'): Promise<void> {
+    const response = await fetch(`/api/grouporders/excel-template?lang=${lang}`);
     if (!response.ok) throw new Error('Failed to download template.');
 
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'group-order-template.xlsx';
+    anchor.download = lang === 'ka' ? 'შეკვეთის-შაბლონი.xlsx' : 'group-order-template.xlsx';
     anchor.click();
     URL.revokeObjectURL(url);
 }
