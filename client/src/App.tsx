@@ -13,6 +13,7 @@ import { HomePage } from './pages/Home/HomePage';
 import { RegisterPage } from './pages/Register/RegisterPage';
 import { FaqPage } from './pages/Faq/FaqPage';
 import { AppLayout } from './components/layout/AppLayout';
+import { ContactPage } from './pages/Contact/ContactPage';
 
 export default function App() {
     return (
@@ -25,7 +26,8 @@ export default function App() {
                             <Route path="/"                  element={<HomePage />} />
                             <Route path="/faq"               element={<FaqPage />} />
                             <Route path="/login"             element={<LoginPage />} />
-                            <Route path="/register"          element={<RegisterPage />} />
+                            <Route path="/register" element={<RegisterPage />} />
+                            <Route path="/contact" element={<ContactPage />} />
                             <Route path="/forgot-password"   element={<ForgotPasswordPage />} />
                             <Route path="/reset-password"    element={<ResetPasswordPage />} />
 

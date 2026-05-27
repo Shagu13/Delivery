@@ -78,6 +78,8 @@ const en = {
   navRegister:         'Register',
   navStaffLogin: 'Login',
   navFaq: 'FAQ',
+  navContact: 'Contact',
+
 
   // ── Home page ─────────────────────────────────────────────────────────────
   homeEyebrow:         'Fast & Reliable',
@@ -921,6 +923,7 @@ const ka: typeof en = {
   navRegister:         'რეგისტრაცია',
   navStaffLogin: 'შესვლა',
   navFaq: 'FAQ',
+  navContact: 'კონტაქტი',
 
   // ── Home page ─────────────────────────────────────────────────────────────
   homeEyebrow:         'სწრაფი და საიმედო',
