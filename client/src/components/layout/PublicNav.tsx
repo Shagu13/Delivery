@@ -22,6 +22,7 @@ export function PublicNav() {
                     <nav className="nav__links">
                         <LanguageToggle />
                         <Link to="/"        className="nav__link">{t.navHome}</Link>
+                        <Link to="/faq"     className="nav__link">{t.navFaq}</Link>
                         <Link to="/send"    className="nav__link">{t.navSendPackages}</Link>
                         <Link to="/register" className="nav__link">{t.navRegister}</Link>
                         <button

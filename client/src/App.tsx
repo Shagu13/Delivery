@@ -11,6 +11,7 @@ import { CourierDashboard } from './pages/Courier/CourierDashboard';
 import { CustomerDashboard } from './pages/Customer/CustomerDashboard';
 import { HomePage } from './pages/Home/HomePage';
 import { RegisterPage } from './pages/Register/RegisterPage';
+import { FaqPage } from './pages/Faq/FaqPage';
 import { AppLayout } from './components/layout/AppLayout';
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
                         <Routes>
                             {/* Public */}
                             <Route path="/"                  element={<HomePage />} />
+                            <Route path="/faq"               element={<FaqPage />} />
                             <Route path="/login"             element={<LoginPage />} />
                             <Route path="/register"          element={<RegisterPage />} />
                             <Route path="/forgot-password"   element={<ForgotPasswordPage />} />

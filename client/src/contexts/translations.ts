@@ -76,7 +76,8 @@ const en = {
   navHome:             'Home',
   navSendPackages:     'Send Packages',
   navRegister:         'Register',
-  navStaffLogin:       'Login',
+  navStaffLogin: 'Login',
+  navFaq: 'FAQ',
 
   // ── Home page ─────────────────────────────────────────────────────────────
   homeEyebrow:         'Fast & Reliable',
@@ -918,7 +919,8 @@ const ka: typeof en = {
   navHome:             'მთავარი',
   navSendPackages:     'ამანათის გაგზავნა',
   navRegister:         'რეგისტრაცია',
-  navStaffLogin:       'შესვლა',
+  navStaffLogin: 'შესვლა',
+  navFaq: 'FAQ',
 
   // ── Home page ─────────────────────────────────────────────────────────────
   homeEyebrow:         'სწრაფი და საიმედო',

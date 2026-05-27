@@ -18,7 +18,9 @@ import { getStatusMeta } from '../../utils/statusMeta';
 import '../../styles/dashboard.css';
 import { fetchSmsBalance } from '../../api/sms';
 import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
-import AdminHistoryPage, { isCompletedGroupOrder } from './AdminHistoryPage';
+import AdminHistoryPage from './AdminHistoryPage';
+import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
+
 
 type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history';
 

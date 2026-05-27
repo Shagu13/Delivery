@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&display=swap');
+
+/*
+  FiraGO is installed via npm (@fontsource/firago) and imported in main.tsx.
+  It covers both Latin and Georgian scripts — replacing Plus Jakarta Sans as
+  the body font so Georgian text renders correctly on all devices.
+*/
 
 :root {
   /* Backgrounds */
@@ -28,9 +34,12 @@
   --color-warning: #b45309;
   --color-warning-bg: rgba(180, 83, 9, 0.07);
 
-  /* Typography */
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'Plus Jakarta Sans', sans-serif;
+  /* Typography
+     --font-display : Syne for Latin headings/brand; FiraGO fallback for Georgian headings
+     --font-body    : FiraGO first (Georgian + Latin), sans-serif system fallback
+  */
+  --font-display: 'Syne', 'FiraGO', sans-serif;
+  --font-body: 'FiraGO', sans-serif;
 
   /* Radii */
   --radius-sm: 6px;

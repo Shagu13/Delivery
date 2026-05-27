@@ -58,7 +58,7 @@ public sealed class PasswordResetSmsService : IPasswordResetSmsService
     // ── Message formatter ────────────────────────────────────────────────────
 
     private static string FormatMessage(string resetLink) =>
-        $"DILO: პაროლის აღსადგენად გადადით ბმულზე (მოქმედია 2 საათი):\n" +
+        $"DILO: პაროლის აღსადგენად გადადით ბმულზე:\n" +
         $"{resetLink}\n" +
         $"თუ ეს მოთხოვნა არ გამოგიგზავნიათ, უგულებელყავით ეს შეტყობინება.";
 }

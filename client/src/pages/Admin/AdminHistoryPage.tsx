@@ -3,6 +3,7 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
 import { getStatusMeta } from '../../utils/statusMeta';
+import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,26 +26,6 @@ function StatusBadge({ status }: { status: string }) {
         ? 'status-badge status-badge--cancelled'
         : 'status-badge status-badge--neutral';
   return <span className={cls} title={meta.description}>{meta.short}</span>;
-}
-
-// ── Completed logic (exported for use in AdminDashboard) ──────────────────────
-
-const TERMINAL_GO_STATUSES = new Set([
-  'CancelledBySender',
-  'CancelledByAdmin',
-  'OrderNotAccepted',
-  'AllDelivered',
-]);
-
-const TERMINAL_ORDER_STATUSES = new Set([
-  'DeliveredToRecipient',
-  'CancelledByAdmin',
-]);
-
-export function isCompletedGroupOrder(go: AdminGroupOrder): boolean {
-  if (TERMINAL_GO_STATUSES.has(go.status)) return true;
-  if (go.orders.length > 0 && go.orders.every(o => TERMINAL_ORDER_STATUSES.has(o.status))) return true;
-  return false;
 }
 
 // ── History status pills ──────────────────────────────────────────────────────
@@ -101,7 +82,11 @@ export default function AdminHistoryPage({ token }: { token: string }) {
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
@@ -221,7 +206,6 @@ export default function AdminHistoryPage({ token }: { token: string }) {
           {visibleOrders.map(go => {
             const expanded = expandedIds.has(go.id);
 
-            // Aggregate financials for the group header summary
             const totalSvc      = go.orders.reduce((s, o) => s + (o.companyServicePrice ?? 0), 0);
             const totalRevenue  = go.orders.reduce((s, o) => s + (o.companyRevenue ?? 0), 0);
             const totalCod      = go.orders.reduce((s, o) => s + (o.amountToCollectForPackage ?? 0), 0);
@@ -253,7 +237,6 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                     <span className="go-meta__date">{formatDate(go.createdAt)}</span>
                   </div>
 
-                  {/* Financial summary chips */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', flexShrink: 0, flexWrap: 'wrap' }}>
                     {totalSvc > 0 && (
                       <span style={chipStyle('var(--color-bg-3)', 'var(--color-text-subtle)')}>
@@ -332,14 +315,12 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                                 </td>
                                 <td><StatusBadge status={o.status} /></td>
 
-                                {/* Fragile */}
                                 <td style={{ textAlign: 'center' }}>
                                   {o.isFragile
                                     ? <span title="Fragile" style={{ fontSize: '0.78rem', color: '#f97316' }}>🔸</span>
                                     : <span style={{ opacity: 0.25, fontSize: '0.78rem' }}>—</span>}
                                 </td>
 
-                                {/* Who pays service fee */}
                                 <td>
                                   <span style={{
                                     fontSize: '0.72rem',
@@ -355,7 +336,6 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                                   </span>
                                 </td>
 
-                                {/* Product paid */}
                                 <td>
                                   <span style={{
                                     fontSize: '0.75rem',
@@ -366,31 +346,26 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                                   </span>
                                 </td>
 
-                                {/* COD — amount to collect */}
                                 <td style={{ fontWeight: 600, color: '#d97706' }}>
                                   {o.amountToCollectForPackage != null && o.amountToCollectForPackage > 0
                                     ? `₾${o.amountToCollectForPackage.toFixed(2)}`
                                     : <span style={{ opacity: 0.35 }}>—</span>}
                                 </td>
 
-                                {/* Cash actually collected */}
                                 <td style={{ fontWeight: 600, color: '#16a34a' }}>
                                   {o.amountOfCashCollected != null && o.amountOfCashCollected > 0
                                     ? `₾${o.amountOfCashCollected.toFixed(2)}`
                                     : <span style={{ opacity: 0.35 }}>—</span>}
                                 </td>
 
-                                {/* Service price */}
                                 <td style={{ fontWeight: 600 }}>
                                   {money(o.companyServicePrice)}
                                 </td>
 
-                                {/* Courier salary */}
                                 <td style={{ color: '#f97316', fontWeight: 600 }}>
                                   {money(o.courierSalary)}
                                 </td>
 
-                                {/* Revenue */}
                                 <td style={{
                                   fontWeight: 600,
                                   color: o.companyRevenue != null
@@ -400,7 +375,6 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                                   {money(o.companyRevenue)}
                                 </td>
 
-                                {/* Delivered at */}
                                 <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap' }}>
                                   {o.deliveredAt
                                     ? new Date(o.deliveredAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -410,7 +384,6 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                             ))}
                           </tbody>
 
-                          {/* Totals footer row */}
                           {go.orders.length > 1 && (
                             <tfoot>
                               <tr style={{ background: 'var(--color-bg-3)', borderTop: '2px solid var(--color-border)' }}>
