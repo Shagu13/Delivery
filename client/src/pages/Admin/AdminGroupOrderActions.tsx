@@ -233,21 +233,3 @@ export function AdminOrderRowActions({ order, token, onSuccess, onError, onRefre
     );
 }
 
-//// ── Status colour map (all statuses including new ones) ───────────────────────
-//export const STATUS_COLORS: Record<string, [string, string]> = {
-//  Pending:                         ['rgba(160,120,0,0.12)',  '#c4870f'],
-//  AcceptedGroupOrder:              ['rgba(59,130,246,0.12)', '#3b82f6'],
-//  AcceptedOrder:                   ['rgba(59,130,246,0.12)', '#3b82f6'],
-//  CourierAssignedToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-//  CourierOnTheWayToPickUp:         ['rgba(139,92,246,0.12)', '#8b5cf6'],
-//  CourierDeliveringToWarehouse:    ['rgba(249,115,22,0.12)', '#f97316'],
-//  DeliveredToWarehouse:            ['rgba(16,185,129,0.12)', '#10b981'],
-//  AdminAcceptedOrderInWareHouse:   ['rgba(16,185,129,0.12)', '#10b981'],
-//  OrderIsOnItsWayToRecipientsCity: ['rgba(59,130,246,0.12)', '#3b82f6'],
-//  CourierAssignedToDeliver:        ['rgba(139,92,246,0.12)', '#8b5cf6'],
-//  CourierRecievedOrderToDeliver:   ['rgba(249,115,22,0.12)', '#f97316'],
-//  DeliveredToRecipient:            ['rgba(16,185,129,0.12)', '#10b981'],
-//  CancelledBySender:               ['rgba(239,68,68,0.12)',  '#ef4444'],
-//  OrderNotAccepted:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-//  CancelledByAdmin:                ['rgba(239,68,68,0.12)',  '#ef4444'],
-//};

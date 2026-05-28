@@ -727,10 +727,21 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       }
                     </td>
                     <td className="aop-td">
-                      {order.productPaymentStatus === 'Paid'
-                        ? <span className="aop-paid">{t.aopPaid}</span>
-                        : <span className="aop-unpaid">{t.aopUnpaid}</span>
-                      }
+                      {order.productPaymentStatus === 'Paid' ? (
+                        <span className="aop-paid">{t.aopPaid}</span>
+                      ) : (() => {
+                        const parcelDue  = order.productPaymentStatus === 'NotPaid';
+                        const courierDue = order.whoPaysForCompanyService === 'Recipient' && order.companyServicePrice > 0;
+                        const sub = parcelDue && courierDue ? t.aopSubParcelAndFee
+                                  : courierDue              ? t.aopSubFeeOnly
+                                                            : t.aopSubParcelOnly;
+                        return (
+                          <span className="aop-unpaid">
+                            {t.aopUnpaid}
+                            <span className="aop-unpaid__sub">{sub}</span>
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="aop-td aop-td--edit" onClick={e => e.stopPropagation()}>
                       <button
@@ -880,8 +891,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-price--empty { color: var(--color-text-subtle); font-weight: 400; }
         .aop-price--cod { color: #3b82f6; }
         .aop-missing { font-size: 0.7rem; font-weight: 600; color: #ef4444; background: rgba(239,68,68,0.1); border-radius: 4px; padding: 2px 5px; }
-        .aop-paid   { color: #10b981; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
-        .aop-unpaid { color: #ef4444; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+        .aop-paid { color: #10b981; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+        .aop-unpaid { color: #ef4444; font-size: 0.75rem; font-weight: 600; white-space: nowrap; display: flex; flex-direction: column; gap: 1px; }
+        .aop-unpaid__sub { font-size: 0.68rem; font-weight: 600; opacity: 0.8; }
         .aop-checkbox { width: 14px; height: 14px; cursor: pointer; accent-color: var(--color-accent); }
         .aop-payer-badge { display: inline-block; font-size: 0.62rem; font-weight: 700; border-radius: 3px; padding: 1px 5px; background: rgba(59,130,246,0.1); color: #3b82f6; white-space: nowrap; }
         .aop-payer-badge--rcpt { background: rgba(196,127,23,0.12); color: var(--color-accent); }

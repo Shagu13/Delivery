@@ -1112,9 +1112,22 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                       </td>
                       <td><StatusBadge status={o.status} /></td>
                       <td>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444' }}>
-                          {o.productPaymentStatus === 'Paid' ? t.goPaid : t.goUnpaid}
-                        </span>
+                        {o.productPaymentStatus === 'Paid' ? (
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>
+                            {t.goPaid}
+                          </span>
+                        ) : (() => {
+                          const courierDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
+                          const sub = o.productPaymentStatus === 'NotPaid' && courierDue ? t.goSubParcelAndFee
+                                    : courierDue                                         ? t.goSubFeeOnly
+                                                                                         : t.goSubParcelOnly;
+                          return (
+                            <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ef4444' }}>{t.goUnpaid}</span>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#ef4444', opacity: 0.8 }}>{sub}</span>
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td>
                         <AdminOrderRowActions
@@ -1235,9 +1248,22 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                 </td>
                                 <td><StatusBadge status={o.status} /></td>
                                 <td>
-                                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444' }}>
-                                    {o.productPaymentStatus === 'Paid' ? t.goPaid : t.goUnpaid}
-                                  </span>
+                                  {o.productPaymentStatus === 'Paid' ? (
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>
+                                      {t.goPaid}
+                                    </span>
+                                  ) : (() => {
+                                    const courierDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
+                                    const sub = o.productPaymentStatus === 'NotPaid' && courierDue ? t.goSubParcelAndFee
+                                              : courierDue                                         ? t.goSubFeeOnly
+                                                                                                   : t.goSubParcelOnly;
+                                    return (
+                                      <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ef4444' }}>{t.goUnpaid}</span>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#ef4444', opacity: 0.8 }}>{sub}</span>
+                                      </span>
+                                    );
+                                  })()}
                                 </td>
                                 <td>
                                   <AdminOrderRowActions

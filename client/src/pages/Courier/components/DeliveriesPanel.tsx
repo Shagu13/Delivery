@@ -112,9 +112,21 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelPayment}</span>
                                             <span className="courier-card__value">
-                                                {order.productPaymentStatus === 'Paid'
-                                                    ? t.cdDeliveryPayPaid
-                                                    : t.cdDeliveryPayCollect(order.whoPaysForCompanyService === 'Recipient')}
+                                                {order.productPaymentStatus === 'Paid' ? (
+                                                    t.cdDeliveryPayPaid
+                                                ) : (() => {
+                                                    const parcelDue  = order.productPaymentStatus === 'NotPaid';
+                                                    const courierDue = order.whoPaysForCompanyService === 'Recipient' && order.companyServicePrice > 0;
+                                                    const sub = parcelDue && courierDue ? t.aopSubParcelAndFee
+                                                              : courierDue              ? t.aopSubFeeOnly
+                                                                                        : t.aopSubParcelOnly;
+                                                    return (
+                                                        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                                                            <span>{t.aopUnpaid}</span>
+                                                            <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>{sub}</span>
+                                                        </span>
+                                                    );
+                                                })()}
                                             </span>
                                         </div>
                                         {mustCollect && (
