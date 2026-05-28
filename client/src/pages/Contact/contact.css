@@ -137,6 +137,17 @@
     background: var(--color-border);
 }
 
+.contact__btn--whatsapp {
+    background: #25D366;
+    color: #fff;
+    border: none;
+}
+
+.contact__btn--whatsapp:hover {
+    background: #1ebe5d;
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.35);
+}
+
 /* ── Map ── */
 .contact__map-wrap {
     border-radius: 0 var(--radius-lg) var(--radius-lg) 0;

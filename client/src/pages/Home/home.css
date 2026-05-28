@@ -180,12 +180,14 @@
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
+
 }
 .home__hero-svg {
     width: 100%;
     height: 100%;
     max-width: 640px;
     max-height: 620px;
+    object-fit: contain;
 }
 
 /* ═══════════════════════════════════════════════════════════════
