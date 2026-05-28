@@ -145,7 +145,6 @@ function HeroIllustration() {
         </svg>
     );
 }
-
 export function HomePage() {
     const { t, lang } = useLanguage();
     const [trackingNumber, setTrackingNumber] = useState('');

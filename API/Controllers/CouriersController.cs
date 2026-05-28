@@ -1,5 +1,7 @@
 using API.Models.Couriers;
 using Application.Couriers.Commands.CreateCourier;
+using Application.Couriers.Commands.UpdateCourier;
+using Application.Couriers.Commands.SetCourierActiveStatus;
 using Application.Couriers.DTOs;
 using Application.Common.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -69,6 +71,7 @@ public sealed class CouriersController : BaseController
                 assignedDistrict = c.AssignedDistrict,
                 phoneNumber = c.PhoneNumber,
                 isAvailable = c.IsAvailable,
+                isActive = c.IsActive,
             })
             .ToListAsync(ct);
 
@@ -80,6 +83,28 @@ public sealed class CouriersController : BaseController
 
     // ── GET /api/couriers/{id}/orders  (Admin) ────────────────────────────────
     /// <summary>Returns all orders ever assigned to this courier, regardless of status.</summary>
+    // ── PUT /api/couriers/{id} (Admin) ─────────────────────────────────────────
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCourierRequest request, CancellationToken ct)
+    {
+        var newPassword = string.IsNullOrWhiteSpace(request.NewPassword) ? null : request.NewPassword;
+        await Sender.Send(new UpdateCourierCommand(id, request.Username, newPassword), ct);
+        return NoContent();
+    }
+
+    // ── PATCH /api/couriers/{id}/active (Admin) ───────────────────────────────
+    [HttpPatch("{id:guid}/active")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetActive(Guid id, [FromBody] SetCourierActiveStatusRequest request, CancellationToken ct)
+    {
+        await Sender.Send(new SetCourierActiveStatusCommand(id, request.IsActive), ct);
+        return NoContent();
+    }
+
     [HttpGet("{id:guid}/orders")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

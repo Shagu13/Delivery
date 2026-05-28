@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
+import { EditCourierModal } from './EditCourierModal';
 import { SettlementModal } from './SettlementModal';
 import type { CreateCourierResponse, Courier, CourierOrder } from '../../api/couriers';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
-import { fetchCouriers, fetchCourierOrders, setCourierSalary } from '../../api/couriers';
+import { fetchCouriers, fetchCourierOrders, setCourierSalary, setCourierActiveStatus } from '../../api/couriers';
 import { assignCourierToOrder } from '../../api/orders';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import AdminCustomersPage from './AdminCustomersPage';
@@ -42,6 +43,7 @@ export function AdminDashboard() {
   };
 
   const [showCreateCourier, setShowCreateCourier] = useState(false);
+  const [editCourier, setEditCourier] = useState<Courier | null>(null);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -59,6 +61,14 @@ export function AdminDashboard() {
     setToast(`Courier "${courier.fullName}" created successfully.`);
     setTimeout(() => setToast(null), 4000);
     goTo('couriers');
+  };
+
+  const handleCourierUpdated = (courierId: string, newUsername: string) => {
+    setCouriers(prev => prev.map(c => c.courierId === courierId ? { ...c, username: newUsername } : c));
+  };
+
+  const handleCourierActiveChanged = (courierId: string, isActive: boolean) => {
+    setCouriers(prev => prev.map(c => c.courierId === courierId ? { ...c, isActive } : c));
   };
 
   const initials = user
@@ -204,7 +214,7 @@ export function AdminDashboard() {
           {activeView === 'overview'  && <AdminOverview token={token ?? ''} />}
           {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} />}
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} />}
-          {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} />}
+          {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} />}
                   {activeView === 'cities' && <AdminCitiesPage token={token ?? ''} />}
                   {activeView === 'weightTiers' && token && (
@@ -219,6 +229,14 @@ export function AdminDashboard() {
         open={showCreateCourier}
         onClose={() => setShowCreateCourier(false)}
         onCreated={handleCourierCreated}
+      />
+
+      <EditCourierModal
+        open={editCourier !== null}
+        courier={editCourier}
+        token={token ?? ''}
+        onClose={() => setEditCourier(null)}
+        onUpdated={(id, username) => { handleCourierUpdated(id, username); }}
       />
 
       {toast && (
@@ -1261,10 +1279,14 @@ function AdminCouriers({
   couriers,
   token,
   onAdd,
+  onEdit,
+  onActiveChanged,
 }: {
   couriers: Courier[];
   token: string;
   onAdd: () => void;
+  onEdit: (courier: Courier) => void;
+  onActiveChanged: (courierId: string, isActive: boolean) => void;
 }) {
   if (couriers.length === 0) {
     return (
@@ -1298,7 +1320,7 @@ function AdminCouriers({
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         {couriers.map(c => (
-          <CourierRow key={c.courierId} courier={c} token={token} />
+          <CourierRow key={c.courierId} courier={c} token={token} onEdit={onEdit} onActiveChanged={onActiveChanged} />
         ))}
       </div>
     </div>
@@ -1306,7 +1328,7 @@ function AdminCouriers({
 }
 
 // ── Single expandable courier row ─────────────────────────────────────────────
-function CourierRow({ courier, token }: { courier: Courier; token: string }) {
+function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Courier; token: string; onEdit: (courier: Courier) => void; onActiveChanged: (courierId: string, isActive: boolean) => void; }) {
   const [expanded,        setExpanded]        = useState(false);
   const [orders,          setOrders]          = useState<CourierOrder[]>([]);
   const [loading,         setLoading]         = useState(false);
@@ -1316,6 +1338,7 @@ function CourierRow({ courier, token }: { courier: Courier; token: string }) {
   const [rowToast,        setRowToast]        = useState<{ msg: string; err: boolean } | null>(null);
   const [showSettlement,  setShowSettlement]  = useState(false);
   const [settlementToast, setSettlementToast] = useState<string | null>(null);
+  const [togglingActive,  setTogglingActive]  = useState(false);
 
   const showRowToast = (msg: string, err = false) => {
     setRowToast({ msg, err });
@@ -1370,13 +1393,26 @@ function CourierRow({ courier, token }: { courier: Courier; token: string }) {
     }
   };
 
+  const handleToggleActive = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTogglingActive(true);
+    try {
+      await setCourierActiveStatus(courier.courierId, !courier.isActive, token);
+      onActiveChanged(courier.courierId, !courier.isActive);
+    } catch {
+      showRowToast('Failed to update courier status', true);
+    } finally {
+      setTogglingActive(false);
+    }
+  };
+
   return (
     <div style={{ borderBottom: '1px solid var(--color-border)' }}>
       {/* Header row */}
       <div
         className="go-row-header"
         onClick={handleToggle}
-        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}
+        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isActive ? 1 : 0.6 }}
       >
         <svg
           className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`}
@@ -1385,7 +1421,12 @@ function CourierRow({ courier, token }: { courier: Courier; token: string }) {
           <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         <div style={{ flex: 1 }}>
-          <div className="courier-name">{courier.fullName}</div>
+          <div className="courier-name">
+            {courier.fullName}
+            {!courier.isActive && (
+              <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 100, padding: '1px 8px' }}>Deactivated</span>
+            )}
+          </div>
           <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
@@ -1395,6 +1436,26 @@ function CourierRow({ courier, token }: { courier: Courier; token: string }) {
           <span className={`status-badge ${courier.isAvailable ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
             {courier.isAvailable ? 'Available' : 'Unavailable'}
           </span>
+          <button
+            className="go-action-btn go-action-btn--ghost"
+            style={{ padding: '5px 13px', fontSize: '0.75rem' }}
+            onClick={e => { e.stopPropagation(); onEdit(courier); }}
+          >
+            Edit
+          </button>
+          <button
+            className="go-action-btn"
+            style={{
+              padding: '5px 13px', fontSize: '0.75rem',
+              background: courier.isActive ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)',
+              color: courier.isActive ? '#ef4444' : '#10b981',
+              border: `1px solid ${courier.isActive ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
+            }}
+            onClick={handleToggleActive}
+            disabled={togglingActive}
+          >
+            {togglingActive ? '…' : courier.isActive ? 'Deactivate' : 'Activate'}
+          </button>
           <button
             className="go-action-btn go-action-btn--assign"
             style={{ padding: '5px 13px', fontSize: '0.75rem' }}

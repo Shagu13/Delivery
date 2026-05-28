@@ -108,4 +108,8 @@
         width: 24px;
         height: 24px;
     }
+
+    .logo-bg__img {
+        width: min(340px, 85vw);
+    }
 }

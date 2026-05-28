@@ -15,6 +15,9 @@ namespace Domain
         public required string AssignedDistrict { get; set; }  
         public bool IsAvailable { get; set; } = true;
 
+        /// <summary>Admin-controlled. False = courier is soft-deleted/disabled and cannot log in.</summary>
+        public bool IsActive { get; set; } = true;
+
         // Identity link
         public required string ApplicationUserId { get; set; }
         public ApplicationUser ApplicationUser { get; set; } = null!;

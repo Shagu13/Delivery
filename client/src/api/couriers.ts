@@ -24,6 +24,7 @@ export interface Courier {
     assignedDistrict: string;
     phoneNumber: string;
     isAvailable: boolean;
+    isActive: boolean;
 }
 
 export interface CourierOrder {
@@ -102,4 +103,48 @@ export async function setCourierSalary(orderId: string, salary: number, token: s
         body: JSON.stringify({ salary }),
     });
     if (!res.ok) throw new Error('Failed to set courier salary');
+}
+
+export interface UpdateCourierRequest {
+    username: string;
+    newPassword?: string;
+}
+
+export async function updateCourier(
+    courierId: string,
+    data: UpdateCourierRequest,
+    token: string,
+): Promise<void> {
+    const res = await fetch(`/api/couriers/${courierId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new CourierApiError(
+            res.status,
+            body?.title ?? `Request failed with status ${res.status}`,
+            body?.errors,
+        );
+    }
+}
+
+export async function setCourierActiveStatus(
+    courierId: string,
+    isActive: boolean,
+    token: string,
+): Promise<void> {
+    const res = await fetch(`/api/couriers/${courierId}/active`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ isActive }),
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new CourierApiError(
+            res.status,
+            body?.title ?? `Request failed with status ${res.status}`,
+        );
+    }
 }
