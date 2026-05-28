@@ -1,20 +1,14 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/useLanguage';
-
-import {
-    fetchMyPickups, markPickingUp,
-    markPickedUp, markDeliveredToWarehouse,
-} from '../../api/adminGroupOrders';
+import { fetchMyPickups } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
-import {
-    fetchMyDeliveries, markOrderDelivering, markOrderDelivered,
-    postponeOrder, retryDelivery,
-} from '../../api/orders';
-import type { CourierOrder, PostponeReason } from '../../api/orders';
-import { POSTPONE_REASON_LABELS } from '../../api/orders';
+import { fetchMyDeliveries } from '../../api/orders';
+import type { CourierOrder } from '../../api/orders';
 import '../../styles/dashboard.css';
+import { PickupsPanel } from './components/PickupsPanel';
+import { DeliveriesPanel } from './components/DeliveriesPanel';
 import { CourierHistoryPage } from './CourierHistoryPage';
 import { CourierSettlementsPage } from './CourierSettlementsPage';
 
@@ -32,88 +26,7 @@ function useIsMobile(breakpoint = 768) {
     return isMobile;
 }
 
-// ── SwipeButton ───────────────────────────────────────────────────────────────
-type SwipeVariant = 'primary' | 'success';
-interface SwipeButtonProps {
-    label: string; onSwipe: () => void; disabled?: boolean; variant?: SwipeVariant;
-}
-function SwipeButton({ label, onSwipe, disabled = false, variant = 'primary' }: SwipeButtonProps) {
-    const trackRef = useRef<HTMLDivElement>(null);
-    const [offset, setOffset] = useState(0);
-    const [swipeState, setSwipeState] = useState<'idle' | 'confirmed'>('idle');
-    const startXRef = useRef<number | null>(null);
-    const [maxTravel, setMaxTravel] = useState(200);
-    const HANDLE_SIZE = 48; const PADDING = 4; const THRESHOLD = 0.82;
-    useEffect(() => {
-        const el = trackRef.current; if (!el) return;
-        const ro = new ResizeObserver(([e]) => setMaxTravel(e.contentRect.width - HANDLE_SIZE - PADDING * 2));
-        ro.observe(el); return () => ro.disconnect();
-    }, []);
-    const handlePointerDown = (e: React.PointerEvent) => {
-        if (disabled || swipeState === 'confirmed') return;
-        startXRef.current = e.clientX;
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    };
-    const handlePointerMove = (e: React.PointerEvent) => {
-        if (startXRef.current === null || swipeState === 'confirmed') return;
-        const dx = Math.max(0, Math.min(e.clientX - startXRef.current, maxTravel));
-        setOffset(dx);
-        if (dx / maxTravel >= THRESHOLD) {
-            startXRef.current = null; setOffset(maxTravel); setSwipeState('confirmed');
-            setTimeout(() => { onSwipe(); setTimeout(() => { setSwipeState('idle'); setOffset(0); }, 500); }, 280);
-        }
-    };
-    const handlePointerUp = () => { if (swipeState === 'confirmed') return; startXRef.current = null; setOffset(0); };
-    const progress = maxTravel > 0 ? offset / maxTravel : 0;
-    const isSnappingBack = swipeState === 'idle' && offset === 0;
-    const palette: Record<SwipeVariant, { bg: string; fill: string; handle: string; labelColor: string }> = {
-        primary: { bg: 'var(--color-accent-dim)', fill: 'var(--color-accent)', handle: 'var(--color-accent)', labelColor: 'var(--color-accent)' },
-        success: { bg: '#d1fae5', fill: '#10b981', handle: '#059669', labelColor: '#065f46' },
-    };
-    const c = palette[variant];
-    return (
-        <div ref={trackRef} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp}
-            style={{ position: 'relative', height: '56px', borderRadius: '100px',
-                background: disabled ? 'var(--color-bg-3)' : c.bg, overflow: 'hidden', userSelect: 'none',
-                cursor: disabled ? 'not-allowed' : 'ew-resize', opacity: disabled ? 0.55 : 1,
-                touchAction: 'none', WebkitTapHighlightColor: 'transparent' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0,
-                width: `${PADDING + HANDLE_SIZE + offset}px`,
-                background: swipeState === 'confirmed' ? c.fill : `${c.fill}4d`, borderRadius: '100px',
-                transition: isSnappingBack ? 'width 0.4s cubic-bezier(0.34,1.56,0.64,1)' : 'none', pointerEvents: 'none' }} />
-            {swipeState === 'idle' && (
-                <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', paddingLeft: `${HANDLE_SIZE + PADDING * 2 + 8}px`,
-                    fontSize: '0.875rem', fontWeight: 700, color: c.labelColor, letterSpacing: '0.02em',
-                    pointerEvents: 'none', opacity: Math.max(0, 1 - progress * 2.5),
-                    transition: isSnappingBack ? 'opacity 0.3s' : 'none' }}>{label}</span>
-            )}
-            {swipeState === 'confirmed' && (
-                <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', fontSize: '1.25rem', color: '#fff', fontWeight: 700, pointerEvents: 'none' }}>✓</span>
-            )}
-            <div style={{ position: 'absolute', top: PADDING, left: PADDING,
-                width: `${HANDLE_SIZE}px`, height: `${HANDLE_SIZE}px`, borderRadius: '100px',
-                background: disabled ? 'var(--color-border)' : c.handle,
-                transform: `translateX(${offset}px)`,
-                transition: isSnappingBack ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1)' : 'none',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: swipeState === 'confirmed' ? '0 2px 12px rgba(0,0,0,0.22)' : '0 2px 8px rgba(0,0,0,0.15)',
-                pointerEvents: 'none', fontSize: swipeState === 'confirmed' ? '1rem' : '1.5rem', color: '#fff', lineHeight: 1 }}>
-                {swipeState === 'confirmed' ? '✓' : '›'}
-            </div>
-            {swipeState === 'idle' && offset === 0 && (
-                <div style={{ position: 'absolute', top: '50%', left: `${PADDING + HANDLE_SIZE + 8}px`,
-                    transform: 'translateY(-50%)', display: 'flex', gap: '3px', opacity: 0.35, pointerEvents: 'none' }}>
-                    {['›','›','›'].map((ch, i) => <span key={i} style={{ fontSize: '0.7rem', color: c.labelColor }}>{ch}</span>)}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ── Root component ────────────────────────────────────────────────────────────
+// ── Root component ─────────────────────────────────────────────────────────────
 type DashView = 'pickups' | 'deliveries' | 'history' | 'settlements';
 
 export function CourierDashboard() {
@@ -141,6 +54,7 @@ export function CourierDashboard() {
         catch { if (!silent) setPickupError(t.cdPickupsLoading); }
         finally { if (!silent) setPickupLoading(false); }
     };
+
     const loadDeliveries = async (silent = false) => {
         if (!token) return;
         if (!silent) { setDeliveriesLoading(true); setDeliveriesError(null); }
@@ -185,7 +99,7 @@ export function CourierDashboard() {
     const pickupProps = { pickups, loading: pickupLoading, error: pickupError, onRefresh: loadPickups, busyId, token: token!, onAct: act };
     const deliveryProps = { deliveries, loading: deliveriesLoading, error: deliveriesError, busyId, token: token!, onAct: act };
 
-    // ── Mobile ────────────────────────────────────────────────────────────────
+    // ── Mobile ─────────────────────────────────────────────────────────────────
     if (isMobile) {
         return (
             <div className="mobile-shell">
@@ -208,9 +122,9 @@ export function CourierDashboard() {
                 <main className="mobile-content">
                     {toast && <div className="dashboard__toast">{toast}</div>}
                     <div className="mobile-tabs">
-                        <button className={`mobile-tab${view === 'pickups' ? ' mobile-tab--active' : ''}`} onClick={() => setView('pickups')}>{t.cdTabPickups}</button>
-                        <button className={`mobile-tab${view === 'deliveries' ? ' mobile-tab--active' : ''}`} onClick={() => setView('deliveries')}>{t.cdTabDeliveries}</button>
-                        <button className={`mobile-tab${view === 'history' ? ' mobile-tab--active' : ''}`} onClick={() => setView('history')}>{t.cdTabHistory}</button>
+                        <button className={`mobile-tab${view === 'pickups'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('pickups')}>{t.cdTabPickups}</button>
+                        <button className={`mobile-tab${view === 'deliveries'  ? ' mobile-tab--active' : ''}`} onClick={() => setView('deliveries')}>{t.cdTabDeliveries}</button>
+                        <button className={`mobile-tab${view === 'history'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('history')}>{t.cdTabHistory}</button>
                         <button className={`mobile-tab${view === 'settlements' ? ' mobile-tab--active' : ''}`} onClick={() => setView('settlements')}>{t.cdTabPay}</button>
                     </div>
                     {view === 'pickups'     && <PickupsPanel    {...pickupProps} />}
@@ -222,7 +136,7 @@ export function CourierDashboard() {
         );
     }
 
-    // ── Desktop ───────────────────────────────────────────────────────────────
+    // ── Desktop ────────────────────────────────────────────────────────────────
     return (
         <div className="dashboard">
             <aside className="sidebar">
@@ -235,9 +149,9 @@ export function CourierDashboard() {
                         DILO
                     </div>
                     <nav className="sidebar__nav">
-                        <button className={`sidebar__link${view === 'pickups' ? ' sidebar__link--active' : ''}`} onClick={() => setView('pickups')}>{t.cdTabPickups}</button>
-                        <button className={`sidebar__link${view === 'deliveries' ? ' sidebar__link--active' : ''}`} onClick={() => setView('deliveries')}>{t.cdTabDeliveries}</button>
-                        <button className={`sidebar__link${view === 'history' ? ' sidebar__link--active' : ''}`} onClick={() => setView('history')}>{t.cdTabHistory}</button>
+                        <button className={`sidebar__link${view === 'pickups'     ? ' sidebar__link--active' : ''}`} onClick={() => setView('pickups')}>{t.cdTabPickups}</button>
+                        <button className={`sidebar__link${view === 'deliveries'  ? ' sidebar__link--active' : ''}`} onClick={() => setView('deliveries')}>{t.cdTabDeliveries}</button>
+                        <button className={`sidebar__link${view === 'history'     ? ' sidebar__link--active' : ''}`} onClick={() => setView('history')}>{t.cdTabHistory}</button>
                         <button className={`sidebar__link${view === 'settlements' ? ' sidebar__link--active' : ''}`} onClick={() => setView('settlements')}>{t.cdTabSettlements}</button>
                     </nav>
                 </div>
@@ -264,382 +178,6 @@ export function CourierDashboard() {
                 {view === 'history'     && <CourierHistoryPage />}
                 {view === 'settlements' && <CourierSettlementsPage />}
             </main>
-        </div>
-    );
-}
-
-// ── Map helper ───────────────────────────────────────────────────────────────
-function mapUrl(city: string, district: string, address: string) {
-    const q = encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
-    return `https://www.google.com/maps/search/?api=1&query=${q}`;
-}
-
-// ── Route toolbar ──────────────────────────────────────────────────────────
-interface Stop { city: string; district: string; address: string; }
-
-function buildGoogleRouteUrl(stops: Stop[], origin?: string) {
-    const dest = encodeURIComponent(`${stops[stops.length-1].address}, ${stops[stops.length-1].district}, ${stops[stops.length-1].city}, Georgia`);
-    const orig = origin ?? encodeURIComponent(`${stops[0].address}, ${stops[0].district}, ${stops[0].city}, Georgia`);
-    const midStops = origin ? stops.slice(0, -1) : stops.slice(1, -1);
-    const wps = midStops.map(s => encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`)).join('|');
-    return `https://www.google.com/maps/dir/?api=1&origin=${orig}&destination=${dest}${wps ? `&waypoints=${wps}` : ''}&travelmode=driving`;
-}
-
-function buildYandexRouteUrl(stops: Stop[], origin?: string) {
-    const pts = stops.map(s => encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`));
-    const all = origin ? [encodeURIComponent(origin), ...pts] : pts;
-    return `https://yandex.com/maps/?mode=routes&rtext=${all.join('~')}&rtt=auto`;
-}
-
-function RouteToolbar({ stops, onClear }: { stops: Stop[]; onClear: () => void }) {
-    const [locState, setLocState] = useState<'idle' | 'loading' | 'ready' | 'denied'>('idle');
-    const [currentLoc, setCurrentLoc] = useState<string | undefined>(undefined);
-
-    if (stops.length < 2) return null;
-
-    const requestLocation = () => {
-        if (!navigator.geolocation) { setLocState('denied'); return; }
-        setLocState('loading');
-        navigator.geolocation.getCurrentPosition(
-            pos => {
-                setCurrentLoc(`${pos.coords.latitude},${pos.coords.longitude}`);
-                setLocState('ready');
-            },
-            () => setLocState('denied'),
-            { timeout: 8000 }
-        );
-    };
-
-    return (
-        <div className="route-toolbar">
-            <span className="route-toolbar__count">{stops.length} stops</span>
-            {locState === 'idle' && (
-                <button onClick={requestLocation} className="route-toolbar__btn route-toolbar__btn--loc">
-                    📍 Use my location
-                </button>
-            )}
-            {locState === 'loading' && <span className="route-toolbar__count">Locating…</span>}
-            {locState === 'denied' && <span className="route-toolbar__count" style={{ color: '#f97316' }}>Location denied</span>}
-            {locState === 'ready' && <span className="route-toolbar__count" style={{ color: '#10b981' }}>📍 Location set</span>}
-            <a href={buildGoogleRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--google">
-                🗺 Google Maps
-            </a>
-            <a href={buildYandexRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandex">
-                🗺 Yandex Maps
-            </a>
-            <button onClick={onClear} className="route-toolbar__clear">✕</button>
-        </div>
-    );
-}
-
-// ── Pickups Panel ─────────────────────────────────────────────────────────────
-interface PickupsPanelProps {
-    pickups: AdminGroupOrder[]; loading: boolean; error: string | null;
-    onRefresh: () => void; busyId: string | null; token: string;
-    onAct: (id: string, fn: () => Promise<void>, msg: string) => Promise<void>;
-}
-
-function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct }: PickupsPanelProps) {
-    const { t } = useLanguage();
-    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-    const toggle = (id: string) =>
-        setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
-    const toggleSelect = (id: string) =>
-        setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
-
-    if (loading) return <div className="dashboard__loader">{t.cdPickupsLoading}</div>;
-    if (error)   return <div className="dashboard__error">{error} <button onClick={onRefresh}>{t.cdRetry}</button></div>;
-    if (!pickups.length) return <div className="dashboard__empty">{t.cdPickupsEmpty}</div>;
-
-    return (
-        <div className="dashboard__section">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <h2 className="dashboard__title" style={{ margin: 0 }}>{t.cdPickupsTitle}</h2>
-                {expandedIds.size > 0 && (
-                    <button onClick={() => setExpandedIds(new Set())}
-                        style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
-                        {t.cdCollapseAll}
-                    </button>
-                )}
-            </div>
-            <div className="courier-cards">
-                {pickups.map(go => {
-                    const isExpanded = expandedIds.has(go.id);
-                    const isSelected = selectedIds.has(go.id);
-                    return (
-                        <div key={go.id} className={`courier-card${isSelected ? ' courier-card--selected' : ''}`}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(go.id)}
-                                    style={{ width: 18, height: 18, marginLeft: 12, cursor: 'pointer', accentColor: 'var(--color-accent)', flexShrink: 0 }} />
-                                <button className="courier-card__collapse-row" style={{ flex: 1 }} onClick={() => toggle(go.id)} aria-expanded={isExpanded}>
-                                    <div className="courier-card__collapse-icon">📦</div>
-                                    <div className="courier-card__collapse-info">
-                                        <span className="courier-card__collapse-primary">{go.pickUpCity}, {go.pickUpDistrict},</span>
-                                        <span className="courier-card__collapse-secondary">{go.pickUpAddress}</span>
-                                    </div>
-                                    <div className="courier-card__collapse-right">
-                                        <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
-                                    </div>
-                                </button>
-                            </div>
-                            {isExpanded && (
-                                <>
-                                    <div className="courier-card__body">
-                                        <div className="courier-card__row">
-                                            <span className="courier-card__label">🏪 {t.cdLabelSender}</span>
-                                            <span className="courier-card__value">{go.senderBusinessName || `${go.senderFirstName} ${go.senderLastName}`}</span>
-                                        </div>
-                                        <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelLocation}</span><span className="courier-card__value">{go.pickUpCity}, {go.pickUpDistrict}</span></div>
-                                        <div className="courier-card__row">
-                                            <span className="courier-card__label">{t.cdLabelAddress}</span>
-                                            <a href={mapUrl(go.pickUpCity, go.pickUpDistrict, go.pickUpAddress)} target="_blank" rel="noopener noreferrer" className="courier-card__map-link">
-                                                📍 {go.pickUpAddress}
-                                            </a>
-                                        </div>
-                                        <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelPackages}</span><span className="courier-card__value">{t.cdLabelPackageCount(go.numberOfPackages)}</span></div>
-                                        {go.senderPhone && (
-                                            <div className="courier-card__row">
-                                                <span className="courier-card__label">{t.cdLabelPhone}</span>
-                                                <a href={`tel:${go.senderPhone}`} className="courier-card__phone-link">
-                                                    📞 {go.senderPhone}
-                                                </a>
-                                            </div>
-                                        )}
-                                        {go.whenPackagePickedUpDate && <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelScheduled}</span><span className="courier-card__value">{new Date(go.whenPackagePickedUpDate).toLocaleDateString()}</span></div>}
-                                        {go.note && <div className="courier-card__note">{go.note}</div>}
-                                    </div>
-                                    <div className="courier-card__footer">
-                                        {go.status === 'CourierAssignedToPickUp' && <SwipeButton label={t.cdPickupSwipeOnWay} variant="primary" disabled={busyId === go.id} onSwipe={() => onAct(go.id, () => markPickingUp(token, go.id), t.cdPickupToastOnWay)} />}
-                                        {go.status === 'CourierOnTheWayToPickUp' && <SwipeButton label={t.cdPickupSwipePickedUp} variant="primary" disabled={busyId === go.id} onSwipe={() => onAct(go.id, () => markPickedUp(token, go.id), t.cdPickupToastPickedUp)} />}
-                                        {go.status === 'CourierDeliveringToWarehouse' && <SwipeButton label={t.cdPickupSwipeToWarehouse} variant="success" disabled={busyId === go.id} onSwipe={() => onAct(go.id, () => markDeliveredToWarehouse(token, go.id), t.cdPickupToastToWarehouse)} />}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-// ── Deliveries Panel ──────────────────────────────────────────────────────────
-interface DeliveriesPanelProps {
-    deliveries: CourierOrder[]; loading: boolean; error: string | null;
-    busyId: string | null; token: string;
-    onAct: (id: string, fn: () => Promise<void>, msg: string) => Promise<void>;
-}
-
-function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: DeliveriesPanelProps) {
-    const { t } = useLanguage();
-    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [postponingId, setPostponingId] = useState<string | null>(null);
-    const [collectConfirmOrderId, setCollectConfirmOrderId] = useState<string | null>(null);
-
-    const toggle = (id: string) =>
-        setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
-    const toggleSelect = (id: string) =>
-        setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
-
-    if (loading) return <div className="dashboard__loader">{t.cdDeliveriesLoading}</div>;
-    if (error)   return <div className="dashboard__error">{error}</div>;
-    if (!deliveries.length) return <div className="dashboard__empty">{t.cdDeliveriesEmpty}</div>;
-
-    const needsCollect = (o: CourierOrder) =>
-        o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
-
-    const collectTotal = (o: CourierOrder) =>
-        o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null
-            ? o.amountToCollectForPackage + o.companyServicePrice
-            : o.companyServicePrice;
-
-    return (
-        <div className="dashboard__section">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <h2 className="dashboard__title" style={{ margin: 0 }}>{t.cdDeliveriesTitle}</h2>
-                {expandedIds.size > 0 && (
-                    <button onClick={() => setExpandedIds(new Set())}
-                        style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
-                        {t.cdCollapseAll}
-                    </button>
-                )}
-            </div>
-            <div className="courier-cards">
-                {deliveries.map(order => {
-                    const isBusy = busyId === order.id;
-                    const isExpanded = expandedIds.has(order.id);
-                    const isSelected = selectedIds.has(order.id);
-                    const mustCollect = needsCollect(order);
-                    const total = collectTotal(order);
-                    return (
-                        <div key={order.id} className={`courier-card${isSelected ? ' courier-card--selected' : ''}`} style={{ position: 'relative' }}>
-                            {/* Collapsed row */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(order.id)}
-                                    style={{ width: 18, height: 18, marginLeft: 12, cursor: 'pointer', accentColor: 'var(--color-accent)', flexShrink: 0 }} />
-                                <button className="courier-card__collapse-row" style={{ flex: 1 }} onClick={() => toggle(order.id)} aria-expanded={isExpanded}>
-                                    <div className="courier-card__collapse-icon">
-                                        {order.isFragile ? '🥚' : '🚚'}
-                                    </div>
-                                    <div className="courier-card__collapse-info">
-                                        <span className="courier-card__collapse-primary">
-                                            {order.recipientCity}, {order.recipientDistrict},
-                                        </span>
-                                        <span className="courier-card__collapse-secondary">{order.recipientAddress}</span>
-                                    </div>
-                                    <div className="courier-card__collapse-right">
-                                        {mustCollect && <span className="courier-card__collapse-collect">₾{total.toFixed(2)}</span>}
-                                        {order.isFragile && <span className="courier-card__collapse-badge courier-card__collapse-badge--warn">{t.cdLabelFragile}</span>}
-                                        <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
-                                    </div>
-                                </button>
-                            </div>
-
-                            {isExpanded && (
-                                <>
-                                    <div className="courier-card__body">
-                                        <div className="courier-card__row">
-                                            <span className="courier-card__label">{t.cdLabelSender}</span>
-                                            <span className="courier-card__value">{order.senderBusinessName}</span>
-                                        </div>
-                                        <div className="courier-card__row">
-                                                <span className="courier-card__label">{t.cdLabelPhone}</span>
-                                                <a href={`tel:${order.recipientPhone}`} className="courier-card__phone-link">
-                                                    📞 {order.recipientPhone}
-                                                </a>
-                                            </div>
-                                        <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelLocation}</span><span className="courier-card__value">{order.recipientCity}, {order.recipientDistrict},</span></div>
-                                        <div className="courier-card__row">
-                                            <span className="courier-card__label">{t.cdLabelAddress}</span>
-                                            <a href={mapUrl(order.recipientCity, order.recipientDistrict, order.recipientAddress)} target="_blank" rel="noopener noreferrer" className="courier-card__map-link">
-                                                📍 {order.recipientAddress}
-                                            </a>
-                                        </div>
-                                        <div className="courier-card__row">
-                                            <span className="courier-card__label">{t.cdLabelPayment}</span>
-                                            <span className="courier-card__value">
-                                                {order.productPaymentStatus === 'Paid' ? t.cdDeliveryPayPaid : t.cdDeliveryPayCollect(order.whoPaysForCompanyService === 'Recipient')}
-                                            </span>
-                                        </div>
-                                        {mustCollect && <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelCollect}</span><span className="courier-card__value" style={{ color: '#dc2626', fontWeight: 700 }}>₾{total.toFixed(2)}</span></div>}
-                                        {order.deliveryDateFrom && order.deliveryDateTo && (
-                                            <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelWindow}</span><span className="courier-card__value">{new Date(order.deliveryDateFrom).toLocaleDateString()} – {new Date(order.deliveryDateTo).toLocaleDateString()}</span></div>
-                                        )}
-                                        {order.status === 'DeliveryPostponed' && order.postponeReason && (
-                                            <div className="courier-card__row"><span className="courier-card__label">{t.cdLabelPostponed}</span><span className="courier-card__value" style={{ color: '#f97316' }}>{POSTPONE_REASON_LABELS[order.postponeReason]}</span></div>
-                                        )}
-                                        {order.description && <div className="courier-card__note">{order.description}</div>}
-                                    </div>
-                                    <div className="courier-card__footer">
-                                        {order.status === 'CourierAssignedToDeliver' && (
-                                            <SwipeButton label={t.cdDeliverySwipeOnWay} variant="primary" disabled={isBusy}
-                                                onSwipe={() => onAct(order.id, () => markOrderDelivering(token, order.id), t.cdDeliveryToastOnWay)} />
-                                        )}
-                                        {order.status === 'CourierDeliveringTheOrderToRecipient' && (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                <SwipeButton label={t.cdDeliverySwipeDelivered} variant="success" disabled={isBusy}
-                                                    onSwipe={() => { if (mustCollect) { setCollectConfirmOrderId(order.id); } else { onAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); } }} />
-                                                <button disabled={isBusy} onClick={() => setPostponingId(order.id)}
-                                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #f97316', background: 'transparent', color: '#f97316', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
-                                                    {t.cdDeliveryBtnPostpone}
-                                                </button>
-                                            </div>
-                                        )}
-                                        {order.status === 'DeliveryPostponed' && (
-                                            <SwipeButton label={t.cdDeliverySwipeRetry} variant="primary" disabled={isBusy}
-                                                onSwipe={() => onAct(order.id, () => retryDelivery(token, order.id), t.cdDeliveryToastRetry)} />
-                                        )}
-                                    </div>
-                                    {collectConfirmOrderId === order.id && (
-                                        <CollectConfirmModal order={order} isBusy={isBusy}
-                                            onCancel={() => setCollectConfirmOrderId(null)}
-                                            onConfirm={() => { setCollectConfirmOrderId(null); onAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); }} />
-                                    )}
-                                    {postponingId === order.id && (
-                                        <PostponeModal isBusy={isBusy}
-                                            onCancel={() => setPostponingId(null)}
-                                            onConfirm={(reason) => { setPostponingId(null); onAct(order.id, () => postponeOrder(token, order.id, reason), t.cdDeliveryToastPostponed); }} />
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-            <RouteToolbar
-                stops={deliveries.filter(o => selectedIds.has(o.id)).map(o => ({ city: o.recipientCity, district: o.recipientDistrict, address: o.recipientAddress }))}
-                onClear={() => setSelectedIds(new Set())}
-            />
-        </div>
-    );
-}
-
-// ── CollectConfirmModal
-interface CollectConfirmModalProps { order: CourierOrder; isBusy: boolean; onCancel: () => void; onConfirm: () => void; }
-
-function CollectConfirmModal({ order, isBusy, onCancel, onConfirm }: CollectConfirmModalProps) {
-    const { t } = useLanguage();
-    const hasProductAmount = order.productPaymentStatus === 'NotPaid' && order.amountToCollectForPackage != null && order.amountToCollectForPackage > 0;
-    const hasServiceFee = order.companyServicePrice > 0 && order.whoPaysForCompanyService === 'Recipient';
-    const total = hasProductAmount ? order.amountToCollectForPackage! + order.companyServicePrice : order.companyServicePrice;
-    return (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(0,0,0,0.50)', borderRadius: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-            <div style={{ background: 'var(--color-bg)', borderRadius: '14px', padding: '24px 20px', width: '100%', maxWidth: '340px', boxShadow: '0 8px 32px rgba(0,0,0,0.28)', textAlign: 'center' }}>
-                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', margin: '0 auto 14px' }}>💰</div>
-                <h3 style={{ margin: '0 0 6px', fontSize: '1.05rem', fontWeight: 700 }}>{t.cdCollectTitle}</h3>
-                <p style={{ margin: '0 0 14px', fontSize: '0.875rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>{t.cdCollectSubtitle}</p>
-                <div style={{ margin: '0 0 10px', padding: '12px 14px', borderRadius: '8px', background: 'var(--color-bg-2, #f9fafb)', border: '1px solid var(--color-border)', textAlign: 'left', fontSize: '0.85rem' }}>
-                    {hasProductAmount && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <span style={{ color: 'var(--color-text-muted)' }}>{t.cdCollectParcel}</span>
-                            <span style={{ fontWeight: 600 }}>₾{order.amountToCollectForPackage!.toFixed(2)}</span>
-                        </div>
-                    )}
-                    {hasServiceFee && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: hasProductAmount ? 6 : 0, borderTop: hasProductAmount ? '1px dashed var(--color-border)' : 'none' }}>
-                            <span style={{ color: 'var(--color-text-muted)' }}>{t.cdCollectFee}</span>
-                            <span style={{ fontWeight: 600 }}>₾{order.companyServicePrice.toFixed(2)}</span>
-                        </div>
-                    )}
-                </div>
-                <div style={{ margin: '0 0 20px', padding: '12px 16px', borderRadius: '10px', background: '#fef9c3', border: '1px solid #fde047', width: '100%' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#92400e', marginBottom: 2, fontWeight: 700, letterSpacing: '0.05em' }}>{t.cdCollectTotal}</div>
-                    <span style={{ fontSize: '1.7rem', fontWeight: 800, color: '#92400e', letterSpacing: '-0.5px' }}>₾{total.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={onCancel} disabled={isBusy} style={{ flex: 1, padding: '11px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>{t.cdCollectNo}</button>
-                    <button disabled={isBusy} onClick={onConfirm} style={{ flex: 1, padding: '11px', borderRadius: '8px', border: 'none', background: '#10b981', color: '#fff', cursor: isBusy ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.875rem', opacity: isBusy ? 0.6 : 1 }}>{t.cdCollectYes}</button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ── PostponeModal ─────────────────────────────────────────────────────────────
-interface PostponeModalProps { isBusy: boolean; onCancel: () => void; onConfirm: (reason: PostponeReason) => void; }
-
-function PostponeModal({ isBusy, onCancel, onConfirm }: PostponeModalProps) {
-    const { t } = useLanguage();
-    const [selected, setSelected] = useState<PostponeReason | null>(null);
-    return (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(0,0,0,0.45)', borderRadius: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-            <div style={{ background: 'var(--color-bg)', borderRadius: '12px', padding: '20px', width: '100%', maxWidth: '340px', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
-                <h3 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 700 }}>{t.cdPostponeTitle}</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                    {(Object.keys(POSTPONE_REASON_LABELS) as PostponeReason[]).map(reason => (
-                        <button key={reason} onClick={() => setSelected(reason)} style={{ padding: '10px 12px', borderRadius: '8px', border: selected === reason ? '2px solid var(--color-accent)' : '1px solid var(--color-border)', background: selected === reason ? 'var(--color-accent-dim)' : 'transparent', textAlign: 'left', cursor: 'pointer', fontSize: '0.875rem', fontWeight: selected === reason ? 600 : 400 }}>
-                            {POSTPONE_REASON_LABELS[reason]}
-                        </button>
-                    ))}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={onCancel} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', fontSize: '0.875rem' }}>{t.cancel}</button>
-                    <button disabled={!selected || isBusy} onClick={() => selected && onConfirm(selected)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: selected ? '#f97316' : 'var(--color-bg-3)', color: selected ? '#fff' : 'var(--color-text-muted)', cursor: selected ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: '0.875rem' }}>{t.goConfirm}</button>
-                </div>
-            </div>
         </div>
     );
 }
