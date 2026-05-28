@@ -43,9 +43,9 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         IRecipientNotificationSmsService recipientSms,
         ILogger<AssignCourierToOrderCommandHandler> logger)
     {
-        _context      = context;
+        _context = context;
         _recipientSms = recipientSms;
-        _logger       = logger;
+        _logger = logger;
     }
 
     public async Task Handle(AssignCourierToOrderCommand request, CancellationToken cancellationToken)
@@ -71,7 +71,7 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             ?? throw new NotFoundException("Courier", request.CourierId);
 
         order.CourierId = courier.Id;
-        order.Status    = OrderStatus.CourierAssignedToDeliver;
+        order.Status = OrderStatus.CourierAssignedToDeliver;
         await _context.SaveChangesAsync(cancellationToken);
 
         // ── Notify recipient via SMS ──────────────────────────────────────────
@@ -135,7 +135,7 @@ public sealed class MarkOrderDeliveringCommandHandler : IRequestHandler<MarkOrde
 
         var pickedUpAt = DateTime.UtcNow;
 
-        order.Status                 = OrderStatus.CourierDeliveringTheOrderToRecipient;
+        order.Status = OrderStatus.CourierDeliveringTheOrderToRecipient;
         order.PickedUpFromWarehouseAt = pickedUpAt;
 
         // Auto-fill delivery window for non-Tbilisi orders
@@ -143,7 +143,7 @@ public sealed class MarkOrderDeliveringCommandHandler : IRequestHandler<MarkOrde
         if (!order.RecipientCity.Equals(tbilisi, StringComparison.OrdinalIgnoreCase))
         {
             order.DeliveryDateFrom = pickedUpAt.Date.AddDays(1);
-            order.DeliveryDateTo   = pickedUpAt.Date.AddDays(4);
+            order.DeliveryDateTo = pickedUpAt.Date.AddDays(4);
         }
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -164,26 +164,30 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         if (order.Status != OrderStatus.CourierDeliveringTheOrderToRecipient)
             throw new ConflictException($"Expected CourierDeliveringTheOrderToRecipient. Current: {order.Status}.");
 
-        order.Status        = OrderStatus.DeliveredToRecipient;
+        // Capture payment status before marking paid, so the cash-collection logic below
+        // still knows whether the product was unpaid at the time of delivery.
+        var wasNotPaid = order.ProductPaymentStatus == PaymentStatus.NotPaid;
+
+        order.Status = OrderStatus.DeliveredToRecipient;
+        order.ProductPaymentStatus = PaymentStatus.Paid;
 
         // Auto-populate AmountOfCashCollected when the recipient is paying cash on delivery.
         // Case 1 — product unpaid, recipient pays fee: collect product amount + courier fee.
         // Case 2 — product pre-paid, recipient pays fee only: collect courier fee.
         if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
         {
-            if (order.ProductPaymentStatus == PaymentStatus.NotPaid &&
-                order.AmountToCollectForPackage.HasValue)
+            if (wasNotPaid && order.AmountToCollectForPackage.HasValue)
             {
                 order.AmountOfCashCollected = order.AmountToCollectForPackage.Value
                                             + order.CompanyServicePrice;
             }
-            else if (order.ProductPaymentStatus == PaymentStatus.Paid)
+            else if (!wasNotPaid)
             {
                 order.AmountOfCashCollected = order.CompanyServicePrice;
             }
         }
 
-        order.DeliveredAt    = DateTime.UtcNow;
+        order.DeliveredAt = DateTime.UtcNow;
         order.PostponeReason = null;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -206,9 +210,9 @@ public sealed class PostponeOrderCommandHandler : IRequestHandler<PostponeOrderC
         if (order.Status != OrderStatus.CourierDeliveringTheOrderToRecipient)
             throw new ConflictException($"Expected CourierDeliveringTheOrderToRecipient. Current: {order.Status}.");
 
-        order.Status        = OrderStatus.DeliveryPostponed;
+        order.Status = OrderStatus.DeliveryPostponed;
         order.PostponeReason = request.Reason;
-        order.PostponedAt   = DateTime.UtcNow;
+        order.PostponedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
@@ -227,9 +231,9 @@ public sealed class RetryDeliveryCommandHandler : IRequestHandler<RetryDeliveryC
         if (order.Status != OrderStatus.DeliveryPostponed)
             throw new ConflictException($"Expected DeliveryPostponed. Current: {order.Status}.");
 
-        order.Status        = OrderStatus.CourierDeliveringTheOrderToRecipient;
+        order.Status = OrderStatus.CourierDeliveringTheOrderToRecipient;
         order.PostponeReason = null;
-        order.PostponedAt   = null;
+        order.PostponedAt = null;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
@@ -311,7 +315,7 @@ public sealed class SetCourierSalaryCommandHandler : IRequestHandler<SetCourierS
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
 
-        order.CourierSalary  = request.Salary;
+        order.CourierSalary = request.Salary;
         order.CompanyRevenue = order.CompanyServicePrice - request.Salary;
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -386,7 +390,7 @@ public sealed class SetDistrictTerritoryCommandHandler : IRequestHandler<SetDist
             ?? throw new NotFoundException("District", request.DistrictId);
 
         district.IsCapitalTerritory = request.IsCapitalTerritory;
-        district.IsCityTerritory    = request.IsCityTerritory;
+        district.IsCityTerritory = request.IsCityTerritory;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
