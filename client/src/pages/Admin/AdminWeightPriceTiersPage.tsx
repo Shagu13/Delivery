@@ -30,7 +30,7 @@ function Modal({ title, onClose, children }: {
     >
       <div style={{
         background: '#fff', borderRadius: 12, padding: '1.5rem',
-        width: 460, maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+        width: 480, maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>{title}</h3>
@@ -65,15 +65,17 @@ const INPUT: React.CSSProperties = {
 
 // ── Tier form (shared by Create / Edit) ───────────────────────────────────────
 interface TierFormState {
-  label:       string;
-  minWeightKg: string;
-  maxWeightKg: string;
-  isStandard:  boolean;
-  customPrice: string;
+  label:         string;
+  minWeightKg:   string;
+  maxWeightKg:   string;
+  capitalPrice:  string;
+  cityPrice:     string;
+  districtPrice: string;
 }
 
 const EMPTY_FORM: TierFormState = {
-  label: '', minWeightKg: '', maxWeightKg: '', isStandard: true, customPrice: '',
+  label: '', minWeightKg: '', maxWeightKg: '',
+  capitalPrice: '', cityPrice: '', districtPrice: '',
 };
 
 function TierForm({
@@ -96,14 +98,8 @@ function TierForm({
   const firstRef = useRef<HTMLInputElement>(null);
   useEffect(() => { firstRef.current?.focus(); }, []);
 
-  const set = (field: keyof TierFormState, value: string | boolean) =>
+  const set = (field: keyof TierFormState, value: string) =>
     setForm(prev => ({ ...prev, [field]: value }));
-
-  const CHECKBOX_ROW: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '0.45rem 0.65rem', borderRadius: 7,
-    border: '1px solid #d1d5db', cursor: 'pointer', userSelect: 'none', fontSize: '0.88rem',
-  };
 
   return (
     <div>
@@ -139,47 +135,44 @@ function TierForm({
         />
       </Field>
 
-      {/* Pricing mode */}
-      <Field label={t.awptPricingMode} required>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={CHECKBOX_ROW}>
+      {/* Zone prices */}
+      <div style={{
+        background: '#f9fafb', border: '1px solid #e5e7eb',
+        borderRadius: 8, padding: '0.85rem 1rem', marginBottom: '0.9rem',
+      }}>
+        <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>
+          {t.awptZonePricesLabel}
+        </p>
+        <p style={{ margin: '0 0 0.85rem', fontSize: '0.75rem', color: '#6b7280' }}>
+          {t.awptZonePricesHint}
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <Field label={t.awptCapitalPrice}>
             <input
-              type="radio" name="isStandard" checked={form.isStandard}
-              onChange={() => set('isStandard', true)}
+              style={INPUT} type="number" min="0.01" step="0.01"
+              value={form.capitalPrice}
+              onChange={e => set('capitalPrice', e.target.value)}
+              placeholder="₾"
             />
-            <span>
-              {t.awptStandardMode}
-              <span style={{ color: '#6b7280', fontSize: '0.78rem', display: 'block' }}>
-                {t.awptStandardModeHint}
-              </span>
-            </span>
-          </label>
-          <label style={CHECKBOX_ROW}>
+          </Field>
+          <Field label={t.awptCityPrice}>
             <input
-              type="radio" name="isStandard" checked={!form.isStandard}
-              onChange={() => set('isStandard', false)}
+              style={INPUT} type="number" min="0.01" step="0.01"
+              value={form.cityPrice}
+              onChange={e => set('cityPrice', e.target.value)}
+              placeholder="₾"
             />
-            <span>
-              {t.awptCustomMode}
-              <span style={{ color: '#6b7280', fontSize: '0.78rem', display: 'block' }}>
-                {t.awptCustomModeHint}
-              </span>
-            </span>
-          </label>
+          </Field>
+          <Field label={t.awptDistrictPrice}>
+            <input
+              style={INPUT} type="number" min="0.01" step="0.01"
+              value={form.districtPrice}
+              onChange={e => set('districtPrice', e.target.value)}
+              placeholder="₾"
+            />
+          </Field>
         </div>
-      </Field>
-
-      {/* Custom price — only when not standard */}
-      {!form.isStandard && (
-        <Field label={t.awptCustomPrice} required hint={t.awptCustomPriceHint}>
-          <input
-            style={INPUT} type="number" min="0.01" step="0.01"
-            value={form.customPrice}
-            onChange={e => set('customPrice', e.target.value)}
-            placeholder={t.awptCustomPricePh}
-          />
-        </Field>
-      )}
+      </div>
 
       {error && (
         <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>
@@ -205,6 +198,12 @@ function TierForm({
   );
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function parsePriceField(val: string): number | null {
+  const n = parseFloat(val);
+  return isNaN(n) || n <= 0 ? null : n;
+}
+
 // ── Create Modal ──────────────────────────────────────────────────────────────
 function CreateTierModal({ token, onClose, onCreated }: {
   token: string;
@@ -220,18 +219,16 @@ function CreateTierModal({ token, onClose, onCreated }: {
     const max = parseFloat(form.maxWeightKg);
     if (isNaN(min) || isNaN(max)) { setError(t.awptErrWeightNumbers); return; }
     if (max <= min) { setError(t.awptErrMaxWeight); return; }
-    if (!form.isStandard && (!form.customPrice || parseFloat(form.customPrice) <= 0)) {
-      setError(t.awptErrCustomPrice); return;
-    }
     setSubmitting(true);
     setError('');
     try {
       const tier = await createWeightPriceTier({
-        label:       form.label.trim() || null,
-        minWeightKg: min,
-        maxWeightKg: max,
-        isStandard:  form.isStandard,
-        customPrice: form.isStandard ? null : parseFloat(form.customPrice),
+        label:         form.label.trim() || null,
+        minWeightKg:   min,
+        maxWeightKg:   max,
+        capitalPrice:  parsePriceField(form.capitalPrice),
+        cityPrice:     parsePriceField(form.cityPrice),
+        districtPrice: parsePriceField(form.districtPrice),
       }, token);
       onCreated(tier);
     } catch (err) {
@@ -266,11 +263,12 @@ function EditTierModal({ token, tier, onClose, onSaved }: {
   const [error, setError]           = useState('');
 
   const initial: TierFormState = {
-    label:       tier.label ?? '',
-    minWeightKg: String(tier.minWeightKg),
-    maxWeightKg: String(tier.maxWeightKg),
-    isStandard:  tier.isStandard,
-    customPrice: tier.customPrice != null ? String(tier.customPrice) : '',
+    label:         tier.label ?? '',
+    minWeightKg:   String(tier.minWeightKg),
+    maxWeightKg:   String(tier.maxWeightKg),
+    capitalPrice:  tier.capitalPrice  != null ? String(tier.capitalPrice)  : '',
+    cityPrice:     tier.cityPrice     != null ? String(tier.cityPrice)     : '',
+    districtPrice: tier.districtPrice != null ? String(tier.districtPrice) : '',
   };
 
   async function handleSubmit(form: TierFormState) {
@@ -278,19 +276,17 @@ function EditTierModal({ token, tier, onClose, onSaved }: {
     const max = parseFloat(form.maxWeightKg);
     if (isNaN(min) || isNaN(max)) { setError(t.awptErrWeightNumbers); return; }
     if (max <= min) { setError(t.awptErrMaxWeight); return; }
-    if (!form.isStandard && (!form.customPrice || parseFloat(form.customPrice) <= 0)) {
-      setError(t.awptErrCustomPrice); return;
-    }
     setSubmitting(true);
     setError('');
     try {
       const updated = await updateWeightPriceTier({
-        id:          tier.id,
-        label:       form.label.trim() || null,
-        minWeightKg: min,
-        maxWeightKg: max,
-        isStandard:  form.isStandard,
-        customPrice: form.isStandard ? null : parseFloat(form.customPrice),
+        id:            tier.id,
+        label:         form.label.trim() || null,
+        minWeightKg:   min,
+        maxWeightKg:   max,
+        capitalPrice:  parsePriceField(form.capitalPrice),
+        cityPrice:     parsePriceField(form.cityPrice),
+        districtPrice: parsePriceField(form.districtPrice),
       }, token);
       onSaved(updated);
     } catch (err) {
@@ -357,6 +353,12 @@ function ConfirmDeleteModal({ tier, token, onClose, onDeleted }: {
   );
 }
 
+// ── Price cell ────────────────────────────────────────────────────────────────
+function PriceCell({ value }: { value: number | null }) {
+  if (value == null) return <span style={{ color: '#9ca3af', fontSize: '0.78rem' }}>—</span>;
+  return <span style={{ color: 'var(--color-accent, #c47f17)', fontWeight: 600 }}>₾{value.toFixed(2)}</span>;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AdminWeightPriceTiersPage({ token }: Props) {
   const { t } = useLanguage();
@@ -364,9 +366,9 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
 
-  const [showCreate, setShowCreate]       = useState(false);
-  const [editing,    setEditing]          = useState<WeightPriceTier | null>(null);
-  const [deleting,   setDeleting]         = useState<WeightPriceTier | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing,    setEditing]    = useState<WeightPriceTier | null>(null);
+  const [deleting,   setDeleting]   = useState<WeightPriceTier | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -376,16 +378,6 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [t]);
-
-  const BADGE = (isStandard: boolean): React.CSSProperties => ({
-    display: 'inline-block',
-    padding: '2px 8px',
-    borderRadius: 99,
-    fontSize: '0.74rem',
-    fontWeight: 600,
-    background: isStandard ? '#dbeafe' : '#fef3c7',
-    color: isStandard ? '#1d4ed8' : '#92400e',
-  });
 
   return (
     <div style={{ padding: '0 0 2rem' }}>
@@ -430,9 +422,7 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
         }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>⚖️</div>
           <p style={{ margin: 0, fontWeight: 600 }}>{t.awptEmptyTitle}</p>
-          <p style={{ margin: '0.25rem 0 1rem', fontSize: '0.85rem' }}>
-            {t.awptEmptyHint}
-          </p>
+          <p style={{ margin: '0.25rem 0 1rem', fontSize: '0.85rem' }}>{t.awptEmptyHint}</p>
           <button
             onClick={() => setShowCreate(true)}
             style={{ padding: '0.45rem 1.2rem', borderRadius: 8, background: 'var(--color-accent, #c47f17)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
@@ -450,7 +440,7 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
           }}>
             <thead>
               <tr style={{ background: 'var(--color-bg-2, #f9fafb)', borderBottom: '1px solid var(--color-border)' }}>
-                {[t.awptThLabel, t.awptThRange, t.awptThPricing, t.awptThPrice, t.awptThActions].map(h => (
+                {[t.awptThLabel, t.awptThRange, t.awptThCapital, t.awptThCity, t.awptThDistrict, t.awptThActions].map(h => (
                   <th key={h} style={{ padding: '0.65rem 1rem', textAlign: 'left', fontWeight: 700, fontSize: '0.78rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
@@ -466,16 +456,9 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
                   <td style={{ padding: '0.75rem 1rem', fontFamily: 'Courier New, monospace', fontWeight: 600 }}>
                     {tier.minWeightKg} – {tier.maxWeightKg} kg
                   </td>
-                  <td style={{ padding: '0.75rem 1rem' }}>
-                    <span style={BADGE(tier.isStandard)}>
-                      {tier.isStandard ? t.awptStandard : t.awptCustomFlat}
-                    </span>
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
-                    {tier.customPrice != null
-                      ? <span style={{ color: 'var(--color-accent, #c47f17)' }}>₾{tier.customPrice.toFixed(2)}</span>
-                      : <span style={{ color: 'var(--color-text-subtle)', fontSize: '0.78rem' }}>—</span>}
-                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}><PriceCell value={tier.capitalPrice} /></td>
+                  <td style={{ padding: '0.75rem 1rem' }}><PriceCell value={tier.cityPrice} /></td>
+                  <td style={{ padding: '0.75rem 1rem' }}><PriceCell value={tier.districtPrice} /></td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button
@@ -499,7 +482,6 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
         </div>
       )}
 
-      {/* Modals */}
       {showCreate && (
         <CreateTierModal
           token={token}

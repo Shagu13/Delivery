@@ -11,12 +11,13 @@ namespace Application.WeightPriceTiers.Commands;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 public sealed record UpdateWeightPriceTierCommand(
-    Guid Id,
-    string? Label,
-    decimal MinWeightKg,
-    decimal MaxWeightKg,
-    bool IsStandard,
-    decimal? CustomPrice
+    Guid     Id,
+    string?  Label,
+    decimal  MinWeightKg,
+    decimal  MaxWeightKg,
+    decimal? CapitalPrice,
+    decimal? CityPrice,
+    decimal? DistrictPrice
 ) : IRequest<WeightPriceTierDto>;
 
 // ── Validator ─────────────────────────────────────────────────────────────────
@@ -37,14 +38,17 @@ public sealed class UpdateWeightPriceTierCommandValidator
             .MaximumLength(100).WithMessage("Label must not exceed 100 characters.")
             .When(x => x.Label is not null);
 
-        RuleFor(x => x.CustomPrice)
-            .NotNull().WithMessage("Custom price is required when IsStandard is false.")
-            .GreaterThan(0).WithMessage("Custom price must be greater than 0.")
-            .When(x => !x.IsStandard);
+        RuleFor(x => x.CapitalPrice)
+            .GreaterThan(0).WithMessage("Capital price must be greater than 0.")
+            .When(x => x.CapitalPrice.HasValue);
 
-        RuleFor(x => x.CustomPrice)
-            .Null().WithMessage("Custom price must be empty when IsStandard is true.")
-            .When(x => x.IsStandard);
+        RuleFor(x => x.CityPrice)
+            .GreaterThan(0).WithMessage("City price must be greater than 0.")
+            .When(x => x.CityPrice.HasValue);
+
+        RuleFor(x => x.DistrictPrice)
+            .GreaterThan(0).WithMessage("District price must be greater than 0.")
+            .When(x => x.DistrictPrice.HasValue);
     }
 }
 
@@ -66,11 +70,12 @@ public sealed class UpdateWeightPriceTierCommandHandler
             .FirstOrDefaultAsync(t => t.Id == request.Id && t.DateDeleted == null, cancellationToken)
             ?? throw new NotFoundException(nameof(WeightPriceTier), request.Id);
 
-        tier.Label = request.Label?.Trim();
-        tier.MinWeightKg = request.MinWeightKg;
-        tier.MaxWeightKg = request.MaxWeightKg;
-        tier.IsStandard = request.IsStandard;
-        tier.CustomPrice = request.IsStandard ? null : request.CustomPrice;
+        tier.Label         = request.Label?.Trim();
+        tier.MinWeightKg   = request.MinWeightKg;
+        tier.MaxWeightKg   = request.MaxWeightKg;
+        tier.CapitalPrice  = request.CapitalPrice;
+        tier.CityPrice     = request.CityPrice;
+        tier.DistrictPrice = request.DistrictPrice;
 
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -79,8 +84,9 @@ public sealed class UpdateWeightPriceTierCommandHandler
             tier.Label,
             tier.MinWeightKg,
             tier.MaxWeightKg,
-            tier.IsStandard,
-            tier.CustomPrice,
+            tier.CapitalPrice,
+            tier.CityPrice,
+            tier.DistrictPrice,
             tier.CreatedAt);
     }
 }

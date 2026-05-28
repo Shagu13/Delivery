@@ -27,8 +27,9 @@ public sealed class GetAllWeightPriceTiersQueryHandler
                 t.Label,
                 t.MinWeightKg,
                 t.MaxWeightKg,
-                t.IsStandard,
-                t.CustomPrice,
+                t.CapitalPrice,
+                t.CityPrice,
+                t.DistrictPrice,
                 t.CreatedAt))
             .ToListAsync(cancellationToken);
     }

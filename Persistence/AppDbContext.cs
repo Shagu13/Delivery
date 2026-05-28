@@ -203,7 +203,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(t => t.Label).HasMaxLength(100);
             e.Property(t => t.MinWeightKg).HasColumnType("decimal(18,3)");
             e.Property(t => t.MaxWeightKg).HasColumnType("decimal(18,3)");
-            e.Property(t => t.CustomPrice).HasColumnType("decimal(18,2)");
+            e.Property(t => t.CapitalPrice).HasColumnType("decimal(18,2)");
+            e.Property(t => t.CityPrice).HasColumnType("decimal(18,2)");
+            e.Property(t => t.DistrictPrice).HasColumnType("decimal(18,2)");
         });
 
         // ── PasswordResetToken ────────────────────────────────────────────────

@@ -3,8 +3,9 @@ export interface WeightPriceTier {
     label: string | null;
     minWeightKg: number;
     maxWeightKg: number;
-    isStandard: boolean;
-    customPrice: number | null;
+    capitalPrice: number | null;
+    cityPrice: number | null;
+    districtPrice: number | null;
     createdAt: string;
 }
 
@@ -12,8 +13,9 @@ export interface CreateWeightPriceTierRequest {
     label?: string | null;
     minWeightKg: number;
     maxWeightKg: number;
-    isStandard: boolean;
-    customPrice?: number | null;
+    capitalPrice?: number | null;
+    cityPrice?: number | null;
+    districtPrice?: number | null;
 }
 
 export interface UpdateWeightPriceTierRequest {
@@ -21,8 +23,9 @@ export interface UpdateWeightPriceTierRequest {
     label?: string | null;
     minWeightKg: number;
     maxWeightKg: number;
-    isStandard: boolean;
-    customPrice?: number | null;
+    capitalPrice?: number | null;
+    cityPrice?: number | null;
+    districtPrice?: number | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -696,17 +696,20 @@ namespace Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("CapitalPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("CityPrice")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<decimal?>("CustomPrice")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("DateDeleted")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool>("IsStandard")
-                        .HasColumnType("bit");
+                    b.Property<decimal?>("DistrictPrice")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Label")
                         .HasMaxLength(100)

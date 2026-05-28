@@ -20,11 +20,12 @@ public sealed class CreateWeightPriceTierCommandHandler
     {
         var tier = new WeightPriceTier
         {
-            Label        = request.Label?.Trim(),
-            MinWeightKg  = request.MinWeightKg,
-            MaxWeightKg  = request.MaxWeightKg,
-            IsStandard   = request.IsStandard,
-            CustomPrice  = request.IsStandard ? null : request.CustomPrice,
+            Label         = request.Label?.Trim(),
+            MinWeightKg   = request.MinWeightKg,
+            MaxWeightKg   = request.MaxWeightKg,
+            CapitalPrice  = request.CapitalPrice,
+            CityPrice     = request.CityPrice,
+            DistrictPrice = request.DistrictPrice,
         };
 
         _context.WeightPriceTiers.Add(tier);
@@ -35,8 +36,9 @@ public sealed class CreateWeightPriceTierCommandHandler
             tier.Label,
             tier.MinWeightKg,
             tier.MaxWeightKg,
-            tier.IsStandard,
-            tier.CustomPrice,
+            tier.CapitalPrice,
+            tier.CityPrice,
+            tier.DistrictPrice,
             tier.CreatedAt);
     }
 }

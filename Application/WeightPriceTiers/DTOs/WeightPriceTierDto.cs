@@ -5,7 +5,8 @@ public sealed record WeightPriceTierDto(
     string?   Label,
     decimal   MinWeightKg,
     decimal   MaxWeightKg,
-    bool      IsStandard,
-    decimal?  CustomPrice,
+    decimal?  CapitalPrice,
+    decimal?  CityPrice,
+    decimal?  DistrictPrice,
     DateTime  CreatedAt
 );

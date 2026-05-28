@@ -68,6 +68,7 @@ export function PackageCard({
 }: PackageCardProps) {
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(true);
+  const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
 
   const fieldError = (field: string) => errors[`orders[${index}].${field}`];
   const status = cardStatus(data, errors, index);
@@ -77,8 +78,11 @@ export function PackageCard({
   const computeServiceFee = (district: District, tierId?: string): number => {
     if (tierId) {
       const tier = weightTiers.find(t => t.id === tierId);
-      if (tier && !tier.isStandard && (tier.customPrice ?? 0) > 0) {
-        return tier.customPrice!;
+      if (tier) {
+        const zonePrice = district.isCapitalTerritory ? tier.capitalPrice
+                        : district.isCityTerritory    ? tier.cityPrice
+                                                      : tier.districtPrice;
+        if ((zonePrice ?? 0) > 0) return zonePrice!;
       }
     }
     if (customerPricing) {
@@ -99,6 +103,7 @@ export function PackageCard({
   const handleCityChange = (cityName: string) => {
     onChange(index, 'recipientCity', cityName);
     onChange(index, 'recipientDistrict', '');
+    setSelectedDistrict(null);
   };
 
   const handleDistrictChange = (districtName: string) => {
@@ -106,6 +111,7 @@ export function PackageCard({
   };
 
   const handleDistrictSelect = (district: District | null) => {
+    setSelectedDistrict(district);
     if (district) {
       const fee = computeServiceFee(district, data.weightPriceTierId);
       onChange(index, 'companyServicePrice', fee);
@@ -116,11 +122,9 @@ export function PackageCard({
 
   const handleWeightTierChange = (tierId: string) => {
     onChange(index, 'weightPriceTierId', tierId);
-    if (data.recipientDistrict) {
-      const selectedTier = tierId ? weightTiers.find(t => t.id === tierId) : undefined;
-      if (selectedTier && !selectedTier.isStandard && (selectedTier.customPrice ?? 0) > 0) {
-        onChange(index, 'companyServicePrice', selectedTier.customPrice!);
-      }
+    if (selectedDistrict) {
+      const fee = computeServiceFee(selectedDistrict, tierId || undefined);
+      onChange(index, 'companyServicePrice', fee);
     }
   };
 
@@ -282,9 +286,6 @@ export function PackageCard({
                   {weightTiers.map(tier => (
                     <option key={tier.id} value={tier.id}>
                       {tierLabel(tier)}
-                      {!tier.isStandard && tier.customPrice != null
-                        ? ` — ₾${tier.customPrice.toFixed(2)}`
-                        : ''}
                     </option>
                   ))}
                 </select>

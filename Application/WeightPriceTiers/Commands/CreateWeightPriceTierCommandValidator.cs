@@ -18,15 +18,16 @@ public sealed class CreateWeightPriceTierCommandValidator
             .MaximumLength(100).WithMessage("Label must not exceed 100 characters.")
             .When(x => x.Label is not null);
 
-        // When not standard, a positive custom price is required
-        RuleFor(x => x.CustomPrice)
-            .NotNull().WithMessage("Custom price is required when IsStandard is false.")
-            .GreaterThan(0).WithMessage("Custom price must be greater than 0.")
-            .When(x => !x.IsStandard);
+        RuleFor(x => x.CapitalPrice)
+            .GreaterThan(0).WithMessage("Capital price must be greater than 0.")
+            .When(x => x.CapitalPrice.HasValue);
 
-        // When standard, custom price must be null
-        RuleFor(x => x.CustomPrice)
-            .Null().WithMessage("Custom price must be empty when IsStandard is true.")
-            .When(x => x.IsStandard);
+        RuleFor(x => x.CityPrice)
+            .GreaterThan(0).WithMessage("City price must be greater than 0.")
+            .When(x => x.CityPrice.HasValue);
+
+        RuleFor(x => x.DistrictPrice)
+            .GreaterThan(0).WithMessage("District price must be greater than 0.")
+            .When(x => x.DistrictPrice.HasValue);
     }
 }

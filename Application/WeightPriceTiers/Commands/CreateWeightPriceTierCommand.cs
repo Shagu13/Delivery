@@ -7,6 +7,7 @@ public sealed record CreateWeightPriceTierCommand(
     string?  Label,
     decimal  MinWeightKg,
     decimal  MaxWeightKg,
-    bool     IsStandard,
-    decimal? CustomPrice
+    decimal? CapitalPrice,
+    decimal? CityPrice,
+    decimal? DistrictPrice
 ) : IRequest<WeightPriceTierDto>;

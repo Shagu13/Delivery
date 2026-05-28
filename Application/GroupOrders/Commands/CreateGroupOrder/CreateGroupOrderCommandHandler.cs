@@ -84,6 +84,12 @@ public sealed class CreateGroupOrderCommandHandler
         {
             var o = dto.Orders[i];
 
+            var district = districts.FirstOrDefault(d =>
+                d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
+
+            bool isCapital = district?.IsCapitalTerritory == true;
+            bool isCity    = district?.IsCityTerritory    == true;
+
             decimal companyServicePrice;
 
             // ── Step 1: explicit override from sender/admin ───────────────────
@@ -91,40 +97,30 @@ public sealed class CreateGroupOrderCommandHandler
             {
                 companyServicePrice = o.CompanyServicePrice.Value;
             }
-            // ── Step 2: weight tier with IsStandard = false ───────────────────
+            // ── Step 2: weight tier zone price ────────────────────────────────
+            // Pick the price column that matches the recipient's zone.
+            // If that column is null the tier has no opinion for this zone → fall through.
             else if (o.WeightPriceTierId.HasValue
-                && weightTiers.FirstOrDefault(t => t.Id == o.WeightPriceTierId.Value) is { IsStandard: false } customTier
-                && customTier.CustomPrice is > 0)
+                && weightTiers.FirstOrDefault(t => t.Id == o.WeightPriceTierId.Value) is { } tier)
             {
-                companyServicePrice = customTier.CustomPrice!.Value;
+                decimal? zonePrice = isCapital ? tier.CapitalPrice
+                                   : isCity    ? tier.CityPrice
+                                               : tier.DistrictPrice;
+
+                if (zonePrice is > 0)
+                {
+                    companyServicePrice = zonePrice.Value;
+                }
+                else
+                {
+                    // Tier has no price for this zone → Step 3
+                    companyServicePrice = ResolveStandardPrice(customer, district, isCapital, isCity);
+                }
             }
             // ── Step 3: standard pricing (customer negotiated → district fallback)
             else
             {
-                var district = districts.FirstOrDefault(d =>
-                    d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
-
-                if (customer is not null)
-                {
-                    bool isCapital = district?.IsCapitalTerritory == true;
-                    bool isCity    = district?.IsCityTerritory    == true;
-
-                    if (isCapital && customer.CompanyServiceCapitalPrice is > 0)
-                        companyServicePrice = customer.CompanyServiceCapitalPrice!.Value;
-                    else if (isCity && customer.CompanyServiceCityPrice is > 0)
-                        companyServicePrice = customer.CompanyServiceCityPrice!.Value;
-                    else if (customer.CompanyServiceDistrictPrice is > 0)
-                        companyServicePrice = customer.CompanyServiceDistrictPrice!.Value;
-                    else
-                        companyServicePrice = district?.CompanyServicePrice ?? 0;
-                }
-                else
-                {
-                    companyServicePrice = districts
-                        .FirstOrDefault(d => d.DistrictName.Equals(
-                            o.RecipientDistrict, StringComparison.OrdinalIgnoreCase))
-                        ?.CompanyServicePrice ?? 0;
-                }
+                companyServicePrice = ResolveStandardPrice(customer, district, isCapital, isCity);
             }
 
             decimal? amountToCollect = null;
@@ -177,5 +173,26 @@ public sealed class CreateGroupOrderCommandHandler
                     o.RecipientFirstName, o.RecipientLastName))
                 .ToList()
         );
+    }
+
+    private static decimal ResolveStandardPrice(
+        Customer? customer,
+        District? district,
+        bool isCapital,
+        bool isCity)
+    {
+        if (customer is not null)
+        {
+            if (isCapital && customer.CompanyServiceCapitalPrice is > 0)
+                return customer.CompanyServiceCapitalPrice!.Value;
+
+            if (isCity && customer.CompanyServiceCityPrice is > 0)
+                return customer.CompanyServiceCityPrice!.Value;
+
+            if (customer.CompanyServiceDistrictPrice is > 0)
+                return customer.CompanyServiceDistrictPrice!.Value;
+        }
+
+        return district?.CompanyServicePrice ?? 0;
     }
 }
