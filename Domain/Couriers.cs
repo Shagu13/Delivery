@@ -13,10 +13,8 @@ namespace Domain
         public required string PhoneNumber { get; set; }
         public required string AssignedCity { get; set; }      
         public required string AssignedDistrict { get; set; }  
-        public bool IsAvailable { get; set; } = true;
-
-        /// <summary>Admin-controlled. False = courier is soft-deleted/disabled and cannot log in.</summary>
-        public bool IsActive { get; set; } = true;
+        /// <summary>Null = active courier. Non-null = soft-deleted; the value is the deletion timestamp.</summary>
+        public DateTime? DateDeleted { get; set; }
 
         // Identity link
         public required string ApplicationUserId { get; set; }

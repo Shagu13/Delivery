@@ -70,8 +70,8 @@ public sealed class CouriersController : BaseController
                 assignedCity = c.AssignedCity,
                 assignedDistrict = c.AssignedDistrict,
                 phoneNumber = c.PhoneNumber,
-                isAvailable = c.IsAvailable,
-                isActive = c.IsActive,
+                isDeleted = c.DateDeleted != null,
+                dateDeleted = c.DateDeleted,
             })
             .ToListAsync(ct);
 

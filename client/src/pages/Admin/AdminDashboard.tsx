@@ -68,7 +68,7 @@ export function AdminDashboard() {
   };
 
   const handleCourierActiveChanged = (courierId: string, isActive: boolean) => {
-    setCouriers(prev => prev.map(c => c.courierId === courierId ? { ...c, isActive } : c));
+    setCouriers(prev => prev.map(c => c.courierId === courierId ? { ...c, isDeleted: !isActive, dateDeleted: isActive ? null : new Date().toISOString() } : c));
   };
 
   const initials = user
@@ -458,7 +458,7 @@ function AdminOverview({ token }: { token: string }) {
             o.status === 'CourierAssignedToDeliver' ||
             o.status === 'CourierDeliveringTheOrderToRecipient'
         ).length, 0);
-    const activeCouriers = couriers.filter(c => c.isAvailable).length;
+    const activeCouriers = couriers.filter(c => !c.isDeleted).length;
 
     const recent = [...groupOrders]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -1397,8 +1397,9 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
     e.stopPropagation();
     setTogglingActive(true);
     try {
-      await setCourierActiveStatus(courier.courierId, !courier.isActive, token);
-      onActiveChanged(courier.courierId, !courier.isActive);
+      const isActive = courier.isDeleted; // toggling: if deleted -> activate, if active -> deactivate
+      await setCourierActiveStatus(courier.courierId, isActive, token);
+      onActiveChanged(courier.courierId, isActive);
     } catch {
       showRowToast('Failed to update courier status', true);
     } finally {
@@ -1412,7 +1413,7 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
       <div
         className="go-row-header"
         onClick={handleToggle}
-        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isActive ? 1 : 0.6 }}
+        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isDeleted ? 0.6 : 1 }}
       >
         <svg
           className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`}
@@ -1423,7 +1424,7 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
         <div style={{ flex: 1 }}>
           <div className="courier-name">
             {courier.fullName}
-            {!courier.isActive && (
+            {courier.isDeleted && (
               <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 100, padding: '1px 8px' }}>Deactivated</span>
             )}
           </div>
@@ -1433,8 +1434,8 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
           <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
             {courier.phoneNumber}
           </span>
-          <span className={`status-badge ${courier.isAvailable ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
-            {courier.isAvailable ? 'Available' : 'Unavailable'}
+          <span className={`status-badge ${!courier.isDeleted ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
+            {!courier.isDeleted ? 'Active' : 'Deleted'}
           </span>
           <button
             className="go-action-btn go-action-btn--ghost"
@@ -1447,14 +1448,14 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
             className="go-action-btn"
             style={{
               padding: '5px 13px', fontSize: '0.75rem',
-              background: courier.isActive ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)',
-              color: courier.isActive ? '#ef4444' : '#10b981',
-              border: `1px solid ${courier.isActive ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
+              background: !courier.isDeleted ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)',
+              color: !courier.isDeleted ? '#ef4444' : '#10b981',
+              border: `1px solid ${!courier.isDeleted ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
             }}
             onClick={handleToggleActive}
             disabled={togglingActive}
           >
-            {togglingActive ? '…' : courier.isActive ? 'Deactivate' : 'Activate'}
+            {togglingActive ? '…' : !courier.isDeleted ? 'Deactivate' : 'Activate'}
           </button>
           <button
             className="go-action-btn go-action-btn--assign"

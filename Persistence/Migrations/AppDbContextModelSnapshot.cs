@@ -151,6 +151,9 @@ namespace Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<DateTime?>("DateDeleted")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -160,12 +163,6 @@ namespace Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsAvailable")
-                        .HasColumnType("bit");
 
                     b.Property<string>("LastName")
                         .IsRequired()

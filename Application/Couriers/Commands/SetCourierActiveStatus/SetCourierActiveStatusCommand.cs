@@ -28,7 +28,7 @@ public sealed class SetCourierActiveStatusCommandHandler : IRequestHandler<SetCo
             .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)
             ?? throw new NotFoundException(nameof(Domain.Courier), request.CourierId);
 
-        courier.IsActive = request.IsActive;
+        courier.DateDeleted = request.IsActive ? null : DateTime.UtcNow;
 
         var user = courier.ApplicationUser;
         if (request.IsActive)

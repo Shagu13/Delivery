@@ -23,8 +23,8 @@ export interface Courier {
     assignedCity: string;
     assignedDistrict: string;
     phoneNumber: string;
-    isAvailable: boolean;
-    isActive: boolean;
+    isDeleted: boolean;
+    dateDeleted: string | null;
 }
 
 export interface CourierOrder {

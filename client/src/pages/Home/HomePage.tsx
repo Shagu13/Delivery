@@ -5,23 +5,6 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
 import './home.css';
 
-//const STATUS_CLASS: Record<string, string> = {
-//    Pending:                         'track-badge--pending',
-//    AcceptedGroupOrder:              'track-badge--assigned',
-//    OrderNotAccepted:                'track-badge--failed',
-//    CourierAssignedToPickUp:         'track-badge--assigned',
-//    CourierOnTheWayToPickUp:         'track-badge--assigned',
-//    CourierDeliveringToWarehouse:    'track-badge--delivering',
-//    DeliveredToWarehouse:            'track-badge--inwarehouse',
-//    AdminAcceptedOrderInWareHouse:   'track-badge--inwarehouse',
-//    CancelledBySender:               'track-badge--failed',
-//    AcceptedOrder:                   'track-badge--assigned',
-//    OrderIsOnItsWayToRecipientsCity: 'track-badge--onitsway',
-//    CourierAssignedToDeliver:        'track-badge--assigned',
-//    CourierRecievedOrderToDeliver:   'track-badge--delivering',
-//    DeliveredToRecipient:            'track-badge--delivered',
-//    CancelledByAdmin:                'track-badge--failed',
-//};
 
 function formatDate(iso: string, lang: string) {
     return new Intl.DateTimeFormat(lang === 'ka' ? 'ka-GE' : 'en-GB', {
