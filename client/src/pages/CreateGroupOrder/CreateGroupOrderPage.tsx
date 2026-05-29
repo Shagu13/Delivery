@@ -101,8 +101,10 @@ function validate(
         const p = (field: string, val: string, errMsg: string) => {
             if (!val.trim()) errors[`orders[${i}].${field}`] = errMsg;
         };
-        p('recipientPhone',   pkg.recipientPhone,   t.cgoErrPhone);
-        p('recipientAddress', pkg.recipientAddress, t.cgoErrAddress);
+        p('recipientFirstName', pkg.recipientFirstName, t.cgoErrFirstName);
+        p('recipientLastName',  pkg.recipientLastName,  t.cgoErrLastName);
+        p('recipientPhone',     pkg.recipientPhone,     t.cgoErrPhone);
+        p('recipientAddress',   pkg.recipientAddress,   t.cgoErrAddress);
 
         if (!pkg.recipientCity.trim()) {
             errors[`orders[${i}].recipientCity`] = t.cgoErrCity;
