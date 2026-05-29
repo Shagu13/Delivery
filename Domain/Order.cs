@@ -73,6 +73,30 @@ public class Order
     /// </summary>
     public decimal? AmountToCollectForPackage { get; set; }
 
+    // ── New payment tracking fields ───────────────────────────────────────────
+
+    /// <summary>
+    /// Tracks whether the company service fee has been collected from the sender.
+    /// Only meaningful when WhoPaysForCompanyService == Sender.
+    /// Unpaid → customer submits PaymentRequest → Pending → admin confirms → Paid.
+    /// </summary>
+    public CompanyServicePaymentStatus CompanyServicePaymentStatus { get; set; }
+        = CompanyServicePaymentStatus.Unpaid;
+
+    /// <summary>
+    /// Whether the company has forwarded the COD product money back to the sender.
+    /// Only relevant when ProductPaymentStatus == NotPaid (courier collected cash for product).
+    /// Admin marks this true once they have transferred the money to the sender.
+    /// </summary>
+    public bool HasCompanyPaidTheSender { get; set; } = false;
+
+    /// <summary>
+    /// FK to the PaymentRequest that covers this order's company service fee (SenderPaysCompany).
+    /// Null when no payment request has been submitted for this order yet.
+    /// </summary>
+    public Guid? PaymentRequestId { get; set; }
+    public PaymentRequest? PaymentRequest { get; set; }
+
     // ── Financials (admin-managed) ───────────────────────────────────────────
     /// <summary>
     /// The price the company charges for delivering this order.

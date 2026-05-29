@@ -21,6 +21,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<DailySettlement>  DailySettlements  => Set<DailySettlement>();
     public DbSet<WeightPriceTier>  WeightPriceTiers  => Set<WeightPriceTier>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<PaymentRequest>   PaymentRequests   => Set<PaymentRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -119,15 +120,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(o => o.OrderType);
             e.HasIndex(o => new { o.RecipientCity, o.RecipientDistrict });
             e.HasIndex(o => o.GroupOrderId);
+            e.HasIndex(o => o.CompanyServicePaymentStatus);
+            e.HasIndex(o => o.HasCompanyPaidTheSender);
             e.HasOne(o => o.Courier).WithMany(c => c.Orders)
              .HasForeignKey(o => o.CourierId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(o => o.Warehouse).WithMany()
              .HasForeignKey(o => o.WarehouseId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(o => o.TrackingEvents).WithOne()
              .HasForeignKey(t => t.OrderId).OnDelete(DeleteBehavior.Cascade);
-            // WeightPriceTier: soft-delete is on the tier, not a hard FK constraint
             e.HasOne(o => o.WeightPriceTier).WithMany()
              .HasForeignKey(o => o.WeightPriceTierId).OnDelete(DeleteBehavior.SetNull);
+            // PaymentRequest FK — SetNull so deleting a request doesn't cascade to orders
+            e.HasOne(o => o.PaymentRequest).WithMany(p => p.Orders)
+             .HasForeignKey(o => o.PaymentRequestId).OnDelete(DeleteBehavior.SetNull);
             e.Property(o => o.RecipientFirstName).HasMaxLength(100).IsRequired();
             e.Property(o => o.RecipientLastName).HasMaxLength(100).IsRequired();
             e.Property(o => o.RecipientPhone).HasMaxLength(20).IsRequired();
@@ -140,6 +145,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(o => o.OrderType).HasConversion<string>().HasMaxLength(20);
             e.Property(o => o.ProductPaymentStatus).HasConversion<string>().HasMaxLength(20);
             e.Property(o => o.WhoPaysForCompanyService).HasConversion<string>().HasMaxLength(20);
+            e.Property(o => o.CompanyServicePaymentStatus).HasConversion<string>().HasMaxLength(20);
             e.Property(o => o.ReturnPickupAddress).HasMaxLength(250);
             e.Property(o => o.ReturnPickupCity).HasMaxLength(100);
             e.Property(o => o.ReturnPickupDistrict).HasMaxLength(100);
@@ -157,6 +163,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(d => d.CourierId);
             e.HasIndex(d => d.CreatedAt);
             e.HasIndex(d => new { d.CourierId, d.CreatedAt });
+            e.HasIndex(d => d.WasCourierPaid);
+            e.HasIndex(d => d.HasCourierHandedOverRevenue);
             e.HasOne(d => d.Courier).WithMany(c => c.DailySettlements)
              .HasForeignKey(d => d.CourierId).OnDelete(DeleteBehavior.Restrict);
             e.Property(d => d.TotalAmountOfCashCollected).HasColumnType("decimal(18,2)");
@@ -164,6 +172,28 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(d => d.TotalCompanyNetIncome).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCourierSalary).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCourierTransferToCompany).HasColumnType("decimal(18,2)");
+        });
+
+        // ── PaymentRequest ────────────────────────────────────────────────────
+        modelBuilder.Entity<PaymentRequest>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.HasIndex(p => p.Type);
+            e.HasIndex(p => p.Status);
+            e.HasIndex(p => p.CustomerId);
+            e.HasIndex(p => p.CourierId);
+            e.HasIndex(p => p.CreatedAt);
+            e.HasOne(p => p.Customer).WithMany()
+             .HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(p => p.Courier).WithMany()
+             .HasForeignKey(p => p.CourierId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(p => p.DailySettlement).WithMany(d => d.PaymentRequests)
+             .HasForeignKey(p => p.DailySettlementId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(p => p.TotalAmount).HasColumnType("decimal(18,2)");
+            e.Property(p => p.AmountConfirmed).HasColumnType("decimal(18,2)");
+            e.Property(p => p.Type).HasConversion<string>().HasMaxLength(40);
+            e.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(p => p.Note).HasMaxLength(500);
         });
 
         // ── TrackingEvent ─────────────────────────────────────────────────────

@@ -871,6 +871,7 @@ const en = {
   custErrNewPwdShort:        'At least 8 characters.',
   custErrNewPwdUppercase:    'Must contain an uppercase letter.',
   custErrNewPwdNumber:       'Must contain a number.',
+  custNavPayments:           'Payments',
 
   // ── Admin History ─────────────────────────────────────────────────────────
   sidebarHistory:            'Order History',
@@ -1772,6 +1773,7 @@ const ka: typeof en = {
   custErrNewPwdShort:        'მინიმუმ 8 სიმბოლო.',
   custErrNewPwdUppercase:    'უნდა შეიცავდეს ლათინურ დიდ ასოს.',
   custErrNewPwdNumber:       'უნდა შეიცავდეს ციფრს.',
+  custNavPayments:           'გადახდები',
 
   // ── Admin History ─────────────────────────────────────────────────────────
   sidebarHistory:            'შეკვეთების ისტორია',

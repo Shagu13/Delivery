@@ -278,11 +278,20 @@ namespace Persistence.Migrations
                     b.Property<Guid>("CourierId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("CourierPaidAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("HasCourierHandedOverRevenue")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsTheDayClosed")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("RevenueHandedOverAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<decimal?>("TotalAmountOfCashCollected")
                         .HasColumnType("decimal(18,2)");
@@ -305,11 +314,18 @@ namespace Persistence.Migrations
                     b.Property<int>("TotalOrdersPickedUp")
                         .HasColumnType("int");
 
+                    b.Property<bool>("WasCourierPaid")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CourierId");
 
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("HasCourierHandedOverRevenue");
+
+                    b.HasIndex("WasCourierPaid");
 
                     b.HasIndex("CourierId", "CreatedAt");
 
@@ -471,6 +487,11 @@ namespace Persistence.Migrations
                     b.Property<decimal?>("CompanyRevenue")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("CompanyServicePaymentStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<decimal>("CompanyServicePrice")
                         .HasColumnType("decimal(18,2)");
 
@@ -499,6 +520,9 @@ namespace Persistence.Migrations
                     b.Property<Guid>("GroupOrderId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("HasCompanyPaidTheSender")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsFragile")
                         .HasColumnType("bit");
 
@@ -506,6 +530,9 @@ namespace Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid?>("PaymentRequestId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime?>("PickedUpFromWarehouseAt")
                         .HasColumnType("datetime2");
@@ -586,13 +613,19 @@ namespace Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyServicePaymentStatus");
+
                     b.HasIndex("CourierId");
 
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("GroupOrderId");
 
+                    b.HasIndex("HasCompanyPaidTheSender");
+
                     b.HasIndex("OrderType");
+
+                    b.HasIndex("PaymentRequestId");
 
                     b.HasIndex("Status");
 
@@ -648,6 +681,64 @@ namespace Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("PasswordResetTokens");
+                });
+
+            modelBuilder.Entity("Domain.PaymentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountConfirmed")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CourierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("DailySettlementId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourierId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("DailySettlementId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Type");
+
+                    b.ToTable("PaymentRequests");
                 });
 
             modelBuilder.Entity("Domain.TrackingEvent", b =>
@@ -963,6 +1054,11 @@ namespace Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Domain.PaymentRequest", "PaymentRequest")
+                        .WithMany("Orders")
+                        .HasForeignKey("PaymentRequestId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Domain.Warehouse", "Warehouse")
                         .WithMany()
                         .HasForeignKey("WarehouseId")
@@ -977,9 +1073,35 @@ namespace Persistence.Migrations
 
                     b.Navigation("GroupOrder");
 
+                    b.Navigation("PaymentRequest");
+
                     b.Navigation("Warehouse");
 
                     b.Navigation("WeightPriceTier");
+                });
+
+            modelBuilder.Entity("Domain.PaymentRequest", b =>
+                {
+                    b.HasOne("Domain.Courier", "Courier")
+                        .WithMany()
+                        .HasForeignKey("CourierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Domain.DailySettlement", "DailySettlement")
+                        .WithMany("PaymentRequests")
+                        .HasForeignKey("DailySettlementId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Courier");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("DailySettlement");
                 });
 
             modelBuilder.Entity("Domain.TrackingEvent", b =>
@@ -1056,6 +1178,11 @@ namespace Persistence.Migrations
                     b.Navigation("Orders");
                 });
 
+            modelBuilder.Entity("Domain.DailySettlement", b =>
+                {
+                    b.Navigation("PaymentRequests");
+                });
+
             modelBuilder.Entity("Domain.GroupOrder", b =>
                 {
                     b.Navigation("Orders");
@@ -1064,6 +1191,11 @@ namespace Persistence.Migrations
             modelBuilder.Entity("Domain.Order", b =>
                 {
                     b.Navigation("TrackingEvents");
+                });
+
+            modelBuilder.Entity("Domain.PaymentRequest", b =>
+                {
+                    b.Navigation("Orders");
                 });
 #pragma warning restore 612, 618
         }
