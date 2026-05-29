@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { fetchAllDistrictsFlat, type AllDistrictEntry } from '../../api/cities';
-import { fetchWeightPriceTiers, type WeightPriceTier } from '../../api/weightPriceTiers';
+import { type AllDistrictEntry } from '../../api/cities';
+import { type WeightPriceTier } from '../../api/weightPriceTiers';
 import { useLanguage } from '../../contexts/useLanguage';
 import { useAuth } from '../../contexts/useAuth';
+import { prefetchCalcData, isCacheValid, _cachedDistricts, _cachedTiers } from './calcDataCache';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 const C = {
@@ -167,9 +168,9 @@ export interface CalcCoreProps {
 export function CalcCore({ token, compact }: CalcCoreProps) {
   const { t, lang } = useLanguage();
 
-  const [allDistricts,     setAllDistricts]     = useState<AllDistrictEntry[]>([]);
-  const [weightTiers,      setWeightTiers]       = useState<WeightPriceTier[]>([]);
-  const [loadingData,      setLoadingData]       = useState(true);
+  const [allDistricts,     setAllDistricts]     = useState<AllDistrictEntry[]>(() => _cachedDistricts ?? []);
+  const [weightTiers,      setWeightTiers]       = useState<WeightPriceTier[]>(() => _cachedTiers ?? []);
+  const [loadingData,      setLoadingData]       = useState(() => !isCacheValid());
 
   // From city
   const [fromSearch,    setFromSearch]    = useState('');
@@ -196,15 +197,14 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
   const fromInputRef = useRef<HTMLInputElement>(null);
   const toInputRef   = useRef<HTMLInputElement>(null);
 
-  // ── Load data ───────────────────────────────────────────────────────────────
+  // ── Load data (uses module-level cache, TTL: 5 min) ────────────────────────
   useEffect(() => {
-    Promise.all([fetchAllDistrictsFlat(), fetchWeightPriceTiers()])
-      .then(([districts, tiers]) => {
-        setAllDistricts(districts);
-        setWeightTiers(tiers);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingData(false));
+    if (isCacheValid()) return;
+    prefetchCalcData().then(() => {
+      if (_cachedDistricts) setAllDistricts(_cachedDistricts);
+      if (_cachedTiers)     setWeightTiers(_cachedTiers);
+      setLoadingData(false);
+    });
   }, []);
 
   // ── Close on outside click ──────────────────────────────────────────────────
@@ -225,13 +225,22 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
 
   // ── Fetch base price when destination or weight tier changes ───────────────
   useEffect(() => {
-    if (!selectedEntry) { setBasePrice(null); return; }
-    setLoadingPrice(true);
-    setPriceError(false);
-    fetchBasePrice(selectedEntry.districtId, selectedTierId, token)
-      .then(setBasePrice)
-      .catch(() => setPriceError(true))
-      .finally(() => setLoadingPrice(false));
+    if (!selectedEntry) return;
+    let cancelled = false;
+    const run = async () => {
+      setLoadingPrice(true);
+      setPriceError(false);
+      try {
+        const result = await fetchBasePrice(selectedEntry.districtId, selectedTierId, token);
+        if (!cancelled) setBasePrice(result);
+      } catch {
+        if (!cancelled) setPriceError(true);
+      } finally {
+        if (!cancelled) setLoadingPrice(false);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
   }, [selectedEntry, selectedTierId, token]);
 
   // ── Derived: unique cities ──────────────────────────────────────────────────
@@ -281,10 +290,10 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
   }, [allDistricts, toSearch]);
 
   // ── Computed final price ────────────────────────────────────────────────────
-  /** Final price shown to user */
+  /** Final price shown to user — null when no destination is selected */
   const finalPrice = useMemo<number | null>(() => {
-    return basePrice ? basePrice.price : null;
-  }, [basePrice]);
+    return selectedEntry && basePrice ? basePrice.price : null;
+  }, [selectedEntry, basePrice]);
 
   const isFlatRate = false;
 

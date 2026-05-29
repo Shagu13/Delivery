@@ -3,12 +3,16 @@ import { Link, useLocation } from 'react-router-dom';
 import { LanguageToggle } from '../ui/LanguageToggle';
 import { useLanguage } from '../../contexts/useLanguage';
 import { PriceCalculatorModal } from '../../pages/Home/PriceCalculatorModal';
+import { prefetchCalcData } from '../../pages/Home/calcDataCache';
 
 export function PublicNav() {
     const { t } = useLanguage();
     const [calcOpen, setCalcOpen]   = useState(false);
     const [menuOpen, setMenuOpen]   = useState(false);
     const location = useLocation();
+
+    // Prefetch calculator data so the modal opens instantly
+    useEffect(() => { prefetchCalcData(); }, []);
 
     // Close drawer on route change
     useEffect(() => { setMenuOpen(false); }, [location.pathname]);
