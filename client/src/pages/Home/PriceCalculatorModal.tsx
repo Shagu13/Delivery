@@ -112,8 +112,10 @@ interface PriceResult {
   tier: 'capital' | 'city' | 'district' | 'default';
 }
 
-async function fetchBasePrice(districtId: string, token?: string | null): Promise<PriceResult> {
-  const res = await fetch(`/api/calculator?districtId=${districtId}`, {
+async function fetchBasePrice(districtId: string, weightTierId?: string | null, token?: string | null): Promise<PriceResult> {
+  const params = new URLSearchParams({ districtId });
+  if (weightTierId) params.set('weightTierId', weightTierId);
+  const res = await fetch(`/api/calculator?${params}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error('Failed');
@@ -221,16 +223,16 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
     return () => document.removeEventListener('mousedown', h);
   }, [selectedCity, selectedEntry]);
 
-  // ── Fetch base price when destination selected ──────────────────────────────
+  // ── Fetch base price when destination or weight tier changes ───────────────
   useEffect(() => {
     if (!selectedEntry) { setBasePrice(null); return; }
     setLoadingPrice(true);
     setPriceError(false);
-    fetchBasePrice(selectedEntry.districtId, token)
+    fetchBasePrice(selectedEntry.districtId, selectedTierId, token)
       .then(setBasePrice)
       .catch(() => setPriceError(true))
       .finally(() => setLoadingPrice(false));
-  }, [selectedEntry, token]);
+  }, [selectedEntry, selectedTierId, token]);
 
   // ── Derived: unique cities ──────────────────────────────────────────────────
   const allCities = useMemo<CityEntry[]>(() => {

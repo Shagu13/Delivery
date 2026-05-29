@@ -23,7 +23,10 @@ public sealed class CalculatorController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(typeof(CalculatorResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Calculate([FromQuery] Guid districtId, CancellationToken ct)
+    public async Task<IActionResult> Calculate(
+        [FromQuery] Guid  districtId,
+        [FromQuery] Guid? weightTierId,
+        CancellationToken ct)
     {
         var district = await _context.Districts
             .AsNoTracking()
@@ -60,6 +63,24 @@ public sealed class CalculatorController : ControllerBase
                     price = customer.CompanyServiceDistrictPrice!.Value;
                     tier  = "district";
                 }
+            }
+        }
+
+        // If a weight tier is selected, its zone price overrides whatever was resolved above
+        if (weightTierId.HasValue)
+        {
+            var weightTier = await _context.WeightPriceTiers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(w => w.Id == weightTierId.Value && w.DateDeleted == null, ct);
+
+            if (weightTier is not null)
+            {
+                decimal? weightPrice = district.IsCapitalTerritory ? weightTier.CapitalPrice
+                                     : district.IsCityTerritory    ? weightTier.CityPrice
+                                     :                               weightTier.DistrictPrice;
+
+                if (weightPrice.HasValue)
+                    price = weightPrice.Value;
             }
         }
 
