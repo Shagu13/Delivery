@@ -64,6 +64,11 @@ export interface UpdateOrderRequest {
     amountToCollectForPackage: number | null;
     companyServicePrice: number;
     courierSalary: number | null;
+    orderType?: string | null;
+    returnPickupCity?: string | null;
+    returnPickupDistrict?: string | null;
+    returnPickupAddress?: string | null;
+    statusOverride?: string | null;
 }
 
 async function orderAction(token: string, id: string, action: string, body?: object): Promise<void> {

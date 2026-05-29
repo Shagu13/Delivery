@@ -279,21 +279,12 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
   }, [allDistricts, toSearch]);
 
   // ── Computed final price ────────────────────────────────────────────────────
-  const selectedTier = useMemo(
-    () => weightTiers.find(t => t.id === selectedTierId) ?? null,
-    [weightTiers, selectedTierId],
-  );
-
   /** Final price shown to user */
   const finalPrice = useMemo<number | null>(() => {
-    // Non-standard tier has a flat custom price (overrides everything)
-    if (selectedTier && !selectedTier.isStandard && selectedTier.customPrice != null) {
-      return selectedTier.customPrice;
-    }
     return basePrice ? basePrice.price : null;
-  }, [selectedTier, basePrice]);
+  }, [basePrice]);
 
-  const isFlatRate = selectedTier != null && !selectedTier.isStandard && selectedTier.customPrice != null;
+  const isFlatRate = false;
 
   // ── Labels ──────────────────────────────────────────────────────────────────
   const displayName = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -443,28 +434,15 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
                   key={tier.id}
                   type="button"
                   onClick={() => setSelectedTierId(tier.id === selectedTierId ? null : tier.id)}
-                  style={tierChipStyle(selectedTierId === tier.id, !tier.isStandard)}
-                  title={!tier.isStandard && tier.customPrice != null
-                    ? (lang === 'ka' ? `ფიქსირებული: ₾${tier.customPrice.toFixed(2)}` : `Flat rate: ₾${tier.customPrice.toFixed(2)}`)
-                    : undefined}
+                  style={tierChipStyle(selectedTierId === tier.id, false)}
                 >
                   {label}
-                  {!tier.isStandard && (
-                    <span style={{ marginLeft: 4, fontSize: '0.65rem', opacity: 0.75 }}>
-                      {lang === 'ka' ? 'ფიქს.' : 'flat'}
-                    </span>
-                  )}
                 </button>
               );
             })}
           </div>
-          {!selectedTier?.isStandard && selectedTier && (
-            <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: C.textSubtle, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              {t.calcWeightTierHint}
-            </p>
+            </div>
           )}
-        </div>
-      )}
 
       {/* ── Price result ── */}
       <div style={{ borderTop: `1.5px solid ${C.border}`, paddingTop: 16 }}>
