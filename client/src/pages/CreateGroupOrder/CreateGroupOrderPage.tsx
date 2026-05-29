@@ -381,11 +381,10 @@ export function CreateGroupOrderPage() {
         setTimeout(() => {
             const all = document.querySelectorAll('.form-field--error');
             if (!all.length) return;
-            let topEl: Element = all[0];
             let topY = all[0].getBoundingClientRect().top + window.scrollY;
             all.forEach(el => {
                 const y = el.getBoundingClientRect().top + window.scrollY;
-                if (y < topY) { topY = y; topEl = el; }
+                if (y < topY) { topY = y; }
             });
             window.scrollTo({ top: Math.max(0, topY - 80), behavior: 'smooth' });
         }, 50);
