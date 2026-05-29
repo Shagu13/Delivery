@@ -3,8 +3,6 @@ import {
   getMyPayments,
   createPaymentRequest,
   type CustomerPaymentsPage,
-  type CustomerServiceFeeOrder,
-  type CustomerCodIncomeOrder,
   type CompanyServicePaymentStatus,
 } from '../../api/payments';
 

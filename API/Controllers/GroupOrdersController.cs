@@ -389,7 +389,9 @@ public sealed class GroupOrdersController : BaseController
                 "აღწერა",
                 "გადახდის სტატუსი",
                 "ვინ იხდის სერვის საფასურს",
-                "მტვრევადია"
+                "მტვრევადია",
+                "ამანათის ფასი (₾)",
+                "წონის კატეგორია"
               ]
             : [
                 "RecipientFirstName",
@@ -401,10 +403,12 @@ public sealed class GroupOrdersController : BaseController
                 "Description",
                 "PaymentStatus",
                 "WhoPaysForCourierFee",
-                "IsFragile"
+                "IsFragile",
+                "ParcelPrice (₾)",
+                "WeightCategory"
               ];
 
-        bool[] required = [true, true, true, true, true, true, false, true, true, true];
+        bool[] required = [true, true, true, true, true, true, false, true, true, true, false, false];
 
         for (int i = 0; i < headers.Length; i++)
         {
@@ -429,6 +433,8 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 8).Value = "გადასახდელი";
             ws.Cell(2, 9).Value = "გამგზავნი";
             ws.Cell(2, 10).Value = "არა";
+            ws.Cell(2, 11).Value = 45.00;
+            ws.Cell(2, 12).Value = "";
         }
         else
         {
@@ -442,6 +448,8 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 8).Value = "Not Paid";
             ws.Cell(2, 9).Value = "Sender";
             ws.Cell(2, 10).Value = "No";
+            ws.Cell(2, 11).Value = 45.00;
+            ws.Cell(2, 12).Value = "";
         }
 
         foreach (var cell in ws.Row(2).CellsUsed())
@@ -490,6 +498,28 @@ public sealed class GroupOrdersController : BaseController
         fragileVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
         fragileVal.ErrorMessage = isGeo ? "აირჩიეთ: კი ან არა" : "Choose Yes or No";
 
+        // ── Weight tier dropdown (L2:L500) — built from DB ─────────────────────
+        var weightTiers = await db.WeightPriceTiers
+            .AsNoTracking()
+            .Where(t => t.DateDeleted == null)
+            .OrderBy(t => t.MinWeightKg)
+            .Select(t => new { t.Label, t.MinWeightKg, t.MaxWeightKg })
+            .ToListAsync(ct);
+
+        if (weightTiers.Count > 0)
+        {
+            // Build a quoted comma-separated list of tier labels for the dropdown
+            var tierLabels = weightTiers
+                .Select(t => string.IsNullOrWhiteSpace(t.Label)
+                    ? $"{t.MinWeightKg}–{t.MaxWeightKg} kg"
+                    : t.Label);
+            var tierOptions = "\"" + string.Join(",", tierLabels) + "\"";
+
+            var weightVal = ws.Range("L2:L500").CreateDataValidation();
+            weightVal.List(tierOptions, true);
+            weightVal.ShowErrorMessage = false;
+        }
+
         ws.Columns().AdjustToContents();
         ws.SheetView.FreezeRows(1);
 
@@ -516,7 +546,7 @@ public sealed class GroupOrdersController : BaseController
 
     [HttpPost("parse-excel")]
     [AllowAnonymous]
-    public IActionResult ParseExcel(IFormFile file)
+    public async Task<IActionResult> ParseExcel(IFormFile file, CancellationToken ct)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { title = "No file uploaded." });
@@ -525,6 +555,58 @@ public sealed class GroupOrdersController : BaseController
         if (ext != ".xlsx")
             return BadRequest(new { title = "Only .xlsx files are supported." });
 
+        // ── Load lookup tables from DB ────────────────────────────────────────
+        var db = HttpContext.RequestServices.GetRequiredService<IAppDbContext>();
+
+        // Build geo→English city map and geo→English district map
+        var cities = await db.Cities
+            .AsNoTracking()
+            .Where(c => c.DateDeleted == null)
+            .Select(c => new { c.CityName, c.CityNameGeo })
+            .ToListAsync(ct);
+
+        // cityGeoToEn: Georgian display name → English canonical name
+        var cityGeoToEn = new Dictionary<string, string>(StringComparer.Ordinal);
+        var cityEnSet   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in cities)
+        {
+            cityEnSet.Add(c.CityName);
+            if (!string.IsNullOrWhiteSpace(c.CityNameGeo))
+                cityGeoToEn[c.CityNameGeo!] = c.CityName;
+        }
+
+        var districts = await db.Districts
+            .AsNoTracking()
+            .Where(d => d.DateDeleted == null)
+            .Select(d => new { d.DistrictName, d.DistrictNameGeo })
+            .ToListAsync(ct);
+
+        var districtGeoToEn = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var d in districts)
+        {
+            if (!string.IsNullOrWhiteSpace(d.DistrictNameGeo))
+                districtGeoToEn[d.DistrictNameGeo!] = d.DistrictName;
+        }
+
+        // Build weight tier lookup: label (e.g. "0–1 kg") or id string → Guid
+        var weightTiers = await db.WeightPriceTiers
+            .AsNoTracking()
+            .Where(t => t.DateDeleted == null)
+            .Select(t => new { t.Id, t.Label, t.MinWeightKg, t.MaxWeightKg })
+            .ToListAsync(ct);
+
+        // Map by label text (case-insensitive) → id
+        var tierByLabel = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tier in weightTiers)
+        {
+            if (!string.IsNullOrWhiteSpace(tier.Label))
+                tierByLabel[tier.Label] = tier.Id;
+            // Also key by "min–max kg" format the template will write
+            var rangeKey = $"{tier.MinWeightKg}–{tier.MaxWeightKg} kg";
+            tierByLabel.TryAdd(rangeKey, tier.Id);
+        }
+
+        // ── Parse file ────────────────────────────────────────────────────────
         using var stream = file.OpenReadStream();
         using var workbook = new XLWorkbook(stream);
         var ws = workbook.Worksheets.FirstOrDefault(s => s.Name == "Orders")
@@ -538,16 +620,33 @@ public sealed class GroupOrdersController : BaseController
             var firstName = ws.Cell(row, 1).GetString().Trim();
             if (string.IsNullOrWhiteSpace(firstName)) continue;
 
-            // Skip sample rows (English or Georgian)
+            // Skip built-in sample rows
             var lastName = ws.Cell(row, 2).GetString().Trim();
             if ((firstName.Equals("Ana", StringComparison.OrdinalIgnoreCase) && lastName.Equals("Smith", StringComparison.OrdinalIgnoreCase)) ||
                 (firstName.Equals("ანა", StringComparison.Ordinal) && lastName.Equals("სმიტი", StringComparison.Ordinal)))
                 continue;
 
             var description = ws.Cell(row, 7).GetString().Trim();
-            var paymentRaw = ws.Cell(row, 8).GetString().Trim();
-            var payerRaw = ws.Cell(row, 9).GetString().Trim();
-            var fragileRaw = ws.Cell(row, 10).GetString().Trim();
+            var paymentRaw  = ws.Cell(row, 8).GetString().Trim();
+            var payerRaw    = ws.Cell(row, 9).GetString().Trim();
+            var fragileRaw  = ws.Cell(row, 10).GetString().Trim();
+
+            // ── Col K: parcel price ───────────────────────────────────────────
+            decimal? amountToCollect = null;
+            var parcelPriceRaw = ws.Cell(row, 11).GetString().Trim();
+            if (decimal.TryParse(parcelPriceRaw,
+                System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsedPrice) && parsedPrice > 0)
+            {
+                amountToCollect = parsedPrice;
+            }
+
+            // ── Col L: weight category ────────────────────────────────────────
+            Guid? weightPriceTierId = null;
+            var weightRaw = ws.Cell(row, 12).GetString().Trim();
+            if (!string.IsNullOrWhiteSpace(weightRaw) && tierByLabel.TryGetValue(weightRaw, out var tierId))
+                weightPriceTierId = tierId;
 
             var paymentStatus =
                 paymentRaw.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
@@ -565,8 +664,16 @@ public sealed class GroupOrdersController : BaseController
                 fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
                 fragileRaw.Equals("კი", StringComparison.Ordinal);
 
-            var recipientCity = ws.Cell(row, 4).GetString().Trim();
-            var recipientDistrict = ws.Cell(row, 5).GetString().Trim();
+            // ── City / district: normalise geo names → English canonical ──────
+            var cellCity     = ws.Cell(row, 4).GetString().Trim();
+            var cellDistrict = ws.Cell(row, 5).GetString().Trim();
+
+            // If the cell contains a Georgian name, map it to the English key.
+            // If it's already English (or unrecognised), pass through as-is.
+            var recipientCity     = cityGeoToEn.TryGetValue(cellCity, out var enCity)
+                                        ? enCity : cellCity;
+            var recipientDistrict = districtGeoToEn.TryGetValue(cellDistrict, out var enDist)
+                                        ? enDist : cellDistrict;
 
             orders.Add(new OrderItemRequest(
                 RecipientFirstName: firstName,
@@ -578,7 +685,9 @@ public sealed class GroupOrdersController : BaseController
                 Description: description.Length > 0 ? description : null,
                 IsFragile: isFragile,
                 ProductPaymentStatus: paymentStatus,
-                WhoPaysForCompanyService: payer
+                WhoPaysForCompanyService: payer,
+                AmountToCollectForPackage: amountToCollect,
+                WeightPriceTierId: weightPriceTierId
                 // OrderType defaults to Send for Excel imports
             ));
         }

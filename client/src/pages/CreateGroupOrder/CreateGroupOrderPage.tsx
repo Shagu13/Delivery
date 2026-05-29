@@ -106,7 +106,9 @@ function validate(
 
         if (!pkg.recipientCity.trim()) {
             errors[`orders[${i}].recipientCity`] = t.cgoErrCity;
-        } else if (cities.length > 0 && !cities.some(c => c.cityName === pkg.recipientCity)) {
+        } else if (cities.length > 0 && !cities.some(
+            c => c.cityName === pkg.recipientCity || c.cityNameGeo === pkg.recipientCity
+        )) {
             errors[`orders[${i}].recipientCity`] = t.cgoErrInvalidCity(pkg.recipientCity);
         }
 
@@ -303,19 +305,60 @@ export function CreateGroupOrderPage() {
                 description: o.description ?? '',
             }));
 
+            // ── Fetch districts for all unique cities and auto-compute service fees ──
             const uniqueCities = [...new Set(normalised.map(o => o.recipientCity).filter(Boolean))];
+            // districtMap: cityName → districtName → District object
+            const districtMap: Record<string, Record<string, import('../../api/cities').District>> = {};
+
             await Promise.all(uniqueCities.map(async cityName => {
-                const city = cities.find(c => c.cityName === cityName);
+                const city = cities.find(c => c.cityName === cityName || c.cityNameGeo === cityName);
                 if (!city) return;
-                const districts = await fetchDistricts(city.id);
+                const districtList = await fetchDistricts(city.id);
                 setCityDistrictCache(prev => ({
                     ...prev,
-                    [cityName]: new Set(districts.map(d => d.districtName)),
+                    [cityName]: new Set(districtList.map(d => d.districtName)),
                 }));
+                districtMap[cityName] = {};
+                for (const d of districtList) {
+                    districtMap[cityName][d.districtName] = d;
+                    if (d.districtNameGeo) districtMap[cityName][d.districtNameGeo] = d;
+                }
             }));
 
-            setPackages(normalised);
-            setImportedCount(normalised.length);
+            // Compute companyServicePrice for each package using resolved district
+            const withFees = normalised.map(o => {
+                const cityDistricts = districtMap[o.recipientCity];
+                if (!cityDistricts) return o;
+                const district = cityDistricts[o.recipientDistrict];
+                if (!district) return o;
+
+                // Reuse the same fee logic as PackageCard.computeServiceFee
+                let fee = 0;
+                const tierId = o.weightPriceTierId;
+                if (tierId) {
+                    const tier = weightTiers.find(t => t.id === tierId);
+                    if (tier) {
+                        const zonePrice = district.isCapitalTerritory ? tier.capitalPrice
+                                        : district.isCityTerritory    ? tier.cityPrice
+                                                                       : tier.districtPrice;
+                        if ((zonePrice ?? 0) > 0) fee = zonePrice!;
+                    }
+                }
+                if (fee === 0 && customerPricing) {
+                    if (district.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
+                        fee = customerPricing.companyServiceCapitalPrice!;
+                    else if (district.isCityTerritory && (customerPricing.companyServiceCityPrice ?? 0) > 0)
+                        fee = customerPricing.companyServiceCityPrice!;
+                    else if ((customerPricing.companyServiceDistrictPrice ?? 0) > 0)
+                        fee = customerPricing.companyServiceDistrictPrice!;
+                }
+                if (fee === 0) fee = district.companyServicePrice ?? 0;
+
+                return { ...o, companyServicePrice: fee };
+            });
+
+            setPackages(withFees);
+            setImportedCount(withFees.length);
             setErrors({});
         } catch (err) {
             setExcelError(err instanceof ApiError
