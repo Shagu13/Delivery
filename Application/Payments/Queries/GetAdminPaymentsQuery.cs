@@ -86,7 +86,7 @@ public sealed class GetAdminPaymentsQueryHandler
         // ── 3. COD owed to senders ────────────────────────────────────────────
         var codOrders = await _context.Orders
             .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
-            .Where(o => o.ProductPaymentStatus  == PaymentStatus.NotPaid
+            .Where(o => o.AmountToCollectForPackage > 0
                      && !o.HasCompanyPaidTheSender
                      && o.Status                == OrderStatus.DeliveredToRecipient
                      && o.GroupOrder.CustomerId != null)
@@ -101,7 +101,7 @@ public sealed class GetAdminPaymentsQueryHandler
                     CustomerId:           g.Key,
                     CustomerBusinessName: customer.BusinessName,
                     CustomerPhone:        customer.PhoneNumber,
-                    TotalCodOwed:         g.Sum(o => o.AmountOfCashCollected ?? o.AmountToCollectForPackage ?? 0m),
+                    TotalCodOwed:         g.Sum(o => o.AmountToCollectForPackage ?? 0m),
                     Orders:               g.Select(MapOrderItem).ToList()
                 );
             })

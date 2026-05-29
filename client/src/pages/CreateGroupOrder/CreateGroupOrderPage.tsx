@@ -376,6 +376,21 @@ export function CreateGroupOrderPage() {
         setErrors({});
     };
 
+    // ── Scroll to the topmost error field on the page ─────────────────────────
+    const scrollToTopError = () => {
+        setTimeout(() => {
+            const all = document.querySelectorAll('.form-field--error');
+            if (!all.length) return;
+            let topEl: Element = all[0];
+            let topY = all[0].getBoundingClientRect().top + window.scrollY;
+            all.forEach(el => {
+                const y = el.getBoundingClientRect().top + window.scrollY;
+                if (y < topY) { topY = y; topEl = el; }
+            });
+            window.scrollTo({ top: Math.max(0, topY - 80), behavior: 'smooth' });
+        }, 50);
+    };
+
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -384,9 +399,7 @@ export function CreateGroupOrderPage() {
         const validationErrors = validate(sender, packages, cities, cityDistrictCache, t);
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
-            setTimeout(() => {
-                document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 50);
+            scrollToTopError();
             return;
         }
 
@@ -430,9 +443,7 @@ export function CreateGroupOrderPage() {
                         mapped[key.toLowerCase()] = (messages as string[])[0];
                     });
                     setErrors(mapped);
-                    setTimeout(() => {
-                        document.querySelector('.form-field--error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }, 50);
+                    scrollToTopError();
                 }
                 setGlobalError(err.message);
             } else {

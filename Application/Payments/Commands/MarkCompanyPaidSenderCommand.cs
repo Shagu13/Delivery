@@ -13,7 +13,7 @@ namespace Application.Payments.Commands;
 /// <summary>
 /// Admin marks that the company has forwarded COD product money to a sender
 /// for a batch of orders.
-/// Applicable when ProductPaymentStatus == NotPaid (courier collected cash for product).
+/// Applicable when AmountToCollectForPackage > 0 (courier collected cash for product).
 /// Creates a PaymentRequest of type CompanyPaysSender and sets HasCompanyPaidTheSender = true.
 /// </summary>
 public sealed record MarkCompanyPaidSenderCommand(
@@ -56,10 +56,10 @@ public sealed class MarkCompanyPaidSenderCommandHandler
         if (orders.Count != request.OrderIds.Count)
             throw new NotFoundException("Order", "one or more of the requested IDs");
 
-        // Validate: must belong to customer, product must be NotPaid (COD), not already paid out
+        // Validate: must belong to customer, must have a COD amount, not already paid out
         var invalid = orders
-            .Where(o => o.GroupOrder.CustomerId != request.CustomerId
-                     || o.ProductPaymentStatus   != PaymentStatus.NotPaid
+            .Where(o => o.GroupOrder.CustomerId    != request.CustomerId
+                     || !(o.AmountToCollectForPackage > 0)
                      || o.HasCompanyPaidTheSender)
             .Select(o => o.TrackingNumber)
             .ToList();
@@ -68,7 +68,7 @@ public sealed class MarkCompanyPaidSenderCommandHandler
             throw new ConflictException(
                 $"The following orders are not eligible: {string.Join(", ", invalid)}");
 
-        var total = orders.Sum(o => o.AmountOfCashCollected ?? o.AmountToCollectForPackage ?? 0m);
+        var total = orders.Sum(o => o.AmountToCollectForPackage ?? 0m);
 
         var paymentRequest = new PaymentRequest
         {

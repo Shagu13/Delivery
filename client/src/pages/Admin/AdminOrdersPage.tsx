@@ -341,6 +341,11 @@ function OrderDetailModal({ order, open, onClose }: { order: AdminOrderItem | nu
             {row(t.odmLabelServicePrice, order.companyServicePrice > 0 ? `₾${order.companyServicePrice.toFixed(2)}` : t.aopNotSet)}
             {row(t.odmLabelSalary, order.courierSalary != null && order.courierSalary > 0 ? `₾${order.courierSalary.toFixed(2)}` : t.aopNotSet)}
             {row(t.odmLabelRevenue, order.companyRevenue != null ? `₾${order.companyRevenue.toFixed(2)}` : '—')}
+            {row('Total (COD + Service)', (() => {
+              const cod = order.amountToCollectForPackage ?? 0;
+              const srv = order.companyServicePrice ?? 0;
+              return <strong style={{ color: 'var(--color-text)' }}>₾{(cod + srv).toFixed(2)}</strong>;
+            })())}
           </div>
 
           <div className="odm-section">
@@ -813,6 +818,17 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                             : <span className="aop-fin-val">₾{order.companyServicePrice.toFixed(2)}</span>
                           }
                         </div>
+                        {(() => {
+                          const cod = order.amountToCollectForPackage ?? 0;
+                          const srv = order.companyServicePrice ?? 0;
+                          const total = cod + srv;
+                          return (
+                            <div className="aop-fin-row aop-fin-row--total">
+                              <span className="aop-fin-label">Tot</span>
+                              <span className="aop-fin-val aop-fin-val--total">₾{total.toFixed(2)}</span>
+                            </div>
+                          );
+                        })()}
                         {/* Hover tooltip */}
                         <div className="aop-fin-tooltip">
                           <div className="aop-fin-tooltip__row">
@@ -839,6 +855,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                           <div className="aop-fin-tooltip__row">
                             <span className="aop-fin-tooltip__label">Revenue</span>
                             <span className="aop-fin-tooltip__val">{order.companyRevenue != null ? `₾${order.companyRevenue.toFixed(2)}` : '—'}</span>
+                          </div>
+                          <div className="aop-fin-tooltip__divider"/>
+                          <div className="aop-fin-tooltip__row">
+                            <span className="aop-fin-tooltip__label">Total (COD+Srv)</span>
+                            <span className="aop-fin-tooltip__val aop-fin-tooltip__val--total">₾{((order.amountToCollectForPackage ?? 0) + (order.companyServicePrice ?? 0)).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
@@ -1047,6 +1068,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-fin-val { font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-text); }
         .aop-fin-val--cod { color: #3b82f6; }
         .aop-fin-val--empty { color: var(--color-text-subtle); font-weight: 400; }
+        .aop-fin-row--total { border-top: 1px solid var(--color-border); margin-top: 2px; padding-top: 2px; }
+        .aop-fin-val--total { color: var(--color-accent); }
+        .aop-fin-tooltip__val--total { color: #f59e0b; }
 
         /* Financials hover tooltip */
         .aop-fin-tooltip { display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 200; width: 200px; background: #1e2026; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); animation: expand-in 0.1s ease both; }

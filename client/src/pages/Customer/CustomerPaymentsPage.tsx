@@ -287,6 +287,16 @@ function ServiceFeeSection({
 function CodIncomeSection({ data }: { data: CustomerPaymentsPage }) {
   const [filterPaid, setFilterPaid] = useState<'all' | 'pending' | 'received'>('all');
 
+  // Delivered but company hasn't paid the sender yet — owed NOW
+  const owedNow = data.codIncomeOrders
+    .filter(o => !o.hasCompanyPaidTheSender && o.deliveredAt)
+    .reduce((s, o) => s + o.amountCollected, 0);
+
+  // Not yet delivered — expected once order completes
+  const expectedLater = data.codIncomeOrders
+    .filter(o => !o.hasCompanyPaidTheSender && !o.deliveredAt)
+    .reduce((s, o) => s + o.amountCollected, 0);
+
   const orders = data.codIncomeOrders.filter(o => {
     if (filterPaid === 'pending')  return !o.hasCompanyPaidTheSender;
     if (filterPaid === 'received') return  o.hasCompanyPaidTheSender;
@@ -297,8 +307,24 @@ function CodIncomeSection({ data }: { data: CustomerPaymentsPage }) {
     <div>
       {/* Summary */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-        <SummaryCard label="Pending (owed to you)" value={`₾${fmt(data.totalCodPending)}`} color="var(--color-error)" />
-        <SummaryCard label="Received" value={`₾${fmt(data.totalCodReceived)}`} color="var(--color-success)" />
+        <SummaryCard
+          label="Owed to You (Delivered)"
+          value={`₾${fmt(owedNow)}`}
+          sub="Delivered — awaiting company transfer"
+          color="var(--color-error)"
+        />
+        <SummaryCard
+          label="Expected (In Transit)"
+          value={`₾${fmt(expectedLater)}`}
+          sub="Orders not yet delivered"
+          color="var(--color-warning)"
+        />
+        <SummaryCard
+          label="Received"
+          value={`₾${fmt(data.totalCodReceived)}`}
+          sub="Already paid to you"
+          color="var(--color-success)"
+        />
       </div>
 
       {/* Filter */}
@@ -326,7 +352,7 @@ function CodIncomeSection({ data }: { data: CustomerPaymentsPage }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
             <thead>
               <tr style={{ background: 'var(--color-bg-3)' }}>
-                {['Tracking', 'Recipient', 'City', 'Amount', 'Payout Status', 'Delivered'].map(h => (
+                {['Tracking', 'Recipient', 'City', 'Amount', 'Order Status', 'Payout Status', 'Delivered'].map(h => (
                   <th key={h} style={{
                     padding: '8px 12px', textAlign: 'left', fontWeight: 700,
                     color: 'var(--color-text-subtle)', fontSize: '0.68rem',
@@ -347,6 +373,13 @@ function CodIncomeSection({ data }: { data: CustomerPaymentsPage }) {
                   <td style={{ padding: '8px 12px' }}>{o.recipientFirstName}</td>
                   <td style={{ padding: '8px 12px', color: 'var(--color-text-muted)' }}>{o.recipientCity}</td>
                   <td style={{ padding: '8px 12px', fontWeight: 700 }}>₾{fmt(o.amountCollected)}</td>
+                  <td style={{ padding: '8px 12px' }}>
+                    {o.deliveredAt ? (
+                      <span style={{ color: 'var(--color-success)', fontWeight: 600, fontSize: '0.78rem' }}>Delivered</span>
+                    ) : (
+                      <span style={{ color: 'var(--color-warning)', fontWeight: 600, fontSize: '0.78rem' }}>In Transit</span>
+                    )}
+                  </td>
                   <td style={{ padding: '8px 12px' }}>
                     {o.hasCompanyPaidTheSender ? (
                       <span style={{

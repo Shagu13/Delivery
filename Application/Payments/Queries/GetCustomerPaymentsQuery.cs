@@ -85,9 +85,9 @@ public sealed class GetCustomerPaymentsQueryHandler
         // ── 3. COD income orders (all delivered, unpaid by company) ───────────
         var codOrders = await _context.Orders
             .Include(o => o.GroupOrder)
-            .Where(o => o.GroupOrder.CustomerId  == customer.Id
-                     && o.ProductPaymentStatus   == PaymentStatus.NotPaid
-                     && o.Status                 == OrderStatus.DeliveredToRecipient)
+            .Where(o => o.GroupOrder.CustomerId      == customer.Id
+                     && o.AmountToCollectForPackage  > 0
+                     && (o.Status == OrderStatus.DeliveredToRecipient || !o.HasCompanyPaidTheSender))
             .OrderByDescending(o => o.DeliveredAt)
             .ToListAsync(cancellationToken);
 
@@ -96,7 +96,7 @@ public sealed class GetCustomerPaymentsQueryHandler
             TrackingNumber:          o.TrackingNumber,
             RecipientFirstName:      o.RecipientFirstName,
             RecipientCity:           o.RecipientCity,
-            AmountCollected:         o.AmountOfCashCollected ?? o.AmountToCollectForPackage ?? 0m,
+            AmountCollected:         o.AmountToCollectForPackage ?? 0m,
             OrderStatus:             o.Status.ToString(),
             HasCompanyPaidTheSender: o.HasCompanyPaidTheSender,
             DeliveredAt:             o.DeliveredAt
@@ -117,12 +117,12 @@ public sealed class GetCustomerPaymentsQueryHandler
             .Sum(o => o.CompanyServicePrice);
 
         var totalCodPending  = codOrders
-            .Where(o => !o.HasCompanyPaidTheSender)
-            .Sum(o => o.AmountOfCashCollected ?? o.AmountToCollectForPackage ?? 0m);
+            .Where(o => !o.HasCompanyPaidTheSender && o.DeliveredAt != null)
+            .Sum(o => o.AmountToCollectForPackage ?? 0m);
 
         var totalCodReceived = codOrders
             .Where(o => o.HasCompanyPaidTheSender)
-            .Sum(o => o.AmountOfCashCollected ?? o.AmountToCollectForPackage ?? 0m);
+            .Sum(o => o.AmountToCollectForPackage ?? 0m);
 
         return new CustomerPaymentsPageDto(
             ServiceFeeOrders:     serviceFeeDtos,
