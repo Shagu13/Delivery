@@ -4,7 +4,7 @@ import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import type { District } from '../../api/cities';
 import type { WeightPriceTier } from '../../api/weightPriceTiers';
 import { tierLabel } from '../../api/weightPriceTiers';
-import type { OrderItemRequest, ValidationErrors } from '../../types/groupOrder';
+import type { OrderItemRequest, OrderType, ValidationErrors } from '../../types/groupOrder';
 import { useLanguage } from '../../contexts/useLanguage';
 
 interface CustomerPricing {
@@ -20,6 +20,8 @@ interface PackageCardProps {
   canRemove: boolean;
   customerPricing?: CustomerPricing | null;
   weightTiers?: WeightPriceTier[];
+  /** Customer's registered address — used to auto-fill the 'Deliver Back To' fields when orderType is Return */
+  senderAddress?: { city: string; district: string; address: string } | null;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
   onRemove: (index: number) => void;
 }
@@ -34,7 +36,12 @@ function cardStatus(data: OrderItemRequest, errors: ValidationErrors, index: num
     data.recipientPhone.trim() &&
     data.recipientCity.trim() &&
     data.recipientDistrict.trim() &&
-    data.recipientAddress.trim();
+    data.recipientAddress.trim() &&
+    (data.orderType !== 'Return' || (
+      (data.returnPickupAddress ?? '').trim() &&
+      (data.returnPickupCity ?? '').trim() &&
+      (data.returnPickupDistrict ?? '').trim()
+    ));
 
   return requiredFilled ? 'complete' as const : 'empty' as const;
 }
@@ -42,6 +49,7 @@ function cardStatus(data: OrderItemRequest, errors: ValidationErrors, index: num
 function summaryLine(data: OrderItemRequest, placeholder: string): string {
   const parts: string[] = [];
 
+  if (data.orderType && data.orderType !== 'Send') parts.push(`[${data.orderType}]`);
   const name = [data.recipientFirstName, data.recipientLastName].filter(Boolean).join(' ');
   if (name) parts.push(name);
   if (data.recipientPhone) parts.push(data.recipientPhone);
@@ -54,6 +62,13 @@ function summaryLine(data: OrderItemRequest, placeholder: string): string {
   return parts.length > 0 ? parts.join(' · ') : placeholder;
 }
 
+// ── Order type badge colours ───────────────────────────────────────────────────
+const ORDER_TYPE_STYLE: Record<OrderType, { bg: string; color: string }> = {
+  Send:     { bg: 'transparent',              color: 'var(--color-text-subtle)' },
+  Return:   { bg: 'rgba(239,68,68,0.10)',     color: '#ef4444' },
+  Exchange: { bg: 'rgba(59,130,246,0.10)',    color: '#3b82f6' },
+};
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function PackageCard({
@@ -63,12 +78,14 @@ export function PackageCard({
   canRemove,
   customerPricing,
   weightTiers = [],
+  senderAddress,
   onChange,
   onRemove,
 }: PackageCardProps) {
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(true);
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
+  const [selectedReturnDistrict, setSelectedReturnDistrict] = useState<District | null>(null);
 
   const fieldError = (field: string) => errors[`orders[${index}].${field}`];
   const status = cardStatus(data, errors, index);
@@ -97,6 +114,9 @@ export function PackageCard({
   };
 
   const showCollectAmount = data.productPaymentStatus === 'NotPaid';
+  const isReturn   = data.orderType === 'Return';
+  const isExchange = data.orderType === 'Exchange';
+  const typeStyle  = ORDER_TYPE_STYLE[data.orderType ?? 'Send'];
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -120,10 +140,21 @@ export function PackageCard({
     }
   };
 
+  const handleReturnDistrictSelect = (district: District | null) => {
+    setSelectedReturnDistrict(district);
+    if (district) {
+      const fee = computeServiceFee(district, data.weightPriceTierId);
+      onChange(index, 'companyServicePrice', fee);
+    } else {
+      onChange(index, 'companyServicePrice', 0);
+    }
+  };
+
   const handleWeightTierChange = (tierId: string) => {
     onChange(index, 'weightPriceTierId', tierId);
-    if (selectedDistrict) {
-      const fee = computeServiceFee(selectedDistrict, tierId || undefined);
+    const activeDist = isReturn ? selectedReturnDistrict : selectedDistrict;
+    if (activeDist) {
+      const fee = computeServiceFee(activeDist, tierId || undefined);
       onChange(index, 'companyServicePrice', fee);
     }
   };
@@ -139,6 +170,27 @@ export function PackageCard({
 
   const handleServicePayerChange = (value: string) => {
     onChange(index, 'whoPaysForCompanyService', value);
+  };
+
+  const handleOrderTypeChange = (value: string) => {
+    onChange(index, 'orderType', value);
+    setSelectedDistrict(null);
+    setSelectedReturnDistrict(null);
+    onChange(index, 'companyServicePrice', 0);
+    if (value === 'Return') {
+      onChange(index, 'whoPaysForCompanyService', 'Sender');
+      // Auto-fill deliver-back-to address from the customer's registered address
+      if (senderAddress) {
+        onChange(index, 'recipientCity',     senderAddress.city);
+        onChange(index, 'recipientDistrict', senderAddress.district);
+        onChange(index, 'recipientAddress',  senderAddress.address);
+      }
+    } else {
+      // For Send / Exchange, clear recipient address so user fills it fresh
+      onChange(index, 'recipientCity',     '');
+      onChange(index, 'recipientDistrict', '');
+      onChange(index, 'recipientAddress',  '');
+    }
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -164,6 +216,17 @@ export function PackageCard({
             <span className="package-card__badge-label">{t.cgoPackageLabel}</span>
             <span className="package-card__badge-num">{String(index + 1).padStart(2, '0')}</span>
           </span>
+
+          {/* Order type chip */}
+          {data.orderType && data.orderType !== 'Send' && (
+            <span
+              className="package-card__type-chip"
+              style={{ background: typeStyle.bg, color: typeStyle.color }}
+            >
+              {data.orderType === 'Return'   ? (t.cgoOrderTypeReturn   ?? 'Return')   : null}
+              {data.orderType === 'Exchange' ? (t.cgoOrderTypeExchange ?? 'Exchange') : null}
+            </span>
+          )}
 
           {/* Summary (shown when collapsed, fades when open) */}
           <span className="package-card__summary" aria-hidden={isOpen}>
@@ -200,9 +263,71 @@ export function PackageCard({
       {/* ── Collapsible Body ── */}
       <div className="package-card__collapse" aria-hidden={!isOpen}>
         <div className="package-card__body">
-          {/* Recipient */}
+
+          {/* ── Order Type selector ── */}
           <fieldset className="fieldset">
-            <legend className="fieldset__legend">{t.cgoRecipient}</legend>
+            <legend className="fieldset__legend">{t.cgoOrderTypeLabel ?? 'Order Type'}</legend>
+            <div className="package-card__type-row">
+              {(['Send', 'Return', 'Exchange'] as OrderType[]).map(type => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`package-card__type-btn${data.orderType === type ? ' package-card__type-btn--active' : ''}`}
+                  style={data.orderType === type ? { background: ORDER_TYPE_STYLE[type].bg, borderColor: ORDER_TYPE_STYLE[type].color, color: ORDER_TYPE_STYLE[type].color } : {}}
+                  onClick={() => handleOrderTypeChange(type)}
+                >
+                  {type === 'Send'     && (t.cgoOrderTypeSend     ?? 'Send')}
+                  {type === 'Return'   && (t.cgoOrderTypeReturn   ?? 'Return')}
+                  {type === 'Exchange' && (t.cgoOrderTypeExchange ?? 'Exchange')}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          {/* ── Return pickup address (only when Return) ── */}
+          {isReturn && (
+            <fieldset className="fieldset package-card__return-section">
+              <legend className="fieldset__legend" style={{ color: '#ef4444' }}>
+                {t.cgoReturnPickupAddress ?? '📍 Return Pickup Address'}
+              </legend>
+              <p className="package-card__return-hint">
+                {t.cgoReturnPickupHint ?? 'Enter the address where the courier will collect the parcel from the recipient.'}
+              </p>
+              <CityDistrictPicker
+                cityValue={data.returnPickupCity ?? ''}
+                districtValue={data.returnPickupDistrict ?? ''}
+                onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', 0); }}
+                onDistrictChange={v => onChange(index, 'returnPickupDistrict', v)}
+                onDistrictSelect={handleReturnDistrictSelect}
+                cityError={fieldError('returnPickupCity')}
+                districtError={fieldError('returnPickupDistrict')}
+              />
+              <FormField
+                label={t.cgoStreetAddress}
+                required
+                value={data.returnPickupAddress ?? ''}
+                onChange={e => onChange(index, 'returnPickupAddress', e.target.value)}
+                error={fieldError('returnPickupAddress')}
+                placeholder={t.cgoStreetPlaceholder}
+                maxLength={250}
+              />
+            </fieldset>
+          )}
+
+          {/* Exchange hint */}
+          {isExchange && (
+            <div className="package-card__exchange-hint">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M8 5v3.5M8 11h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+              {t.cgoExchangeHint ?? 'Exchange: fill in the recipient address to deliver the replacement parcel to.'}
+            </div>
+          )}
+
+          {/* Recipient Info */}
+          <fieldset className="fieldset">
+            <legend className="fieldset__legend">{t.cgoRecipientInfo}</legend>
             <div className="grid grid--2">
               <FormField
                 label={t.cgoRecipientFirstName}
@@ -235,7 +360,9 @@ export function PackageCard({
 
           {/* Delivery Address */}
           <fieldset className="fieldset">
-            <legend className="fieldset__legend">{t.cgoDeliveryAddress}</legend>
+            <legend className="fieldset__legend">
+              {isReturn ? (t.cgoReturnDeliverBackTo ?? 'Deliver Back To (Sender)') : t.cgoDeliveryAddress}
+            </legend>
 
             <CityDistrictPicker
               cityValue={data.recipientCity}
@@ -408,6 +535,67 @@ export function PackageCard({
           </fieldset>
         </div>
       </div>
+
+      <style>{`
+        .package-card__type-row {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .package-card__type-btn {
+          padding: 7px 16px;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          background: var(--color-bg-3);
+          color: var(--color-text-subtle);
+          font-family: var(--font-body);
+          font-size: 0.82rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all var(--transition);
+        }
+        .package-card__type-btn:hover {
+          border-color: var(--color-accent);
+          color: var(--color-accent);
+        }
+        .package-card__type-btn--active {
+          font-weight: 700;
+        }
+        .package-card__type-chip {
+          font-size: 0.68rem;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          padding: 2px 8px;
+          border-radius: 99px;
+          border: 1px solid currentColor;
+          white-space: nowrap;
+        }
+        .package-card__return-section {
+          border: 1px solid rgba(239,68,68,0.3);
+          border-radius: var(--radius-sm);
+          padding: 14px 16px;
+          background: rgba(239,68,68,0.04);
+        }
+        .package-card__return-hint {
+          font-size: 0.8rem;
+          color: var(--color-text-muted);
+          margin-bottom: 12px;
+          line-height: 1.5;
+        }
+        .package-card__exchange-hint {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 0.8rem;
+          color: #3b82f6;
+          background: rgba(59,130,246,0.06);
+          border: 1px solid rgba(59,130,246,0.2);
+          border-radius: var(--radius-sm);
+          padding: 10px 12px;
+          line-height: 1.5;
+        }
+      `}</style>
     </div>
   );
 }

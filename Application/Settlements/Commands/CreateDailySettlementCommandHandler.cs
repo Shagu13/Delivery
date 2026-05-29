@@ -65,9 +65,19 @@ public sealed class CreateDailySettlementCommandHandler
         var totalCourierSalary  = orders.Sum(o => o.CourierSalary ?? 0m);
         var totalNetIncome      = totalServiceRevenue - totalCourierSalary;
 
-        // How much the courier must hand over to the company:
-        // they keep their salary from the cash they collected, the rest goes back.
-        var totalTransferToCompany = totalCashCollected - totalCourierSalary;
+        // Service fees collected directly from recipients (in cash by the courier)
+        var totalServiceFeesFromRecipients = orders
+            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
+            .Sum(o => o.CompanyServicePrice);
+
+        // Total cash the courier physically holds
+        var totalCashCourierHolds = totalCashCollected + totalServiceFeesFromRecipients;
+
+        // How much the courier must transfer to the company (or receive if negative):
+        // Courier physically holds: COD cash + service fees collected from recipients.
+        // Salary is deducted from that. If sender paid fees, courier holds nothing for
+        // those orders and the company must pay the courier their salary separately.
+        var totalTransferToCompany = totalCashCourierHolds - totalCourierSalary;
 
         // ── 6. Count packages picked up on this day ───────────────────────────
         var totalOrdersPickedUp = await _context.GroupOrders

@@ -1,5 +1,7 @@
 import type { PaymentStatus, ServicePayer } from '../api/adminGroupOrders';
 
+export type OrderType = 'Send' | 'Return' | 'Exchange';
+
 export interface OrderItemRequest {
     recipientFirstName: string;
     recipientLastName: string;
@@ -12,6 +14,12 @@ export interface OrderItemRequest {
     isFragile: boolean;
     productPaymentStatus: PaymentStatus;
     whoPaysForCompanyService: ServicePayer;
+    /** Order type: Send (default), Return, or Exchange. */
+    orderType: OrderType;
+    /** Required when orderType === 'Return'. Address where courier collects the parcel. */
+    returnPickupAddress?: string;
+    returnPickupCity?: string;
+    returnPickupDistrict?: string;
     /**
      * Cash amount the courier must collect from the recipient for the product (COD).
      * Only required when productPaymentStatus === 'NotPaid' AND whoPaysForCompanyService === 'Recipient'.

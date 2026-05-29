@@ -8,7 +8,9 @@ public sealed record GetAllOrdersQuery(
     string? District,
     string? Search,
     Guid?   CourierId,
-    bool    Unpriced = false,
-    int     Page     = 1,
-    int     PageSize = 50
+    string? OrderType  = null,   // "Send" | "Return" | "Exchange" | null (all)
+    bool    Unpriced   = false,
+    bool    ActiveOnly = false,  // when true, exclude terminal statuses
+    int     Page       = 1,
+    int     PageSize   = 50
 ) : IRequest<PagedResult<AdminOrderListDto>>;

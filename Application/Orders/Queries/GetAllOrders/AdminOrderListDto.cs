@@ -19,12 +19,16 @@ public sealed record AdminOrderListDto(
     string   RecipientAddress,
     string?  Description,
     bool     IsFragile,
-    // Status & payment
+    // Order type & status
+    string   OrderType,             // "Send" | "Return" | "Exchange"
     string   Status,
     string   ProductPaymentStatus,
     string   WhoPaysForCompanyService,
-    // COD — cash the courier must collect from the recipient for the product itself.
-    // Only set when ProductPaymentStatus == NotPaid AND WhoPaysForCompanyService == Recipient.
+    // Return pickup address (only populated when OrderType == "Return")
+    string?  ReturnPickupAddress,
+    string?  ReturnPickupCity,
+    string?  ReturnPickupDistrict,
+    // COD
     decimal? AmountToCollectForPackage,
     // Financials
     decimal  CompanyServicePrice,

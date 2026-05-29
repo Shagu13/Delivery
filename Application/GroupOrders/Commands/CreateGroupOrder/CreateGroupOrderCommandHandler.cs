@@ -98,8 +98,6 @@ public sealed class CreateGroupOrderCommandHandler
                 companyServicePrice = o.CompanyServicePrice.Value;
             }
             // ── Step 2: weight tier zone price ────────────────────────────────
-            // Pick the price column that matches the recipient's zone.
-            // If that column is null the tier has no opinion for this zone → fall through.
             else if (o.WeightPriceTierId.HasValue
                 && weightTiers.FirstOrDefault(t => t.Id == o.WeightPriceTierId.Value) is { } tier)
             {
@@ -113,7 +111,6 @@ public sealed class CreateGroupOrderCommandHandler
                 }
                 else
                 {
-                    // Tier has no price for this zone → Step 3
                     companyServicePrice = ResolveStandardPrice(customer, district, isCapital, isCity);
                 }
             }
@@ -146,6 +143,11 @@ public sealed class CreateGroupOrderCommandHandler
                 TrackingNumber            = trackingNumbers[i],
                 CompanyServicePrice       = companyServicePrice,
                 WeightPriceTierId         = o.WeightPriceTierId,
+                // ── Return / Exchange fields ──────────────────────────────────
+                OrderType             = o.OrderType,
+                ReturnPickupAddress   = o.OrderType == OrderType.Return ? o.ReturnPickupAddress  : null,
+                ReturnPickupCity      = o.OrderType == OrderType.Return ? o.ReturnPickupCity     : null,
+                ReturnPickupDistrict  = o.OrderType == OrderType.Return ? o.ReturnPickupDistrict : null,
             });
         }
 

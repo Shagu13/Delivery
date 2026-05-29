@@ -20,17 +20,19 @@ public sealed class OrdersController : BaseController
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(PagedResult<AdminOrderListDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
-        [FromQuery] string? city      = null,
-        [FromQuery] string? district  = null,
-        [FromQuery] string? search    = null,
-        [FromQuery] Guid?   courierId = null,
-        [FromQuery] bool    unpriced  = false,
-        [FromQuery] int     page      = 1,
-        [FromQuery] int     pageSize  = 50,
+        [FromQuery] string? city       = null,
+        [FromQuery] string? district   = null,
+        [FromQuery] string? search     = null,
+        [FromQuery] string? orderType  = null,
+        [FromQuery] Guid?   courierId  = null,
+        [FromQuery] bool    unpriced   = false,
+        [FromQuery] bool    activeOnly = false,
+        [FromQuery] int     page       = 1,
+        [FromQuery] int     pageSize   = 50,
         CancellationToken ct = default)
     {
         var result = await Sender.Send(
-            new GetAllOrdersQuery(city, district, search, courierId, unpriced, page, pageSize), ct);
+            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, page, pageSize), ct);
         return Ok(result);
     }
 

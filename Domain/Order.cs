@@ -10,6 +10,15 @@ public class Order
     public Guid GroupOrderId { get; set; }
     public GroupOrder GroupOrder { get; set; } = null!;
 
+    // ── Order type ───────────────────────────────────────────────────────────
+    /// <summary>
+    /// Whether this is a standard Send, a Return, or an Exchange.
+    /// Default: Send. Set by sender when placing the order.
+    /// For Return: courier goes to ReturnPickupAddress to collect, then brings to warehouse.
+    /// For Exchange: operationally identical to Send; labelled for reporting purposes.
+    /// </summary>
+    public OrderType OrderType { get; set; } = OrderType.Send;
+
     // ── Recipient / Delivery ─────────────────────────────────────────────────
     public required string RecipientFirstName { get; set; }
     public required string RecipientLastName  { get; set; }
@@ -17,6 +26,16 @@ public class Order
     public required string RecipientCity      { get; set; }
     public required string RecipientDistrict  { get; set; }
     public required string RecipientAddress   { get; set; }
+
+    // ── Return pickup (only for OrderType == Return) ─────────────────────────
+    /// <summary>
+    /// The address where the courier must go to collect the parcel for a Return.
+    /// This is the recipient's location — where the parcel currently sits.
+    /// Null for Send and Exchange orders.
+    /// </summary>
+    public string? ReturnPickupAddress  { get; set; }
+    public string? ReturnPickupCity     { get; set; }
+    public string? ReturnPickupDistrict { get; set; }
 
     // ── Assignment ───────────────────────────────────────────────────────────
     public Guid?     CourierId   { get; set; }

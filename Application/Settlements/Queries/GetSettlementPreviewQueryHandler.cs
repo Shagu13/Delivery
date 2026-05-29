@@ -59,7 +59,10 @@ public sealed class GetSettlementPreviewQueryHandler
         var totalSalary    = orders.Sum(o => o.CourierSalary ?? 0m);
         var totalNetIncome = totalService - totalSalary;
 
-        // How much the courier must hand over to the company
+        // How much the courier must transfer to the company (or receive if negative):
+        // Courier physically holds: COD cash + service fees collected from recipients.
+        // Salary is deducted from that. If sender paid fees, courier holds nothing for
+        // those orders and the company must pay the courier their salary separately.
         var totalCourierTransfer = totalCashCourierHolds - totalSalary;
 
         // ── Flag orders missing required financial data ────────────────────────

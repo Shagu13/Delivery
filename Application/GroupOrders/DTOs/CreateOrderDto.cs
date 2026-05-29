@@ -17,7 +17,11 @@ public sealed record CreateOrderDto(
     bool           IsFragile,
     PaymentStatus  ProductPaymentStatus,
     ServicePayer   WhoPaysForCompanyService,
-    decimal?       AmountToCollectForPackage = null, // amount courier must collect from recipient (COD)
-    decimal?       CompanyServicePrice       = null, // explicit override; null = use auto-pricing
-    Guid?          WeightPriceTierId         = null  // selected weight tier; drives pricing when tier.IsStandard = false
+    OrderType      OrderType                 = OrderType.Send,   // ← new
+    string?        ReturnPickupAddress       = null,             // ← new: required when OrderType == Return
+    string?        ReturnPickupCity          = null,             // ← new
+    string?        ReturnPickupDistrict      = null,             // ← new
+    decimal?       AmountToCollectForPackage = null,
+    decimal?       CompanyServicePrice       = null,
+    Guid?          WeightPriceTierId         = null
 );

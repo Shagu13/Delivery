@@ -15,6 +15,15 @@ public sealed record CourierOrderDto(
     string RecipientAddress,
     string? Description,
     bool   IsFragile,
+    /// <summary>
+    /// Whether this is a Send, Return, or Exchange order.
+    /// For Return: courier must go to ReturnPickupAddress (not RecipientAddress) to collect the parcel.
+    /// </summary>
+    OrderType     OrderType,
+    /// <summary>Address to collect from when OrderType == Return.</summary>
+    string?       ReturnPickupAddress,
+    string?       ReturnPickupCity,
+    string?       ReturnPickupDistrict,
     OrderStatus   Status,
     PaymentStatus ProductPaymentStatus,
     ServicePayer  WhoPaysForCompanyService,

@@ -259,7 +259,34 @@ const en = {
   aopNextPage:         'Next →',
   aopPageInfo:         (page: number, total: number) => `Page ${page} of ${total}`,
 
-  // ── Admin Dashboard / Group Orders ────────────────────────────────────────
+  // ── Order Detail Modal ────────────────────────────────────────────────────
+  odmSectionSender:    'Sender',
+  odmSectionRecipient: 'Recipient',
+  odmSectionPackage:   'Package',
+  odmSectionFinancials:'Financials',
+  odmSectionDates:     'Dates',
+  odmLabelBusiness:    'Business',
+  odmLabelName:        'Name',
+  odmLabelPhone:       'Phone',
+  odmLabelCity:        'City',
+  odmLabelDistrict:    'District',
+  odmLabelAddress:     'Address',
+  odmLabelDescription: 'Description',
+  odmLabelFragile:     'Fragile',
+  odmLabelFragileYes:  '⚠ Yes',
+  odmLabelFragileNo:   'No',
+  odmLabelProductPayment: 'Product Payment',
+  odmLabelWhoPays:     'Who Pays Fee',
+  odmLabelWhoPaysRcpt: 'Recipient',
+  odmLabelWhoPaysSndr: 'Sender',
+  odmLabelCod:         'COD Amount',
+  odmLabelServicePrice:'Service Price',
+  odmLabelSalary:      'Courier Salary',
+  odmLabelRevenue:     'Revenue',
+  odmLabelCreated:     'Created',
+  odmLabelDelivered:   'Delivered',
+
+  // ── Admin Dashboard / Group Orders
   goSearchPh:              'Search by sender, recipient, phone, city, address, TN…',
   goOrderCount:            (n: number, total: number) => `${n}${n !== total ? `/${total}` : ''} group order${n !== 1 ? 's' : ''}`,
   goOrdersMatched:         'matched',
@@ -441,7 +468,7 @@ const en = {
   cgoPackageDescription:    'Package Description',
   cgoDescPlaceholder:       'Contents, special handling…',
   cgoPackageOptions:        'Package Options',
-  cgoPaymentStatus:         'Payment Status',
+  cgoPaymentStatus:         'Product/Parcel Payment Status',
   cgoNotPaid:               'Not Paid',
   cgoPaid:                  'Paid',
   cgoWhoPays:               'Who Pays Courier Fee',
@@ -759,7 +786,7 @@ const en = {
   stlmTotalSvcHint:          'All CompanyServicePrice (sender + recipient)',
   stlmCourierSalary:         'Courier Salary',
   stlmNetIncome:             'Company Net Income',
-  stlmTransfer:              'Courier Transfer to Company',
+  stlmTransfer:              'Company Transfer to Courier',
   stlmTransferHint:          'Total cash held − salary',
   stlmDeliveredOrders:       (n: number) => `Delivered Orders (${n})`,
   stlmThTracking:            'Tracking №',
@@ -846,7 +873,30 @@ const en = {
   pillAllDelivered:          'All Delivered',
   goHistoryLoading:          'Loading history…',
   goHistoryNoOrders:         'No completed orders yet.',
-  goHistoryNoMatch:          'No completed orders match your filters.',
+    goHistoryNoMatch: 'No completed orders match your filters.',
+
+    // Order type (PackageCard / CreateGroupOrderPage)
+    cgoOrderTypeLabel: 'Order Type',
+    cgoOrderTypeSend: 'Send',
+    cgoOrderTypeReturn: 'Return',
+    cgoOrderTypeExchange: 'Exchange',
+
+    // Return pickup section
+    cgoReturnPickupAddress: '📍 Return Pickup Address',
+    cgoReturnPickupHint: 'Enter the address where the courier will collect the parcel from the recipient.',
+    cgoReturnDeliverBackTo: 'Deliver Back To (Sender)',
+
+    // Exchange hint
+    cgoExchangeHint: 'Exchange: fill in the recipient address to deliver the replacement parcel to.',
+
+    // Admin orders page filter chips
+    pillSend: 'Send',
+    pillReturn: 'Return',
+    pillExchange: 'Exchange',
+
+    // Status pills (statusMeta.ts handles badge labels — these are for filter UI)
+    pillReturnedToSender: 'Returned',
+    pillExchangeCompleted: 'Exchanged',
 };
 
 const ka: typeof en = {
@@ -1047,7 +1097,7 @@ const ka: typeof en = {
   aopAllCities:        'ყველა ქალაქი',
   aopAllDistricts:     'ყველა რაიონი',
   aopUnpriced:         'შეუფასებელი',
-  aopUnpricedTitle:    'ნახე შეკვეთები სერვის ფასის ან კურიერის ხელფასის გარეშე',
+  aopUnpricedTitle:    'ნახე შეკვეთები საკურიეროს ან კურიერის ხელფასის გარეშე',
   aopClearFilters:     'ფილტრების გასუფთავება',
   aopOrderCount:       (n: number) => `${n.toLocaleString()} შეკვეთა`,
   aopMissingFinancials:(n: number) => `${n} შეკვეთას ფინანსური მონაცემები არ აქვს`,
@@ -1069,7 +1119,7 @@ const ka: typeof en = {
   aopThCityDistrict:   'ქ. / რაიონი',
   aopThDescription:    'აღწერა',
   aopThStatus:         'სტატუსი',
-  aopThSvcPrice:       'სერვ. ფასი',
+  aopThSvcPrice:       'საკურიერო',
   aopThSalary:         'ხელფასი',
   aopThRevenue:        'შემოსავალი',
   aopThPaid:           'გადახდა',
@@ -1088,11 +1138,11 @@ const ka: typeof en = {
     aopBulkSuccess: (label: string, amount: string, n: number) =>
         `${label} — ₾${amount} დაყენდა ${n} შეკვეთისთვის.`,
   aopSetPrices:        '💰 ფასების დაყენება',
-  aopBulkSvcLabel:     'სერვის ფასი',
+  aopBulkSvcLabel:     'საკურიეროს ფასი',
   aopBulkSalLabel:     'კურიერის ხელფასი',
   aopUnchangedPh:      'უცვლელი',
   aopThPayer:          'გადამხდ.',
-  aopThPayerTitle:     'ვინ იხდის სააგენტოს სერვის ფასს',
+  aopThPayerTitle:     'ვინ იხდის საკურიეროს ფასს',
   aopThCod:            'COD ₾',
   aopRcpt:             'მიმღ.',
   aopSndr:             'გამგ.',
@@ -1105,7 +1155,34 @@ const ka: typeof en = {
   aopNextPage:         'შემდეგი →',
   aopPageInfo:         (page: number, total: number) => `გვ. ${page} / ${total}`,
 
-  // ── Admin Dashboard / Group Orders ────────────────────────────────────────
+  // ── Order Detail Modal ────────────────────────────────────────────────────
+  odmSectionSender:    'გამგზავნი',
+  odmSectionRecipient: 'მიმღები',
+  odmSectionPackage:   'ამანათი',
+  odmSectionFinancials:'ფინანსები',
+  odmSectionDates:     'თარიღები',
+  odmLabelBusiness:    'ბიზნესი',
+  odmLabelName:        'სახელი',
+  odmLabelPhone:       'ტელ.',
+  odmLabelCity:        'ქალაქი',
+  odmLabelDistrict:    'რაიონი',
+  odmLabelAddress:     'მისამართი',
+  odmLabelDescription: 'აღწერა',
+  odmLabelFragile:     'მტვრევადი',
+  odmLabelFragileYes:  '⚠ დიახ',
+  odmLabelFragileNo:   'არა',
+  odmLabelProductPayment: 'პროდუქტის გადახდა',
+  odmLabelWhoPays:     'ვინ იხდის',
+  odmLabelWhoPaysRcpt: 'მიმღები',
+  odmLabelWhoPaysSndr: 'გამგზავნი',
+  odmLabelCod:         'COD თანხა',
+  odmLabelServicePrice:'საკურიერო ფასი',
+  odmLabelSalary:      'კურიერის ხელფასი',
+  odmLabelRevenue:     'შემოსავალი',
+  odmLabelCreated:     'შექმნილია',
+  odmLabelDelivered:   'მიტანილია',
+
+  // ── Admin Dashboard / Group Orders
   goSearchPh:              'ძებნა გამგზავნით, მიმღებით, ტელ., ქალაქით, TN…',
   goOrderCount:            (n: number, total: number) => `${n}${n !== total ? `/${total}` : ''} ჯგუფური შეკვეთა`,
   goOrdersMatched:         'ნაპოვნი',
@@ -1386,7 +1463,7 @@ const ka: typeof en = {
   cdCollectTitle:    'ნაღდის დადასტურება',
   cdCollectSubtitle: 'შეაგროვეთ შემდეგი თანხა მიმღებისგან?',
   cdCollectParcel:   '📦 ამანათის ღირებულება',
-  cdCollectFee:      '🚚 სერვისის ფასი',
+  cdCollectFee:      '🚚 საკურიეროს ფასი',
   cdCollectTotal:    'სულ ასაღები მიმღებისგან',
   cdCollectNo:       'ჯერ არა',
   cdCollectYes:      '✓ დიახ, ავიღე',
@@ -1451,7 +1528,7 @@ const ka: typeof en = {
   acpDistrictBadge:          '🏘 რაიონი',
   acpThDistrict:             'რაიონი',
   acpThTerritory:            'ტერიტორია',
-  acpThServicePrice:         'სააგენტოს სერვის ფასი (₾)',
+  acpThServicePrice:         'საკურიეროს ფასი (₾)',
   acpNotSet:                 'არ არის',
   acpAddDistrictBtn:         '+ რაიონი',
   acpEnglishName:            'ინგლისური სახელი',
@@ -1463,7 +1540,7 @@ const ka: typeof en = {
   acpAddDistrictTitle:       (city: string) => `რაიონის დამატება — ${city}`,
   acpDistrictNamePh:         'მაგ. Saburtalo',
   acpDistrictNameGeoPh:      'მაგ. საბურთალო',
-  acpServicePriceLabel:      'სააგენტოს სერვის ფასი (₾)',
+  acpServicePriceLabel:      'საკურიეროს ფასი (₾)',
   acpServicePricePh:         'დატოვეთ ცარიელი შემდეგ დასაყენებლად',
   acpServicePriceEditPh:     'დატოვეთ ცარიელი გასასუფთავებლად',
   acpPricingTerritory:       'ფასის ტერიტორია',
@@ -1605,7 +1682,7 @@ const ka: typeof en = {
   stlmTotalSvcHint:          'საკურიერო (გამგზავნი + მიმღები)',
   stlmCourierSalary:         'კურიერის ხელფასი',
   stlmNetIncome:             'სააგენტოს წმინდა შემოსავალი',
-  stlmTransfer:              'კურიერის გადასარიცხი სააგენტოში',
+  stlmTransfer:              'კურიერთან გადასარიცხი',
   stlmTransferHint:          'სულ ნაღდი − ხელფასი',
   stlmDeliveredOrders:       (n: number) => `ჩაბარებული შეკვეთები (${n})`,
   stlmThTracking:            'Tracking №',
@@ -1692,7 +1769,29 @@ const ka: typeof en = {
   pillAllDelivered:          'ყველა ჩაბარდა',
   goHistoryLoading:          'ისტორია იტვირთება…',
   goHistoryNoOrders:         'დასრულებული შეკვეთები ჯერ არ არის.',
-  goHistoryNoMatch:          'ფილტრებით შეკვეთები ვერ მოიძებნა.',
+    goHistoryNoMatch: 'ფილტრებით შეკვეთები ვერ მოიძებნა.',
+
+    // Order type
+    cgoOrderTypeLabel: 'შეკვეთის ტიპი',
+    cgoOrderTypeSend: 'გაგზავნა',
+    cgoOrderTypeReturn: 'დაბრუნება',
+    cgoOrderTypeExchange: 'გაცვლა',
+
+    // Return pickup section
+    cgoReturnPickupAddress: '📍 დაბრუნების მისამართი',
+    cgoReturnPickupHint: 'შეიყვანეთ მისამართი, საიდანაც კურიერი ამანათს აიღებს.',
+    cgoReturnDeliverBackTo: 'გამგზავნთან მიბრუნება',
+
+    // Exchange hint
+    cgoExchangeHint: 'გაცვლა: შეავსეთ მიმღების მისამართი სათადარიგო ამანათის მისატანად.',
+
+    // Admin filter chips
+    pillSend: 'გაგზავნა',
+    pillReturn: 'დაბრუნება',
+    pillExchange: 'გაცვლა',
+    pillReturnedToSender: 'დაბრუნდა',
+    pillExchangeCompleted: 'გაცვლა შედგა',
+
 };
 
 export const translations = { en, ka } as const;

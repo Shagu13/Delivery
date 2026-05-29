@@ -22,7 +22,7 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     CourierOnTheWayToPickUp:         { short: 'Picking Up',       description: 'Courier is on the way to your pickup address.' },
     CourierDeliveringToWarehouse:    { short: 'To Warehouse',     description: 'Courier is transporting your order to the warehouse.' },
     DeliveredToWarehouse:            { short: 'At Warehouse',     description: 'Order has arrived at the warehouse.' },
-    AdminAcceptedOrderInWareHouse:   { short: 'In Warehouse',          description: 'Order inspected and cleared at the warehouse — ready for dispatch.' },
+    AdminAcceptedOrderInWareHouse:   { short: 'In Warehouse',     description: 'Order inspected and cleared at the warehouse — ready for dispatch.' },
     CancelledBySender:               { short: 'Cancelled',        description: 'Order was cancelled by the sender.' },
 
     // ── Order (last-mile) flow ────────────────────────────────────────────────
@@ -35,32 +35,40 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
 
     // ── Admin override ────────────────────────────────────────────────────────
     CancelledByAdmin:                { short: 'Cancelled',        description: 'Order was cancelled by the Company.' },
-    AllDelivered:                    { short: 'All Delivered',    description: 'All packages in this group have been delivered.' },
+    AllDelivered:                    { short: 'All Delivered',    description: 'All packages in this group have been delivered or cancelled.' },
+
+    // ── Return & Exchange terminals ───────────────────────────────────────────
+    ReturnedToSender:                { short: 'Returned',         description: 'Parcel has been returned to the sender.' },
+    ExchangeCompleted:               { short: 'Exchanged',        description: 'Exchange parcel has been delivered to the recipient.' },
   },
 
   ka: {
     // ── GroupOrder flow ───────────────────────────────────────────────────────
-    Pending:                         { short: 'მოლოდინში',         description: 'შეკვეთა განთავსებულია — ელოდება ოპერატორის დადასტურებას.' },
-    AcceptedGroupOrder:              { short: 'მიღებულია',          description: 'კომპანიამ შეკვეთა მიიღო.' },
-    OrderNotAccepted:                { short: 'არ მიღებულა',        description: 'შეკვეთა ოპერატორმა არ მიიღო.' },
-    CourierAssignedToPickUp:         { short: 'დაინიშნა',           description: 'კურიერი დაინიშნა შეკვეთის გასატანად.' },
-    CourierOnTheWayToPickUp:         { short: 'გამოემართა',         description: 'კურიერი მიემართება გატანის მისამართზე.' },
-    CourierDeliveringToWarehouse:    { short: 'საწყობისკენ',        description: 'კურიერს ამანათი საწყობში მიაქვს.' },
-    DeliveredToWarehouse:            { short: 'მოწმდება',          description: 'ამანათი საწყობშია და მოწმდება.' },
-    AdminAcceptedOrderInWareHouse:   { short: 'საწყობშია',         description: 'ამანათი შემოწმდა და საწყობში მიიღეს — მზადდება გასაგზავნად.' },
-    CancelledBySender:               { short: 'გაუქმებულია',        description: 'გამგზავნმა შეკვეთა გაუქმა.' },
+    Pending:                         { short: 'მოლოდინში',        description: 'შეკვეთა განხილვის მოლოდინშია.' },
+    AcceptedGroupOrder:              { short: 'მიღებულია',        description: 'კომპანიამ შეკვეთა მიიღო.' },
+    OrderNotAccepted:                { short: 'არ მიღებულა',      description: 'შეკვეთა ოპერატორმა არ მიიღო.' },
+    CourierAssignedToPickUp:         { short: 'კურიერი დაინიშნა', description: 'კურიერი დაინიშნა თქვენი ამანათის აყვანისთვის.' },
+    CourierOnTheWayToPickUp:         { short: 'მოდის',            description: 'კურიერი მიემართება თქვენს მისამართზე.' },
+    CourierDeliveringToWarehouse:    { short: 'საწყობისკენ',      description: 'კურიერი ამანათს საწყობში მიაქვს.' },
+    DeliveredToWarehouse:            { short: 'საწყობშია',        description: 'ამანათი საწყობს მიაღწია.' },
+    AdminAcceptedOrderInWareHouse:   { short: 'საწყობში',         description: 'ამანათი შემოწმებულია — მზადაა გასაგზავნად.' },
+    CancelledBySender:               { short: 'გაუქმებულია',      description: 'შეკვეთა გამგზავნმა გააუქმა.' },
 
     // ── Order (last-mile) flow ────────────────────────────────────────────────
-    AcceptedOrder:                          { short: 'მიღებულია',          description: 'კომპანიამ მიიღო შეკვეთა.' },
-    OrderIsOnItsWayToRecipientsCity:        { short: 'გზაშია',             description: 'ამანათი მიმღების ქალაქისკენ მიდის.' },
-    CourierAssignedToDeliver:               { short: 'კურიერი დაინიშნა',   description: 'კურიერი დაინიშნა ამანათის მისატანად.' },
-    CourierDeliveringTheOrderToRecipient:   { short: 'მიტანის პროცესში',   description: 'კურიერმა მიიღო ამანათი და მალე ჩაგბარდებათ.' },
-    DeliveryPostponed:                      { short: 'გადადებულია',        description: 'მიტანა ვერ შედგა — კურიერი ხელახლა შეეცდება.' },
-    DeliveredToRecipient:                   { short: 'ჩაბარდა',            description: 'ამანათი წარმატებით ჩაბარდა მიმღებს.' },
+    AcceptedOrder:                          { short: 'მიღებულია',        description: 'კომპანიამ შეკვეთა მიიღო.' },
+    OrderIsOnItsWayToRecipientsCity:        { short: 'გზაშია',           description: 'ამანათი მიმღების ქალაქისკენ მიდის.' },
+    CourierAssignedToDeliver:               { short: 'კურიერი დაინიშნა', description: 'კურიერი დაინიშნა მიტანისთვის.' },
+    CourierDeliveringTheOrderToRecipient:   { short: 'მიტანის პროცესში', description: 'კურიერმა მიიღო ამანათი და მალე ჩაგბარდებათ.' },
+    DeliveryPostponed:                      { short: 'გადადებულია',       description: 'მიტანა ვერ შედგა — კურიერი ხელახლა სცდება.' },
+    DeliveredToRecipient:                   { short: 'ჩაბარდა',           description: 'ამანათი წარმატებით ჩაბარდა მიმღებს.' },
 
     // ── Admin override ────────────────────────────────────────────────────────
-    CancelledByAdmin:                { short: 'გაუქმებულია',        description: 'კომპანიამ შეკვეთა გააუქმა.' },
-    AllDelivered:                    { short: 'ჩაბარდა სრულად',    description: 'ამ ჯგუფის ყველა ამანათი ჩაბარდა.' },
+    CancelledByAdmin:                { short: 'გაუქმებულია',      description: 'კომპანიამ შეკვეთა გააუქმა.' },
+    AllDelivered:                    { short: 'ჩაბარდა სრულად',  description: 'ამ ჯგუფის ყველა ამანათი ჩაბარდა ან გაუქმდა.' },
+
+    // ── Return & Exchange terminals ───────────────────────────────────────────
+    ReturnedToSender:                { short: 'დაბრუნდა',         description: 'ამანათი გამგზავნს დაუბრუნდა.' },
+    ExchangeCompleted:               { short: 'გაცვლა შედგა',     description: 'სათადარიგო ამანათი მიმღებს ჩაბარდა.' },
   },
 };
 

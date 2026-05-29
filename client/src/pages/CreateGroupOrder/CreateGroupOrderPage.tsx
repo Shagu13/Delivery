@@ -64,6 +64,10 @@ const EMPTY_PACKAGE: OrderItemRequest = {
     isFragile:                    false,
     productPaymentStatus:         'NotPaid',
     whoPaysForCompanyService:     'Recipient',
+    orderType:                    'Send',        // ← new
+    returnPickupAddress:          undefined,     // ← new
+    returnPickupCity:             undefined,     // ← new
+    returnPickupDistrict:         undefined,     // ← new
     amountToCollectForPackage:    undefined,
     weightPriceTierId:            undefined,
 };
@@ -124,6 +128,16 @@ function validate(
                 errors[`orders[${i}].companyServicePrice`] = t.cgoErrServiceFee;
             }
         }
+
+        // ── Return-specific validation ─────────────────────────────────────────
+        if (pkg.orderType === 'Return') {
+            if (!pkg.returnPickupCity?.trim())
+                errors[`orders[${i}].returnPickupCity`] = t.cgoErrCity;
+            if (!pkg.returnPickupDistrict?.trim())
+                errors[`orders[${i}].returnPickupDistrict`] = t.cgoErrDistrict;
+            if (!pkg.returnPickupAddress?.trim())
+                errors[`orders[${i}].returnPickupAddress`] = t.cgoErrAddress;
+        }
     });
 
     return errors;
@@ -143,6 +157,7 @@ export function CreateGroupOrderPage() {
     const [globalError,  setGlobalError]  = useState<string | null>(null);
     const [result,       setResult]       = useState<CreateGroupOrderResponse | null>(null);
     const [customerPricing, setCustomerPricing] = useState<Pick<Customer, 'companyServiceCapitalPrice' | 'companyServiceCityPrice' | 'companyServiceDistrictPrice'> | null>(null);
+    const [senderAddress, setSenderAddress] = useState<{ city: string; district: string; address: string } | null>(null);
 
     const [excelImporting, setExcelImporting] = useState(false);
     const [excelError,     setExcelError]     = useState<string | null>(null);
@@ -158,7 +173,7 @@ export function CreateGroupOrderPage() {
     useEffect(() => {
         fetchWeightPriceTiers()
             .then(setWeightTiers)
-            .catch(() => {}); // silently ignore — weight tier selector just won't show
+            .catch(() => {});
     }, []);
 
     // ── City / district cache for frontend validation ─────────────────────────
@@ -197,6 +212,11 @@ export function CreateGroupOrderPage() {
                     companyServiceCapitalPrice:  profile.companyServiceCapitalPrice,
                     companyServiceCityPrice:     profile.companyServiceCityPrice,
                     companyServiceDistrictPrice: profile.companyServiceDistrictPrice,
+                });
+                setSenderAddress({
+                    city:     profile.city,
+                    district: profile.district,
+                    address:  profile.address,
                 });
                 setPrefilled(true);
             } catch {
@@ -283,7 +303,6 @@ export function CreateGroupOrderPage() {
                 description: o.description ?? '',
             }));
 
-            // Build district cache for all unique cities found in the import
             const uniqueCities = [...new Set(normalised.map(o => o.recipientCity).filter(Boolean))];
             await Promise.all(uniqueCities.map(async cityName => {
                 const city = cities.find(c => c.cityName === cityName);
@@ -343,17 +362,18 @@ export function CreateGroupOrderPage() {
                 orders: packages.map(p => ({
                     ...p,
                     description: p.description?.trim() || undefined,
-                    // Send parcel price whenever the product is not pre-paid
                     amountToCollectForPackage:
                         p.productPaymentStatus === 'NotPaid'
                             ? p.amountToCollectForPackage
                             : undefined,
-                    // Send the computed/confirmed company service price
                     companyServicePrice: p.companyServicePrice ?? undefined,
-                    // Send the selected weight tier id for backend pricing resolution
                     weightPriceTierId: p.weightPriceTierId || undefined,
+                    // ── Return/Exchange fields ────────────────────────────────
+                    orderType: p.orderType,
+                    returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
+                    returnPickupCity:     p.orderType === 'Return' ? p.returnPickupCity?.trim()     : undefined,
+                    returnPickupDistrict: p.orderType === 'Return' ? p.returnPickupDistrict?.trim() : undefined,
                 })),
-                // customerId is resolved server-side from the JWT — do not send it from the client
             };
 
             const response = await createGroupOrder(payload, token!);
@@ -549,6 +569,7 @@ export function CreateGroupOrderPage() {
                                         canRemove={packages.length > 1}
                                         customerPricing={customerPricing}
                                         weightTiers={weightTiers}
+                                        senderAddress={senderAddress}
                                         onChange={handlePackageChange}
                                         onRemove={removePackage}
                                     />

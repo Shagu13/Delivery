@@ -116,6 +116,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasKey(o => o.Id);
             e.HasIndex(o => o.Status);
             e.HasIndex(o => o.CreatedAt);
+            e.HasIndex(o => o.OrderType);
             e.HasIndex(o => new { o.RecipientCity, o.RecipientDistrict });
             e.HasIndex(o => o.GroupOrderId);
             e.HasOne(o => o.Courier).WithMany(c => c.Orders)
@@ -136,8 +137,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(o => o.TrackingNumber).HasMaxLength(30).IsRequired();
             e.Property(o => o.Description).HasMaxLength(500);
             e.Property(o => o.Status).HasConversion<string>().HasMaxLength(50);
+            e.Property(o => o.OrderType).HasConversion<string>().HasMaxLength(20);
             e.Property(o => o.ProductPaymentStatus).HasConversion<string>().HasMaxLength(20);
             e.Property(o => o.WhoPaysForCompanyService).HasConversion<string>().HasMaxLength(20);
+            e.Property(o => o.ReturnPickupAddress).HasMaxLength(250);
+            e.Property(o => o.ReturnPickupCity).HasMaxLength(100);
+            e.Property(o => o.ReturnPickupDistrict).HasMaxLength(100);
             e.Property(o => o.CourierSalary).HasColumnType("decimal(18,2)");
             e.Property(o => o.CompanyServicePrice).HasColumnType("decimal(18,2)");
             e.Property(o => o.CompanyRevenue).HasColumnType("decimal(18,2)");

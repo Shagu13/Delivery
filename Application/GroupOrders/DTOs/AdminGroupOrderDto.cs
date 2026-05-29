@@ -43,6 +43,13 @@ public sealed record AdminOrderDto(
     string RecipientAddress,
     string? Description,
     bool   IsFragile,
+    // Order type
+    OrderType     OrderType,
+    // Return pickup address (null for Send/Exchange)
+    string?       ReturnPickupAddress,
+    string?       ReturnPickupCity,
+    string?       ReturnPickupDistrict,
+    // Status & payment
     OrderStatus   Status,
     PaymentStatus ProductPaymentStatus,
     ServicePayer  WhoPaysForCompanyService,

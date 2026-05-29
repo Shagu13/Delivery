@@ -12,6 +12,19 @@ interface Props {
     token: string;
 }
 
+const ORDER_TYPE_OPTIONS = [
+    { value: 'Send',     label: 'Send',     color: 'var(--color-text-subtle)' },
+    { value: 'Return',   label: 'Return',   color: '#ef4444' },
+    { value: 'Exchange', label: 'Exchange', color: '#3b82f6' },
+] as const;
+
+const STATUS_OVERRIDE_OPTIONS = [
+    { value: '',                  label: '— no change —' },
+    { value: 'ReturnedToSender',  label: '↩ Returned to Sender' },
+    { value: 'ExchangeCompleted', label: '✓ Exchange Completed' },
+    { value: 'CancelledByAdmin',  label: '✗ Cancel (Admin)' },
+];
+
 export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) {
     // ── Form state ────────────────────────────────────────────────────────────
     const [firstName,   setFirstName]   = useState('');
@@ -28,9 +41,16 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
     const [svcPrice,    setSvcPrice]    = useState('');
     const [salary,      setSalary]      = useState('');
 
+    // Return/Exchange fields
+    const [orderType,           setOrderType]           = useState('Send');
+    const [returnCity,          setReturnCity]          = useState('');
+    const [returnDistrict,      setReturnDistrict]      = useState('');
+    const [returnAddress,       setReturnAddress]       = useState('');
+    const [statusOverride,      setStatusOverride]      = useState('');
+
     const [saving,     setSaving]     = useState(false);
     const [error,      setError]      = useState<string | null>(null);
-    const [activeTab,  setActiveTab]  = useState<'delivery' | 'financials'>('delivery');
+    const [activeTab,  setActiveTab]  = useState<'delivery' | 'financials' | 'type'>('delivery');
 
     // Populate form when order changes
     useEffect(() => {
@@ -48,6 +68,11 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
         setCodAmount(order.amountToCollectForPackage != null ? String(order.amountToCollectForPackage) : '');
         setSvcPrice(String(order.companyServicePrice));
         setSalary(order.courierSalary != null ? String(order.courierSalary) : '');
+        setOrderType(order.orderType ?? 'Send');
+        setReturnCity(order.returnPickupCity ?? '');
+        setReturnDistrict(order.returnPickupDistrict ?? '');
+        setReturnAddress(order.returnPickupAddress ?? '');
+        setStatusOverride('');
         setError(null);
         setActiveTab('delivery');
     }, [order]);
@@ -61,6 +86,8 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
     }, [open, onClose]);
 
     if (!open || !order) return null;
+
+    const isReturn = orderType === 'Return';
 
     const handleSave = async () => {
         setSaving(true);
@@ -80,6 +107,11 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
                 amountToCollectForPackage: codAmount ? parseFloat(codAmount) : null,
                 companyServicePrice:       parseFloat(svcPrice) || 0,
                 courierSalary:             salary ? parseFloat(salary) : null,
+                orderType,
+                returnPickupCity:          isReturn ? returnCity.trim() || null     : null,
+                returnPickupDistrict:      isReturn ? returnDistrict.trim() || null : null,
+                returnPickupAddress:       isReturn ? returnAddress.trim() || null  : null,
+                statusOverride:            statusOverride || null,
             });
             onSaved();
             onClose();
@@ -101,6 +133,18 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
                         <p className="modal__eyebrow">Edit Order</p>
                         <h2 className="modal__title" id="edit-order-title">
                             <span className="tn-badge" style={{ fontSize: '0.85rem', marginRight: 8 }}>{order.trackingNumber}</span>
+                            {(order.orderType && order.orderType !== 'Send') && (
+                                <span style={{
+                                    fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em',
+                                    padding: '2px 8px', borderRadius: 99,
+                                    background: order.orderType === 'Return' ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)',
+                                    color: order.orderType === 'Return' ? '#ef4444' : '#3b82f6',
+                                    border: `1px solid ${order.orderType === 'Return' ? '#ef4444' : '#3b82f6'}`,
+                                    textTransform: 'uppercase',
+                                }}>
+                                    {order.orderType}
+                                </span>
+                            )}
                         </h2>
                     </div>
                     <button className="modal__close" onClick={onClose} aria-label="Close">
@@ -119,95 +163,161 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
                         </svg>
                         Recipient &amp; Package
                     </button>
+                    <button className={`eom-tab${activeTab === 'type' ? ' eom-tab--active' : ''}`} onClick={() => setActiveTab('type')}>
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                            <path d="M2 8h12M8 2l4 6-4 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        Type &amp; Status
+                    </button>
                     <button className={`eom-tab${activeTab === 'financials' ? ' eom-tab--active' : ''}`} onClick={() => setActiveTab('financials')}>
                         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                             <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
-                            <path d="M8 4.5v1M8 10.5v1M5.5 8a2.5 2.5 0 005 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                            <path d="M8 5v6M6 7h3.5a1.5 1.5 0 010 3H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                         </svg>
                         Financials
                     </button>
                 </div>
 
+                {/* Body */}
                 <div className="modal__body">
                     {error && (
                         <div className="modal__global-error">
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                 <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4"/>
-                                <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                                <path d="M8 5v3.5M8 11h.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                             </svg>
                             {error}
                         </div>
                     )}
 
-                    {/* ── Delivery tab ───────────────────────────────────── */}
+                    {/* ── Delivery tab ───────────────────────────────────────── */}
                     {activeTab === 'delivery' && (
-                        <>
-                            <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Recipient Info</legend>
-                                <div className="eom-grid">
-                                    <Field label="First Name" required>
-                                        <input className="eom-input" value={firstName} onChange={e => setFirstName(e.target.value)} />
-                                    </Field>
-                                    <Field label="Last Name" required>
-                                        <input className="eom-input" value={lastName} onChange={e => setLastName(e.target.value)} />
-                                    </Field>
-                                    <Field label="Phone" required>
-                                        <input className="eom-input" value={phone} onChange={e => setPhone(e.target.value)} />
-                                    </Field>
-                                </div>
-                                <CityDistrictPicker
-                                    cityValue={city}
-                                    districtValue={district}
-                                    onCityChange={val => { setCity(val); setDistrict(''); }}
-                                    onDistrictChange={setDistrict}
-                                />
-                                <div className="eom-grid">
-                                    <Field label="Address" required className="eom-col-2">
-                                        <input className="eom-input" value={address} onChange={e => setAddress(e.target.value)} />
-                                    </Field>
-                                </div>
-                            </fieldset>
+                        <fieldset className="modal__fieldset">
+                            <legend className="modal__legend">Recipient</legend>
+                            <div className="eom-grid">
+                                <Field label="First Name" required>
+                                    <input className="eom-input" value={firstName} onChange={e => setFirstName(e.target.value)} />
+                                </Field>
+                                <Field label="Last Name" required>
+                                    <input className="eom-input" value={lastName} onChange={e => setLastName(e.target.value)} />
+                                </Field>
+                                <Field label="Phone" required className="eom-col-2">
+                                    <input className="eom-input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
+                                </Field>
 
-                            <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Package Details</legend>
-                                <div className="eom-grid">
-                                    <Field label="Description" className="eom-col-2">
-                                        <input className="eom-input" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional" />
-                                    </Field>
-                                    <Field label="Fragile?">
-                                        <div className="eom-toggle-row">
-                                            <ToggleBtn active={!isFragile} onClick={() => setIsFragile(false)}>No</ToggleBtn>
-                                            <ToggleBtn active={isFragile} onClick={() => setIsFragile(true)}>
-                                                <span style={{ color: '#f97316' }}>⚠</span> Yes
-                                            </ToggleBtn>
-                                        </div>
-                                    </Field>
-                                </div>
-                            </fieldset>
-
-                            <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Payment</legend>
-                                <div className="eom-grid">
-                                    <Field label="Who pays service fee?">
-                                        <div className="eom-toggle-row">
-                                            <ToggleBtn active={payer === 'Sender'} onClick={() => setPayer('Sender')}>Sender</ToggleBtn>
-                                            <ToggleBtn active={payer === 'Recipient'} onClick={() => setPayer('Recipient')}>Recipient</ToggleBtn>
-                                        </div>
-                                    </Field>
-                                    <Field label="Product payment status">
-                                        <div className="eom-toggle-row">
-                                            <ToggleBtn active={payStatus === 'NotPaid'} onClick={() => setPayStatus('NotPaid')}>Unpaid</ToggleBtn>
-                                            <ToggleBtn active={payStatus === 'Paid'} onClick={() => setPayStatus('Paid')}>
-                                                <span style={{ color: '#10b981' }}>✓</span> Paid
-                                            </ToggleBtn>
-                                        </div>
-                                    </Field>
-                                    <Field label="COD amount (₾)">
+                                <Field label="Delivery City / District" required className="eom-col-2">
+                                    <CityDistrictPicker
+                                        cityValue={city}
+                                        districtValue={district}
+                                        onCityChange={v => { setCity(v); setDistrict(''); }}
+                                        onDistrictChange={setDistrict}
+                                        onDistrictSelect={() => {}}
+                                    />
+                                </Field>
+                                <Field label="Street Address" required className="eom-col-2">
+                                    <input className="eom-input" value={address} onChange={e => setAddress(e.target.value)} />
+                                </Field>
+                                <Field label="Description" className="eom-col-2">
+                                    <input className="eom-input" value={description} onChange={e => setDescription(e.target.value)} />
+                                </Field>
+                                <Field label="Payment Status" required>
+                                    <select className="eom-input" value={payStatus} onChange={e => setPayStatus(e.target.value)}>
+                                        <option value="NotPaid">Not Paid</option>
+                                        <option value="Paid">Paid</option>
+                                    </select>
+                                </Field>
+                                <Field label="Service Payer" required>
+                                    <select className="eom-input" value={payer} onChange={e => setPayer(e.target.value)}>
+                                        <option value="Sender">Sender</option>
+                                        <option value="Recipient">Recipient</option>
+                                    </select>
+                                </Field>
+                                {payStatus === 'NotPaid' && (
+                                    <Field label="COD Amount (₾)" className="eom-col-2">
                                         <div className="eom-currency-wrap">
                                             <span className="eom-currency">₾</span>
                                             <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={codAmount} onChange={e => setCodAmount(e.target.value)} placeholder="0.00" />
                                         </div>
                                     </Field>
+                                )}
+                                <Field label="Fragile" className="eom-col-2">
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={isFragile} onChange={e => setIsFragile(e.target.checked)} />
+                                        <span style={{ fontSize: '0.875rem' }}>⚠ Contains fragile items</span>
+                                    </label>
+                                </Field>
+                            </div>
+                        </fieldset>
+                    )}
+
+                    {/* ── Type & Status tab ──────────────────────────────────── */}
+                    {activeTab === 'type' && (
+                        <>
+                            <fieldset className="modal__fieldset">
+                                <legend className="modal__legend">Order Type</legend>
+                                <div className="eom-type-row">
+                                    {ORDER_TYPE_OPTIONS.map(opt => (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            className={`eom-toggle-btn${orderType === opt.value ? ' eom-toggle-btn--active' : ''}`}
+                                            style={orderType === opt.value ? { borderColor: opt.color, color: opt.color, background: `${opt.color}15` } : {}}
+                                            onClick={() => setOrderType(opt.value)}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 10, lineHeight: 1.5 }}>
+                                    {orderType === 'Return'   && 'Return: courier collects parcel from recipient and brings to warehouse. Fill in the pickup address below.'}
+                                    {orderType === 'Exchange' && 'Exchange: replacement parcel delivered to recipient. Operationally same as Send.'}
+                                    {orderType === 'Send'     && 'Standard delivery from warehouse to recipient.'}
+                                </p>
+                            </fieldset>
+
+                            {/* Return pickup address */}
+                            {isReturn && (
+                                <fieldset className="modal__fieldset" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.03)' }}>
+                                    <legend className="modal__legend" style={{ color: '#ef4444' }}>Return Pickup Address</legend>
+                                    <div className="eom-grid">
+                                        <Field label="City / District" required className="eom-col-2">
+                                            <CityDistrictPicker
+                                                cityValue={returnCity}
+                                                districtValue={returnDistrict}
+                                                onCityChange={v => { setReturnCity(v); setReturnDistrict(''); }}
+                                                onDistrictChange={setReturnDistrict}
+                                                onDistrictSelect={() => {}}
+                                            />
+                                        </Field>
+                                        <Field label="Street Address" required className="eom-col-2">
+                                            <input
+                                                className="eom-input"
+                                                value={returnAddress}
+                                                onChange={e => setReturnAddress(e.target.value)}
+                                                placeholder="Address where courier collects the parcel"
+                                            />
+                                        </Field>
+                                    </div>
+                                </fieldset>
+                            )}
+
+                            {/* Status override */}
+                            <fieldset className="modal__fieldset">
+                                <legend className="modal__legend">Set Terminal Status</legend>
+                                <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 10 }}>
+                                    Use this to mark a Return or Exchange as complete. Leave blank to keep the current status.
+                                </p>
+                                <div className="eom-type-row">
+                                    {STATUS_OVERRIDE_OPTIONS.map(opt => (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            className={`eom-toggle-btn${statusOverride === opt.value ? ' eom-toggle-btn--active' : ''}`}
+                                            onClick={() => setStatusOverride(opt.value)}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </fieldset>
                         </>
@@ -263,7 +373,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
                 .modal { position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:101;max-height:calc(100dvh - 48px);overflow-y:auto;background:var(--color-bg-2);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:0 20px 60px rgba(0,0,0,0.22);animation:modal-slide-up 0.22s ease both; }
                 .modal__header { display:flex;align-items:flex-start;justify-content:space-between;padding:24px 24px 20px;border-bottom:1px solid var(--color-border);position:sticky;top:0;background:var(--color-bg-2);z-index:1; }
                 .modal__eyebrow { font-size:0.68rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--color-accent);margin-bottom:4px; }
-                .modal__title { font-family:var(--font-display);font-size:1.1rem;font-weight:800;color:var(--color-text);margin:0;display:flex;align-items:center; }
+                .modal__title { font-family:var(--font-display);font-size:1.1rem;font-weight:800;color:var(--color-text);margin:0;display:flex;align-items:center;gap:8px; }
                 .modal__close { width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-muted);transition:background var(--transition); }
                 .modal__close:hover { background:var(--color-border); }
                 .modal__body { padding:20px 24px;display:flex;flex-direction:column;gap:14px; }
@@ -297,7 +407,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
                 .eom-currency-wrap { position:relative;display:flex;align-items:center; }
                 .eom-currency { position:absolute;left:10px;font-size:0.85rem;color:var(--color-text-subtle);pointer-events:none; }
                 .eom-input--currency { padding-left:24px; }
-                .eom-toggle-row { display:flex;gap:6px; }
+                .eom-type-row { display:flex;gap:6px;flex-wrap:wrap; }
                 .eom-toggle-btn { padding:7px 14px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-bg-3);color:var(--color-text-subtle);font-size:0.8rem;font-weight:600;cursor:pointer;transition:all var(--transition);display:flex;align-items:center;gap:5px; }
                 .eom-toggle-btn--active { background:var(--color-accent-dim);border-color:rgba(196,127,23,0.4);color:var(--color-accent); }
                 .eom-revenue-preview { font-size:0.82rem;color:var(--color-text-subtle);padding:8px 10px;background:var(--color-bg-3);border-radius:var(--radius-sm);border:1px solid var(--color-border);display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
@@ -318,19 +428,5 @@ function Field({ label, required, className, children }: {
             <label className={`eom-label${required ? ' eom-label--required' : ''}`}>{label}</label>
             {children}
         </div>
-    );
-}
-
-function ToggleBtn({ active, onClick, children }: {
-    active: boolean; onClick: () => void; children: React.ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            className={`eom-toggle-btn${active ? ' eom-toggle-btn--active' : ''}`}
-            onClick={onClick}
-        >
-            {children}
-        </button>
     );
 }

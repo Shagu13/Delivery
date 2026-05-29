@@ -40,6 +40,12 @@ public sealed record AdminOrderResponse(
     string  RecipientAddress,
     string? Description,
     bool    IsFragile,
+    /// <summary>"Send" | "Return" | "Exchange"</summary>
+    string  OrderType,
+    /// <summary>Return pickup address — null for Send/Exchange orders.</summary>
+    string? ReturnPickupAddress,
+    string? ReturnPickupCity,
+    string? ReturnPickupDistrict,
     string  Status,
     string  ProductPaymentStatus,
     string  WhoPaysForCompanyService,

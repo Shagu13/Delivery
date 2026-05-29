@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,8 +30,8 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         order.IsFragile   = request.IsFragile;
 
         // ── Payment ──────────────────────────────────────────────────────────
-        order.WhoPaysForCompanyService = request.WhoPaysForCompanyService;
-        order.ProductPaymentStatus     = request.ProductPaymentStatus;
+        order.WhoPaysForCompanyService  = request.WhoPaysForCompanyService;
+        order.ProductPaymentStatus      = request.ProductPaymentStatus;
         order.AmountToCollectForPackage = request.AmountToCollectForPackage;
 
         // ── Financials ───────────────────────────────────────────────────────
@@ -41,6 +42,48 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         order.CompanyRevenue = request.CourierSalary.HasValue
             ? request.CompanyServicePrice - request.CourierSalary.Value
             : null;
+
+        // ── Order type & return pickup ────────────────────────────────────────
+        order.OrderType = request.OrderType;
+
+        if (request.OrderType == OrderType.Return)
+        {
+            order.ReturnPickupAddress  = request.ReturnPickupAddress?.Trim();
+            order.ReturnPickupCity     = request.ReturnPickupCity?.Trim();
+            order.ReturnPickupDistrict = request.ReturnPickupDistrict?.Trim();
+        }
+        else
+        {
+            // Clear return fields if type changed away from Return
+            order.ReturnPickupAddress  = null;
+            order.ReturnPickupCity     = null;
+            order.ReturnPickupDistrict = null;
+        }
+
+        // ── Status override (admin sets ReturnedToSender / ExchangeCompleted) ──
+        if (request.StatusOverride.HasValue)
+        {
+            // Only allow admin-intended terminal overrides here; normal flow statuses
+            // are set by dedicated commands (MarkDelivered, PostponeOrder, etc.)
+            var allowed = new[]
+            {
+                OrderStatus.ReturnedToSender,
+                OrderStatus.ExchangeCompleted,
+                OrderStatus.CancelledByAdmin,
+            };
+
+            if (allowed.Contains(request.StatusOverride.Value))
+            {
+                order.Status = request.StatusOverride.Value;
+
+                // Stamp DeliveredAt when marking returned/exchanged
+                if (request.StatusOverride.Value is OrderStatus.ReturnedToSender
+                                                 or OrderStatus.ExchangeCompleted)
+                {
+                    order.DeliveredAt ??= DateTime.UtcNow;
+                }
+            }
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
     }

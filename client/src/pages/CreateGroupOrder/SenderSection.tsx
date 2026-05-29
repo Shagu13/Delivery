@@ -63,8 +63,8 @@ export function SenderSection({
       )}
 
       <div className="form-section__body">
-        {/* Personal Information */}
-        <fieldset className="fieldset">
+        {/* Personal Information — hidden when pre-filled from profile */}
+        {!prefilled && <fieldset className="fieldset">
           <legend className="fieldset__legend">{t.cgoPersonalInfo}</legend>
 
           <div className="grid grid--2">
@@ -110,7 +110,7 @@ export function SenderSection({
               placeholder="5XX XXX XXX" maxLength={9}
             />
           </div>
-        </fieldset>
+        </fieldset>}
 
         {/* Pickup Location */}
         <fieldset className="fieldset">

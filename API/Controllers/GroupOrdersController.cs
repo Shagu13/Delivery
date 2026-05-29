@@ -52,19 +52,23 @@ public sealed class GroupOrdersController : BaseController
                 Note: request.Note,
                 Orders: request.Orders
                     .Select(o => new CreateOrderDto(
-                        o.RecipientFirstName,
-                        o.RecipientLastName,
-                        o.RecipientPhone,
-                        o.RecipientCity,
-                        o.RecipientDistrict,
-                        o.RecipientAddress,
-                        o.Description,
-                        o.IsFragile,
-                        o.ProductPaymentStatus,
-                        o.WhoPaysForCompanyService,
-                        o.AmountToCollectForPackage,
-                        o.CompanyServicePrice,
-                        o.WeightPriceTierId))       
+                        RecipientFirstName:        o.RecipientFirstName,
+                        RecipientLastName:         o.RecipientLastName,
+                        RecipientPhone:            o.RecipientPhone,
+                        RecipientCity:             o.RecipientCity,
+                        RecipientDistrict:         o.RecipientDistrict,
+                        RecipientAddress:          o.RecipientAddress,
+                        Description:               o.Description,
+                        IsFragile:                 o.IsFragile,
+                        ProductPaymentStatus:      o.ProductPaymentStatus,
+                        WhoPaysForCompanyService:  o.WhoPaysForCompanyService,
+                        OrderType:                 o.OrderType,
+                        ReturnPickupAddress:       o.ReturnPickupAddress,
+                        ReturnPickupCity:          o.ReturnPickupCity,
+                        ReturnPickupDistrict:      o.ReturnPickupDistrict,
+                        AmountToCollectForPackage: o.AmountToCollectForPackage,
+                        CompanyServicePrice:       o.CompanyServicePrice,
+                        WeightPriceTierId:         o.WeightPriceTierId))
                     .ToList(),
                 CustomerId: customerId
             )
@@ -288,10 +292,6 @@ public sealed class GroupOrdersController : BaseController
     //  EXCEL / TEMPLATE ENDPOINTS
     // ══════════════════════════════════════════════════════════════════════════
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  EXCEL / TEMPLATE ENDPOINTS
-    // ══════════════════════════════════════════════════════════════════════════
-
     [HttpGet("excel-template")]
     [AllowAnonymous]
     public async Task<IActionResult> DownloadTemplate(
@@ -319,18 +319,12 @@ public sealed class GroupOrdersController : BaseController
             })
             .ToListAsync(ct);
 
-        // ── Resolve display names based on language ───────────────────────────
-        // Named ranges always use the Latin name (required for INDIRECT to work);
-        // the display label shown to the user in the dropdown can be Georgian.
-        // We build a parallel "label" list per city while keeping the internal
-        // range key as the sanitised Latin name.
         using var workbook = new XLWorkbook();
 
         // ── Hidden Data sheet ─────────────────────────────────────────────────
         var wsData = workbook.Worksheets.Add("Data");
         wsData.Visibility = XLWorksheetVisibility.Hidden;
 
-        // Column A: city display names (Latin or Georgian depending on lang)
         wsData.Cell(1, 1).Value = "Cities";
         for (int i = 0; i < cities.Count; i++)
         {
@@ -340,26 +334,21 @@ public sealed class GroupOrdersController : BaseController
             wsData.Cell(i + 2, 1).Value = displayName;
         }
 
-        // City list table + named range (values used in city dropdown)
         var cityTableRange = wsData.Range(1, 1, cities.Count + 1, 1);
         cityTableRange.AsTable("T_CityList");
         workbook.DefinedNames.Add("CityList", wsData.Range(2, 1, cities.Count + 1, 1));
 
-        // One column per city with its district display names.
-        // Named range key = sanitised Latin name (INDIRECT needs this).
         for (int col = 0; col < cities.Count; col++)
         {
             var city = cities[col];
-            int excelCol = col + 2; // B onwards
+            int excelCol = col + 2;
 
-            // Column header = Latin city name (used as the INDIRECT key)
             wsData.Cell(1, excelCol).Value = city.CityName;
 
             var districts = city.Districts.Count > 0 ? city.Districts : null;
 
             if (districts is null)
             {
-                // Fallback: use city name itself as the sole district entry
                 var fallbackDisplay = isGeo && !string.IsNullOrWhiteSpace(city.CityNameGeo)
                     ? city.CityNameGeo!
                     : city.CityName;
@@ -389,7 +378,6 @@ public sealed class GroupOrdersController : BaseController
         // ── Orders sheet ──────────────────────────────────────────────────────
         var ws = workbook.Worksheets.Add("Orders");
 
-        // ── Headers (language-aware) ──────────────────────────────────────────
         string[] headers = isGeo
             ? [
                 "მიმღების სახელი",
@@ -416,7 +404,6 @@ public sealed class GroupOrdersController : BaseController
                 "IsFragile"
               ];
 
-        // Columns 1–6 and 8–10 are required; 7 (Description) is optional
         bool[] required = [true, true, true, true, true, true, false, true, true, true];
 
         for (int i = 0; i < headers.Length; i++)
@@ -430,7 +417,6 @@ public sealed class GroupOrdersController : BaseController
                 : XLColor.FromArgb(0x6B, 0x65, 0x60);
         }
 
-        // ── Sample row (language-aware, skipped on parse) ─────────────────────
         if (isGeo)
         {
             ws.Cell(2, 1).Value = "ანა";
@@ -470,11 +456,6 @@ public sealed class GroupOrdersController : BaseController
         cityVal.ShowErrorMessage = false;
 
         // ── District dependent dropdown (E2:E500) ─────────────────────────────
-        // INDIRECT uses the Latin city name typed in D (which IS the named range key).
-        // When isGeo = true the city dropdown shows Georgian labels but the named-range
-        // lookup must still resolve to a Latin key — so we keep the INDIRECT formula
-        // the same in both languages (it references column D which always holds the
-        // canonical Latin name internally via the named ranges).
         for (int row = 2; row <= 500; row++)
         {
             var distVal = ws.Cell(row, 5).CreateDataValidation();
@@ -568,21 +549,18 @@ public sealed class GroupOrdersController : BaseController
             var payerRaw = ws.Cell(row, 9).GetString().Trim();
             var fragileRaw = ws.Cell(row, 10).GetString().Trim();
 
-            // Payment status: English "Paid" or Georgian "გადახდილი"
             var paymentStatus =
                 paymentRaw.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
                 paymentRaw.Equals("გადახდილი", StringComparison.Ordinal)
                     ? PaymentStatus.Paid
                     : PaymentStatus.NotPaid;
 
-            // Service payer: English "Recipient" or Georgian "მიმღები"
             var payer =
                 payerRaw.Equals("Recipient", StringComparison.OrdinalIgnoreCase) ||
                 payerRaw.Equals("მიმღები", StringComparison.Ordinal)
                     ? ServicePayer.Recipient
                     : ServicePayer.Sender;
 
-            // Fragile: English "Yes" or Georgian "კი"
             var isFragile =
                 fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
                 fragileRaw.Equals("კი", StringComparison.Ordinal);
@@ -601,6 +579,7 @@ public sealed class GroupOrdersController : BaseController
                 IsFragile: isFragile,
                 ProductPaymentStatus: paymentStatus,
                 WhoPaysForCompanyService: payer
+                // OrderType defaults to Send for Excel imports
             ));
         }
 
@@ -646,6 +625,10 @@ public sealed class GroupOrdersController : BaseController
                 RecipientAddress:                 o.RecipientAddress,
                 Description:                      o.Description,
                 IsFragile:                        o.IsFragile,
+                OrderType:                        o.OrderType.ToString(),
+                ReturnPickupAddress:              o.ReturnPickupAddress,
+                ReturnPickupCity:                 o.ReturnPickupCity,
+                ReturnPickupDistrict:             o.ReturnPickupDistrict,
                 Status:                           o.Status.ToString(),
                 ProductPaymentStatus:             o.ProductPaymentStatus.ToString(),
                 WhoPaysForCompanyService:         o.WhoPaysForCompanyService.ToString(),
@@ -673,4 +656,3 @@ public sealed record UpdateGroupOrderRequest(
     string  PickUpAddress,
     string? Note
 );
-

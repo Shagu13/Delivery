@@ -14,6 +14,13 @@ namespace Domain.Enums;
 ///   CourierAssignedToDeliver → CourierDeliveringTheOrderToRecipient
 ///   → DeliveredToRecipient  |  DeliveryPostponed → CourierDeliveringTheOrderToRecipient (retry)
 ///   Terminal: CancelledByAdmin
+///
+/// Return flow (OrderType == Return):
+///   Same GroupOrder pickup flow → warehouse → CourierAssignedToDeliver (to sender's address)
+///   → CourierDeliveringTheOrderToRecipient → ReturnedToSender (terminal)
+///
+/// Exchange flow (OrderType == Exchange):
+///   Same as standard Send flow → ExchangeCompleted (terminal, set by admin)
 /// </summary>
 public enum OrderStatus
 {
@@ -43,4 +50,18 @@ public enum OrderStatus
 
     // ── GroupOrder terminal: every package delivered or cancelled ─────────────
     AllDelivered                         = 16,
+
+    // ── Return terminal ───────────────────────────────────────────────────────
+    /// <summary>
+    /// The returned parcel has been delivered back to the sender.
+    /// Set by admin. Visible on customer dashboard.
+    /// </summary>
+    ReturnedToSender                     = 17,
+
+    // ── Exchange terminal ─────────────────────────────────────────────────────
+    /// <summary>
+    /// The exchange parcel has been delivered to the recipient.
+    /// Set by admin. Visible on customer dashboard.
+    /// </summary>
+    ExchangeCompleted                    = 18,
 }

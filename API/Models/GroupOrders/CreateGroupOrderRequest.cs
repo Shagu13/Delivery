@@ -33,7 +33,13 @@ public sealed record OrderItemRequest(
     /// actual sub-district chosen in the third picker.
     /// </summary>
     bool IsDeliveryAddressInCityItself = false,
+    /// <summary>Send (default), Return, or Exchange.</summary>
+    OrderType OrderType = OrderType.Send,
+    /// <summary>Required when OrderType == Return. Address where courier collects the parcel.</summary>
+    string? ReturnPickupAddress = null,
+    string? ReturnPickupCity = null,
+    string? ReturnPickupDistrict = null,
     decimal? AmountToCollectForPackage = null,
     decimal? CompanyServicePrice = null,
-    Guid? WeightPriceTierId = null   // ← selected weight tier; drives pricing when tier.IsStandard = false
+    Guid? WeightPriceTierId = null
 );

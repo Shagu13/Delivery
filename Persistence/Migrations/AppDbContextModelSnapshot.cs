@@ -502,6 +502,11 @@ namespace Persistence.Migrations
                     b.Property<bool>("IsFragile")
                         .HasColumnType("bit");
 
+                    b.Property<string>("OrderType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime?>("PickedUpFromWarehouseAt")
                         .HasColumnType("datetime2");
 
@@ -546,6 +551,18 @@ namespace Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("ReturnPickupAddress")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("ReturnPickupCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ReturnPickupDistrict")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -574,6 +591,8 @@ namespace Persistence.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("GroupOrderId");
+
+                    b.HasIndex("OrderType");
 
                     b.HasIndex("Status");
 

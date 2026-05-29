@@ -57,13 +57,14 @@ async function fetchAllOrders(
   }
 ): Promise<PagedResult> {
   const qs = new URLSearchParams();
-  if (params.city)       qs.set('city',      params.city);
-  if (params.district)   qs.set('district',  params.district);
-  if (params.search)     qs.set('search',    params.search);
-  if (params.courierId)  qs.set('courierId', params.courierId);
-  if (params.unpriced)   qs.set('unpriced',  'true');
-  if (params.page)       qs.set('page',      String(params.page));
-  if (params.pageSize)   qs.set('pageSize',  String(params.pageSize));
+  if (params.city)       qs.set('city',       params.city);
+  if (params.district)   qs.set('district',   params.district);
+  if (params.search)     qs.set('search',     params.search);
+  if (params.courierId)  qs.set('courierId',  params.courierId);
+  if (params.unpriced)   qs.set('unpriced',   'true');
+  qs.set('activeOnly', 'true');
+  if (params.page)       qs.set('page',       String(params.page));
+  if (params.pageSize)   qs.set('pageSize',   String(params.pageSize));
   const res = await fetch(`/api/orders?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -272,6 +273,82 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
   );
 }
 
+// ── Order Detail Modal ───────────────────────────────────────────────────────
+
+function OrderDetailModal({ order, open, onClose }: { order: AdminOrderItem | null; open: boolean; onClose: () => void }) {
+  const { t, lang } = useLanguage();
+  if (!open || !order) return null;
+
+  const [bg, color] = STATUS_COLORS[order.status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];
+  const statusMeta  = getStatusMeta(order.status, lang);
+  const rcptPays    = order.whoPaysForCompanyService === 'Recipient';
+
+  const row = (label: string, value: React.ReactNode) => (
+    <div className="odm-row">
+      <span className="odm-label">{label}</span>
+      <span className="odm-value">{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="odm-overlay" onClick={onClose}>
+      <div className="odm-panel" onClick={e => e.stopPropagation()}>
+        <div className="odm-header">
+          <div className="odm-header__left">
+            <span className="odm-tn">{order.trackingNumber}</span>
+            <span className="status-badge" style={{ background: bg, color }}>{statusMeta.short}</span>
+          </div>
+          <button className="odm-close" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div className="odm-body">
+          <div className="odm-section">
+            <div className="odm-section-title">{t.odmSectionSender}</div>
+            {row(t.odmLabelBusiness, order.senderBusinessName)}
+            {row(t.odmLabelName, `${order.senderFirstName} ${order.senderLastName}`)}
+            {row(t.odmLabelPhone, order.senderPhone)}
+          </div>
+
+          <div className="odm-section">
+            <div className="odm-section-title">{t.odmSectionRecipient}</div>
+            {row(t.odmLabelName, `${order.recipientFirstName} ${order.recipientLastName}`)}
+            {row(t.odmLabelPhone, order.recipientPhone)}
+            {row(t.odmLabelCity, lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity)}
+            {row(t.odmLabelDistrict, lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict)}
+            {row(t.odmLabelAddress, order.recipientAddress)}
+            {order.description && row(t.odmLabelDescription, order.description)}
+          </div>
+
+          <div className="odm-section">
+            <div className="odm-section-title">{t.odmSectionPackage}</div>
+            {row(t.odmLabelFragile, order.isFragile ? t.odmLabelFragileYes : t.odmLabelFragileNo)}
+            {row(t.odmLabelProductPayment, order.productPaymentStatus)}
+            {row(t.odmLabelWhoPays, rcptPays ? t.odmLabelWhoPaysRcpt : t.odmLabelWhoPaysSndr)}
+          </div>
+
+          <div className="odm-section">
+            <div className="odm-section-title">{t.odmSectionFinancials}</div>
+            {row(t.odmLabelCod, order.amountToCollectForPackage != null ? `₾${order.amountToCollectForPackage.toFixed(2)}` : '—')}
+            {row(t.odmLabelServicePrice, order.companyServicePrice > 0 ? `₾${order.companyServicePrice.toFixed(2)}` : t.aopNotSet)}
+            {row(t.odmLabelSalary, order.courierSalary != null && order.courierSalary > 0 ? `₾${order.courierSalary.toFixed(2)}` : t.aopNotSet)}
+            {row(t.odmLabelRevenue, order.companyRevenue != null ? `₾${order.companyRevenue.toFixed(2)}` : '—')}
+          </div>
+
+          <div className="odm-section">
+            <div className="odm-section-title">{t.odmSectionDates}</div>
+            {row(t.odmLabelCreated, new Date(order.createdAt).toLocaleString())}
+            {order.deliveredAt && row(t.odmLabelDelivered, new Date(order.deliveredAt).toLocaleString())}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 50;
@@ -303,6 +380,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   // Edit modal
   const [editOrder,     setEditOrder]     = useState<AdminOrderItem | null>(null);
   const [editOpen,      setEditOpen]      = useState(false);
+
+  // Detail modal
+  const [detailOrder,   setDetailOrder]   = useState<AdminOrderItem | null>(null);
+  const [detailOpen,    setDetailOpen]    = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false });
@@ -450,6 +531,12 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     e.stopPropagation();
     setEditOrder(order);
     setEditOpen(true);
+  };
+
+  const handleDetailClick = (e: React.MouseEvent, order: AdminOrderItem) => {
+    e.stopPropagation();
+    setDetailOrder(order);
+    setDetailOpen(true);
   };
 
   const handleEditSaved = () => {
@@ -645,14 +732,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <th className="aop-th">{t.aopThRecipient}</th>
                 <th className="aop-th">{t.aopThPhone}</th>
                 <th className="aop-th">{t.aopThCityDistrict}</th>
-                <th className="aop-th">{t.aopThStatus}</th>
-                <th className="aop-th aop-th--num" title={t.aopThPayerTitle}>{t.aopThPayer}</th>
-                <th className="aop-th aop-th--num">{t.aopThCod}</th>
-                <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>
-                <th className="aop-th aop-th--num">{t.aopThSalary}</th>
-                <th className="aop-th aop-th--num">{t.aopThRevenue}</th>
+                <th className="aop-th aop-th--fin">COD / Srv</th>
                 <th className="aop-th">{t.aopThPaid}</th>
-                <th className="aop-th aop-th--edit" />
+                <th className="aop-th aop-th--actions" />
               </tr>
             </thead>
             <tbody>
@@ -692,39 +774,52 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       <div className="aop-city">{lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity}</div>
                       <div className="aop-district">{lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict}</div>
                     </td>
-                    <td className="aop-td">
-                      <span className="status-badge" style={{ background: bg, color }} title={statusMeta.description}>
-                        {statusMeta.short}
-                      </span>
-                    </td>
-                    <td className="aop-td aop-td--num">
-                      <span className={`aop-payer-badge${rcptPays ? ' aop-payer-badge--rcpt' : ''}`} title={rcptPays ? t.aopPayerRcptTitle : t.aopPayerSndrTitle}>
-                        {rcptPays ? t.aopRcpt : t.aopSndr}
-                      </span>
-                    </td>
-                    <td className="aop-td aop-td--num">
-                      {order.amountToCollectForPackage != null
-                        ? <span className="aop-price aop-price--cod">₾{order.amountToCollectForPackage.toFixed(2)}</span>
-                        : <span className="aop-price aop-price--empty">—</span>
-                      }
-                    </td>
-                    <td className="aop-td aop-td--num">
-                      {missingPrice
-                        ? <span className="aop-missing">{t.aopNotSet}</span>
-                        : <span className="aop-price">₾{order.companyServicePrice.toFixed(2)}</span>
-                      }
-                    </td>
-                    <td className="aop-td aop-td--num">
-                      {missingSalary
-                        ? <span className="aop-missing">{t.aopNotSet}</span>
-                        : <span className="aop-price">₾{order.courierSalary!.toFixed(2)}</span>
-                      }
-                    </td>
-                    <td className="aop-td aop-td--num">
-                      {order.companyRevenue != null
-                        ? <span className="aop-price">₾{order.companyRevenue.toFixed(2)}</span>
-                        : <span className="aop-price aop-price--empty">—</span>
-                      }
+                    {/* Combined COD / Service Price cell with hover tooltip */}
+                    <td className="aop-td aop-td--fin" onClick={e => e.stopPropagation()}>
+                      <div className="aop-fin-cell">
+                        <div className="aop-fin-row">
+                          <span className="aop-fin-label">COD</span>
+                          {order.amountToCollectForPackage != null
+                            ? <span className="aop-fin-val aop-fin-val--cod">₾{order.amountToCollectForPackage.toFixed(2)}</span>
+                            : <span className="aop-fin-val aop-fin-val--empty">—</span>
+                          }
+                        </div>
+                        <div className="aop-fin-row">
+                          <span className="aop-fin-label">Srv</span>
+                          {missingPrice
+                            ? <span className="aop-missing" style={{fontSize:'0.62rem',padding:'1px 3px'}}>!</span>
+                            : <span className="aop-fin-val">₾{order.companyServicePrice.toFixed(2)}</span>
+                          }
+                        </div>
+                        {/* Hover tooltip */}
+                        <div className="aop-fin-tooltip">
+                          <div className="aop-fin-tooltip__row">
+                            <span className="aop-fin-tooltip__label">Status</span>
+                            <span className="status-badge" style={{background:bg,color,fontSize:'0.65rem'}}>{statusMeta.short}</span>
+                          </div>
+                          <div className="aop-fin-tooltip__row">
+                            <span className="aop-fin-tooltip__label">Payer</span>
+                            <span className="aop-fin-tooltip__val">{rcptPays ? 'Recipient' : 'Sender'}</span>
+                          </div>
+                          <div className="aop-fin-tooltip__divider"/>
+                          <div className="aop-fin-tooltip__row">
+                            <span className="aop-fin-tooltip__label">COD</span>
+                            <span className="aop-fin-tooltip__val">{order.amountToCollectForPackage != null ? `₾${order.amountToCollectForPackage.toFixed(2)}` : '—'}</span>
+                          </div>
+                          <div className="aop-fin-tooltip__row">
+                            <span className="aop-fin-tooltip__label">Srv Price</span>
+                            <span className="aop-fin-tooltip__val">{missingPrice ? t.aopNotSet : `₾${order.companyServicePrice.toFixed(2)}`}</span>
+                          </div>
+                          <div className="aop-fin-tooltip__row">
+                            <span className="aop-fin-tooltip__label">Salary</span>
+                            <span className="aop-fin-tooltip__val">{missingSalary ? t.aopNotSet : `₾${order.courierSalary!.toFixed(2)}`}</span>
+                          </div>
+                          <div className="aop-fin-tooltip__row">
+                            <span className="aop-fin-tooltip__label">Revenue</span>
+                            <span className="aop-fin-tooltip__val">{order.companyRevenue != null ? `₾${order.companyRevenue.toFixed(2)}` : '—'}</span>
+                          </div>
+                        </div>
+                      </div>
                     </td>
                     <td className="aop-td">
                       {order.productPaymentStatus === 'Paid' ? (
@@ -743,9 +838,20 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                         );
                       })()}
                     </td>
-                    <td className="aop-td aop-td--edit" onClick={e => e.stopPropagation()}>
+                    <td className="aop-td aop-td--actions" onClick={e => e.stopPropagation()}>
+                      <div style={{display:'flex',gap:'4px',justifyContent:'center'}}>
                       <button
-                        className="aop-edit-btn"
+                        className="aop-action-btn"
+                        onClick={e => handleDetailClick(e, order)}
+                        title="View details"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                          <ellipse cx="8" cy="8" rx="7" ry="5" stroke="currentColor" strokeWidth="1.4"/>
+                          <circle cx="8" cy="8" r="2" fill="currentColor"/>
+                        </svg>
+                      </button>
+                      <button
+                        className="aop-action-btn"
                         onClick={e => handleEditClick(e, order)}
                         title={t.aopEditOrderTitle}
                       >
@@ -753,6 +859,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                           <path d="M11.5 2.5a1.5 1.5 0 012.12 2.12l-8 8L3 13.5l.88-2.62 8-8z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
                       </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -793,6 +900,12 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         onClose={() => setEditOpen(false)}
         onSaved={handleEditSaved}
         token={token}
+      />
+
+      <OrderDetailModal
+        order={detailOrder}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
       />
 
       <style>{`
@@ -867,14 +980,15 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-th { text-align: left; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 9px 10px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; overflow: hidden; text-overflow: ellipsis; }
         .aop-th--check { width: 40px; padding-left: 16px; }
         .aop-th--num { text-align: right; }
-        .aop-th--edit { width: 36px; }
+        .aop-th--fin { width: 90px; text-align: right; }
+        .aop-th--actions { width: 64px; }
         .aop-td { padding: 9px 10px; font-size: 0.8rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; cursor: pointer; overflow: hidden; }
         .aop-td--check { padding-left: 16px; cursor: default; width: 40px; }
         .aop-td--tracking { width: 100px; }
         .aop-td--sender { width: 120px; }
         .aop-td--mono { font-family: 'Courier New', monospace; font-size: 0.76rem; width: 100px; }
-        .aop-td--num { text-align: right; width: 68px; }
-        .aop-td--edit { width: 36px; cursor: default; text-align: center; }
+        .aop-td--fin { width: 90px; cursor: default; }
+        .aop-td--actions { width: 64px; cursor: default; text-align: center; }
         .aop-tr { transition: background var(--transition); }
         .aop-tr:hover { background: var(--color-bg-3); }
         .aop-tr--selected { background: rgba(196,127,23,0.07) !important; }
@@ -897,8 +1011,43 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-checkbox { width: 14px; height: 14px; cursor: pointer; accent-color: var(--color-accent); }
         .aop-payer-badge { display: inline-block; font-size: 0.62rem; font-weight: 700; border-radius: 3px; padding: 1px 5px; background: rgba(59,130,246,0.1); color: #3b82f6; white-space: nowrap; }
         .aop-payer-badge--rcpt { background: rgba(196,127,23,0.12); color: var(--color-accent); }
-        .aop-edit-btn { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 4px 6px; cursor: pointer; color: var(--color-text-subtle); display: flex; align-items: center; transition: all var(--transition); }
-        .aop-edit-btn:hover { background: var(--color-bg-3); color: var(--color-accent); border-color: rgba(196,127,23,0.4); }
+        .aop-action-btn { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 4px 6px; cursor: pointer; color: var(--color-text-subtle); display: flex; align-items: center; transition: all var(--transition); }
+        .aop-action-btn:hover { background: var(--color-bg-3); color: var(--color-accent); border-color: rgba(196,127,23,0.4); }
+        .aop-td--actions { display: table-cell; }
+        .aop-td--actions > .aop-td { display: flex; gap: 4px; justify-content: center; }
+        td.aop-td--actions { display: table-cell; }
+        td.aop-td--actions > * { display: inline-flex; gap: 4px; justify-content: center; align-items: center; }
+
+        /* Combined financials cell */
+        .aop-fin-cell { position: relative; display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+        .aop-fin-row { display: flex; align-items: center; gap: 4px; }
+        .aop-fin-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; color: var(--color-text-subtle); letter-spacing: 0.04em; }
+        .aop-fin-val { font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-text); }
+        .aop-fin-val--cod { color: #3b82f6; }
+        .aop-fin-val--empty { color: var(--color-text-subtle); font-weight: 400; }
+
+        /* Financials hover tooltip */
+        .aop-fin-tooltip { display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 200; width: 200px; background: #1e2026; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); animation: expand-in 0.1s ease both; }
+        .aop-fin-cell:hover .aop-fin-tooltip { display: flex; flex-direction: column; gap: 6px; }
+        .aop-fin-tooltip__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .aop-fin-tooltip__label { font-size: 0.7rem; color: rgba(255,255,255,0.5); white-space: nowrap; }
+        .aop-fin-tooltip__val { font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.9); font-variant-numeric: tabular-nums; }
+        .aop-fin-tooltip__divider { height: 1px; background: rgba(255,255,255,0.1); margin: 2px 0; }
+
+        /* Order detail modal */
+        .odm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; animation: expand-in 0.15s ease both; }
+        .odm-panel { background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); width: 100%; max-width: 480px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .odm-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--color-border); gap: 10px; }
+        .odm-header__left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+        .odm-tn { font-family: 'Courier New', monospace; font-size: 0.78rem; color: var(--color-text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .odm-close { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 5px 7px; cursor: pointer; color: var(--color-text-subtle); display: flex; align-items: center; flex-shrink: 0; transition: all var(--transition); }
+        .odm-close:hover { color: var(--color-text); border-color: var(--color-text-subtle); }
+        .odm-body { overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
+        .odm-section { display: flex; flex-direction: column; gap: 6px; }
+        .odm-section-title { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-subtle); margin-bottom: 2px; }
+        .odm-row { display: flex; align-items: baseline; gap: 8px; }
+        .odm-label { font-size: 0.72rem; color: var(--color-text-subtle); min-width: 90px; flex-shrink: 0; }
+        .odm-value { font-size: 0.8rem; font-weight: 500; color: var(--color-text); word-break: break-word; }
 
         /* Tracking cell */
         .tn-cell { position: relative; display: inline-flex; align-items: center; gap: 5px; }
