@@ -33,14 +33,7 @@ export function useEditCourier(
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    // Called by the modal when it opens with a new courier (via key prop reset)
-    // We also expose a reset function so the parent can force-reset if needed.
-    const reset = useCallback((c: Courier | null) => {
-        setForm(initialForm(c));
-        setErrors({});
-        setGlobalError(null);
-        setSuccess(false);
-    }, []);
+
 
     const handleChange = useCallback((field: keyof EditCourierForm, value: string) => {
         setForm(prev => ({ ...prev, [field]: value }));
