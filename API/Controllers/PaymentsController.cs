@@ -69,7 +69,8 @@ public sealed class PaymentsController : BaseController
     {
         var id = await Sender.Send(new MarkCompanyPaidSenderCommand(
             request.CustomerId,
-            request.OrderIds,
+            request.CodOrderIds,
+            request.FeeOffsetOrderIds,
             request.Note), ct);
         return CreatedAtAction(nameof(GetAdminPayments), new { }, new { paymentRequestId = id });
     }
@@ -180,7 +181,8 @@ public sealed record ConfirmSenderPaymentRequest(
 
 public sealed record MarkCompanyPaidSenderRequest(
     Guid       CustomerId,
-    List<Guid> OrderIds,
+    List<Guid> CodOrderIds,
+    List<Guid> FeeOffsetOrderIds,
     string?    Note
 );
 
