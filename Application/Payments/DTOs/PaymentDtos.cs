@@ -69,11 +69,38 @@ public sealed record AdminCourierSettlementDto(
     DateTime SettlementDate,
     int      TotalOrdersDelivered,
     int      TotalOrdersPickedUp,
-    decimal  TotalCourierSalary,
-    decimal  TotalCourierTransferToCompany,
-    decimal  TotalCompanyServiceRevenue,
-    decimal  TotalCompanyNetIncome,
+
+    // ── Cash collected ────────────────────────────────────────────────────────
+    /// <summary>Total cash physically collected by the courier (COD + bundled service fees).</summary>
     decimal? TotalAmountOfCashCollected,
+
+    // ── COD ───────────────────────────────────────────────────────────────────
+    /// <summary>Product money the company must forward back to senders.</summary>
+    decimal  TotalCodOwedToSenders,
+
+    // ── Service revenue ───────────────────────────────────────────────────────
+    decimal  TotalCompanyServiceRevenue,
+
+    /// <summary>Service fees not yet collected from Sender-payer customers.</summary>
+    decimal  TotalServiceFeesOwedBySenders,
+
+    // ── Salary & transfer ─────────────────────────────────────────────────────
+    decimal  TotalCourierSalary,
+
+    /// <summary>Cash the courier hands over: TotalAmountOfCashCollected − TotalCourierSalary.</summary>
+    decimal  TotalCourierTransferToCompany,
+
+    // ── Company position ──────────────────────────────────────────────────────
+    /// <summary>
+    /// Company cash after receiving handover and paying COD to senders.
+    /// = TotalCourierTransferToCompany − TotalCodOwedToSenders.
+    /// Can be negative; add TotalServiceFeesOwedBySenders to get TotalCompanyNetIncome.
+    /// </summary>
+    decimal  CompanyNetCashAfterCod,
+
+    decimal  TotalCompanyNetIncome,
+
+    // ── Status flags ──────────────────────────────────────────────────────────
     bool     IsTheDayClosed,
     bool     WasCourierPaid,
     DateTime? CourierPaidAt,

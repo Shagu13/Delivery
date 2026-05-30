@@ -119,23 +119,26 @@ public sealed class GetAdminPaymentsQueryHandler
             .ToListAsync(cancellationToken);
 
         var settlementDtos = settlements.Select(d => new AdminCourierSettlementDto(
-            SettlementId:                d.Id,
-            CourierId:                   d.CourierId,
-            CourierFullName:             $"{d.Courier.FirstName} {d.Courier.LastName}",
-            CourierPhone:                d.Courier.PhoneNumber,
-            SettlementDate:              d.CreatedAt,
-            TotalOrdersDelivered:        d.TotalOrdersDelivered,
-            TotalOrdersPickedUp:         d.TotalOrdersPickedUp,
-            TotalCourierSalary:          d.TotalCourierSalary,
+            SettlementId:                  d.Id,
+            CourierId:                     d.CourierId,
+            CourierFullName:               $"{d.Courier.FirstName} {d.Courier.LastName}",
+            CourierPhone:                  d.Courier.PhoneNumber,
+            SettlementDate:                d.CreatedAt,
+            TotalOrdersDelivered:          d.TotalOrdersDelivered,
+            TotalOrdersPickedUp:           d.TotalOrdersPickedUp,
+            TotalAmountOfCashCollected:    d.TotalAmountOfCashCollected,
+            TotalCodOwedToSenders:         d.TotalCodOwedToSenders,
+            TotalCompanyServiceRevenue:    d.TotalCompanyServiceRevenue,
+            TotalServiceFeesOwedBySenders: d.TotalServiceFeesOwedBySenders,
+            TotalCourierSalary:            d.TotalCourierSalary,
             TotalCourierTransferToCompany: d.TotalCourierTransferToCompany,
-            TotalCompanyServiceRevenue:  d.TotalCompanyServiceRevenue,
-            TotalCompanyNetIncome:       d.TotalCompanyNetIncome,
-            TotalAmountOfCashCollected:  d.TotalAmountOfCashCollected,
-            IsTheDayClosed:              d.IsTheDayClosed,
-            WasCourierPaid:              d.WasCourierPaid,
-            CourierPaidAt:               d.CourierPaidAt,
-            HasCourierHandedOverRevenue: d.HasCourierHandedOverRevenue,
-            RevenueHandedOverAt:         d.RevenueHandedOverAt
+            CompanyNetCashAfterCod:        d.CompanyNetCashAfterCod,
+            TotalCompanyNetIncome:         d.TotalCompanyNetIncome,
+            IsTheDayClosed:                d.IsTheDayClosed,
+            WasCourierPaid:                d.WasCourierPaid,
+            CourierPaidAt:                 d.CourierPaidAt,
+            HasCourierHandedOverRevenue:   d.HasCourierHandedOverRevenue,
+            RevenueHandedOverAt:           d.RevenueHandedOverAt
         )).ToList();
 
         return new AdminPaymentsPageDto(

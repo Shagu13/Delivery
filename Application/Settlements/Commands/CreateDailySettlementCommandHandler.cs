@@ -59,25 +59,42 @@ public sealed class CreateDailySettlementCommandHandler
                 $"Cannot create settlement: the following orders are missing financial data — " +
                 string.Join(", ", incomplete));
 
-        // ── 5. Compute all financial totals from orders ───────────────────────
-        var totalCashCollected  = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
-        var totalServiceRevenue = orders.Sum(o => o.CompanyServicePrice);
-        var totalCourierSalary  = orders.Sum(o => o.CourierSalary ?? 0m);
-        var totalNetIncome      = totalServiceRevenue - totalCourierSalary;
+        // ── 5. Compute all financial totals ───────────────────────────────────
 
-        // Service fees collected directly from recipients (in cash by the courier)
-        var totalServiceFeesFromRecipients = orders
-            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
+        // Total cash the courier physically collected from recipients.
+        // For Recipient-payer orders: AmountOfCashCollected already includes
+        // the package COD + the service fee bundled together.
+        // For Sender-payer orders: AmountOfCashCollected is only the package COD.
+        // There is NO double-counting — we do NOT add service fees separately.
+        var totalCashCollected = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
+
+        // Total product money (COD) the company owes back to senders.
+        // = sum of AmountToCollectForPackage (the package-only portion, excluding service fee).
+        var totalCodOwedToSenders = orders.Sum(o => o.AmountToCollectForPackage ?? 0m);
+
+        // Gross service revenue (all 9 orders × CompanyServicePrice, regardless of who pays).
+        var totalServiceRevenue = orders.Sum(o => o.CompanyServicePrice);
+
+        // Service fees still receivable from senders (not collected in cash).
+        // = Sender-payer orders × CompanyServicePrice.
+        var totalServiceFeesOwedBySenders = orders
+            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender)
             .Sum(o => o.CompanyServicePrice);
 
-        // Total cash the courier physically holds
-        var totalCashCourierHolds = totalCashCollected + totalServiceFeesFromRecipients;
+        var totalCourierSalary = orders.Sum(o => o.CourierSalary ?? 0m);
 
-        // How much the courier must transfer to the company (or receive if negative):
-        // Courier physically holds: COD cash + service fees collected from recipients.
-        // Salary is deducted from that. If sender paid fees, courier holds nothing for
-        // those orders and the company must pay the courier their salary separately.
-        var totalTransferToCompany = totalCashCourierHolds - totalCourierSalary;
+        // FIX: courier hands over exactly what they collected minus their salary.
+        // Previously this incorrectly added service fees from Recipient-payer orders
+        // again, even though those fees are already included in AmountOfCashCollected.
+        var totalTransferToCompany = totalCashCollected - totalCourierSalary;
+
+        // Company's cash position after paying out COD to senders.
+        // Can be negative when Sender-payer orders' fees are not yet received.
+        var companyNetCashAfterCod = totalTransferToCompany - totalCodOwedToSenders;
+
+        // Net income once all sender fees are collected.
+        // Invariant: companyNetCashAfterCod + totalServiceFeesOwedBySenders = totalNetIncome
+        var totalNetIncome = totalServiceRevenue - totalCourierSalary;
 
         // ── 6. Count packages picked up on this day ───────────────────────────
         var totalOrdersPickedUp = await _context.GroupOrders
@@ -89,16 +106,19 @@ public sealed class CreateDailySettlementCommandHandler
         // ── 7. Create settlement ──────────────────────────────────────────────
         var settlement = new DailySettlement
         {
-            CourierId                    = request.CourierId,
-            TotalOrdersPickedUp          = totalOrdersPickedUp,
-            TotalOrdersDelivered         = orders.Count,
-            TotalAmountOfCashCollected   = totalCashCollected > 0 ? totalCashCollected : null,
-            TotalCompanyServiceRevenue   = totalServiceRevenue,
-            TotalCourierSalary           = totalCourierSalary,
-            TotalCompanyNetIncome        = totalNetIncome,
+            CourierId                     = request.CourierId,
+            TotalOrdersPickedUp           = totalOrdersPickedUp,
+            TotalOrdersDelivered          = orders.Count,
+            TotalAmountOfCashCollected    = totalCashCollected > 0 ? totalCashCollected : null,
+            TotalCodOwedToSenders         = totalCodOwedToSenders,
+            TotalCompanyServiceRevenue    = totalServiceRevenue,
+            TotalServiceFeesOwedBySenders = totalServiceFeesOwedBySenders,
+            TotalCourierSalary            = totalCourierSalary,
             TotalCourierTransferToCompany = totalTransferToCompany,
-            CreatedAt                    = dayStart,   // anchor CreatedAt to start-of-day UTC
-            IsTheDayClosed               = false,
+            CompanyNetCashAfterCod        = companyNetCashAfterCod,
+            TotalCompanyNetIncome         = totalNetIncome,
+            CreatedAt                     = dayStart,   // anchor CreatedAt to start-of-day UTC
+            IsTheDayClosed                = false,
         };
 
         _context.DailySettlements.Add(settlement);

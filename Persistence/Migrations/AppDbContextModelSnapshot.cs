@@ -275,6 +275,9 @@ namespace Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("CompanyNetCashAfterCod")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<Guid>("CourierId")
                         .HasColumnType("uniqueidentifier");
 
@@ -296,6 +299,9 @@ namespace Persistence.Migrations
                     b.Property<decimal?>("TotalAmountOfCashCollected")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("TotalCodOwedToSenders")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("TotalCompanyNetIncome")
                         .HasColumnType("decimal(18,2)");
 
@@ -313,6 +319,9 @@ namespace Persistence.Migrations
 
                     b.Property<int>("TotalOrdersPickedUp")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("TotalServiceFeesOwedBySenders")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("WasCourierPaid")
                         .HasColumnType("bit");
