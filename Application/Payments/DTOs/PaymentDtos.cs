@@ -132,12 +132,36 @@ public sealed record CustomerCodIncomeOrderDto(
     DateTime? DeliveredAt
 );
 
+/// <summary>
+/// A single COD payout the company made to this sender.
+/// Shown in the customer's COD Income tab so they can see exactly how much
+/// they received and why it may be less than the gross COD amount.
+///
+/// Example: COD ₾305.50, service fee offset ₾28.00, net paid ₾277.50.
+/// Note auto-generated: "COD ₾305.50 − service fees ₾28.00 = net ₾277.50"
+/// </summary>
+public sealed record CustomerCodPayoutDto(
+    Guid     PaymentRequestId,
+    DateTime PaidAt,
+    /// <summary>Gross COD this payout covers (sum of AmountToCollectForPackage).</summary>
+    decimal  GrossCod,
+    /// <summary>Service fees the sender owed, deducted from the COD. Zero if no netting.</summary>
+    decimal  ServiceFeeOffset,
+    /// <summary>Actual amount transferred to sender: max(0, GrossCod − ServiceFeeOffset).</summary>
+    decimal  NetAmountPaid,
+    /// <summary>Auto-generated breakdown note, e.g. "COD ₾305.50 − service fees ₾28.00 = net ₾277.50"</summary>
+    string?  Note,
+    int      OrderCount
+);
+
 // ── Customer: full Payments page ──────────────────────────────────────────────
 
 public sealed record CustomerPaymentsPageDto(
     IReadOnlyList<CustomerServiceFeeOrderDto>       ServiceFeeOrders,
     IReadOnlyList<CustomerPaymentRequestSummaryDto> PaymentRequests,
     IReadOnlyList<CustomerCodIncomeOrderDto>        CodIncomeOrders,
+    /// <summary>History of all COD payouts from company to this sender, with netting breakdown.</summary>
+    IReadOnlyList<CustomerCodPayoutDto>             CodPayouts,
     decimal TotalServiceFeeUnpaid,
     decimal TotalServiceFeePending,
     decimal TotalServiceFeePaid,

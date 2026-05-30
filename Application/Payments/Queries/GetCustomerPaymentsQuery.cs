@@ -7,21 +7,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Payments.Queries;
 
-// ── Query ─────────────────────────────────────────────────────────────────────
-
 /// <summary>
 /// Returns payment data for the authenticated customer's Payments page:
 ///   - Service fee orders (WhoPaysForCompanyService == Sender) for the given month
-///   - Their payment request history
-///   - COD income orders (ProductPaymentStatus == NotPaid, company owes sender)
+///   - Their SenderPaysCompany payment request history
+///   - COD income orders
+///   - COD payout history (CompanyPaysSender records) — shows netting breakdown
 /// </summary>
 public sealed record GetCustomerPaymentsQuery(
-    string   ApplicationUserId,
-    int      Year,
-    int      Month
+    string ApplicationUserId,
+    int    Year,
+    int    Month
 ) : IRequest<CustomerPaymentsPageDto>;
-
-// ── Handler ───────────────────────────────────────────────────────────────────
 
 public sealed class GetCustomerPaymentsQueryHandler
     : IRequestHandler<GetCustomerPaymentsQuery, CustomerPaymentsPageDto>
@@ -33,7 +30,6 @@ public sealed class GetCustomerPaymentsQueryHandler
         GetCustomerPaymentsQuery request,
         CancellationToken cancellationToken)
     {
-        // Resolve customer
         var customer = await _context.Customers
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.ApplicationUserId,
                                  cancellationToken)
@@ -45,28 +41,28 @@ public sealed class GetCustomerPaymentsQueryHandler
         // ── 1. Service fee orders for the month ───────────────────────────────
         var serviceFeeOrders = await _context.Orders
             .Include(o => o.GroupOrder)
-            .Where(o => o.GroupOrder.CustomerId     == customer.Id
-                     && o.WhoPaysForCompanyService  == ServicePayer.Sender
-                     && o.CreatedAt                >= monthStart
-                     && o.CreatedAt                <  monthEnd)
+            .Where(o => o.GroupOrder.CustomerId    == customer.Id
+                     && o.WhoPaysForCompanyService == ServicePayer.Sender
+                     && o.CreatedAt               >= monthStart
+                     && o.CreatedAt               <  monthEnd)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(cancellationToken);
 
         var serviceFeeDtos = serviceFeeOrders.Select(o => new CustomerServiceFeeOrderDto(
-            OrderId:                    o.Id,
-            TrackingNumber:             o.TrackingNumber,
-            RecipientFirstName:         o.RecipientFirstName,
-            RecipientCity:              o.RecipientCity,
-            RecipientDistrict:          o.RecipientDistrict,
-            CompanyServicePrice:        o.CompanyServicePrice,
-            OrderStatus:                o.Status.ToString(),
+            OrderId:                     o.Id,
+            TrackingNumber:              o.TrackingNumber,
+            RecipientFirstName:          o.RecipientFirstName,
+            RecipientCity:               o.RecipientCity,
+            RecipientDistrict:           o.RecipientDistrict,
+            CompanyServicePrice:         o.CompanyServicePrice,
+            OrderStatus:                 o.Status.ToString(),
             CompanyServicePaymentStatus: o.CompanyServicePaymentStatus.ToString(),
-            PaymentRequestId:           o.PaymentRequestId,
-            CreatedAt:                  o.CreatedAt,
-            DeliveredAt:                o.DeliveredAt
+            PaymentRequestId:            o.PaymentRequestId,
+            CreatedAt:                   o.CreatedAt,
+            DeliveredAt:                 o.DeliveredAt
         )).ToList();
 
-        // ── 2. Payment request history (all time, newest first) ───────────────
+        // ── 2. SenderPaysCompany request history (all time) ───────────────────
         var paymentRequests = await _context.PaymentRequests
             .Where(p => p.CustomerId == customer.Id
                      && p.Type       == PaymentRequestType.SenderPaysCompany)
@@ -82,12 +78,13 @@ public sealed class GetCustomerPaymentsQueryHandler
             ))
             .ToListAsync(cancellationToken);
 
-        // ── 3. COD income orders (all delivered, unpaid by company) ───────────
+        // ── 3. COD income orders ──────────────────────────────────────────────
         var codOrders = await _context.Orders
             .Include(o => o.GroupOrder)
-            .Where(o => o.GroupOrder.CustomerId      == customer.Id
-                     && o.AmountToCollectForPackage  > 0
-                     && (o.Status == OrderStatus.DeliveredToRecipient || !o.HasCompanyPaidTheSender))
+            .Where(o => o.GroupOrder.CustomerId     == customer.Id
+                     && o.AmountToCollectForPackage > 0
+                     && (o.Status == OrderStatus.DeliveredToRecipient
+                      || !o.HasCompanyPaidTheSender))
             .OrderByDescending(o => o.DeliveredAt)
             .ToListAsync(cancellationToken);
 
@@ -102,21 +99,40 @@ public sealed class GetCustomerPaymentsQueryHandler
             DeliveredAt:             o.DeliveredAt
         )).ToList();
 
-        // ── 4. Totals ──────────────────────────────────────────────────────────
-        var totalUnpaid   = serviceFeeOrders
+        // ── 4. COD payout history (CompanyPaysSender) — shows netting ─────────
+        // Load all CompanyPaysSender requests for this customer (all time, newest first).
+        // This tells the customer exactly what was paid and why it may differ from gross COD.
+        var codPayouts = await _context.PaymentRequests
+            .Where(p => p.CustomerId == customer.Id
+                     && p.Type       == PaymentRequestType.CompanyPaysSender
+                     && p.Status     == PaymentRequestStatus.Confirmed)
+            .OrderByDescending(p => p.ConfirmedAt)
+            .Select(p => new CustomerCodPayoutDto(
+                PaymentRequestId: p.Id,
+                PaidAt:           p.ConfirmedAt!.Value,
+                GrossCod:         p.TotalAmount,
+                ServiceFeeOffset: p.ServiceFeeOffset,
+                NetAmountPaid:    p.AmountConfirmed,
+                Note:             p.Note,
+                OrderCount:       p.Orders.Count
+            ))
+            .ToListAsync(cancellationToken);
+
+        // ── 5. Totals ─────────────────────────────────────────────────────────
+        var totalUnpaid = serviceFeeOrders
             .Where(o => o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Unpaid
                      && o.Status == OrderStatus.DeliveredToRecipient)
             .Sum(o => o.CompanyServicePrice);
 
-        var totalPending  = serviceFeeOrders
+        var totalPending = serviceFeeOrders
             .Where(o => o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Pending)
             .Sum(o => o.CompanyServicePrice);
 
-        var totalPaid     = serviceFeeOrders
+        var totalPaid = serviceFeeOrders
             .Where(o => o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Paid)
             .Sum(o => o.CompanyServicePrice);
 
-        var totalCodPending  = codOrders
+        var totalCodPending = codOrders
             .Where(o => !o.HasCompanyPaidTheSender && o.DeliveredAt != null)
             .Sum(o => o.AmountToCollectForPackage ?? 0m);
 
@@ -125,9 +141,10 @@ public sealed class GetCustomerPaymentsQueryHandler
             .Sum(o => o.AmountToCollectForPackage ?? 0m);
 
         return new CustomerPaymentsPageDto(
-            ServiceFeeOrders:     serviceFeeDtos,
-            PaymentRequests:      paymentRequests,
-            CodIncomeOrders:      codDtos,
+            ServiceFeeOrders:        serviceFeeDtos,
+            PaymentRequests:         paymentRequests,
+            CodIncomeOrders:         codDtos,
+            CodPayouts:              codPayouts,
             TotalServiceFeeUnpaid:   totalUnpaid,
             TotalServiceFeePending:  totalPending,
             TotalServiceFeePaid:     totalPaid,

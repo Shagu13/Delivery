@@ -126,10 +126,21 @@ export interface CustomerCodIncomeOrder {
   deliveredAt:             string | null;
 }
 
+export interface CustomerCodPayout {
+  paymentRequestId: string;
+  paidAt:           string;
+  grossCod:         number;
+  serviceFeeOffset: number;
+  netAmountPaid:    number;
+  note:             string | null;
+  orderCount:       number;
+}
+
 export interface CustomerPaymentsPage {
   serviceFeeOrders:       CustomerServiceFeeOrder[];
   paymentRequests:        CustomerPaymentRequestSummary[];
   codIncomeOrders:        CustomerCodIncomeOrder[];
+  codPayouts:             CustomerCodPayout[];
   totalServiceFeeUnpaid:  number;
   totalServiceFeePending: number;
   totalServiceFeePaid:    number;

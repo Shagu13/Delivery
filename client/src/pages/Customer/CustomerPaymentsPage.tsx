@@ -3,6 +3,7 @@ import {
   getMyPayments,
   createPaymentRequest,
   type CustomerPaymentsPage,
+  type CustomerCodPayout,
   type CompanyServicePaymentStatus,
 } from '../../api/payments';
 
@@ -414,6 +415,105 @@ function CodIncomeSection({ data }: { data: CustomerPaymentsPage }) {
           </table>
         </div>
       )}
+      <CodPayoutsSection payouts={data.codPayouts ?? []} />
+    </div>
+  );
+}
+
+// ── COD Payout History ────────────────────────────────────────────────────────
+
+function CodPayoutsSection({ payouts }: { payouts: CustomerCodPayout[] }) {
+  if (payouts.length === 0) return null;
+
+  const fmt = (n: number) =>
+    n.toLocaleString('ka-GE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <p style={{
+        fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+        letterSpacing: '0.08em', color: 'var(--color-text-subtle)', marginBottom: 12,
+      }}>
+        Payout History ({payouts.length})
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {payouts.map(p => {
+          const hasOffset = p.serviceFeeOffset > 0;
+          return (
+            <div key={p.paymentRequestId} style={{
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--color-bg)',
+              overflow: 'hidden',
+            }}>
+              {/* Header row */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 14px',
+                background: hasOffset ? 'rgba(99,102,241,0.04)' : undefined,
+                borderBottom: hasOffset ? '1px solid var(--color-border)' : undefined,
+                flexWrap: 'wrap', gap: 8,
+              }}>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--color-success)' }}>
+                    ₾{fmt(p.netAmountPaid)} received
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginLeft: 10 }}>
+                    {p.orderCount} order{p.orderCount !== 1 ? 's' : ''} ·{' '}
+                    {new Date(p.paidAt).toLocaleDateString('ka-GE', {
+                      day: '2-digit', month: 'short', year: 'numeric',
+                    })}
+                  </span>
+                </div>
+                <span style={{
+                  fontSize: '0.7rem', fontWeight: 700, padding: '2px 10px',
+                  borderRadius: 100,
+                  background: 'var(--color-success-bg)', color: 'var(--color-success)',
+                }}>
+                  Paid
+                </span>
+              </div>
+
+              {/* Breakdown — only shown when netting was applied */}
+              {hasOffset && (
+                <div style={{ padding: '10px 14px' }}>
+                  <div style={{
+                    display: 'inline-flex', flexDirection: 'column', gap: 4,
+                    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)', padding: '8px 14px',
+                    fontSize: '0.82rem', minWidth: 260,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}>
+                      <span style={{ color: 'var(--color-text-muted)' }}>Gross COD</span>
+                      <span style={{ fontWeight: 600 }}>₾{fmt(p.grossCod)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}>
+                      <span style={{ color: '#6366f1' }}>Service fees deducted</span>
+                      <span style={{ fontWeight: 600, color: '#6366f1' }}>− ₾{fmt(p.serviceFeeOffset)}</span>
+                    </div>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', gap: 24,
+                      borderTop: '1px solid var(--color-border)', paddingTop: 4, marginTop: 2,
+                      fontWeight: 800,
+                    }}>
+                      <span>Net transferred</span>
+                      <span style={{ color: 'var(--color-success)' }}>₾{fmt(p.netAmountPaid)}</span>
+                    </div>
+                  </div>
+                  {p.note && (
+                    <div style={{
+                      fontSize: '0.72rem', color: 'var(--color-text-subtle)',
+                      marginTop: 8, fontStyle: 'italic',
+                    }}>
+                      {p.note}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
