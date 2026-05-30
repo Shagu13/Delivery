@@ -11,6 +11,14 @@ import {
   type PaymentOrderItem,
 } from '../../api/payments';
 
+// Re-export shape used in netting modal
+type NettingModal = {
+  sender:            AdminCodOwedToSender;
+  selectedCodIds:    Set<string>;
+  selectedFeeIds:    Set<string>;
+  note:              string;
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const fmt = (n: number) =>
@@ -318,7 +326,7 @@ function CollectFromSendersTab({
   );
 }
 
-// ── Tab: Pay Senders COD ──────────────────────────────────────────────────────
+// ── Tab: Pay Senders COD (with netting) ──────────────────────────────────────
 
 function PaySendersCodTab({
   token, senders, onRefresh,
@@ -327,20 +335,67 @@ function PaySendersCodTab({
   senders: AdminCodOwedToSender[];
   onRefresh: () => void;
 }) {
-  const [selected, setSelected] = useState<{ sender: AdminCodOwedToSender; orderIds: string[] } | null>(null);
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState<NettingModal | null>(null);
+  const [busy,  setBusy]  = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handlePay = async () => {
-    if (!selected) return;
+  // Open modal: pre-select all COD orders, no fee offsets selected by default
+  const openModal = (sender: AdminCodOwedToSender) => {
+    setModal({
+      sender,
+      selectedCodIds: new Set(sender.codOrders.map(o => o.orderId)),
+      selectedFeeIds: new Set(),
+      note: '',
+    });
+    setError(null);
+  };
+
+  const toggleCod = (id: string) => {
+    if (!modal) return;
+    const next = new Set(modal.selectedCodIds);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setModal({ ...modal, selectedCodIds: next });
+  };
+
+  const toggleFee = (id: string) => {
+    if (!modal) return;
+    const next = new Set(modal.selectedFeeIds);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setModal({ ...modal, selectedFeeIds: next });
+  };
+
+  // Live calculations
+  const grossCod = modal
+    ? modal.sender.codOrders
+        .filter(o => modal.selectedCodIds.has(o.orderId))
+        .reduce((s, o) => s + (o.amountToCollectForPackage ?? 0), 0)
+    : 0;
+
+  const totalOffset = modal
+    ? modal.sender.offsetEligibleFeeOrders
+        .filter(o => modal.selectedFeeIds.has(o.orderId))
+        .reduce((s, o) => s + o.companyServicePrice, 0)
+    : 0;
+
+  const netTransfer = Math.max(0, grossCod - totalOffset);
+  const remainingFees = Math.max(0, totalOffset - grossCod); // if fees > COD
+
+  const handleConfirm = async () => {
+    if (!modal) return;
+    if (modal.selectedCodIds.size === 0) { setError('Select at least one COD order.'); return; }
     setBusy(true); setError(null);
     try {
-      await markCompanyPaidSenderCod(token, selected.sender.customerId, selected.orderIds, note || undefined);
-      setSelected(null); setNote('');
+      await markCompanyPaidSenderCod(
+        token,
+        modal.sender.customerId,
+        [...modal.selectedCodIds],
+        [...modal.selectedFeeIds],
+        modal.note || undefined,
+      );
+      setModal(null);
       onRefresh();
     } catch (e: any) {
-      setError(e.message ?? 'Failed to mark as paid.');
+      setError(e.message ?? 'Failed to record payment.');
     } finally {
       setBusy(false);
     }
@@ -359,48 +414,164 @@ function PaySendersCodTab({
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{sender.customerBusinessName}</div>
               <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                {sender.customerPhone} · {sender.orders.length} order{sender.orders.length !== 1 ? 's' : ''}
+                {sender.customerPhone} · {sender.codOrders.length} COD order{sender.codOrders.length !== 1 ? 's' : ''}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-error)' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#ef4444' }}>
                 ₾{fmt(sender.totalCodOwed)}
               </div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>to pay</div>
+              {sender.totalServiceFeesOwed > 0 && (
+                <div style={{ fontSize: '0.72rem', marginTop: 3 }}>
+                  <span style={{ color: '#10b981' }}>− ₾{fmt(sender.totalServiceFeesOwed)} fees owed</span>
+                  <span style={{ color: 'var(--color-text-subtle)', marginLeft: 4 }}>
+                    → net ₾{fmt(sender.suggestedNetTransfer)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <OrdersExpandable orders={sender.orders} />
-            <button
-              onClick={() => { setSelected({ sender, orderIds: sender.orders.map(o => o.orderId) }); setNote(''); setError(null); }}
-              style={{ ...primaryBtnStyle, marginLeft: 'auto' }}
-            >
-              Mark as Paid to Sender
+            <OrdersExpandable orders={sender.codOrders} />
+            <button onClick={() => openModal(sender)} style={{ ...primaryBtnStyle, marginLeft: 'auto' }}>
+              Settle with Sender
             </button>
           </div>
         </div>
       ))}
 
-      {selected && (
-        <Modal title="Mark COD as Paid to Sender" onClose={() => { setSelected(null); setError(null); }}>
-          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginBottom: 16 }}>
-            Confirm that you have transferred{' '}
-            <strong style={{ color: 'var(--color-text)' }}>
-              ₾{fmt(selected.orderIds.reduce((s, id) => {
-                const o = selected.sender.orders.find(x => x.orderId === id);
-                return s + (o?.amountOfCashCollected ?? o?.amountToCollectForPackage ?? 0);
-              }, 0))}
-            </strong>{' '}
-            to <strong>{selected.sender.customerBusinessName}</strong>.
-          </p>
-          <label style={labelStyle}>Note (optional)</label>
-          <input type="text" value={note} onChange={e => setNote(e.target.value)}
-            placeholder="e.g. Bank transfer ref. 12345" style={inputStyle} />
+      {/* Netting modal */}
+      {modal && (
+        <Modal
+          title={`Settle with ${modal.sender.customerBusinessName}`}
+          onClose={() => { setModal(null); setError(null); }}
+        >
+          <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 4 }}>
+
+            {/* COD orders checklist */}
+            <p style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.07em', color: 'var(--color-text-subtle)', marginBottom: 8 }}>
+              COD Orders to Pay Out
+            </p>
+            <div style={{
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
+              overflow: 'hidden', marginBottom: 16,
+            }}>
+              {modal.sender.codOrders.map((o, i) => (
+                <label key={o.orderId} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 12px', cursor: 'pointer',
+                  borderTop: i > 0 ? '1px solid var(--color-border)' : undefined,
+                  background: modal.selectedCodIds.has(o.orderId) ? 'rgba(196,127,23,0.05)' : undefined,
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={modal.selectedCodIds.has(o.orderId)}
+                    onChange={() => toggleCod(o.orderId)}
+                    style={{ accentColor: 'var(--color-accent)', width: 15, height: 15, flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--color-text-muted)', flexShrink: 0 }}>
+                    {o.trackingNumber}
+                  </span>
+                  <span style={{ fontSize: '0.82rem', flex: 1 }}>{o.recipientFirstName} · {o.recipientCity}</span>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#ef4444', flexShrink: 0 }}>
+                    ₾{fmt(o.amountToCollectForPackage ?? 0)}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {/* Fee offset checklist */}
+            {modal.sender.offsetEligibleFeeOrders.length > 0 && (
+              <>
+                <p style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: '0.07em', color: 'var(--color-text-subtle)', marginBottom: 4 }}>
+                  Offset Service Fees (select to deduct from COD)
+                </p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                  These are orders where {modal.sender.customerBusinessName} owes the company a service fee.
+                  Checking them deducts the fee from the COD payout instead of collecting separately.
+                </p>
+                <div style={{
+                  border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
+                  overflow: 'hidden', marginBottom: 16,
+                }}>
+                  {modal.sender.offsetEligibleFeeOrders.map((o, i) => (
+                    <label key={o.orderId} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 12px', cursor: 'pointer',
+                      borderTop: i > 0 ? '1px solid var(--color-border)' : undefined,
+                      background: modal.selectedFeeIds.has(o.orderId) ? 'rgba(16,185,129,0.05)' : undefined,
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={modal.selectedFeeIds.has(o.orderId)}
+                        onChange={() => toggleFee(o.orderId)}
+                        style={{ accentColor: '#10b981', width: 15, height: 15, flexShrink: 0 }}
+                      />
+                      <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--color-text-muted)', flexShrink: 0 }}>
+                        {o.trackingNumber}
+                      </span>
+                      <span style={{ fontSize: '0.82rem', flex: 1 }}>{o.recipientFirstName} · {o.recipientCity}</span>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#10b981', flexShrink: 0 }}>
+                        − ₾{fmt(o.companyServicePrice)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Live calculation summary */}
+            <div style={{
+              background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)', padding: '12px 14px', marginBottom: 16,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: 4 }}>
+                <span style={{ color: 'var(--color-text-muted)' }}>Gross COD (selected)</span>
+                <span style={{ fontWeight: 600 }}>₾{fmt(grossCod)}</span>
+              </div>
+              {totalOffset > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: 4 }}>
+                  <span style={{ color: '#10b981' }}>Service fee offset</span>
+                  <span style={{ fontWeight: 600, color: '#10b981' }}>− ₾{fmt(totalOffset)}</span>
+                </div>
+              )}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem',
+                fontWeight: 800, marginTop: totalOffset > 0 ? 6 : 0,
+                borderTop: totalOffset > 0 ? '1px solid var(--color-border)' : undefined,
+                paddingTop: totalOffset > 0 ? 6 : 0,
+              }}>
+                <span>Net transfer to sender</span>
+                <span style={{ color: netTransfer > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>
+                  ₾{fmt(netTransfer)}
+                </span>
+              </div>
+              {remainingFees > 0 && (
+                <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: 6 }}>
+                  ⚠ Fee offset (₾{fmt(totalOffset)}) exceeds COD (₾{fmt(grossCod)}).
+                  Remaining ₾{fmt(remainingFees)} will be marked paid but still tracked as a company receivable offset.
+                </div>
+              )}
+            </div>
+
+            {/* Note */}
+            <label style={labelStyle}>Note (optional)</label>
+            <input
+              type="text"
+              value={modal.note}
+              onChange={e => setModal(m => m ? { ...m, note: e.target.value } : m)}
+              placeholder="e.g. Bank transfer ref. 12345"
+              style={inputStyle}
+            />
+          </div>
+
           {error && <div style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginTop: 8 }}>{error}</div>}
-          <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setSelected(null); setError(null); }} style={cancelBtnStyle}>Cancel</button>
-            <button onClick={handlePay} disabled={busy} style={primaryBtnStyle}>
-              {busy ? 'Saving…' : 'Confirm Payment'}
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
+            <button onClick={() => { setModal(null); setError(null); }} style={cancelBtnStyle}>Cancel</button>
+            <button onClick={handleConfirm} disabled={busy || modal.selectedCodIds.size === 0} style={primaryBtnStyle}>
+              {busy ? 'Saving…' : `Confirm — Pay ₾${fmt(netTransfer)}`}
             </button>
           </div>
         </Modal>
@@ -662,6 +833,7 @@ export default function AdminPaymentsPage({ token }: { token: string }) {
               />
             </SectionCard>
           )}
+          {/* Tab badge: also show net suggestion */}
           {tab === 'settlements' && (
             <SectionCard
               title="Courier Settlements"

@@ -11,14 +11,32 @@ namespace Application.Payments.Commands;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Admin marks that the company has forwarded COD product money to a sender
-/// for a batch of orders.
-/// Applicable when AmountToCollectForPackage > 0 (courier collected cash for product).
-/// Creates a PaymentRequest of type CompanyPaysSender and sets HasCompanyPaidTheSender = true.
+/// Admin marks that the company has forwarded COD product money to a sender,
+/// optionally netting outstanding service fees the sender owes the company.
+///
+/// Netting rules:
+///   - CodOrderIds:        COD orders being paid out (AmountToCollectForPackage)
+///   - FeeOffsetOrderIds:  Sender-payer orders whose service fees are deducted
+///                         from the COD payout instead of collected separately.
+///
+/// The net transfer to the sender = sum(COD) - sum(service fees of offset orders).
+/// This can never go below zero — if fees >= COD, net = 0 and remaining
+/// fee balance stays as a separate obligation (owed by sender to company).
+///
+/// On confirmation:
+///   - All CodOrderIds:       HasCompanyPaidTheSender = true
+///   - All FeeOffsetOrderIds: CompanyServicePaymentStatus = Paid
+///   - One PaymentRequest created (type CompanyPaysSender) with:
+///       TotalAmount      = gross COD
+///       ServiceFeeOffset = sum of offset fees
+///       AmountConfirmed  = max(0, COD - fees)
 /// </summary>
 public sealed record MarkCompanyPaidSenderCommand(
     Guid       CustomerId,
-    List<Guid> OrderIds,
+    /// <summary>COD orders to mark as paid to sender.</summary>
+    List<Guid> CodOrderIds,
+    /// <summary>Service-fee orders to offset against the COD (can be empty).</summary>
+    List<Guid> FeeOffsetOrderIds,
     string?    Note
 ) : IRequest<Guid>;
 
@@ -30,7 +48,8 @@ public sealed class MarkCompanyPaidSenderCommandValidator
     public MarkCompanyPaidSenderCommandValidator()
     {
         RuleFor(x => x.CustomerId).NotEmpty();
-        RuleFor(x => x.OrderIds).NotEmpty();
+        RuleFor(x => x.CodOrderIds).NotEmpty();
+        RuleFor(x => x.FeeOffsetOrderIds).NotNull();
         RuleFor(x => x.Note).MaximumLength(500).When(x => x.Note is not null);
     }
 }
@@ -48,43 +67,91 @@ public sealed class MarkCompanyPaidSenderCommandHandler
         MarkCompanyPaidSenderCommand request,
         CancellationToken cancellationToken)
     {
-        var orders = await _context.Orders
+        // ── 1. Load and validate COD orders ───────────────────────────────────
+        var codOrders = await _context.Orders
             .Include(o => o.GroupOrder)
-            .Where(o => request.OrderIds.Contains(o.Id))
+            .Where(o => request.CodOrderIds.Contains(o.Id))
             .ToListAsync(cancellationToken);
 
-        if (orders.Count != request.OrderIds.Count)
-            throw new NotFoundException("Order", "one or more of the requested IDs");
+        if (codOrders.Count != request.CodOrderIds.Count)
+            throw new NotFoundException("Order", "one or more COD order IDs not found");
 
-        // Validate: must belong to customer, must have a COD amount, not already paid out
-        var invalid = orders
-            .Where(o => o.GroupOrder.CustomerId    != request.CustomerId
+        var invalidCod = codOrders
+            .Where(o => o.GroupOrder.CustomerId != request.CustomerId
                      || !(o.AmountToCollectForPackage > 0)
                      || o.HasCompanyPaidTheSender)
             .Select(o => o.TrackingNumber)
             .ToList();
 
-        if (invalid.Count > 0)
+        if (invalidCod.Count > 0)
             throw new ConflictException(
-                $"The following orders are not eligible: {string.Join(", ", invalid)}");
+                $"The following COD orders are not eligible: {string.Join(", ", invalidCod)}");
 
-        var total = orders.Sum(o => o.AmountToCollectForPackage ?? 0m);
+        var grossCod = codOrders.Sum(o => o.AmountToCollectForPackage ?? 0m);
 
+        // ── 2. Load and validate fee-offset orders (if any) ───────────────────
+        var feeOffsetOrders = new List<Domain.Order>();
+
+        if (request.FeeOffsetOrderIds.Count > 0)
+        {
+            feeOffsetOrders = await _context.Orders
+                .Include(o => o.GroupOrder)
+                .Where(o => request.FeeOffsetOrderIds.Contains(o.Id))
+                .ToListAsync(cancellationToken);
+
+            if (feeOffsetOrders.Count != request.FeeOffsetOrderIds.Count)
+                throw new NotFoundException("Order", "one or more fee offset order IDs not found");
+
+            var invalidFee = feeOffsetOrders
+                .Where(o => o.GroupOrder.CustomerId    != request.CustomerId
+                         || o.WhoPaysForCompanyService != ServicePayer.Sender
+                         || o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Paid)
+                .Select(o => o.TrackingNumber)
+                .ToList();
+
+            if (invalidFee.Count > 0)
+                throw new ConflictException(
+                    $"The following fee offset orders are not eligible: {string.Join(", ", invalidFee)}");
+        }
+
+        var totalFeeOffset = feeOffsetOrders.Sum(o => o.CompanyServicePrice);
+
+        // ── 3. Calculate net transfer ─────────────────────────────────────────
+        // Net can never be negative — if fees exceed COD, net = 0.
+        // Remaining fees (fees - COD) stay outstanding as a separate obligation.
+        var netTransfer = Math.Max(0m, grossCod - totalFeeOffset);
+
+        // ── 4. Build note including netting breakdown ─────────────────────────
+        string? autoNote = null;
+        if (totalFeeOffset > 0)
+        {
+            autoNote = $"COD ₾{grossCod:F2} − service fees ₾{totalFeeOffset:F2} = net ₾{netTransfer:F2}";
+            if (request.Note is not null)
+                autoNote = $"{autoNote}. {request.Note}";
+        }
+
+        // ── 5. Create PaymentRequest ──────────────────────────────────────────
         var paymentRequest = new PaymentRequest
         {
-            Type        = PaymentRequestType.CompanyPaysSender,
-            Status      = PaymentRequestStatus.Confirmed, // admin initiates and confirms simultaneously
-            CustomerId  = request.CustomerId,
-            TotalAmount = total,
-            AmountConfirmed = total,
-            ConfirmedAt = DateTime.UtcNow,
-            Note        = request.Note,
+            Type             = PaymentRequestType.CompanyPaysSender,
+            Status           = PaymentRequestStatus.Confirmed,
+            CustomerId       = request.CustomerId,
+            TotalAmount      = grossCod,
+            ServiceFeeOffset = totalFeeOffset,
+            AmountConfirmed  = netTransfer,
+            ConfirmedAt      = DateTime.UtcNow,
+            Note             = autoNote ?? request.Note,
         };
 
         _context.PaymentRequests.Add(paymentRequest);
 
-        foreach (var order in orders)
+        // ── 6. Mark COD orders as paid ────────────────────────────────────────
+        foreach (var order in codOrders)
             order.HasCompanyPaidTheSender = true;
+
+        // ── 7. Mark offset fee orders as paid ─────────────────────────────────
+        foreach (var order in feeOffsetOrders)
+            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
 
         await _context.SaveChangesAsync(cancellationToken);
         return paymentRequest.Id;

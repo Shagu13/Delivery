@@ -1,8 +1,4 @@
-// ─── Payments API ─────────────────────────────────────────────────────────────
-
 const BASE = '/api/payments';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type CompanyServicePaymentStatus = 'Unpaid' | 'Pending' | 'Paid';
 export type PaymentRequestStatus        = 'Pending' | 'Confirmed' | 'PartiallyPaid';
@@ -27,8 +23,6 @@ export interface PaymentOrderItem {
   createdAt:                  string;
   deliveredAt:                string | null;
 }
-
-// ── Admin types ───────────────────────────────────────────────────────────────
 
 export interface AdminSenderPaymentRequest {
   paymentRequestId:     string;
@@ -58,31 +52,37 @@ export interface AdminCollectFromSenders {
 }
 
 export interface AdminCodOwedToSender {
-  customerId:           string;
-  customerBusinessName: string;
-  customerPhone:        string;
-  totalCodOwed:         number;
-  orders:               PaymentOrderItem[];
+  customerId:                string;
+  customerBusinessName:      string;
+  customerPhone:             string;
+  totalCodOwed:              number;
+  totalServiceFeesOwed:      number;
+  suggestedNetTransfer:      number;
+  codOrders:                 PaymentOrderItem[];
+  offsetEligibleFeeOrders:   PaymentOrderItem[];
 }
 
 export interface AdminCourierSettlement {
-  settlementId:                string;
-  courierId:                   string;
-  courierFullName:             string;
-  courierPhone:                string;
-  settlementDate:              string;
-  totalOrdersDelivered:        number;
-  totalOrdersPickedUp:         number;
-  totalCourierSalary:          number;
+  settlementId:                  string;
+  courierId:                     string;
+  courierFullName:               string;
+  courierPhone:                  string;
+  settlementDate:                string;
+  totalOrdersDelivered:          number;
+  totalOrdersPickedUp:           number;
+  totalAmountOfCashCollected:    number | null;
+  totalCodOwedToSenders:         number;
+  totalCompanyServiceRevenue:    number;
+  totalServiceFeesOwedBySenders: number;
+  totalCourierSalary:            number;
   totalCourierTransferToCompany: number;
-  totalCompanyServiceRevenue:  number;
-  totalCompanyNetIncome:       number;
-  totalAmountOfCashCollected:  number | null;
-  isTheDayClosed:              boolean;
-  wasCourierPaid:              boolean;
-  courierPaidAt:               string | null;
-  hasCourierHandedOverRevenue: boolean;
-  revenueHandedOverAt:         string | null;
+  companyNetCashAfterCod:        number;
+  totalCompanyNetIncome:         number;
+  isTheDayClosed:                boolean;
+  wasCourierPaid:                boolean;
+  courierPaidAt:                 string | null;
+  hasCourierHandedOverRevenue:   boolean;
+  revenueHandedOverAt:           string | null;
 }
 
 export interface AdminPaymentsPage {
@@ -90,8 +90,6 @@ export interface AdminPaymentsPage {
   payToSenders:       AdminCodOwedToSender[];
   courierSettlements: AdminCourierSettlement[];
 }
-
-// ── Customer types ────────────────────────────────────────────────────────────
 
 export interface CustomerServiceFeeOrder {
   orderId:                    string;
@@ -170,15 +168,16 @@ export async function confirmSenderPayment(
 }
 
 export async function markCompanyPaidSenderCod(
-  token:      string,
-  customerId: string,
-  orderIds:   string[],
-  note?:      string,
+  token:              string,
+  customerId:         string,
+  codOrderIds:        string[],
+  feeOffsetOrderIds:  string[],
+  note?:              string,
 ): Promise<void> {
   const res = await fetch(`${BASE}/admin/pay-sender-cod`, {
     method:  'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ customerId, orderIds, note: note ?? null }),
+    body:    JSON.stringify({ customerId, codOrderIds, feeOffsetOrderIds, note: note ?? null }),
   });
   if (!res.ok) throw new Error(await res.text());
 }

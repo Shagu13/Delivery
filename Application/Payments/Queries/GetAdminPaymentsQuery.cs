@@ -6,20 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Payments.Queries;
 
-// ── Query ─────────────────────────────────────────────────────────────────────
-
-/// <summary>
-/// Returns all data for the admin Payments page:
-///   1. Collect from Senders   (SenderPaysCompany pending requests + unpaid groups)
-///   2. Pay to Senders COD     (orders where company owes sender product money)
-///   3. Courier Settlements    (DailySettlement list with payment flags)
-/// </summary>
-/// <param name="SettlementMonthStart">Optional: filter settlements by month. Null = last 60 days.</param>
 public sealed record GetAdminPaymentsQuery(
     DateTime? SettlementMonthStart = null
 ) : IRequest<AdminPaymentsPageDto>;
-
-// ── Handler ───────────────────────────────────────────────────────────────────
 
 public sealed class GetAdminPaymentsQueryHandler
     : IRequestHandler<GetAdminPaymentsQuery, AdminPaymentsPageDto>
@@ -54,7 +43,7 @@ public sealed class GetAdminPaymentsQueryHandler
             Orders:                p.Orders.Select(MapOrderItem).ToList()
         )).ToList();
 
-        // ── 2. Unpaid sender groups (no request submitted yet) ─────────────────
+        // ── 2. Unpaid sender groups (no request submitted yet) ────────────────
         var unpaidOrders = await _context.Orders
             .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
             .Where(o => o.WhoPaysForCompanyService    == ServicePayer.Sender
@@ -84,6 +73,7 @@ public sealed class GetAdminPaymentsQueryHandler
         );
 
         // ── 3. COD owed to senders ────────────────────────────────────────────
+        // Load all COD orders (unpaid to sender)
         var codOrders = await _context.Orders
             .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
             .Where(o => o.AmountToCollectForPackage > 0
@@ -92,21 +82,45 @@ public sealed class GetAdminPaymentsQueryHandler
                      && o.GroupOrder.CustomerId != null)
             .ToListAsync(cancellationToken);
 
-        var payToSenders = codOrders
-            .GroupBy(o => o.GroupOrder.CustomerId!.Value)
-            .Select(g =>
-            {
-                var customer = g.First().GroupOrder.Customer!;
-                return new AdminCodOwedToSenderDto(
-                    CustomerId:           g.Key,
-                    CustomerBusinessName: customer.BusinessName,
-                    CustomerPhone:        customer.PhoneNumber,
-                    TotalCodOwed:         g.Sum(o => o.AmountToCollectForPackage ?? 0m),
-                    Orders:               g.Select(MapOrderItem).ToList()
-                );
-            })
-            .OrderByDescending(g => g.TotalCodOwed)
-            .ToList();
+        // Load all outstanding service-fee orders (Sender-payer, Unpaid or Pending)
+        // These are eligible to be offset against COD payouts.
+        var allOffsetEligible = await _context.Orders
+            .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
+            .Where(o => o.WhoPaysForCompanyService    == ServicePayer.Sender
+                     && o.CompanyServicePaymentStatus != CompanyServicePaymentStatus.Paid
+                     && o.Status                      == OrderStatus.DeliveredToRecipient
+                     && o.GroupOrder.CustomerId       != null)
+            .ToListAsync(cancellationToken);
+
+        // Group both sets by customer and merge
+        var codByCustomer      = codOrders.GroupBy(o => o.GroupOrder.CustomerId!.Value).ToDictionary(g => g.Key);
+        var feeByCustomer      = allOffsetEligible.GroupBy(o => o.GroupOrder.CustomerId!.Value).ToDictionary(g => g.Key);
+        var allCustomerIds     = codByCustomer.Keys.ToHashSet();
+
+        var payToSenders = allCustomerIds.Select(customerId =>
+        {
+            var codGroup = codByCustomer[customerId];
+            var customer = codGroup.First().GroupOrder.Customer!;
+            var codList  = codGroup.ToList();
+
+            var feeOrders   = feeByCustomer.TryGetValue(customerId, out var fg) ? fg.ToList() : new();
+            var totalCod    = codList.Sum(o => o.AmountToCollectForPackage ?? 0m);
+            var totalFees   = feeOrders.Sum(o => o.CompanyServicePrice);
+            var suggestedNet = Math.Max(0m, totalCod - totalFees);
+
+            return new AdminCodOwedToSenderDto(
+                CustomerId:                customer.Id,
+                CustomerBusinessName:      customer.BusinessName,
+                CustomerPhone:             customer.PhoneNumber,
+                TotalCodOwed:              totalCod,
+                TotalServiceFeesOwed:      totalFees,
+                SuggestedNetTransfer:      suggestedNet,
+                CodOrders:                 codList.Select(MapOrderItem).ToList(),
+                OffsetEligibleFeeOrders:   feeOrders.Select(MapOrderItem).ToList()
+            );
+        })
+        .OrderByDescending(g => g.TotalCodOwed)
+        .ToList();
 
         // ── 4. Courier settlements ─────────────────────────────────────────────
         var settlementFrom = request.SettlementMonthStart
@@ -148,8 +162,8 @@ public sealed class GetAdminPaymentsQueryHandler
         );
     }
 
-    private static PaymentOrderItemDto MapOrderItem(Domain.Order o) => new(
-        OrderId:                    o.Id,
+    private static PaymentOrderItem MapOrderItem(Domain.Order o) => new(
+        OrderId:                    o.Id.ToString(),
         TrackingNumber:             o.TrackingNumber,
         RecipientFirstName:         o.RecipientFirstName,
         RecipientCity:              o.RecipientCity,

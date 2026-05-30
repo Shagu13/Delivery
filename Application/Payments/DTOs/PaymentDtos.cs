@@ -2,18 +2,18 @@ namespace Application.Payments.DTOs;
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 
-public sealed record PaymentOrderItemDto(
-    Guid    OrderId,
-    string  TrackingNumber,
-    string  RecipientFirstName,
-    string  RecipientCity,
-    string  RecipientDistrict,
-    decimal CompanyServicePrice,
+public sealed record PaymentOrderItem(
+    string   OrderId,
+    string   TrackingNumber,
+    string   RecipientFirstName,
+    string   RecipientCity,
+    string   RecipientDistrict,
+    decimal  CompanyServicePrice,
     decimal? AmountOfCashCollected,
     decimal? AmountToCollectForPackage,
-    string  Status,                     // OrderStatus string
-    string  CompanyServicePaymentStatus,
-    bool    HasCompanyPaidTheSender,
+    string   Status,
+    string   CompanyServicePaymentStatus,
+    bool     HasCompanyPaidTheSender,
     DateTime CreatedAt,
     DateTime? DeliveredAt
 );
@@ -27,17 +27,15 @@ public sealed record AdminSenderPaymentRequestDto(
     string  CustomerPhone,
     decimal TotalAmount,
     decimal AmountConfirmed,
-    string  Status,                     // PaymentRequestStatus string
+    string  Status,
     string? Note,
     DateTime CreatedAt,
     DateTime? ConfirmedAt,
-    IReadOnlyList<PaymentOrderItemDto> Orders
+    IReadOnlyList<PaymentOrderItem> Orders
 );
 
 public sealed record AdminCollectFromSendersDto(
     IReadOnlyList<AdminSenderPaymentRequestDto> PendingRequests,
-    /// <summary>Orders with WhoPaysForCompanyService == Sender and CompanyServicePaymentStatus == Unpaid,
-    /// grouped by customer — senders who haven't submitted a request yet.</summary>
     IReadOnlyList<AdminUnpaidSenderGroupDto> UnpaidGroups
 );
 
@@ -56,7 +54,10 @@ public sealed record AdminCodOwedToSenderDto(
     string  CustomerBusinessName,
     string  CustomerPhone,
     decimal TotalCodOwed,
-    IReadOnlyList<PaymentOrderItemDto> Orders
+    decimal TotalServiceFeesOwed,
+    decimal SuggestedNetTransfer,
+    IReadOnlyList<PaymentOrderItem> CodOrders,
+    IReadOnlyList<PaymentOrderItem> OffsetEligibleFeeOrders
 );
 
 // ── Admin: Courier Settlements ────────────────────────────────────────────────
@@ -69,38 +70,14 @@ public sealed record AdminCourierSettlementDto(
     DateTime SettlementDate,
     int      TotalOrdersDelivered,
     int      TotalOrdersPickedUp,
-
-    // ── Cash collected ────────────────────────────────────────────────────────
-    /// <summary>Total cash physically collected by the courier (COD + bundled service fees).</summary>
     decimal? TotalAmountOfCashCollected,
-
-    // ── COD ───────────────────────────────────────────────────────────────────
-    /// <summary>Product money the company must forward back to senders.</summary>
     decimal  TotalCodOwedToSenders,
-
-    // ── Service revenue ───────────────────────────────────────────────────────
     decimal  TotalCompanyServiceRevenue,
-
-    /// <summary>Service fees not yet collected from Sender-payer customers.</summary>
     decimal  TotalServiceFeesOwedBySenders,
-
-    // ── Salary & transfer ─────────────────────────────────────────────────────
     decimal  TotalCourierSalary,
-
-    /// <summary>Cash the courier hands over: TotalAmountOfCashCollected − TotalCourierSalary.</summary>
     decimal  TotalCourierTransferToCompany,
-
-    // ── Company position ──────────────────────────────────────────────────────
-    /// <summary>
-    /// Company cash after receiving handover and paying COD to senders.
-    /// = TotalCourierTransferToCompany − TotalCodOwedToSenders.
-    /// Can be negative; add TotalServiceFeesOwedBySenders to get TotalCompanyNetIncome.
-    /// </summary>
     decimal  CompanyNetCashAfterCod,
-
     decimal  TotalCompanyNetIncome,
-
-    // ── Status flags ──────────────────────────────────────────────────────────
     bool     IsTheDayClosed,
     bool     WasCourierPaid,
     DateTime? CourierPaidAt,
@@ -111,9 +88,9 @@ public sealed record AdminCourierSettlementDto(
 // ── Admin: full Payments page ─────────────────────────────────────────────────
 
 public sealed record AdminPaymentsPageDto(
-    AdminCollectFromSendersDto                CollectFromSenders,
-    IReadOnlyList<AdminCodOwedToSenderDto>    PayToSenders,
-    IReadOnlyList<AdminCourierSettlementDto>  CourierSettlements
+    AdminCollectFromSendersDto               CollectFromSenders,
+    IReadOnlyList<AdminCodOwedToSenderDto>   PayToSenders,
+    IReadOnlyList<AdminCourierSettlementDto> CourierSettlements
 );
 
 // ── Customer: service fee section ────────────────────────────────────────────
@@ -158,11 +135,9 @@ public sealed record CustomerCodIncomeOrderDto(
 // ── Customer: full Payments page ──────────────────────────────────────────────
 
 public sealed record CustomerPaymentsPageDto(
-    /// <summary>All orders for the selected month (filtered client-side further).</summary>
     IReadOnlyList<CustomerServiceFeeOrderDto>       ServiceFeeOrders,
     IReadOnlyList<CustomerPaymentRequestSummaryDto> PaymentRequests,
     IReadOnlyList<CustomerCodIncomeOrderDto>        CodIncomeOrders,
-    /// <summary>Summary totals for the selected month.</summary>
     decimal TotalServiceFeeUnpaid,
     decimal TotalServiceFeePending,
     decimal TotalServiceFeePaid,
