@@ -21,10 +21,11 @@ import { fetchSmsBalance } from '../../api/sms';
 import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminPaymentsPage from './AdminPaymentsPage';
+import AdminFinancePage from './AdminFinancePage';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'payments';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'payments' | 'finance';
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -183,6 +184,17 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Payments</span>
           </button>
+          <button
+            className={`sidebar__link ${activeView === 'finance' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('finance')}
+            title="Finance"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 12l4-4 3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <rect x="1" y="11" width="14" height="1" rx="0.5" fill="currentColor" opacity="0.3"/>
+            </svg>
+            <span className="sidebar__link-text">Finance</span>
+          </button>
         </nav>
         <div className="sidebar__footer">
           <LanguageToggle className="sidebar__lang-toggle" />
@@ -214,6 +226,7 @@ export function AdminDashboard() {
             {activeView === 'weightTiers' && t.topbarWeightTiers}
             {activeView === 'history' && t.topbarHistory}
             {activeView === 'payments' && 'Payments'}
+            {activeView === 'finance' && 'Finance'}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
@@ -236,6 +249,7 @@ export function AdminDashboard() {
                   )}
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
           {activeView === 'payments' && token && <AdminPaymentsPage token={token} />}
+          {activeView === 'finance' && token && <AdminFinancePage token={token} />}
         </main>
       </div>
 
