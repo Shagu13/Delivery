@@ -65,8 +65,13 @@ export function AdminDashboard() {
     goTo('couriers');
   };
 
-  const handleCourierUpdated = (courierId: string, newUsername: string) => {
-    setCouriers(prev => prev.map(c => c.courierId === courierId ? { ...c, username: newUsername } : c));
+  const handleCourierUpdated = (courierId: string, newUsername: string, newPhone: string, newIdNumber: string) => {
+    setCouriers(prev => prev.map(c =>
+      c.courierId === courierId
+        ? { ...c, username: newUsername, phoneNumber: newPhone, idNumber: newIdNumber }
+        : c
+    ));
+    setEditCourier(null);
   };
 
   const handleCourierActiveChanged = (courierId: string, isActive: boolean) => {
@@ -261,11 +266,12 @@ export function AdminDashboard() {
       />
 
       <EditCourierModal
+        key={editCourier?.courierId ?? 'none'}
         open={editCourier !== null}
         courier={editCourier}
         token={token ?? ''}
         onClose={() => setEditCourier(null)}
-        onUpdated={(id, username) => { handleCourierUpdated(id, username); }}
+        onUpdated={(id, username, phone, idNumber) => { handleCourierUpdated(id, username, phone, idNumber); }}
       />
 
       {toast && (

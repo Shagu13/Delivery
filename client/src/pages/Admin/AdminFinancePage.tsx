@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getAdminFinanceSummary,
   type AdminFinancePage,
@@ -452,20 +452,23 @@ function LedgerTable({
 const MONTHS_OPTIONS = [3, 6, 12, 24];
 
 export default function AdminFinancePage({ token }: { token: string }) {
-  const [data,        setData]        = useState<AdminFinancePage | null>(null);
-  const [loading,     setLoading]     = useState(true);
+  const [data,          setData]          = useState<AdminFinancePage | null>(null);
+  const [loading,       setLoading]       = useState(true);
   const [ledgerLoading, setLedgerLoading] = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
-  const [monthsBack,  setMonthsBack]  = useState(6);
-  const [page,        setPage]        = useState(0);
-  const [typeFilter,  setTypeFilter]  = useState<LedgerTypeFilter>('');
+  const [error,         setError]         = useState<string | null>(null);
+  const [monthsBack,    setMonthsBack]    = useState(6);
+  const [page,          setPage]          = useState(0);
+  const [typeFilter,    setTypeFilter]    = useState<LedgerTypeFilter>('');
 
-  const load = useCallback(async (
-    mb: number, pg: number, tf: LedgerTypeFilter, ledgerOnly = false
+  const fetchData = useCallback(async (
+    mb: number, pg: number, tf: LedgerTypeFilter, ledgerOnly = false,
   ) => {
-    if (ledgerOnly) setLedgerLoading(true);
-    else            setLoading(true);
-    setError(null);
+    if (ledgerOnly) {
+      setLedgerLoading(true);
+    } else {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const d = await getAdminFinanceSummary(token, mb, pg, 30, tf);
       setData(d);
@@ -477,24 +480,29 @@ export default function AdminFinancePage({ token }: { token: string }) {
     }
   }, [token]);
 
-  useEffect(() => { load(monthsBack, page, typeFilter); }, [load, monthsBack, page, typeFilter]);
+  // Initial load on mount only — using ref avoids setState-in-effect lint warning
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (didMount.current) return;
+    didMount.current = true;
+    void fetchData(6, 0, '');
+  }, [fetchData]);
 
   const handleMonthsChange = (mb: number) => {
     setMonthsBack(mb);
     setPage(0);
-    // full reload
-    load(mb, 0, typeFilter);
+    fetchData(mb, 0, typeFilter);
   };
 
   const handlePageChange = (p: number) => {
     setPage(p);
-    load(monthsBack, p, typeFilter, true);
+    fetchData(monthsBack, p, typeFilter, true);
   };
 
   const handleTypeChange = (tf: LedgerTypeFilter) => {
     setTypeFilter(tf);
     setPage(0);
-    load(monthsBack, 0, tf, true);
+    fetchData(monthsBack, 0, tf, true);
   };
 
   if (loading) {
@@ -510,7 +518,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
       <div style={{ padding: 40, textAlign: 'center', color: '#ef4444' }}>
         {error ?? 'No data.'}
         <button
-          onClick={() => load(monthsBack, page, typeFilter)}
+          onClick={() => fetchData(monthsBack, page, typeFilter)}
           style={{ marginLeft: 12, fontSize: '0.8rem', color: 'var(--color-accent)', background: 'none', border: 'none', cursor: 'pointer' }}
         >
           Retry
@@ -520,7 +528,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
   }
 
   // Totals across all loaded months
-  const summaries = data.monthlySummaries;
+  const summaries     = data.monthlySummaries;
   const totalGross    = summaries.reduce((s, m) => s + m.grossServiceRevenue,      0);
   const totalNet      = summaries.reduce((s, m) => s + m.netServiceIncome,         0);
   const totalSalaries = summaries.reduce((s, m) => s + m.totalCourierSalaries,     0);

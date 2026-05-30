@@ -23,6 +23,7 @@ export interface Courier {
     assignedCity: string;
     assignedDistrict: string;
     phoneNumber: string;
+    idNumber: string;
     isDeleted: boolean;
     dateDeleted: string | null;
 }
@@ -108,6 +109,8 @@ export async function setCourierSalary(orderId: string, salary: number, token: s
 export interface UpdateCourierRequest {
     username: string;
     newPassword?: string;
+    phoneNumber: string;
+    idNumber: string;
 }
 
 export async function updateCourier(

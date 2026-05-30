@@ -1,34 +1,46 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { updateCourier, CourierApiError } from '../api/couriers';
 import type { Courier } from '../api/couriers';
 
 export interface EditCourierForm {
-    username: string;
+    username:    string;
     newPassword: string;
+    phoneNumber: string;
+    idNumber:    string;
 }
 
 type FieldErrors = Partial<Record<keyof EditCourierForm, string>>;
 
+function initialForm(courier: Courier | null): EditCourierForm {
+    return {
+        username:    courier?.username    ?? '',
+        newPassword: '',
+        phoneNumber: courier?.phoneNumber ?? '',
+        idNumber:    courier?.idNumber    ?? '',
+    };
+}
+
 export function useEditCourier(
     courier: Courier | null,
     token: string,
-    onUpdated: (courierId: string, newUsername: string) => void,
+    onUpdated: (courierId: string, newUsername: string, newPhone: string, newIdNumber: string) => void,
 ) {
-    const [form, setForm] = useState<EditCourierForm>({ username: '', newPassword: '' });
+    // Key the entire form state off the courier's ID so React re-initializes
+    // whenever a different courier is selected — no useEffect needed.
+    const [form, setForm] = useState<EditCourierForm>(() => initialForm(courier));
     const [errors, setErrors] = useState<FieldErrors>({});
     const [globalError, setGlobalError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
 
-    // Pre-fill username whenever the selected courier changes
-    useEffect(() => {
-        if (courier) {
-            setForm({ username: courier.username, newPassword: '' });
-            setErrors({});
-            setGlobalError(null);
-            setSuccess(false);
-        }
-    }, [courier]);
+    // Called by the modal when it opens with a new courier (via key prop reset)
+    // We also expose a reset function so the parent can force-reset if needed.
+    const reset = useCallback((c: Courier | null) => {
+        setForm(initialForm(c));
+        setErrors({});
+        setGlobalError(null);
+        setSuccess(false);
+    }, []);
 
     const handleChange = useCallback((field: keyof EditCourierForm, value: string) => {
         setForm(prev => ({ ...prev, [field]: value }));
@@ -45,6 +57,14 @@ export function useEditCourier(
         }
         if (form.newPassword && form.newPassword.length < 8) {
             e.newPassword = 'Password must be at least 8 characters.';
+        }
+        if (!form.phoneNumber.trim()) {
+            e.phoneNumber = 'Phone number is required.';
+        } else if (!/^\d{9,15}$/.test(form.phoneNumber.trim())) {
+            e.phoneNumber = 'Enter a valid phone number (digits only).';
+        }
+        if (!form.idNumber.trim()) {
+            e.idNumber = 'ID number is required.';
         }
         return e;
     };
@@ -66,13 +86,15 @@ export function useEditCourier(
             await updateCourier(
                 courier.courierId,
                 {
-                    username: form.username.trim(),
+                    username:    form.username.trim(),
                     newPassword: form.newPassword || undefined,
+                    phoneNumber: form.phoneNumber.trim(),
+                    idNumber:    form.idNumber.trim(),
                 },
                 token,
             );
             setSuccess(true);
-            onUpdated(courier.courierId, form.username.trim());
+            onUpdated(courier.courierId, form.username.trim(), form.phoneNumber.trim(), form.idNumber.trim());
         } catch (err) {
             if (err instanceof CourierApiError && err.errors) {
                 const mapped: FieldErrors = {};

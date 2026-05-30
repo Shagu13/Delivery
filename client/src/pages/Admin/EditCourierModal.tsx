@@ -7,7 +7,7 @@ interface Props {
     courier: Courier | null;
     token: string;
     onClose: () => void;
-    onUpdated: (courierId: string, newUsername: string) => void;
+    onUpdated: (courierId: string, newUsername: string, newPhone: string, newIdNumber: string) => void;
 }
 
 export function EditCourierModal({ open, courier, token, onClose, onUpdated }: Props) {
@@ -22,15 +22,13 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
         return () => window.removeEventListener('keydown', handler);
     }, [open, onClose]);
 
-    useEffect(() => { setShowPassword(false); }, [open]);
-
     if (!open || !courier) return null;
 
     return (
         <>
             {/* Backdrop */}
             <div
-                onClick={onClose}
+                onClick={() => { setShowPassword(false); onClose(); }}
                 style={{
                     position: 'fixed', inset: 0,
                     background: 'rgba(26,23,20,0.45)',
@@ -82,8 +80,7 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                         </h2>
                     </div>
                     <button
-                        onClick={onClose}
-                        aria-label="Close"
+                        onClick={() => { setShowPassword(false); onClose(); }}
                         style={{
                             width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
@@ -157,6 +154,67 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                             Courier updated successfully.
                         </div>
                     )}
+
+                    {/* Section label */}
+                    <p style={{
+                        fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em',
+                        textTransform: 'uppercase', color: 'var(--color-text-subtle)',
+                        margin: '4px 0 0',
+                    }}>
+                        Contact Info
+                    </p>
+
+                    {/* Phone Number */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                            Phone Number <span style={{ color: 'var(--color-accent)' }}>*</span>
+                        </label>
+                        <input
+                            type="tel"
+                            value={form.phoneNumber}
+                            onChange={e => handleChange('phoneNumber', e.target.value)}
+                            placeholder="e.g. 599123456"
+                            maxLength={15}
+                            autoComplete="off"
+                            style={{
+                                background: 'var(--color-bg)', border: `1px solid ${errors.phoneNumber ? 'var(--color-error)' : 'var(--color-border)'}`,
+                                borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
+                                fontSize: '0.875rem', padding: '9px 12px', outline: 'none',
+                                transition: 'border-color 0.15s',
+                            }}
+                            onFocus={e => { if (!errors.phoneNumber) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                            onBlur={e => { if (!errors.phoneNumber) e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                        />
+                        {errors.phoneNumber && (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--color-error)' }}>{errors.phoneNumber}</span>
+                        )}
+                    </div>
+
+                    {/* ID Number */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                            ID Number <span style={{ color: 'var(--color-accent)' }}>*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={form.idNumber}
+                            onChange={e => handleChange('idNumber', e.target.value)}
+                            placeholder="e.g. 01234567890"
+                            maxLength={20}
+                            autoComplete="off"
+                            style={{
+                                background: 'var(--color-bg)', border: `1px solid ${errors.idNumber ? 'var(--color-error)' : 'var(--color-border)'}`,
+                                borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
+                                fontSize: '0.875rem', padding: '9px 12px', outline: 'none',
+                                transition: 'border-color 0.15s',
+                            }}
+                            onFocus={e => { if (!errors.idNumber) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                            onBlur={e => { if (!errors.idNumber) e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                        />
+                        {errors.idNumber && (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--color-error)' }}>{errors.idNumber}</span>
+                        )}
+                    </div>
 
                     {/* Section label */}
                     <p style={{
@@ -245,8 +303,7 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                     <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4 }}>
                         <button
                             type="button"
-                            onClick={onClose}
-                            disabled={submitting}
+                            onClick={() => { setShowPassword(false); onClose(); }}
                             style={{
                                 background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
                                 borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)',

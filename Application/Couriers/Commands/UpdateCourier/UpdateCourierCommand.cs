@@ -8,8 +8,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Couriers.Commands.UpdateCourier;
 
-public sealed record UpdateCourierCommand(Guid CourierId, string Username, string? NewPassword)
-    : IRequest;
+public sealed record UpdateCourierCommand(
+    Guid    CourierId,
+    string  Username,
+    string? NewPassword,
+    string  PhoneNumber,
+    string  IdNumber
+) : IRequest;
 
 public sealed class UpdateCourierCommandHandler : IRequestHandler<UpdateCourierCommand>
 {
@@ -53,6 +58,10 @@ public sealed class UpdateCourierCommandHandler : IRequestHandler<UpdateCourierC
                 throw new ValidationException(failures);
             }
         }
+
+        // Update phone number and ID number on the Courier entity
+        courier.PhoneNumber = request.PhoneNumber.Trim();
+        courier.IdNumber    = request.IdNumber.Trim();
 
         await _context.SaveChangesAsync(cancellationToken);
     }

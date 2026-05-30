@@ -194,6 +194,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
              .HasForeignKey(p => p.DailySettlementId).OnDelete(DeleteBehavior.SetNull);
             e.Property(p => p.TotalAmount).HasColumnType("decimal(18,2)");
             e.Property(p => p.AmountConfirmed).HasColumnType("decimal(18,2)");
+            e.Property(p => p.ServiceFeeOffset).HasColumnType("decimal(18,2)");
             e.Property(p => p.Type).HasConversion<string>().HasMaxLength(40);
             e.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(p => p.Note).HasMaxLength(500);

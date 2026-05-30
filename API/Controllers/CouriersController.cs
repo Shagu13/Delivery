@@ -70,6 +70,7 @@ public sealed class CouriersController : BaseController
                 assignedCity = c.AssignedCity,
                 assignedDistrict = c.AssignedDistrict,
                 phoneNumber = c.PhoneNumber,
+                idNumber = c.IdNumber,
                 isDeleted = c.DateDeleted != null,
                 dateDeleted = c.DateDeleted,
             })
@@ -91,7 +92,7 @@ public sealed class CouriersController : BaseController
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCourierRequest request, CancellationToken ct)
     {
         var newPassword = string.IsNullOrWhiteSpace(request.NewPassword) ? null : request.NewPassword;
-        await Sender.Send(new UpdateCourierCommand(id, request.Username, newPassword), ct);
+        await Sender.Send(new UpdateCourierCommand(id, request.Username, newPassword, request.PhoneNumber, request.IdNumber), ct);
         return NoContent();
     }
 
