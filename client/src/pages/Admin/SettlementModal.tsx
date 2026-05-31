@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
     fetchSettlementPreview,
     createSettlement,
+    updateSettlement,
     SettlementApiError,
 } from '../../api/settlements';
 import type { SettlementPreview } from '../../api/settlements';
@@ -30,19 +31,22 @@ export function SettlementModal({
     courierFullName,
     token,
 }: Props) {
-    const [date,     setDate]     = useState(todayIso());
-    const [preview,  setPreview]  = useState<SettlementPreview | null>(null);
-    const [loading,  setLoading]  = useState(false);
-    const [saving,   setSaving]   = useState(false);
-    const [error,    setError]    = useState<string | null>(null);
+    const [date,          setDate]          = useState(todayIso());
+    const [preview,       setPreview]       = useState<SettlementPreview | null>(null);
+    const [loading,       setLoading]       = useState(false);
+    const [saving,        setSaving]        = useState(false);
+    const [error,         setError]         = useState<string | null>(null);
+    const [alreadyExists, setAlreadyExists] = useState(false);
 
     const loadPreview = useCallback(async (d: string) => {
         setLoading(true);
         setError(null);
         setPreview(null);
+        setAlreadyExists(false);
         try {
             const data = await fetchSettlementPreview(courierId, d, token);
             setPreview(data);
+            setAlreadyExists(!!data.existingSettlementId);
         } catch (err) {
             setError(err instanceof SettlementApiError ? err.message : 'Failed to load preview.');
         } finally {
@@ -69,7 +73,21 @@ export function SettlementModal({
         setSaving(true);
         setError(null);
         try {
-            await createSettlement({ courierId, date }, token);
+            if (alreadyExists) {
+                await updateSettlement({ courierId, date }, token);
+            } else {
+                try {
+                    await createSettlement({ courierId, date }, token);
+                } catch (err) {
+                    // 409 = already exists — switch to update mode and retry
+                    if (err instanceof SettlementApiError && err.status === 409) {
+                        setAlreadyExists(true);
+                        await updateSettlement({ courierId, date }, token);
+                    } else {
+                        throw err;
+                    }
+                }
+            }
             onCreated();
             onClose();
         } catch (err) {
@@ -114,13 +132,32 @@ export function SettlementModal({
                         />
                     </fieldset>
 
-                    {error && (
+                    {error && !alreadyExists && (
                         <div className="modal__global-error" role="alert">
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                 <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
                                 <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                             </svg>
                             {error}
+                        </div>
+                    )}
+
+                    {alreadyExists && (
+                        <div style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 10,
+                            background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.3)',
+                            borderRadius: 'var(--radius-sm)', color: '#6366f1',
+                            fontSize: '0.825rem', padding: '10px 14px', lineHeight: 1.5,
+                        }} role="alert">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
+                                <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+                                <path d="M8 7v5M8 5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                            </svg>
+                            <div>
+                                <strong>A settlement already exists for this day.</strong>
+                                {' '}Click <strong>Update Settlement</strong> to recalculate all totals from the current delivered orders.
+                                Confirmed payments will not be changed.
+                            </div>
                         </div>
                     )}
 
@@ -167,7 +204,6 @@ export function SettlementModal({
                                         <div className="stl-cash-label">
                                             <span className="stl-cash-dot stl-cash-dot--cod" />
                                             <span>COD — Cash collected for parcels</span>
-                                            <span className="stl-cash-hint">(AmountOfCashCollected)</span>
                                         </div>
                                         <span className="stl-cash-amount">{fmt(preview.totalAmountOfCashCollected)}</span>
                                     </div>
@@ -176,7 +212,6 @@ export function SettlementModal({
                                         <div className="stl-cash-label">
                                             <span className="stl-cash-dot stl-cash-dot--svc" />
                                             <span>Service fees collected from recipients</span>
-                                            <span className="stl-cash-hint">(CompanyServicePrice where payer = Recipient)</span>
                                         </div>
                                         <span className="stl-cash-amount">{fmt(preview.totalServiceFeesCollectedFromRecipients)}</span>
                                     </div>
@@ -296,9 +331,17 @@ export function SettlementModal({
                         onClick={handleSave}
                         disabled={saving || loading || !preview || hasIncomplete}
                         title={hasIncomplete ? 'Fix incomplete orders before saving' : undefined}
+                        style={alreadyExists ? { background: '#6366f1' } : undefined}
                     >
                         {saving ? (
-                            <><span className="btn__spinner" />Saving…</>
+                            <><span className="btn__spinner" />{alreadyExists ? 'Updating…' : 'Saving…'}</>
+                        ) : alreadyExists ? (
+                            <>
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                    <path d="M2 8h10M8 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                Update Settlement
+                            </>
                         ) : (
                             <>
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">

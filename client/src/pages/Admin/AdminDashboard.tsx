@@ -24,6 +24,17 @@ import AdminPaymentsPage from './AdminPaymentsPage';
 import AdminFinancePage from './AdminFinancePage';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 
+// Terminal order statuses — these orders are hidden from the active Group Orders page
+// and shown only in the History page.
+const ACTIVE_ORDER_STATUSES_ONLY = new Set([
+  'DeliveredToRecipient',
+  'CancelledBySender',
+  'CancelledByAdmin',
+  'OrderNotAccepted',
+  'ReturnedToSender',
+  'ExchangeCompleted',
+]);
+
 
 type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'payments' | 'finance';
 
@@ -825,9 +836,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
 
   const visibleOrders = useMemo(() => {
     return groupOrders.filter(go => {
-      // Base rule: when no status pill is selected, show only active (non-completed) group orders.
-      // Completed orders (all delivered / all cancelled / declined) live in the History page.
-      if (!filterStatus && isCompletedGroupOrder(go)) return false;
+      // Always hide fully completed group orders — they live in History.
+      if (isCompletedGroupOrder(go)) return false;
 
       if (filterStatus) {
         if (ORDER_LEVEL_STATUSES.has(filterStatus)) {
@@ -855,10 +865,11 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const clearAll          = () => { setSearch(''); setFilterCity(''); setFilterDistricts([]); setFilterStatus(''); };
 
   // Returns only the orders that match the active recipient city/district filter
-  // (returns all orders when in sender mode or when no location filter is active)
+  // AND are not in a terminal status (delivered/cancelled orders shown in History only).
   const visibleOrdersFor = useCallback((go: AdminGroupOrder) => {
-    if (filterParty !== 'recipient' || (!filterCity && filterDistricts.length === 0)) return go.orders;
-    return go.orders.filter(o => {
+    const orders = go.orders.filter(o => !ACTIVE_ORDER_STATUSES_ONLY.has(o.status));
+    if (filterParty !== 'recipient' || (!filterCity && filterDistricts.length === 0)) return orders;
+    return orders.filter(o => {
       if (filterCity                && o.recipientCity     !== filterCity)     return false;
       if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
       return true;

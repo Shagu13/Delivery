@@ -172,8 +172,9 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         order.ProductPaymentStatus = PaymentStatus.Paid;
 
         // Auto-populate AmountOfCashCollected when the recipient is paying cash on delivery.
-        // Case 1 — product unpaid, recipient pays fee: collect product amount + courier fee.
-        // Case 2 — product pre-paid, recipient pays fee only: collect courier fee.
+        // Case 1 — Recipient pays fee, product unpaid: collect product amount + courier fee.
+        // Case 2 — Recipient pays fee, product pre-paid: collect courier fee only.
+        // Case 3 — Sender pays fee, product has COD: collect product amount only (no service fee in cash).
         if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
         {
             if (wasNotPaid && order.AmountToCollectForPackage.HasValue)
@@ -185,6 +186,14 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
             {
                 order.AmountOfCashCollected = order.CompanyServicePrice;
             }
+        }
+        else if (order.WhoPaysForCompanyService == ServicePayer.Sender
+              && order.AmountToCollectForPackage.HasValue
+              && order.AmountToCollectForPackage.Value > 0)
+        {
+            // Sender-payer order with COD: courier collects the package amount from recipient.
+            // The service fee is NOT collected here — the sender pays it separately.
+            order.AmountOfCashCollected = order.AmountToCollectForPackage.Value;
         }
 
         order.DeliveredAt = DateTime.UtcNow;

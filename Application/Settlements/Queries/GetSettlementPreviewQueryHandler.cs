@@ -24,6 +24,15 @@ public sealed class GetSettlementPreviewQueryHandler
         var dayStart = request.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var dayEnd   = request.Date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
+        // ── Check if a settlement already exists for this day ──────────────────
+        var existingSettlement = await _context.DailySettlements
+            .AsNoTracking()
+            .Where(d => d.CourierId  == request.CourierId
+                     && d.CreatedAt >= dayStart
+                     && d.CreatedAt <= dayEnd)
+            .Select(d => (Guid?)d.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
         // ── Delivered orders for the day ──────────────────────────────────────
         var orders = await _context.Orders
             .AsNoTracking()
@@ -43,27 +52,23 @@ public sealed class GetSettlementPreviewQueryHandler
             .SumAsync(g => (int?)g.NumberOfPackages, cancellationToken) ?? 0;
 
         // ── Financial totals ──────────────────────────────────────────────────
-        // COD: cash collected from recipients for the product itself
-        var totalCodCash = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
+        // totalCash = AmountOfCashCollected already includes both the package COD
+        // AND the service fee for Recipient-payer orders. Do NOT add service fees again.
+        var totalCash        = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
+        var totalService     = orders.Sum(o => o.CompanyServicePrice);
+        var totalSalary      = orders.Sum(o => o.CourierSalary ?? 0m);
+        var totalNetIncome   = totalService - totalSalary;
 
-        // Service fees collected directly from recipients (in cash)
+        // Service fees collected in cash from recipients (already inside totalCash above).
+        // Used for display only — shows the breakdown of what is inside totalCash.
         var totalServiceFeesFromRecipients = orders
             .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
             .Sum(o => o.CompanyServicePrice);
 
-        // Total cash the courier physically holds
-        var totalCashCourierHolds = totalCodCash + totalServiceFeesFromRecipients;
-
-        // All service revenue (used for company accounting, regardless of payer)
-        var totalService   = orders.Sum(o => o.CompanyServicePrice);
-        var totalSalary    = orders.Sum(o => o.CourierSalary ?? 0m);
-        var totalNetIncome = totalService - totalSalary;
-
-        // How much the courier must transfer to the company (or receive if negative):
-        // Courier physically holds: COD cash + service fees collected from recipients.
-        // Salary is deducted from that. If sender paid fees, courier holds nothing for
-        // those orders and the company must pay the courier their salary separately.
-        var totalCourierTransfer = totalCashCourierHolds - totalSalary;
+        // Courier holds exactly what they collected. No double-counting.
+        // totalCash = package COD + service fees from recipients (bundled by courier at delivery)
+        var totalCashCourierHolds    = totalCash;
+        var totalTransferToCompany   = totalCash - totalSalary;
 
         // ── Flag orders missing required financial data ────────────────────────
         var incomplete = orders
@@ -74,32 +79,33 @@ public sealed class GetSettlementPreviewQueryHandler
             .ToList();
 
         var lines = orders.Select(o => new SettlementOrderLineDto(
-            Id:                       o.Id,
-            TrackingNumber:           o.TrackingNumber,
-            RecipientName:            $"{o.RecipientFirstName} {o.RecipientLastName}",
-            RecipientCity:            o.RecipientCity,
-            RecipientDistrict:        o.RecipientDistrict,
-            CompanyServicePrice:      o.CompanyServicePrice,
+            Id:                    o.Id,
+            TrackingNumber:        o.TrackingNumber,
+            RecipientName:         $"{o.RecipientFirstName} {o.RecipientLastName}",
+            RecipientCity:         o.RecipientCity,
+            RecipientDistrict:     o.RecipientDistrict,
+            CompanyServicePrice:   o.CompanyServicePrice,
             WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
-            CourierSalary:            o.CourierSalary,
-            CompanyRevenue:           o.CompanyRevenue,
-            AmountOfCashCollected:    o.AmountOfCashCollected,
-            DeliveredAt:              o.DeliveredAt
+            CourierSalary:         o.CourierSalary,
+            CompanyRevenue:        o.CompanyRevenue,
+            AmountOfCashCollected: o.AmountOfCashCollected,
+            DeliveredAt:           o.DeliveredAt
         )).ToList();
 
         return new SettlementPreviewDto(
             CourierId:                              courier.Id,
             CourierFullName:                        $"{courier.FirstName} {courier.LastName}",
             Date:                                   request.Date,
+            ExistingSettlementId:                   existingSettlement,
             TotalOrdersPickedUp:                    pickedUpPackages,
             TotalOrdersDelivered:                   orders.Count,
-            TotalAmountOfCashCollected:             totalCodCash,
+            TotalAmountOfCashCollected:             totalCash,
             TotalCompanyServiceRevenue:             totalService,
-            TotalServiceFeesCollectedFromRecipients:totalServiceFeesFromRecipients,
+            TotalServiceFeesCollectedFromRecipients: totalServiceFeesFromRecipients,
             TotalCashCourierHolds:                  totalCashCourierHolds,
             TotalCourierSalary:                     totalSalary,
             TotalCompanyNetIncome:                  totalNetIncome,
-            TotalCourierTransferToCompany:          totalCourierTransfer,
+            TotalCourierTransferToCompany:          totalTransferToCompany,
             Orders:                                 lines,
             IncompleteOrderTrackingNumbers:         incomplete
         );

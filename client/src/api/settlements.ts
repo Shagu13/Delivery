@@ -19,6 +19,8 @@ export interface SettlementPreview {
     courierId: string;
     courierFullName: string;
     date: string;                              // "YYYY-MM-DD"
+    /** Non-null if a settlement already exists for this courier+date. */
+    existingSettlementId: string | null;
     totalOrdersPickedUp: number;
     totalOrdersDelivered: number;
     /** COD cash collected from recipients for the product itself. */
@@ -114,6 +116,28 @@ export async function createSettlement(
         throw new SettlementApiError(
             res.status,
             body?.title ?? `Failed to create settlement (${res.status})`,
+        );
+    }
+    return res.json() as Promise<CreateSettlementResponse>;
+}
+
+export async function updateSettlement(
+    data: CreateSettlementRequest,
+    token: string,
+): Promise<CreateSettlementResponse> {
+    const res = await fetch('/api/settlements', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new SettlementApiError(
+            res.status,
+            body?.title ?? `Failed to update settlement (${res.status})`,
         );
     }
     return res.json() as Promise<CreateSettlementResponse>;

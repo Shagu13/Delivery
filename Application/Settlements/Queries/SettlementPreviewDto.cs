@@ -5,6 +5,13 @@ public sealed record SettlementPreviewDto(
     string   CourierFullName,
     DateOnly Date,
 
+    /// <summary>
+    /// If a settlement already exists for this courier+date, contains its ID.
+    /// Null if no settlement exists yet. Used by the frontend to show
+    /// "Update Settlement" instead of "Save Settlement".
+    /// </summary>
+    Guid?    ExistingSettlementId,
+
     int      TotalOrdersPickedUp,
     int      TotalOrdersDelivered,
 
