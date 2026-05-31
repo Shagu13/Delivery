@@ -90,7 +90,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                 </div>
             </div>
             <div className="courier-cards">
-                {pickups.map(go => {
+                {sortedPickups.map(go => {
                     const isExpanded = expandedIds.has(go.id);
                     const isSelected = selectedIds.has(go.id);
                     return (
