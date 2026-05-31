@@ -70,7 +70,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                     <button
                         onClick={() => setSortMode(m => m === 'district' ? 'nearest' : 'district')}
                         style={{ fontSize: '0.75rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: 'pointer', padding: '3px 8px', color: 'var(--color-text-muted)' }}>
-                        {sortMode === 'district' ? t.cdSortDistrict : t.cdSortNearest}
+                        {sortMode === 'district' ? t.cdSortNearest : t.cdSortDistrict}
                     </button>
                     {expandedIds.size > 0 && (
                         <button onClick={() => setExpandedIds(new Set())}
