@@ -18,3 +18,15 @@ export function buildYandexRouteUrl(stops: Stop[], origin?: string) {
     const all = origin ? [encodeURIComponent(origin), ...pts] : pts;
     return `https://yandex.com/maps/?mode=routes&rtext=${all.join('~')}&rtt=auto`;
 }
+
+// Yandex Go deep-link: opens route in the Yandex Go app (falls back to web on desktop).
+// On Android/iOS the browser hands off to the Yandex Go app automatically.
+export function buildYandexGoRouteUrl(stops: Stop[], origin?: string) {
+    const fmt = (s: Stop) => encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`);
+    const dest = fmt(stops[stops.length - 1]);
+    const midStops = origin ? stops.slice(0, -1) : stops.slice(1, -1);
+    const waypoints = midStops.map(fmt);
+    const origParam = origin ? encodeURIComponent(origin) : fmt(stops[0]);
+    const allPts = [origParam, ...waypoints, dest];
+    return `https://go.yandex/route?rtext=${allPts.join('~')}&rtt=auto`;
+}
