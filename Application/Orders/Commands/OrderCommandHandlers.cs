@@ -186,6 +186,10 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
             {
                 order.AmountOfCashCollected = order.CompanyServicePrice;
             }
+
+            // Courier collected the service fee in cash from the recipient at the door.
+            // Mark it as paid immediately — no PaymentRequest needed for Recipient-payer orders.
+            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
         }
         else if (order.WhoPaysForCompanyService == ServicePayer.Sender
               && order.AmountToCollectForPackage.HasValue

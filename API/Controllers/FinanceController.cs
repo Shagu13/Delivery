@@ -33,4 +33,20 @@ public sealed class FinanceController : BaseController
 
         return Ok(result);
     }
+
+    // ── GET /api/finance/unpaid-fees ──────────────────────────────────────────
+    /// <summary>
+    /// Returns all orders where CompanyServicePaymentStatus is Unpaid or Pending.
+    /// Used by the admin Finance page to surface outstanding service fee collection.
+    /// </summary>
+    [HttpGet("unpaid-fees")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<UnpaidFeeOrderDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetUnpaidFees(CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetUnpaidFeeOrdersQuery(), ct);
+        return Ok(result);
+    }
 }
+
+// patch applied below — replace closing brace of class with new endpoint + brace

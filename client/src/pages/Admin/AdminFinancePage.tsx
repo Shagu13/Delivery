@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getAdminFinanceSummary,
+  getUnpaidFeeOrders,
   type AdminFinancePage,
   type AdminFinanceSummary,
   type FinanceLedgerEntry,
   type LedgerTypeFilter,
+  type UnpaidFeeOrder,
 } from '../../api/finance';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -457,6 +459,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [error,         setError]         = useState<string | null>(null);
   const [monthsBack,    setMonthsBack]    = useState(6);
+  const [showUnpaidFees, setShowUnpaidFees] = useState(false);
   const [page,          setPage]          = useState(0);
   const [typeFilter,    setTypeFilter]    = useState<LedgerTypeFilter>('');
 
@@ -536,6 +539,10 @@ export default function AdminFinancePage({ token }: { token: string }) {
   const totalReceived = summaries.reduce((s, m) => s + m.totalReceivedFromSenders, 0);
   const totalOrders   = summaries.reduce((s, m) => s + m.totalOrdersDelivered,     0);
 
+  if (showUnpaidFees) {
+    return <UnpaidFeesView token={token} onBack={() => setShowUnpaidFees(false)} />;
+  }
+
   return (
     <div style={{ padding: '24px 24px 40px', maxWidth: 1200 }}>
       {/* Header */}
@@ -548,7 +555,23 @@ export default function AdminFinancePage({ token }: { token: string }) {
             Aggregated revenue, COD flows, and payment ledger
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <button
+            onClick={() => setShowUnpaidFees(true)}
+            style={{
+              padding: '5px 14px', borderRadius: 100, fontSize: '0.75rem', fontWeight: 700,
+              border: '1px solid rgba(239,68,68,0.35)',
+              background: 'rgba(239,68,68,0.07)', color: '#ef4444',
+              cursor: 'pointer', marginRight: 6,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M8 5v4M8 11v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            Unpaid Fees
+          </button>
           {MONTHS_OPTIONS.map(mo => (
             <button
               key={mo}
@@ -645,6 +668,259 @@ export default function AdminFinancePage({ token }: { token: string }) {
           onTypeChange={handleTypeChange}
         />
       </div>
+    </div>
+  );
+}
+
+// ── Unpaid Fees full-page view ────────────────────────────────────────────────
+
+function UnpaidFeesView({ token, onBack }: { token: string; onBack: () => void }) {
+  const [orders,  setOrders]  = useState<UnpaidFeeOrder[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+  const [search,  setSearch]  = useState('');
+  const [filter,  setFilter]  = useState<'all' | 'Unpaid' | 'Pending'>('all');
+
+  useEffect(() => {
+    getUnpaidFeeOrders(token)
+      .then(data => { setOrders(data); setLoading(false); })
+      .catch(() => { setError('Failed to load outstanding fees.'); setLoading(false); });
+  }, [token]);
+
+  const fmt = (n: number) =>
+    n.toLocaleString('ka-GE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function formatDate(iso: string | null) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('ka-GE', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  const filtered = (orders ?? []).filter(o => {
+    if (filter !== 'all' && o.companyServicePaymentStatus !== filter) return false;
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      o.senderBusinessName.toLowerCase().includes(q) ||
+      `${o.senderFirstName} ${o.senderLastName}`.toLowerCase().includes(q) ||
+      o.senderPhone.includes(q) ||
+      (o.customerPhone ?? '').includes(q) ||
+      o.trackingNumber.toLowerCase().includes(q) ||
+      o.recipientCity.toLowerCase().includes(q) ||
+      o.recipientFirstName.toLowerCase().includes(q)
+    );
+  });
+
+  const unpaidCount  = (orders ?? []).filter(o => o.companyServicePaymentStatus === 'Unpaid').length;
+  const pendingCount = (orders ?? []).filter(o => o.companyServicePaymentStatus === 'Pending').length;
+  const totalAmount  = filtered.reduce((s, o) => s + o.companyServicePrice, 0);
+
+  return (
+    <div style={{ padding: '24px 24px 40px', maxWidth: 1200 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <button
+          onClick={onBack}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--color-text-muted)', fontSize: '0.82rem', fontWeight: 600, padding: 0,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Back to Finance
+        </button>
+        <div style={{ width: 1, height: 16, background: 'var(--color-border)' }} />
+        <div>
+          <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-text)' }}>
+            Outstanding Service Fees
+          </h2>
+          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Orders where service fee is unpaid or pending confirmation
+          </p>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap',
+      }}>
+        {/* Status filter pills */}
+        {(['all', 'Unpaid', 'Pending'] as const).map(f => {
+          const count = f === 'all' ? (orders?.length ?? 0) : f === 'Unpaid' ? unpaidCount : pendingCount;
+          const color = f === 'Unpaid' ? '#ef4444' : f === 'Pending' ? '#b45309' : 'var(--color-text-muted)';
+          const active = filter === f;
+          return (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              style={{
+                padding: '4px 14px', borderRadius: 100, fontSize: '0.75rem', fontWeight: 700,
+                border: `1px solid ${active ? color : 'var(--color-border)'}`,
+                background: active ? `${color}15` : 'var(--color-bg-3)',
+                color: active ? color : 'var(--color-text-muted)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              {f === 'all' ? 'All' : f}
+              <span style={{
+                background: active ? `${color}25` : 'var(--color-border)',
+                color: active ? color : 'var(--color-text-subtle)',
+                borderRadius: 100, fontSize: '0.68rem', padding: '0 5px',
+              }}>{count}</span>
+            </button>
+          );
+        })}
+
+        {/* Total amount */}
+        {filtered.length > 0 && (
+          <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginLeft: 4 }}>
+            <strong style={{ color: 'var(--color-accent)' }}>&#x20be;{fmt(totalAmount)}</strong> total showing
+          </span>
+        )}
+
+        {/* Search */}
+        <div style={{ marginLeft: 'auto', position: 'relative' }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+            style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+              color: 'var(--color-text-subtle)', pointerEvents: 'none' }}>
+            <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Sender, phone, tracking, recipient..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              paddingLeft: 32, paddingRight: 12, paddingTop: 7, paddingBottom: 7,
+              fontSize: '0.82rem', background: 'var(--color-bg-2)',
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
+              color: 'var(--color-text)', outline: 'none', width: 260,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div style={{ padding: 60, textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          Loading...
+        </div>
+      ) : error ? (
+        <div style={{ padding: 24, color: '#ef4444', fontSize: '0.85rem',
+          background: 'rgba(239,68,68,0.06)', borderRadius: 'var(--radius-sm)',
+          border: '1px solid rgba(239,68,68,0.2)' }}>
+          {error}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ padding: 60, textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem' }}>
+          {search || filter !== 'all' ? 'No orders match your filters.' : 'No outstanding service fees.'}
+        </div>
+      ) : (
+        <div style={{
+          background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-md)', overflow: 'hidden',
+        }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--color-bg-3)' }}>
+                  {[
+                    { label: 'Tracking',      align: 'left'  },
+                    { label: 'Sender',        align: 'left'  },
+                    { label: 'Business',      align: 'left'  },
+                    { label: 'Customer Phone', align: 'left'  },
+                    { label: 'Recipient',     align: 'left'  },
+                    { label: 'City',          align: 'left'  },
+                    { label: 'Recipient Phone', align: 'left' },
+                    { label: 'Payer',         align: 'center'},
+                    { label: 'Fee',           align: 'right' },
+                    { label: 'Status',        align: 'center'},
+                    { label: 'Delivered',     align: 'left'  },
+                  ].map(h => (
+                    <th key={h.label} style={{
+                      padding: '9px 14px', textAlign: h.align as any, fontWeight: 700,
+                      color: 'var(--color-text-muted)', fontSize: '0.68rem',
+                      textTransform: 'uppercase', letterSpacing: '0.06em',
+                      borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap',
+                    }}>{h.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((o, i) => (
+                  <tr key={o.orderId} style={{
+                    borderBottom: i < filtered.length - 1 ? '1px solid var(--color-border)' : undefined,
+                  }}>
+                    <td style={{ padding: '10px 14px', fontFamily: 'monospace',
+                      fontSize: '0.74rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                      {o.trackingNumber}
+                    </td>
+                    <td style={{ padding: '10px 14px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {o.senderFirstName} {o.senderLastName}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                      {o.senderBusinessName}
+                    </td>
+                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                      {o.customerPhone ?? o.senderPhone}
+                    </td>
+                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                      {o.recipientFirstName} {o.recipientLastName}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                      {o.recipientCity}
+                    </td>
+                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                      {o.recipientPhone}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-block', padding: '2px 9px', borderRadius: 100,
+                        fontSize: '0.65rem', fontWeight: 700,
+                        background: o.whoPaysForCompanyService === 'Sender'
+                          ? 'rgba(99,102,241,0.1)' : 'rgba(196,127,23,0.1)',
+                        color: o.whoPaysForCompanyService === 'Sender' ? '#818cf8' : 'var(--color-accent)',
+                      }}>
+                        {o.whoPaysForCompanyService}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right',
+                      color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
+                      &#x20be;{fmt(o.companyServicePrice)}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-block', padding: '2px 9px', borderRadius: 100,
+                        fontSize: '0.65rem', fontWeight: 700,
+                        background: o.companyServicePaymentStatus === 'Unpaid'
+                          ? 'rgba(239,68,68,0.1)' : 'rgba(180,83,9,0.1)',
+                        color: o.companyServicePaymentStatus === 'Unpaid' ? '#ef4444' : '#b45309',
+                      }}>
+                        {o.companyServicePaymentStatus}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 14px', color: 'var(--color-text-muted)',
+                      fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                      {formatDate(o.deliveredAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{
+            padding: '10px 14px', borderTop: '1px solid var(--color-border)',
+            fontSize: '0.75rem', color: 'var(--color-text-subtle)',
+            display: 'flex', justifyContent: 'space-between',
+          }}>
+            <span>{filtered.length} order{filtered.length !== 1 ? 's' : ''}</span>
+            <span>Total outstanding: <strong style={{ color: 'var(--color-accent)' }}>&#x20be;{fmt(totalAmount)}</strong></span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
