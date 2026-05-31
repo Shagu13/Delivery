@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Stop } from './mapUtils';
-import { buildGoogleRouteUrl, buildYandexRouteUrl, buildYandexGoRouteUrl } from './mapUtils';
+import { buildGoogleRouteUrl, buildYandexRouteUrl, buildYandexNaviRouteUrl } from './mapUtils';
 
 interface RouteToolbarProps { stops: Stop[]; onClear: () => void; }
 
@@ -40,8 +40,8 @@ export function RouteToolbar({ stops, onClear }: RouteToolbarProps) {
             <a href={buildYandexRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandex">
                 🗺 Yandex Maps
             </a>
-            <a href={buildYandexGoRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandexgo">
-                🚖 Yandex Go
+            <a href={buildYandexNaviRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandexgo">
+                🧭 Yandex Navi
             </a>
             <button onClick={onClear} className="route-toolbar__clear">✕</button>
         </div>
