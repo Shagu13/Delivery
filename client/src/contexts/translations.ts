@@ -424,6 +424,7 @@ const en = {
   cdSortNearest:            '📍 Sort: Nearest',
   cdLocating:               'Locating…',
   cdLocDenied:              'Location denied',
+  cdGeocoding:              'Geocoding addresses…',
 
   // ── Create Group Order page
   cgoEyebrow:               'Pickup Request',
@@ -1330,6 +1331,7 @@ const ka: typeof en = {
   cdSortNearest:            '📍 დალაგება: უახლოესი',
   cdLocating:               'მდებარეობის განსაზღვრა…',
   cdLocDenied:              'მდებარეობა უარყოფილია',
+  cdGeocoding:              'მისამართების დამუშავება…',
 
   // ── Create Group Order page
   cgoEyebrow:               'გატანის მოთხოვნა',

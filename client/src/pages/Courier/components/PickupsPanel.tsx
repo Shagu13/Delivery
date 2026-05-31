@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markPickingUp, markPickedUp, markDeliveredToWarehouse,
@@ -6,18 +6,7 @@ import {
 import type { AdminGroupOrder } from '../../../api/adminGroupOrders';
 import { SwipeButton } from './SwipeButton';
 import { mapUrl } from './mapUtils';
-
-type SortMode = 'district' | 'nearest';
-
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-const GEO_CENTER: Record<string, [number, number]> = {};
+import { useGeoSort, distanceToAddress } from './useGeoSort';
 
 export interface PickupsPanelProps {
     pickups: AdminGroupOrder[];
@@ -33,19 +22,9 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     const { t } = useLanguage();
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [sortMode, setSortMode] = useState<SortMode>('district');
-    const [locState, setLocState] = useState<'idle' | 'locating' | 'ready' | 'denied'>('idle');
-    const [coords, setCoords] = useState<GeolocationCoordinates | null>(null);
 
-    useEffect(() => {
-        if (!navigator.geolocation) return;
-        setLocState('locating');
-        navigator.geolocation.getCurrentPosition(
-            pos => { setCoords(pos.coords); setLocState('ready'); setSortMode('nearest'); },
-            () => setLocState('denied'),
-            { timeout: 8000 }
-        );
-    }, []);
+    const addresses = pickups.map(go => ({ address: go.pickUpAddress, district: go.pickUpDistrict, city: go.pickUpCity }));
+    const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding } = useGeoSort(addresses);
 
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
@@ -58,9 +37,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
 
     const distanceTo = (go: AdminGroupOrder) => {
         if (!coords) return Infinity;
-        const center = GEO_CENTER[go.pickUpDistrict];
-        if (!center) return Infinity;
-        return haversineKm(coords.latitude, coords.longitude, center[0], center[1]);
+        return distanceToAddress(coords, go.pickUpAddress, go.pickUpDistrict, go.pickUpCity, geocodeCache);
     };
 
     const sortedPickups = [...pickups].sort((a, b) =>
@@ -76,6 +53,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {locState === 'locating' && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t.cdLocating}</span>}
                     {locState === 'denied'   && <span style={{ fontSize: '0.75rem', color: '#f97316' }}>{t.cdLocDenied}</span>}
+                    {locState === 'ready' && geocoding && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t.cdGeocoding}</span>}
                     <button
                         onClick={() => setSortMode(m => m === 'district' ? 'nearest' : 'district')}
                         style={{ fontSize: '0.75rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: 'pointer', padding: '3px 8px', color: 'var(--color-text-muted)' }}>
