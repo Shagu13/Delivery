@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markPickingUp, markPickedUp, markDeliveredToWarehouse,
@@ -6,6 +6,18 @@ import {
 import type { AdminGroupOrder } from '../../../api/adminGroupOrders';
 import { SwipeButton } from './SwipeButton';
 import { mapUrl } from './mapUtils';
+
+type SortMode = 'district' | 'nearest';
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const GEO_CENTER: Record<string, [number, number]> = {};
 
 export interface PickupsPanelProps {
     pickups: AdminGroupOrder[];
@@ -21,6 +33,19 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     const { t } = useLanguage();
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [sortMode, setSortMode] = useState<SortMode>('district');
+    const [locState, setLocState] = useState<'idle' | 'locating' | 'ready' | 'denied'>('idle');
+    const [coords, setCoords] = useState<GeolocationCoordinates | null>(null);
+
+    useEffect(() => {
+        if (!navigator.geolocation) return;
+        setLocState('locating');
+        navigator.geolocation.getCurrentPosition(
+            pos => { setCoords(pos.coords); setLocState('ready'); setSortMode('nearest'); },
+            () => setLocState('denied'),
+            { timeout: 8000 }
+        );
+    }, []);
 
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
@@ -31,16 +56,38 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     if (error)   return <div className="dashboard__error">{error} <button onClick={onRefresh}>{t.cdRetry}</button></div>;
     if (!pickups.length) return <div className="dashboard__empty">{t.cdPickupsEmpty}</div>;
 
+    const distanceTo = (go: AdminGroupOrder) => {
+        if (!coords) return Infinity;
+        const center = GEO_CENTER[go.pickUpDistrict];
+        if (!center) return Infinity;
+        return haversineKm(coords.latitude, coords.longitude, center[0], center[1]);
+    };
+
+    const sortedPickups = [...pickups].sort((a, b) =>
+        sortMode === 'nearest'
+            ? distanceTo(a) - distanceTo(b)
+            : a.pickUpDistrict.localeCompare(b.pickUpDistrict)
+    );
+
     return (
         <div className="dashboard__section">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <h2 className="dashboard__title" style={{ margin: 0 }}>{t.cdPickupsTitle}</h2>
-                {expandedIds.size > 0 && (
-                    <button onClick={() => setExpandedIds(new Set())}
-                        style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
-                        {t.cdCollapseAll}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {locState === 'locating' && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t.cdLocating}</span>}
+                    {locState === 'denied'   && <span style={{ fontSize: '0.75rem', color: '#f97316' }}>{t.cdLocDenied}</span>}
+                    <button
+                        onClick={() => setSortMode(m => m === 'district' ? 'nearest' : 'district')}
+                        style={{ fontSize: '0.75rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: 'pointer', padding: '3px 8px', color: 'var(--color-text-muted)' }}>
+                        {sortMode === 'district' ? t.cdSortDistrict : t.cdSortNearest}
                     </button>
-                )}
+                    {expandedIds.size > 0 && (
+                        <button onClick={() => setExpandedIds(new Set())}
+                            style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+                            {t.cdCollapseAll}
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="courier-cards">
                 {pickups.map(go => {

@@ -41,8 +41,14 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception for {Method} {Path}",
-                context.Request.Method, context.Request.Path);
+            if (ex is ValidationException ve)
+                _logger.LogWarning("Validation failure for {Method} {Path}: {Errors}",
+                    context.Request.Method, context.Request.Path,
+                    string.Join(" | ", ve.Errors.SelectMany(e => e.Value.Select(msg => $"{e.Key}: {msg}"))));
+            else
+                _logger.LogError(ex, "Unhandled exception for {Method} {Path}",
+                    context.Request.Method, context.Request.Path);
+
             await HandleAsync(context, ex, _env.IsDevelopment());
         }
     }

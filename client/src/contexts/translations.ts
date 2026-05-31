@@ -420,8 +420,12 @@ const en = {
   cdRoleCourier:            'Courier',
   cdRetry:                  'Retry',
   cdCollapseAll:            '↑ Collapse all',
+  cdSortDistrict:           '📋 Sort: District',
+  cdSortNearest:            '📍 Sort: Nearest',
+  cdLocating:               'Locating…',
+  cdLocDenied:              'Location denied',
 
-  // ── Create Group Order page ───────────────────────────────────────────────
+  // ── Create Group Order page
   cgoEyebrow:               'Pickup Request',
   cgoTitle:                 'Send Multiple Packages',
   cgoDesc:                  "Fill in your details and list all recipients. We'll generate a unique tracking number for each package.",
@@ -1322,8 +1326,12 @@ const ka: typeof en = {
   cdRoleCourier:            'კურიერი',
   cdRetry:                  'ხელახლა',
   cdCollapseAll:            '↑ ყველას დახურვა',
+  cdSortDistrict:           '📋 დალაგება: უბანი',
+  cdSortNearest:            '📍 დალაგება: უახლოესი',
+  cdLocating:               'მდებარეობის განსაზღვრა…',
+  cdLocDenied:              'მდებარეობა უარყოფილია',
 
-  // ── Create Group Order page ───────────────────────────────────────────────
+  // ── Create Group Order page
   cgoEyebrow:               'გატანის მოთხოვნა',
   cgoTitle:                 'რამდენიმე ამანათის გაგზავნა',
   cgoDesc:                  'შეავსეთ თქვენი მონაცემები და ჩამოთვალეთ ყველა მიმღები. თითოეული ამანათისთვის შეიქმნება უნიკალური Tracking Number.',
