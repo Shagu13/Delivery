@@ -7,6 +7,7 @@ import type { AdminGroupOrder } from '../../../api/adminGroupOrders';
 import { SwipeButton } from './SwipeButton';
 import { mapUrl } from './mapUtils';
 import { useGeoSort, distanceToAddress } from './useGeoSort';
+import { RouteToolbar } from './RouteToolbar';
 
 export interface PickupsPanelProps {
     pickups: AdminGroupOrder[];
@@ -144,6 +145,10 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                     );
                 })}
             </div>
+            <RouteToolbar
+                stops={sortedPickups.filter(go => selectedIds.has(go.id)).map(go => ({ city: go.pickUpCity, district: go.pickUpDistrict, address: go.pickUpAddress }))}
+                onClear={() => setSelectedIds(new Set())}
+            />
         </div>
     );
 }

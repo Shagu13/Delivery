@@ -216,7 +216,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                 })}
             </div>
             <RouteToolbar
-                stops={deliveries.filter(o => selectedIds.has(o.id)).map(o => ({ city: o.recipientCity, district: o.recipientDistrict, address: o.recipientAddress }))}
+                stops={sortedDeliveries.filter(o => selectedIds.has(o.id)).map(o => ({ city: o.recipientCity, district: o.recipientDistrict, address: o.recipientAddress }))}
                 onClear={() => setSelectedIds(new Set())}
             />
         </div>
