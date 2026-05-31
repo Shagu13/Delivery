@@ -218,6 +218,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
             <RouteToolbar
                 stops={sortedDeliveries.filter(o => selectedIds.has(o.id)).map(o => ({ city: o.recipientCity, district: o.recipientDistrict, address: o.recipientAddress }))}
                 onClear={() => setSelectedIds(new Set())}
+                geocodeCache={geocodeCache}
             />
         </div>
     );

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import type { Stop } from './mapUtils';
+import type { Stop, GeocodeCache } from './mapUtils';
 import { buildGoogleRouteUrl, buildYandexRouteUrl, buildYandexNaviRouteUrl } from './mapUtils';
 
-interface RouteToolbarProps { stops: Stop[]; onClear: () => void; }
+interface RouteToolbarProps { stops: Stop[]; onClear: () => void; geocodeCache?: GeocodeCache; }
 
-export function RouteToolbar({ stops, onClear }: RouteToolbarProps) {
+export function RouteToolbar({ stops, onClear, geocodeCache }: RouteToolbarProps) {
     const [locState, setLocState] = useState<'idle' | 'loading' | 'ready' | 'denied'>('idle');
     const [currentLoc, setCurrentLoc] = useState<string | undefined>(undefined);
 
@@ -37,10 +37,10 @@ export function RouteToolbar({ stops, onClear }: RouteToolbarProps) {
             <a href={buildGoogleRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--google">
                 🗺 Google Maps
             </a>
-            <a href={buildYandexRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandex">
+            <a href={buildYandexRouteUrl(stops, currentLoc, geocodeCache)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandex">
                 🗺 Yandex Maps
             </a>
-            <a href={buildYandexNaviRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandexgo">
+            <a href={buildYandexNaviRouteUrl(stops, currentLoc, geocodeCache)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandexgo">
                 🧭 Yandex Navi
             </a>
             <button onClick={onClear} className="route-toolbar__clear">✕</button>

@@ -1,5 +1,17 @@
 export interface Stop { city: string; district: string; address: string; }
 
+export type GeocodeCache = Map<string, [number, number] | null>;
+
+function cacheKey(s: Stop) {
+    return `${s.address}, ${s.district}, ${s.city}, Georgia`.toLowerCase();
+}
+
+function yandexPoint(s: Stop, cache?: GeocodeCache): string {
+    const coords = cache?.get(cacheKey(s));
+    if (coords) return `${coords[0]},${coords[1]}`;
+    return encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`);
+}
+
 export function mapUrl(city: string, district: string, address: string) {
     const q = encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
     return `https://www.google.com/maps/search/?api=1&query=${q}`;
@@ -13,19 +25,15 @@ export function buildGoogleRouteUrl(stops: Stop[], origin?: string) {
     return `https://www.google.com/maps/dir/?api=1&origin=${orig}&destination=${dest}${wps ? `&waypoints=${wps}` : ''}&travelmode=driving`;
 }
 
-export function buildYandexRouteUrl(stops: Stop[], origin?: string) {
-    const pts = stops.map(s => encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`));
+export function buildYandexRouteUrl(stops: Stop[], origin?: string, cache?: GeocodeCache) {
+    const pts = stops.map(s => yandexPoint(s, cache));
     const all = origin ? [encodeURIComponent(origin), ...pts] : pts;
     return `https://yandex.com/maps/?mode=routes&rtext=${all.join('~')}&rtt=auto`;
 }
 
 // Yandex Navi deep-link: opens route in the Yandex Navigator app (falls back to web on desktop).
-export function buildYandexNaviRouteUrl(stops: Stop[], origin?: string) {
-    const fmt = (s: Stop) => encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`);
-    const dest = fmt(stops[stops.length - 1]);
-    const midStops = origin ? stops.slice(0, -1) : stops.slice(1, -1);
-    const waypoints = midStops.map(fmt);
-    const origParam = origin ? encodeURIComponent(origin) : fmt(stops[0]);
-    const allPts = [origParam, ...waypoints, dest];
-    return `https://yandex.com/navi/?rtext=${allPts.join('~')}&rtt=auto`;
+export function buildYandexNaviRouteUrl(stops: Stop[], origin?: string, cache?: GeocodeCache) {
+    const pts = stops.map(s => yandexPoint(s, cache));
+    const all = origin ? [encodeURIComponent(origin), ...pts] : pts;
+    return `https://yandex.com/navi/?rtext=${all.join('~')}&rtt=auto`;
 }

@@ -148,6 +148,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
             <RouteToolbar
                 stops={sortedPickups.filter(go => selectedIds.has(go.id)).map(go => ({ city: go.pickUpCity, district: go.pickUpDistrict, address: go.pickUpAddress }))}
                 onClear={() => setSelectedIds(new Set())}
+                geocodeCache={geocodeCache}
             />
         </div>
     );
