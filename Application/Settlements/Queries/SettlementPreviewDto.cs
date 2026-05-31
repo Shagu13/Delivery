@@ -15,8 +15,17 @@ public sealed record SettlementPreviewDto(
     int      TotalOrdersPickedUp,
     int      TotalOrdersDelivered,
 
-    /// <summary>Sum of AmountOfCashCollected — COD product payments collected from recipients.</summary>
+    /// <summary>
+    /// Sum of AmountOfCashCollected — the total cash physically collected by the courier
+    /// (package COD + service fee bundled for Recipient-payer orders; package COD only for Sender-payer).
+    /// </summary>
     decimal  TotalAmountOfCashCollected,
+
+    /// <summary>
+    /// Sum of AmountToCollectForPackage — the pure product/parcel money only (no service fees).
+    /// Used for the "COD — Cash collected for parcels" display row so it does not include service fees.
+    /// </summary>
+    decimal  TotalCodOnlyAmount,
 
     /// <summary>Sum of ALL CompanyServicePrice values (regardless of who pays).</summary>
     decimal  TotalCompanyServiceRevenue,
@@ -28,9 +37,8 @@ public sealed record SettlementPreviewDto(
     decimal  TotalServiceFeesCollectedFromRecipients,
 
     /// <summary>
-    /// Total cash the courier physically holds:
-    /// TotalAmountOfCashCollected (COD) + TotalServiceFeesCollectedFromRecipients.
-    /// This is what the courier must account for at settlement.
+    /// Total cash the courier physically holds = TotalAmountOfCashCollected.
+    /// (For Recipient-payer orders this already bundles package COD + service fee together.)
     /// </summary>
     decimal  TotalCashCourierHolds,
 

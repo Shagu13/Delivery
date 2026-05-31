@@ -23,8 +23,10 @@ export interface SettlementPreview {
     existingSettlementId: string | null;
     totalOrdersPickedUp: number;
     totalOrdersDelivered: number;
-    /** COD cash collected from recipients for the product itself. */
+    /** Sum of AmountOfCashCollected — total cash physically collected (COD + service fees bundled for Recipient-payer orders). */
     totalAmountOfCashCollected: number;
+    /** Sum of AmountToCollectForPackage — pure parcel/product money only, no service fees. Used for the COD display row. */
+    totalCodOnlyAmount: number;
     /** Sum of ALL CompanyServicePrice values (regardless of who pays). */
     totalCompanyServiceRevenue: number;
     /** Service fees collected in cash directly from recipients (WhoPaysForCompanyService == Recipient). */

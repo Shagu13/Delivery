@@ -71,12 +71,9 @@ export interface AdminCourierSettlement {
   totalOrdersDelivered:          number;
   totalOrdersPickedUp:           number;
   totalAmountOfCashCollected:    number | null;
-  totalCodOwedToSenders:         number;
   totalCompanyServiceRevenue:    number;
-  totalServiceFeesOwedBySenders: number;
   totalCourierSalary:            number;
   totalCourierTransferToCompany: number;
-  companyNetCashAfterCod:        number;
   totalCompanyNetIncome:         number;
   isTheDayClosed:                boolean;
   wasCourierPaid:                boolean;

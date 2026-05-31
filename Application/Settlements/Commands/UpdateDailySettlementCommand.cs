@@ -76,17 +76,12 @@ public sealed class UpdateDailySettlementCommandHandler
                 $"Cannot update settlement: the following orders are missing financial data — " +
                 string.Join(", ", incomplete));
 
-        // ── 5. Recompute totals (same logic as Create) ────────────────────────
-        var totalCashCollected        = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
-        var totalCodOwedToSenders     = orders.Sum(o => o.AmountToCollectForPackage ?? 0m);
-        var totalServiceRevenue       = orders.Sum(o => o.CompanyServicePrice);
-        var totalServiceFeesOwedBySenders = orders
-            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender)
-            .Sum(o => o.CompanyServicePrice);
-        var totalCourierSalary        = orders.Sum(o => o.CourierSalary ?? 0m);
-        var totalTransferToCompany    = totalCashCollected - totalCourierSalary;
-        var companyNetCashAfterCod    = totalTransferToCompany - totalCodOwedToSenders;
-        var totalNetIncome            = totalServiceRevenue - totalCourierSalary;
+        // ── 5. Recompute immutable physical totals ────────────────────────────
+        var totalCashCollected     = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
+        var totalServiceRevenue    = orders.Sum(o => o.CompanyServicePrice);
+        var totalCourierSalary     = orders.Sum(o => o.CourierSalary ?? 0m);
+        var totalTransferToCompany = totalCashCollected - totalCourierSalary;
+        var totalNetIncome         = totalServiceRevenue - totalCourierSalary;
 
         var totalOrdersPickedUp = await _context.GroupOrders
             .Where(g => g.CourierId  == request.CourierId
@@ -98,12 +93,9 @@ public sealed class UpdateDailySettlementCommandHandler
         settlement.TotalOrdersPickedUp           = totalOrdersPickedUp;
         settlement.TotalOrdersDelivered          = orders.Count;
         settlement.TotalAmountOfCashCollected    = totalCashCollected > 0 ? totalCashCollected : null;
-        settlement.TotalCodOwedToSenders         = totalCodOwedToSenders;
         settlement.TotalCompanyServiceRevenue    = totalServiceRevenue;
-        settlement.TotalServiceFeesOwedBySenders = totalServiceFeesOwedBySenders;
         settlement.TotalCourierSalary            = totalCourierSalary;
         settlement.TotalCourierTransferToCompany = totalTransferToCompany;
-        settlement.CompanyNetCashAfterCod        = companyNetCashAfterCod;
         settlement.TotalCompanyNetIncome         = totalNetIncome;
 
         // ── 7. Update pending PaymentRequests linked to this settlement ───────
@@ -112,13 +104,9 @@ public sealed class UpdateDailySettlementCommandHandler
             .Where(p => p.Status != PaymentRequestStatus.Confirmed))
         {
             if (pr.Type == PaymentRequestType.CourierHandsOverRevenue)
-            {
                 pr.TotalAmount = totalTransferToCompany;
-            }
             else if (pr.Type == PaymentRequestType.CompanyPaysCourier)
-            {
                 pr.TotalAmount = totalCourierSalary;
-            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);

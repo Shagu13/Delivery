@@ -55,6 +55,10 @@ public sealed class GetSettlementPreviewQueryHandler
         // totalCash = AmountOfCashCollected already includes both the package COD
         // AND the service fee for Recipient-payer orders. Do NOT add service fees again.
         var totalCash        = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
+
+        // Pure parcel money only (no service fees) — used for the COD display row.
+        var totalCodOnly     = orders.Sum(o => o.AmountToCollectForPackage ?? 0m);
+
         var totalService     = orders.Sum(o => o.CompanyServicePrice);
         var totalSalary      = orders.Sum(o => o.CourierSalary ?? 0m);
         var totalNetIncome   = totalService - totalSalary;
@@ -100,6 +104,7 @@ public sealed class GetSettlementPreviewQueryHandler
             TotalOrdersPickedUp:                    pickedUpPackages,
             TotalOrdersDelivered:                   orders.Count,
             TotalAmountOfCashCollected:             totalCash,
+            TotalCodOnlyAmount:                     totalCodOnly,
             TotalCompanyServiceRevenue:             totalService,
             TotalServiceFeesCollectedFromRecipients: totalServiceFeesFromRecipients,
             TotalCashCourierHolds:                  totalCashCourierHolds,

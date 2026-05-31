@@ -73,7 +73,6 @@ public sealed class GetAdminPaymentsQueryHandler
         );
 
         // ── 3. COD owed to senders ────────────────────────────────────────────
-        // Load all COD orders (unpaid to sender)
         var codOrders = await _context.Orders
             .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
             .Where(o => o.AmountToCollectForPackage > 0
@@ -82,8 +81,6 @@ public sealed class GetAdminPaymentsQueryHandler
                      && o.GroupOrder.CustomerId != null)
             .ToListAsync(cancellationToken);
 
-        // Load all outstanding service-fee orders (Sender-payer, Unpaid or Pending)
-        // These are eligible to be offset against COD payouts.
         var allOffsetEligible = await _context.Orders
             .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
             .Where(o => o.WhoPaysForCompanyService    == ServicePayer.Sender
@@ -92,10 +89,9 @@ public sealed class GetAdminPaymentsQueryHandler
                      && o.GroupOrder.CustomerId       != null)
             .ToListAsync(cancellationToken);
 
-        // Group both sets by customer and merge
-        var codByCustomer      = codOrders.GroupBy(o => o.GroupOrder.CustomerId!.Value).ToDictionary(g => g.Key);
-        var feeByCustomer      = allOffsetEligible.GroupBy(o => o.GroupOrder.CustomerId!.Value).ToDictionary(g => g.Key);
-        var allCustomerIds     = codByCustomer.Keys.ToHashSet();
+        var codByCustomer  = codOrders.GroupBy(o => o.GroupOrder.CustomerId!.Value).ToDictionary(g => g.Key);
+        var feeByCustomer  = allOffsetEligible.GroupBy(o => o.GroupOrder.CustomerId!.Value).ToDictionary(g => g.Key);
+        var allCustomerIds = codByCustomer.Keys.ToHashSet();
 
         var payToSenders = allCustomerIds.Select(customerId =>
         {
@@ -103,20 +99,20 @@ public sealed class GetAdminPaymentsQueryHandler
             var customer = codGroup.First().GroupOrder.Customer!;
             var codList  = codGroup.ToList();
 
-            var feeOrders   = feeByCustomer.TryGetValue(customerId, out var fg) ? fg.ToList() : new();
-            var totalCod    = codList.Sum(o => o.AmountToCollectForPackage ?? 0m);
-            var totalFees   = feeOrders.Sum(o => o.CompanyServicePrice);
+            var feeOrders    = feeByCustomer.TryGetValue(customerId, out var fg) ? fg.ToList() : new();
+            var totalCod     = codList.Sum(o => o.AmountToCollectForPackage ?? 0m);
+            var totalFees    = feeOrders.Sum(o => o.CompanyServicePrice);
             var suggestedNet = Math.Max(0m, totalCod - totalFees);
 
             return new AdminCodOwedToSenderDto(
-                CustomerId:                customer.Id,
-                CustomerBusinessName:      customer.BusinessName,
-                CustomerPhone:             customer.PhoneNumber,
-                TotalCodOwed:              totalCod,
-                TotalServiceFeesOwed:      totalFees,
-                SuggestedNetTransfer:      suggestedNet,
-                CodOrders:                 codList.Select(MapOrderItem).ToList(),
-                OffsetEligibleFeeOrders:   feeOrders.Select(MapOrderItem).ToList()
+                CustomerId:              customer.Id,
+                CustomerBusinessName:    customer.BusinessName,
+                CustomerPhone:           customer.PhoneNumber,
+                TotalCodOwed:            totalCod,
+                TotalServiceFeesOwed:    totalFees,
+                SuggestedNetTransfer:    suggestedNet,
+                CodOrders:               codList.Select(MapOrderItem).ToList(),
+                OffsetEligibleFeeOrders: feeOrders.Select(MapOrderItem).ToList()
             );
         })
         .OrderByDescending(g => g.TotalCodOwed)
@@ -141,12 +137,9 @@ public sealed class GetAdminPaymentsQueryHandler
             TotalOrdersDelivered:          d.TotalOrdersDelivered,
             TotalOrdersPickedUp:           d.TotalOrdersPickedUp,
             TotalAmountOfCashCollected:    d.TotalAmountOfCashCollected,
-            TotalCodOwedToSenders:         d.TotalCodOwedToSenders,
             TotalCompanyServiceRevenue:    d.TotalCompanyServiceRevenue,
-            TotalServiceFeesOwedBySenders: d.TotalServiceFeesOwedBySenders,
             TotalCourierSalary:            d.TotalCourierSalary,
             TotalCourierTransferToCompany: d.TotalCourierTransferToCompany,
-            CompanyNetCashAfterCod:        d.CompanyNetCashAfterCod,
             TotalCompanyNetIncome:         d.TotalCompanyNetIncome,
             IsTheDayClosed:                d.IsTheDayClosed,
             WasCourierPaid:                d.WasCourierPaid,
