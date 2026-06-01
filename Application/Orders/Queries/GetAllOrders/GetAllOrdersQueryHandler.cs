@@ -22,6 +22,7 @@ public sealed class GetAllOrdersQueryHandler
     {
         var query = _context.Orders
             .Include(o => o.GroupOrder)
+            .Include(o => o.Customer)
             .AsNoTracking();
 
         // ── City filter ──────────────────────────────────────────────────────
@@ -82,7 +83,9 @@ public sealed class GetAllOrdersQueryHandler
                 o.RecipientAddress.ToLower().Contains(term) ||
                 (o.GroupOrder != null && o.GroupOrder.SenderBusinessName.ToLower().Contains(term)) ||
                 (o.GroupOrder != null && o.GroupOrder.SenderFirstName.ToLower().Contains(term)) ||
-                (o.GroupOrder != null && o.GroupOrder.SenderLastName.ToLower().Contains(term))
+                (o.GroupOrder != null && o.GroupOrder.SenderLastName.ToLower().Contains(term)) ||
+                (o.Customer != null && o.Customer.BusinessName.ToLower().Contains(term)) ||
+                (o.Customer != null && o.Customer.PhoneNumber.Contains(term))
             );
         }
 
@@ -105,10 +108,10 @@ public sealed class GetAllOrdersQueryHandler
             .Select(o => new AdminOrderListDto(
                 Id:                       o.Id,
                 TrackingNumber:           o.TrackingNumber,
-                SenderBusinessName:       o.GroupOrder?.SenderBusinessName ?? string.Empty,
-                SenderFirstName:          o.GroupOrder?.SenderFirstName ?? string.Empty,
-                SenderLastName:           o.GroupOrder?.SenderLastName ?? string.Empty,
-                SenderPhone:              o.GroupOrder?.SenderPhone ?? string.Empty,
+                SenderBusinessName:       o.GroupOrder?.SenderBusinessName ?? o.Customer?.BusinessName ?? string.Empty,
+                SenderFirstName:          o.GroupOrder?.SenderFirstName    ?? o.Customer?.FirstName    ?? string.Empty,
+                SenderLastName:           o.GroupOrder?.SenderLastName     ?? o.Customer?.LastName     ?? string.Empty,
+                SenderPhone:              o.GroupOrder?.SenderPhone        ?? o.Customer?.PhoneNumber  ?? string.Empty,
                 RecipientFirstName:       o.RecipientFirstName,
                 RecipientLastName:        o.RecipientLastName,
                 RecipientPhone:           o.RecipientPhone,
