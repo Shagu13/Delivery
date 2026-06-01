@@ -369,7 +369,7 @@ export function PackageCard({
               districtValue={data.recipientDistrict}
               onCityChange={handleCityChange}
               onDistrictChange={handleDistrictChange}
-              onDistrictSelect={handleDistrictSelect}
+              onDistrictSelect={isReturn ? () => {} : handleDistrictSelect}
               cityError={fieldError('recipientCity')}
               districtError={fieldError('recipientDistrict')}
             />

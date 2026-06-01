@@ -17,7 +17,6 @@ import { useLanguage } from '../../contexts/useLanguage';
 import type { Translations } from '../../contexts/translations';
 import { SenderSection } from './SenderSection';
 import { PackageCard } from './PackageCard';
-import { PackageTableLayout } from './PackageTableLayout';
 import { PackageSidebarLayout } from './PackageSidebarLayout';
 import { SuccessView } from './SuccessView';
 import { PickupAddressModal } from './PickupAddressModal';
@@ -25,7 +24,7 @@ import './createGroupOrder.css';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type PackageLayout = 'cards' | 'table' | 'sidebar';
+type PackageLayout = 'cards' | 'sidebar';
 
 interface SenderFormData {
     senderFirstName:    string;
@@ -580,18 +579,6 @@ export function CreateGroupOrderPage() {
                                     </button>
                                     <button
                                         type="button"
-                                        className={`layout-tab${layout === 'table' ? ' layout-tab--active' : ''}`}
-                                        onClick={() => setLayout('table')}
-                                        title="Spreadsheet table view"
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                            <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/>
-                                            <path d="M1 5h14M1 9h14M1 13h14M5 1v14M10 1v14" stroke="currentColor" strokeWidth="1.3"/>
-                                        </svg>
-                                        Table
-                                    </button>
-                                    <button
-                                        type="button"
                                         className={`layout-tab${layout === 'sidebar' ? ' layout-tab--active' : ''}`}
                                         onClick={() => setLayout('sidebar')}
                                         title="Sidebar navigator view"
@@ -633,19 +620,6 @@ export function CreateGroupOrderPage() {
                                         </button>
                                     )}
                                 </>
-                            )}
-
-                            {layout === 'table' && (
-                                <PackageTableLayout
-                                    packages={packages}
-                                    errors={errors}
-                                    customerPricing={customerPricing}
-                                    weightTiers={weightTiers}
-                                    senderAddress={senderAddress}
-                                    onChange={handlePackageChange}
-                                    onRemove={removePackage}
-                                    onAdd={addPackage}
-                                />
                             )}
 
                             {layout === 'sidebar' && (

@@ -141,6 +141,12 @@ function PackageDetail({
     else onChange(index, 'amountToCollectForPackage', 0);
   };
 
+  // Scroll detail body to top whenever the package index changes
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [index]);
+
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -187,7 +193,7 @@ function PackageDetail({
       </div>
 
       {/* Scrollable form body */}
-      <div className="psl-detail__body">
+      <div className="psl-detail__body" ref={bodyRef}>
 
         {/* Order Type */}
         <div className="psl-section">
@@ -411,10 +417,20 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
     if (activeIndex >= packages.length) setActiveIndex(Math.max(0, packages.length - 1));
   }, [packages.length, activeIndex]);
 
-  // Scroll active item into view in sidebar
+  // Scroll active item into view within the sidebar list only — never move the page
   useEffect(() => {
-    const el = sidebarRef.current?.querySelector(`[data-idx="${activeIndex}"]`) as HTMLElement | null;
-    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const list = sidebarRef.current?.querySelector('.psl-sidebar__list') as HTMLElement | null;
+    const el   = sidebarRef.current?.querySelector(`[data-idx="${activeIndex}"]`) as HTMLElement | null;
+    if (!list || !el) return;
+    const listTop    = list.scrollTop;
+    const listBottom = listTop + list.clientHeight;
+    const elTop      = el.offsetTop;
+    const elBottom   = elTop + el.offsetHeight;
+    if (elTop < listTop) {
+      list.scrollTop = elTop;
+    } else if (elBottom > listBottom) {
+      list.scrollTop = elBottom - list.clientHeight;
+    }
   }, [activeIndex]);
 
   const handleRemove = (index: number) => {
