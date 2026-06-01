@@ -109,17 +109,32 @@ function PackageDetail({
   const isExchange = pkg.orderType === 'Exchange';
   const showCOD    = pkg.productPaymentStatus === 'NotPaid';
 
+  const [selectedDistrict,       setSelectedDistrict]       = useState<District | null>(null);
+  const [selectedReturnDistrict, setSelectedReturnDistrict] = useState<District | null>(null);
+
   const handleDistrictSelect = useCallback((district: District | null) => {
+    setSelectedDistrict(district);
     if (district) onChange(index, 'companyServicePrice', computeFee(district, pkg.weightPriceTierId, weightTiers, customerPricing));
     else onChange(index, 'companyServicePrice', 0);
   }, [index, pkg.weightPriceTierId, weightTiers, customerPricing, onChange]);
 
   const handleReturnDistrictSelect = useCallback((district: District | null) => {
+    setSelectedReturnDistrict(district);
     if (district) onChange(index, 'companyServicePrice', computeFee(district, pkg.weightPriceTierId, weightTiers, customerPricing));
   }, [index, pkg.weightPriceTierId, weightTiers, customerPricing, onChange]);
 
+  const handleWeightTierChange = (tierId: string) => {
+    onChange(index, 'weightPriceTierId', tierId);
+    const activeDist = isReturn ? selectedReturnDistrict : selectedDistrict;
+    if (activeDist) {
+      onChange(index, 'companyServicePrice', computeFee(activeDist, tierId || undefined, weightTiers, customerPricing));
+    }
+  };
+
   const handleOrderTypeChange = (type: OrderType) => {
     onChange(index, 'orderType', type);
+    setSelectedDistrict(null);
+    setSelectedReturnDistrict(null);
     onChange(index, 'companyServicePrice', 0);
     if (type === 'Return') {
       onChange(index, 'whoPaysForCompanyService', 'Sender');
@@ -292,9 +307,9 @@ function PackageDetail({
           <CityDistrictPicker
             cityValue={pkg.recipientCity}
             districtValue={pkg.recipientDistrict}
-            onCityChange={v => { onChange(index, 'recipientCity', v); onChange(index, 'recipientDistrict', ''); onChange(index, 'companyServicePrice', 0); }}
+            onCityChange={v => { onChange(index, 'recipientCity', v); onChange(index, 'recipientDistrict', ''); if (!isReturn) { setSelectedDistrict(null); onChange(index, 'companyServicePrice', 0); } }}
             onDistrictChange={v => onChange(index, 'recipientDistrict', v)}
-            onDistrictSelect={handleDistrictSelect}
+            onDistrictSelect={isReturn ? () => {} : handleDistrictSelect}
             cityError={fe('recipientCity')}
             districtError={fe('recipientDistrict')}
           />
@@ -327,7 +342,7 @@ function PackageDetail({
               <select
                 className="form-field__input"
                 value={pkg.weightPriceTierId ?? ''}
-                onChange={e => onChange(index, 'weightPriceTierId', e.target.value)}
+                onChange={e => handleWeightTierChange(e.target.value)}
               >
                 <option value="">{t.cgoWeightTierPlaceholder}</option>
                 {weightTiers.map(tier => (
