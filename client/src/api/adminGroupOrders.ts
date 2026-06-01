@@ -17,7 +17,11 @@ export type OrderStatus =
     | 'DeliveryPostponed'
     | 'CancelledBySender'
     | 'CancelledByAdmin'
-    | 'AllDelivered';
+    | 'AllDelivered'
+    | 'ReturnedToSender'
+    | 'ExchangeCompleted'
+    | 'PickedUpFromRecipient'
+    | 'DeliveredReturnOrderToWarehouse';
 
 export type PaymentStatus = 'Paid' | 'NotPaid';
 export type ServicePayer  = 'Sender' | 'Recipient';
