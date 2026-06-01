@@ -17,11 +17,15 @@ import { useLanguage } from '../../contexts/useLanguage';
 import type { Translations } from '../../contexts/translations';
 import { SenderSection } from './SenderSection';
 import { PackageCard } from './PackageCard';
+import { PackageTableLayout } from './PackageTableLayout';
+import { PackageSidebarLayout } from './PackageSidebarLayout';
 import { SuccessView } from './SuccessView';
 import { PickupAddressModal } from './PickupAddressModal';
 import './createGroupOrder.css';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type PackageLayout = 'cards' | 'table' | 'sidebar';
 
 interface SenderFormData {
     senderFirstName:    string;
@@ -64,10 +68,10 @@ const EMPTY_PACKAGE: OrderItemRequest = {
     isFragile:                    false,
     productPaymentStatus:         'NotPaid',
     whoPaysForCompanyService:     'Recipient',
-    orderType:                    'Send',        // ← new
-    returnPickupAddress:          undefined,     // ← new
-    returnPickupCity:             undefined,     // ← new
-    returnPickupDistrict:         undefined,     // ← new
+    orderType:                    'Send',
+    returnPickupAddress:          undefined,
+    returnPickupCity:             undefined,
+    returnPickupDistrict:         undefined,
     amountToCollectForPackage:    undefined,
     weightPriceTierId:            undefined,
 };
@@ -101,10 +105,8 @@ function validate(
         const p = (field: string, val: string, errMsg: string) => {
             if (!val.trim()) errors[`orders[${i}].${field}`] = errMsg;
         };
-        p('recipientFirstName', pkg.recipientFirstName, t.cgoErrFirstName);
-        p('recipientLastName',  pkg.recipientLastName,  t.cgoErrLastName);
-        p('recipientPhone',     pkg.recipientPhone,     t.cgoErrPhone);
-        p('recipientAddress',   pkg.recipientAddress,   t.cgoErrAddress);
+        p('recipientPhone',   pkg.recipientPhone,   t.cgoErrPhone);
+        p('recipientAddress', pkg.recipientAddress, t.cgoErrAddress);
 
         if (!pkg.recipientCity.trim()) {
             errors[`orders[${i}].recipientCity`] = t.cgoErrCity;
@@ -133,7 +135,6 @@ function validate(
             }
         }
 
-        // ── Return-specific validation ─────────────────────────────────────────
         if (pkg.orderType === 'Return') {
             if (!pkg.returnPickupCity?.trim())
                 errors[`orders[${i}].returnPickupCity`] = t.cgoErrCity;
@@ -171,33 +172,26 @@ export function CreateGroupOrderPage() {
     const [prefilled,       setPrefilled]       = useState(false);
     const [pickupModalOpen, setPickupModalOpen] = useState(false);
 
+    // ── Layout switcher ────────────────────────────────────────────────────────
+    const [layout, setLayout] = useState<PackageLayout>('cards');
+
     // ── Weight price tiers ─────────────────────────────────────────────────────
     const [weightTiers, setWeightTiers] = useState<WeightPriceTier[]>([]);
-
-    useEffect(() => {
-        fetchWeightPriceTiers()
-            .then(setWeightTiers)
-            .catch(() => {});
-    }, []);
+    useEffect(() => { fetchWeightPriceTiers().then(setWeightTiers).catch(() => {}); }, []);
 
     // ── City / district cache for frontend validation ─────────────────────────
     const [cities,            setCities]            = useState<City[]>([]);
     const [cityDistrictCache, setCityDistrictCache] = useState<Record<string, Set<string>>>({});
-
-    useEffect(() => {
-        fetchCities().then(setCities).catch(() => {});
-    }, []);
+    useEffect(() => { fetchCities().then(setCities).catch(() => {}); }, []);
 
     // ── Pre-fill from customer profile ────────────────────────────────────────
     useEffect(() => {
         if (user?.role !== 'Customer' || !token) return;
-
         let cancelled = false;
         (async () => {
             try {
                 const profile = await getMyProfile(token);
                 if (cancelled) return;
-
                 setSender(prev => ({
                     ...prev,
                     senderFirstName:    profile.firstName,
@@ -217,21 +211,13 @@ export function CreateGroupOrderPage() {
                     companyServiceCityPrice:     profile.companyServiceCityPrice,
                     companyServiceDistrictPrice: profile.companyServiceDistrictPrice,
                 });
-                setSenderAddress({
-                    city:     profile.city,
-                    district: profile.district,
-                    address:  profile.address,
-                });
+                setSenderAddress({ city: profile.city, district: profile.district, address: profile.address });
                 setPrefilled(true);
-            } catch {
-                // silently ignore
-            }
+            } catch { /* ignore */ }
         })();
-
         return () => { cancelled = true; };
     }, [user?.role, token]);
 
-    // ── When user toggles "Use Other Address" ─────────────────────────────────
     const handleUseOtherAddrChange = (checked: boolean) => {
         setUseOtherAddr(checked);
         if (!checked) {
@@ -244,13 +230,11 @@ export function CreateGroupOrderPage() {
         }
     };
 
-    // ── Sender handlers ───────────────────────────────────────────────────────
     const handleSenderChange = useCallback((field: keyof SenderFormData, value: string) => {
         setSender(prev => ({ ...prev, [field]: value }));
         setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
     }, []);
 
-    // ── Package handlers ──────────────────────────────────────────────────────
     const handlePackageChange = useCallback(
         (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => {
             setPackages(prev => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
@@ -259,8 +243,7 @@ export function CreateGroupOrderPage() {
                 delete n[`orders[${index}].${field}`];
                 return n;
             });
-        },
-        [],
+        }, [],
     );
 
     const addPackage = () => {
@@ -301,25 +284,16 @@ export function CreateGroupOrderPage() {
         setExcelImporting(true);
         try {
             const parsed = await parseGroupOrderExcel(file);
-            const normalised = parsed.map(o => ({
-                ...EMPTY_PACKAGE,
-                ...o,
-                description: o.description ?? '',
-            }));
+            const normalised = parsed.map(o => ({ ...EMPTY_PACKAGE, ...o, description: o.description ?? '' }));
 
-            // ── Fetch districts for all unique cities and auto-compute service fees ──
             const uniqueCities = [...new Set(normalised.map(o => o.recipientCity).filter(Boolean))];
-            // districtMap: cityName → districtName → District object
             const districtMap: Record<string, Record<string, import('../../api/cities').District>> = {};
 
             await Promise.all(uniqueCities.map(async cityName => {
                 const city = cities.find(c => c.cityName === cityName || c.cityNameGeo === cityName);
                 if (!city) return;
                 const districtList = await fetchDistricts(city.id);
-                setCityDistrictCache(prev => ({
-                    ...prev,
-                    [cityName]: new Set(districtList.map(d => d.districtName)),
-                }));
+                setCityDistrictCache(prev => ({ ...prev, [cityName]: new Set(districtList.map(d => d.districtName)) }));
                 districtMap[cityName] = {};
                 for (const d of districtList) {
                     districtMap[cityName][d.districtName] = d;
@@ -327,18 +301,15 @@ export function CreateGroupOrderPage() {
                 }
             }));
 
-            // Compute companyServicePrice for each package using resolved district
             const withFees = normalised.map(o => {
                 const cityDistricts = districtMap[o.recipientCity];
                 if (!cityDistricts) return o;
                 const district = cityDistricts[o.recipientDistrict];
                 if (!district) return o;
-
-                // Reuse the same fee logic as PackageCard.computeServiceFee
                 let fee = 0;
                 const tierId = o.weightPriceTierId;
                 if (tierId) {
-                    const tier = weightTiers.find(t => t.id === tierId);
+                    const tier = weightTiers.find(wt => wt.id === tierId);
                     if (tier) {
                         const zonePrice = district.isCapitalTerritory ? tier.capitalPrice
                                         : district.isCityTerritory    ? tier.cityPrice
@@ -355,7 +326,6 @@ export function CreateGroupOrderPage() {
                         fee = customerPricing.companyServiceDistrictPrice!;
                 }
                 if (fee === 0) fee = district.companyServicePrice ?? 0;
-
                 return { ...o, companyServicePrice: fee };
             });
 
@@ -378,16 +348,12 @@ export function CreateGroupOrderPage() {
         setErrors({});
     };
 
-    // ── Scroll to the topmost error field on the page ─────────────────────────
     const scrollToTopError = () => {
         setTimeout(() => {
-            const all = document.querySelectorAll('.form-field--error');
+            const all = document.querySelectorAll('.form-field--error, .ptl-inp--err, .cdp-field--error');
             if (!all.length) return;
             let topY = all[0].getBoundingClientRect().top + window.scrollY;
-            all.forEach(el => {
-                const y = el.getBoundingClientRect().top + window.scrollY;
-                if (y < topY) { topY = y; }
-            });
+            all.forEach(el => { const y = el.getBoundingClientRect().top + window.scrollY; if (y < topY) topY = y; });
             window.scrollTo({ top: Math.max(0, topY - 80), behavior: 'smooth' });
         }, 50);
     };
@@ -419,13 +385,9 @@ export function CreateGroupOrderPage() {
                 orders: packages.map(p => ({
                     ...p,
                     description: p.description?.trim() || undefined,
-                    amountToCollectForPackage:
-                        p.productPaymentStatus === 'NotPaid'
-                            ? p.amountToCollectForPackage
-                            : undefined,
+                    amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
                     companyServicePrice: p.companyServicePrice ?? undefined,
                     weightPriceTierId: p.weightPriceTierId || undefined,
-                    // ── Return/Exchange fields ────────────────────────────────
                     orderType: p.orderType,
                     returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
                     returnPickupCity:     p.orderType === 'Return' ? p.returnPickupCity?.trim()     : undefined,
@@ -533,9 +495,7 @@ export function CreateGroupOrderPage() {
                             <span className="form-section__number">{t.cgoPackagesNum}</span>
                             <div>
                                 <h2 className="form-section__title">{t.cgoPackagesTitle}</h2>
-                                <p className="form-section__desc">
-                                    {t.cgoPackagesDesc(packages.length)}
-                                </p>
+                                <p className="form-section__desc">{t.cgoPackagesDesc(packages.length)}</p>
                             </div>
                         </div>
 
@@ -564,9 +524,7 @@ export function CreateGroupOrderPage() {
                                                 </svg>
                                                 {t.cgoImported(importedCount)}
                                             </div>
-                                            <button type="button" className="excel-import__clear" onClick={clearImport}>
-                                                {t.cgoClearReset}
-                                            </button>
+                                            <button type="button" className="excel-import__clear" onClick={clearImport}>{t.cgoClearReset}</button>
                                         </>
                                     ) : (
                                         <>
@@ -576,12 +534,7 @@ export function CreateGroupOrderPage() {
                                                 </svg>
                                                 {t.cgoDownloadTemplate}
                                             </button>
-                                            <button
-                                                type="button"
-                                                className="btn excel-import__btn-upload"
-                                                onClick={() => fileInputRef.current?.click()}
-                                                disabled={excelImporting}
-                                            >
+                                            <button type="button" className="btn excel-import__btn-upload" onClick={() => fileInputRef.current?.click()} disabled={excelImporting}>
                                                 {excelImporting ? (
                                                     <><span className="btn__spinner btn__spinner--dark" />{t.cgoImporting}</>
                                                 ) : (
@@ -595,13 +548,7 @@ export function CreateGroupOrderPage() {
                                             </button>
                                         </>
                                     )}
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept=".xlsx"
-                                        style={{ display: 'none' }}
-                                        onChange={handleFileChange}
-                                    />
+                                    <input ref={fileInputRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleFileChange} />
                                 </div>
                                 {excelError && (
                                     <div className="excel-import__error">
@@ -614,30 +561,104 @@ export function CreateGroupOrderPage() {
                                 )}
                             </div>
 
-                            <div className="package-list">
-                                {packages.map((pkg, i) => (
-                                    <PackageCard
-                                        key={i}
-                                        index={i}
-                                        data={pkg}
-                                        errors={errors}
-                                        canRemove={packages.length > 1}
-                                        customerPricing={customerPricing}
-                                        weightTiers={weightTiers}
-                                        senderAddress={senderAddress}
-                                        onChange={handlePackageChange}
-                                        onRemove={removePackage}
-                                    />
-                                ))}
+                            {/* ── Layout switcher ── */}
+                            <div className="layout-switcher">
+                                <span className="layout-switcher__label">View:</span>
+                                <div className="layout-switcher__tabs">
+                                    <button
+                                        type="button"
+                                        className={`layout-tab${layout === 'cards' ? ' layout-tab--active' : ''}`}
+                                        onClick={() => setLayout('cards')}
+                                        title="Accordion cards (default)"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                            <rect x="1" y="2" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+                                            <rect x="1" y="7" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+                                            <rect x="1" y="12" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
+                                        </svg>
+                                        Cards
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`layout-tab${layout === 'table' ? ' layout-tab--active' : ''}`}
+                                        onClick={() => setLayout('table')}
+                                        title="Spreadsheet table view"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                            <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+                                            <path d="M1 5h14M1 9h14M1 13h14M5 1v14M10 1v14" stroke="currentColor" strokeWidth="1.3"/>
+                                        </svg>
+                                        Table
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`layout-tab${layout === 'sidebar' ? ' layout-tab--active' : ''}`}
+                                        onClick={() => setLayout('sidebar')}
+                                        title="Sidebar navigator view"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                            <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+                                            <path d="M5 1v14" stroke="currentColor" strokeWidth="1.3"/>
+                                        </svg>
+                                        Sidebar
+                                    </button>
+                                </div>
                             </div>
 
-                            {packages.length < 100 && (
-                                <button type="button" className="btn btn--add" onClick={addPackage}>
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                        <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                                    </svg>
-                                    {t.cgoAddPackage}
-                                </button>
+                            {/* ── Package editors ── */}
+                            {layout === 'cards' && (
+                                <>
+                                    <div className="package-list">
+                                        {packages.map((pkg, i) => (
+                                            <PackageCard
+                                                key={i}
+                                                index={i}
+                                                data={pkg}
+                                                errors={errors}
+                                                canRemove={packages.length > 1}
+                                                customerPricing={customerPricing}
+                                                weightTiers={weightTiers}
+                                                senderAddress={senderAddress}
+                                                onChange={handlePackageChange}
+                                                onRemove={removePackage}
+                                            />
+                                        ))}
+                                    </div>
+                                    {packages.length < 100 && (
+                                        <button type="button" className="btn btn--add" onClick={addPackage}>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                                            </svg>
+                                            {t.cgoAddPackage}
+                                        </button>
+                                    )}
+                                </>
+                            )}
+
+                            {layout === 'table' && (
+                                <PackageTableLayout
+                                    packages={packages}
+                                    errors={errors}
+                                    customerPricing={customerPricing}
+                                    weightTiers={weightTiers}
+                                    senderAddress={senderAddress}
+                                    onChange={handlePackageChange}
+                                    onRemove={removePackage}
+                                    onAdd={addPackage}
+                                />
+                            )}
+
+                            {layout === 'sidebar' && (
+                                <PackageSidebarLayout
+                                    packages={packages}
+                                    errors={errors}
+                                    customerPricing={customerPricing}
+                                    weightTiers={weightTiers}
+                                    senderAddress={senderAddress}
+                                    onChange={handlePackageChange}
+                                    onRemove={removePackage}
+                                    onAdd={addPackage}
+                                />
                             )}
                         </div>
                     </section>
@@ -654,9 +675,7 @@ export function CreateGroupOrderPage() {
 
                     <div className="form-footer">
                         <div className="form-footer__summary">
-                            <span className="form-footer__count">
-                                {t.cgoFooterCount(packages.length)}
-                            </span>
+                            <span className="form-footer__count">{t.cgoFooterCount(packages.length)}</span>
                             <span className="form-footer__hint">{t.cgoFooterHint}</span>
                         </div>
                         <button type="submit" className="btn btn--primary" disabled={submitting}>

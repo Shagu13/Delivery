@@ -1082,3 +1082,52 @@ body {
 .package-card--complete {
     border-color: rgba(30, 126, 90, 0.25);
 }
+/* ── Layout switcher ─────────────────────────────────────────────────────────── */
+.layout-switcher {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+.layout-switcher__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+.layout-switcher__tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--color-bg-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+}
+.layout-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: none;
+    border-radius: calc(var(--radius-sm) - 1px);
+    background: none;
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+.layout-tab:hover {
+    color: var(--color-text);
+    background: var(--color-bg-2);
+}
+.layout-tab--active {
+    background: var(--color-bg-2);
+    color: var(--color-accent);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}

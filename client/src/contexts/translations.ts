@@ -1392,7 +1392,7 @@ const ka: typeof en = {
   cgoSender:                'გამგზავნი',
   cgoRecipientPayer:        'მიმღები',
   cgoParcelPrice:           'ამანათის ფასი (₾)',
-  cgoParcelHint:            'საქონლის თანხა (მიმღებისგან ასაღები).',
+  cgoParcelHint:            'ამანათის თანხა (მიმღებისგან ასაღები).',
   cgoServiceFee:            'საკურიერო მომსახურება (₾)',
   cgoServiceFeeHintRecipient: 'კურიერი მიმღებისგან აიღებს საკურიეროს.',
   cgoServiceFeeHintSender:  'თქვენ (გამგზავნი) იხდით.',
