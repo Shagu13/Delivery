@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markOrderDelivering, markOrderDelivered, postponeOrder, retryDelivery,
+    markReturnPickedUp, markReturnDeliveredWarehouse,
     POSTPONE_REASON_LABELS,
 } from '../../../api/orders';
 import type { CourierOrder } from '../../../api/orders';
@@ -37,7 +38,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
         setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
 
     if (loading) return <div className="dashboard__loader">{t.cdDeliveriesLoading}</div>;
-    if (error) return <div className="dashboard__error">{error}</div>;
+    if (error)   return <div className="dashboard__error">{error}</div>;
     if (!deliveries.length) return <div className="dashboard__empty">{t.cdDeliveriesEmpty}</div>;
 
     const distanceTo = (o: CourierOrder) => {
@@ -69,7 +70,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                 <h2 className="dashboard__title" style={{ margin: 0 }}>{t.cdDeliveriesTitle}</h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {locState === 'locating' && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t.cdLocating}</span>}
-                    {locState === 'denied' && <span style={{ fontSize: '0.75rem', color: '#f97316' }}>{t.cdLocDenied}</span>}
+                    {locState === 'denied'   && <span style={{ fontSize: '0.75rem', color: '#f97316' }}>{t.cdLocDenied}</span>}
                     {locState === 'ready' && geocoding && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t.cdGeocoding}</span>}
                     <button
                         onClick={() => setSortMode(m => m === 'district' ? 'nearest' : 'district')}
@@ -99,13 +100,19 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                     style={{ width: 18, height: 18, marginLeft: 12, cursor: 'pointer', accentColor: 'var(--color-accent)', flexShrink: 0 }} />
                                 <button className="courier-card__collapse-row" style={{ flex: 1 }} onClick={() => toggle(order.id)} aria-expanded={isExpanded}>
                                     <div className="courier-card__collapse-icon">
-                                        {order.isFragile ? '🥚' : '🚚'}
+                                        {order.orderType === 'Return' ? '↩' : order.orderType === 'Exchange' ? '🔄' : order.isFragile ? '🥚' : '🚚'}
                                     </div>
                                     <div className="courier-card__collapse-info">
                                         <span className="courier-card__collapse-primary">
-                                            {order.recipientCity}, {order.recipientDistrict},
+                                            {order.orderType === 'Return' && order.returnPickupCity
+                                                ? `${order.returnPickupCity}, ${order.returnPickupDistrict}`
+                                                : `${order.recipientCity}, ${order.recipientDistrict}`}
                                         </span>
-                                        <span className="courier-card__collapse-secondary">{order.recipientAddress}</span>
+                                        <span className="courier-card__collapse-secondary">
+                                            {order.orderType === 'Return' && order.returnPickupAddress
+                                                ? order.returnPickupAddress
+                                                : order.recipientAddress}
+                                        </span>
                                     </div>
                                     <div className="courier-card__collapse-right">
                                         {mustCollect && <span className="courier-card__collapse-collect">₾{total.toFixed(2)}</span>}
@@ -144,11 +151,11 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                                 {order.productPaymentStatus === 'Paid' ? (
                                                     t.cdDeliveryPayPaid
                                                 ) : (() => {
-                                                    const parcelDue = order.productPaymentStatus === 'NotPaid';
+                                                    const parcelDue  = order.productPaymentStatus === 'NotPaid';
                                                     const courierDue = order.whoPaysForCompanyService === 'Recipient' && order.companyServicePrice > 0;
                                                     const sub = parcelDue && courierDue ? t.aopSubParcelAndFee
-                                                        : courierDue ? t.aopSubFeeOnly
-                                                            : t.aopSubParcelOnly;
+                                                              : courierDue              ? t.aopSubFeeOnly
+                                                                                        : t.aopSubParcelOnly;
                                                     return (
                                                         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                                                             <span>{t.aopUnpaid}</span>
@@ -201,6 +208,14 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         {order.status === 'DeliveryPostponed' && (
                                             <SwipeButton label={t.cdDeliverySwipeRetry} variant="primary" disabled={isBusy}
                                                 onSwipe={() => onAct(order.id, () => retryDelivery(token, order.id), t.cdDeliveryToastRetry)} />
+                                        )}
+                                        {order.status === 'CourierAssignedToPickUp' && order.orderType === 'Return' && (
+                                            <SwipeButton label="Swipe — Picked Up from Recipient" variant="primary" disabled={isBusy}
+                                                onSwipe={() => onAct(order.id, () => markReturnPickedUp(token, order.id), 'Picked up from recipient')} />
+                                        )}
+                                        {order.status === 'PickedUpFromRecipient' && order.orderType === 'Return' && (
+                                            <SwipeButton label="Swipe — Delivered to Warehouse" variant="success" disabled={isBusy}
+                                                onSwipe={() => onAct(order.id, () => markReturnDeliveredWarehouse(token, order.id), 'Return delivered to warehouse')} />
                                         )}
                                     </div>
                                     {collectConfirmOrderId === order.id && (
