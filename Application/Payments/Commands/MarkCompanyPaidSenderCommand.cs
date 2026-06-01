@@ -77,7 +77,7 @@ public sealed class MarkCompanyPaidSenderCommandHandler
             throw new NotFoundException("Order", "one or more COD order IDs not found");
 
         var invalidCod = codOrders
-            .Where(o => o.GroupOrder.CustomerId != request.CustomerId
+            .Where(o => o.GroupOrder?.CustomerId != request.CustomerId
                      || !(o.AmountToCollectForPackage > 0)
                      || o.HasCompanyPaidTheSender)
             .Select(o => o.TrackingNumber)
@@ -103,7 +103,7 @@ public sealed class MarkCompanyPaidSenderCommandHandler
                 throw new NotFoundException("Order", "one or more fee offset order IDs not found");
 
             var invalidFee = feeOffsetOrders
-                .Where(o => o.GroupOrder.CustomerId    != request.CustomerId
+                .Where(o => o.GroupOrder?.CustomerId    != request.CustomerId
                          || o.WhoPaysForCompanyService != ServicePayer.Sender
                          || o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Paid)
                 .Select(o => o.TrackingNumber)

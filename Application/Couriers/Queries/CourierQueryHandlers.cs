@@ -108,11 +108,15 @@ public sealed class GetCourierOrdersQueryHandler
             ?? throw new NotFoundException("Courier", request.CourierUserId);
 
         // Active last-mile statuses shown on the courier dashboard
+        // Includes Return order pickup flow statuses
         var activeStatuses = new[]
         {
             OrderStatus.CourierAssignedToDeliver,
             OrderStatus.CourierDeliveringTheOrderToRecipient,
             OrderStatus.DeliveryPostponed,
+            // Return order courier flow
+            OrderStatus.CourierAssignedToPickUp,
+            OrderStatus.PickedUpFromRecipient,
         };
 
         var orders = await _context.Orders

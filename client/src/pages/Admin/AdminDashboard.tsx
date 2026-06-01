@@ -23,6 +23,8 @@ import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminPaymentsPage from './AdminPaymentsPage';
 import AdminFinancePage from './AdminFinancePage';
+import AdminReturnExchangePage from './AdminReturnExchangePage';
+import { fetchReturnExchangeOrders, getPendingReturnExchangeCount } from '../../api/returnExchange';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 
 // Terminal order statuses — these orders are hidden from the active Group Orders page
@@ -37,7 +39,7 @@ const ACTIVE_ORDER_STATUSES_ONLY = new Set([
 ]);
 
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'payments' | 'finance';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'payments' | 'finance' | 'returnExchange';
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -61,6 +63,21 @@ export function AdminDashboard() {
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [returnExchangeCount, setReturnExchangeCount] = useState(0);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const orders = await fetchReturnExchangeOrders(token);
+        if (!cancelled) setReturnExchangeCount(getPendingReturnExchangeCount(orders));
+      } catch { /* ignore */ }
+    };
+    void load();
+    const interval = setInterval(() => void load(), 30_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -212,6 +229,23 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Finance</span>
           </button>
+          <button
+            className={`sidebar__link ${activeView === 'returnExchange' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('returnExchange')}
+            title="Returns & Exchanges"
+            style={{ position: 'relative' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 8a6 6 0 1 0 6-6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              <path d="M2 4v4h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="sidebar__link-text">Returns &amp; Exchanges</span>
+            {returnExchangeCount > 0 && (
+              <span className="sidebar__badge" style={{ background: '#ef4444', color: '#fff', marginLeft: 'auto' }}>
+                {returnExchangeCount > 99 ? '99+' : returnExchangeCount}
+              </span>
+            )}
+          </button>
         </nav>
         <div className="sidebar__footer">
           <LanguageToggle className="sidebar__lang-toggle" />
@@ -244,6 +278,7 @@ export function AdminDashboard() {
             {activeView === 'history' && t.topbarHistory}
             {activeView === 'payments' && 'Payments'}
             {activeView === 'finance' && 'Finance'}
+            {activeView === 'returnExchange' && 'Returns & Exchanges'}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
@@ -267,6 +302,13 @@ export function AdminDashboard() {
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
           {activeView === 'payments' && token && <AdminPaymentsPage token={token} />}
           {activeView === 'finance' && token && <AdminFinancePage token={token} />}
+          {activeView === 'returnExchange' && token && (
+            <AdminReturnExchangePage
+              token={token}
+              couriers={couriers}
+              onBack={() => goTo('overview')}
+            />
+          )}
         </main>
       </div>
 

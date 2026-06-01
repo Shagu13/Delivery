@@ -22,6 +22,7 @@ export const POSTPONE_REASON_LABELS: Record<PostponeReason, string> = {
 export interface CourierOrder {
     id: string;
     trackingNumber: string;
+    orderType: 'Send' | 'Return' | 'Exchange';
     senderBusinessName: string | null;
     recipientFirstName: string;
     recipientLastName: string;
@@ -46,6 +47,9 @@ export interface CourierOrder {
     deliveredAt: string | null;
     deliveryDateFrom: string | null;
     deliveryDateTo: string | null;
+    returnPickupCity: string | null;
+    returnPickupDistrict: string | null;
+    returnPickupAddress: string | null;
     postponeReason: PostponeReason | null;
     postponedAt: string | null;
 }
@@ -117,6 +121,8 @@ export const markOrderDelivered  = (token: string, id: string) => orderAction(to
 export const postponeOrder       = (token: string, id: string, reason: PostponeReason) =>
     orderAction(token, id, 'postpone', { reason });
 export const retryDelivery       = (token: string, id: string) => orderAction(token, id, 'retry-delivery');
+export const markReturnPickedUp           = (token: string, id: string) => orderAction(token, id, 'return-picked-up');
+export const markReturnDeliveredWarehouse = (token: string, id: string) => orderAction(token, id, 'return-delivered-warehouse');
 
 export async function fetchMyDeliveries(token: string): Promise<CourierOrder[]> {
     const res = await fetch(`${BASE}/my-deliveries`, {

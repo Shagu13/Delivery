@@ -15,9 +15,11 @@ namespace Domain.Enums;
 ///   → DeliveredToRecipient  |  DeliveryPostponed → CourierDeliveringTheOrderToRecipient (retry)
 ///   Terminal: CancelledByAdmin
 ///
-/// Return flow (OrderType == Return):
-///   Same GroupOrder pickup flow → warehouse → CourierAssignedToDeliver (to sender's address)
-///   → CourierDeliveringTheOrderToRecipient → ReturnedToSender (terminal)
+/// Return flow (OrderType == Return, standalone order):
+///   Created (Pending) → CourierAssignedToPickUp
+///   → PickedUpFromRecipient (courier has parcel from recipient's address)
+///   → DeliveredReturnOrderToWarehouse (courier dropped at warehouse)
+///   → ReturnedToSender (terminal, set by admin once sent back)
 ///
 /// Exchange flow (OrderType == Exchange):
 ///   Same as standard Send flow → ExchangeCompleted (terminal, set by admin)
@@ -64,4 +66,18 @@ public enum OrderStatus
     /// Set by admin. Visible on customer dashboard.
     /// </summary>
     ExchangeCompleted                    = 18,
+
+    // ── Return-order courier flow ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Courier has physically collected the parcel from the recipient's address.
+    /// Applies to standalone Return orders only.
+    /// </summary>
+    PickedUpFromRecipient                = 19,
+
+    /// <summary>
+    /// Courier has delivered the Return parcel to the warehouse.
+    /// Admin reviews and eventually marks ReturnedToSender.
+    /// </summary>
+    DeliveredReturnOrderToWarehouse      = 20,
 }

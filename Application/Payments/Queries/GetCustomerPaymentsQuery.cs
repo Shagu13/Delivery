@@ -41,7 +41,8 @@ public sealed class GetCustomerPaymentsQueryHandler
         // ── 1. Service fee orders for the month ───────────────────────────────
         var serviceFeeOrders = await _context.Orders
             .Include(o => o.GroupOrder)
-            .Where(o => o.GroupOrder.CustomerId    == customer.Id
+            .Where(o => o.GroupOrderId != null
+                     && o.GroupOrder!.CustomerId    == customer.Id
                      && o.WhoPaysForCompanyService == ServicePayer.Sender
                      && o.CreatedAt               >= monthStart
                      && o.CreatedAt               <  monthEnd)
@@ -81,7 +82,8 @@ public sealed class GetCustomerPaymentsQueryHandler
         // ── 3. COD income orders ──────────────────────────────────────────────
         var codOrders = await _context.Orders
             .Include(o => o.GroupOrder)
-            .Where(o => o.GroupOrder.CustomerId     == customer.Id
+            .Where(o => o.GroupOrderId != null
+                     && o.GroupOrder!.CustomerId     == customer.Id
                      && o.AmountToCollectForPackage > 0
                      && (o.Status == OrderStatus.DeliveredToRecipient
                       || !o.HasCompanyPaidTheSender))

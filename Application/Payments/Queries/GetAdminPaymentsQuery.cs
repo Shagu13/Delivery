@@ -45,17 +45,17 @@ public sealed class GetAdminPaymentsQueryHandler
 
         // ── 2. Unpaid sender groups (no request submitted yet) ────────────────
         var unpaidOrders = await _context.Orders
-            .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
+            .Include(o => o.GroupOrder).ThenInclude(g => g!.Customer)
             .Where(o => o.WhoPaysForCompanyService    == ServicePayer.Sender
                      && o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Unpaid
-                     && o.GroupOrder.CustomerId       != null)
+                     && o.GroupOrder!.CustomerId       != null)
             .ToListAsync(cancellationToken);
 
         var unpaidGroups = unpaidOrders
-            .GroupBy(o => o.GroupOrder.CustomerId!.Value)
+            .GroupBy(o => o.GroupOrder!.CustomerId!.Value)
             .Select(g =>
             {
-                var customer = g.First().GroupOrder.Customer!;
+                var customer = g.First().GroupOrder!.Customer!;
                 return new AdminUnpaidSenderGroupDto(
                     CustomerId:           g.Key,
                     CustomerBusinessName: customer.BusinessName,
@@ -74,29 +74,29 @@ public sealed class GetAdminPaymentsQueryHandler
 
         // ── 3. COD owed to senders ────────────────────────────────────────────
         var codOrders = await _context.Orders
-            .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
+            .Include(o => o.GroupOrder).ThenInclude(g => g!.Customer)
             .Where(o => o.AmountToCollectForPackage > 0
                      && !o.HasCompanyPaidTheSender
                      && o.Status                == OrderStatus.DeliveredToRecipient
-                     && o.GroupOrder.CustomerId != null)
+                     && o.GroupOrder!.CustomerId != null)
             .ToListAsync(cancellationToken);
 
         var allOffsetEligible = await _context.Orders
-            .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
+            .Include(o => o.GroupOrder).ThenInclude(g => g!.Customer)
             .Where(o => o.WhoPaysForCompanyService    == ServicePayer.Sender
                      && o.CompanyServicePaymentStatus != CompanyServicePaymentStatus.Paid
                      && o.Status                      == OrderStatus.DeliveredToRecipient
-                     && o.GroupOrder.CustomerId       != null)
+                     && o.GroupOrder!.CustomerId       != null)
             .ToListAsync(cancellationToken);
 
-        var codByCustomer  = codOrders.GroupBy(o => o.GroupOrder.CustomerId!.Value).ToDictionary(g => g.Key);
-        var feeByCustomer  = allOffsetEligible.GroupBy(o => o.GroupOrder.CustomerId!.Value).ToDictionary(g => g.Key);
+        var codByCustomer  = codOrders.GroupBy(o => o.GroupOrder!.CustomerId!.Value).ToDictionary(g => g.Key);
+        var feeByCustomer  = allOffsetEligible.GroupBy(o => o.GroupOrder!.CustomerId!.Value).ToDictionary(g => g.Key);
         var allCustomerIds = codByCustomer.Keys.ToHashSet();
 
         var payToSenders = allCustomerIds.Select(customerId =>
         {
             var codGroup = codByCustomer[customerId];
-            var customer = codGroup.First().GroupOrder.Customer!;
+            var customer = codGroup.First().GroupOrder!.Customer!;
             var codList  = codGroup.ToList();
 
             var feeOrders    = feeByCustomer.TryGetValue(customerId, out var fg) ? fg.ToList() : new();

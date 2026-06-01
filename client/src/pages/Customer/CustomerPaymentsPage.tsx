@@ -262,7 +262,7 @@ function ServiceFeeSection({
               ₾{fmt(selectedTotal)}
             </strong>{' '}
             for <strong>{selectedEligible.length}</strong> order{selectedEligible.length !== 1 ? 's' : ''}.
-            The admin will confirm once payment is received.
+            The Company will confirm once payment is received.
           </p>
           <label style={labelStyle}>Note (optional)</label>
           <input

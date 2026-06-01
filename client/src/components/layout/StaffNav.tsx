@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
+import { fetchReturnExchangeOrders, getPendingReturnExchangeCount } from '../../api/returnExchange';
 import { LanguageToggle } from '../ui/LanguageToggle';
 
 function usePendingCount(token: string | null, isAdmin: boolean) {
@@ -24,11 +25,30 @@ function usePendingCount(token: string | null, isAdmin: boolean) {
     return count;
 }
 
+function useReturnExchangeCount(token: string | null, isAdmin: boolean) {
+    const [count, setCount] = useState<number | null>(null);
+    useEffect(() => {
+        if (!isAdmin || !token) return;
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const orders = await fetchReturnExchangeOrders(token);
+                if (!cancelled) setCount(getPendingReturnExchangeCount(orders));
+            } catch { /* ignore */ }
+        };
+        void load();
+        const interval = setInterval(() => void load(), 30_000);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, [token, isAdmin]);
+    return count;
+}
+
 export function StaffNav() {
     const { user, token } = useAuth();
     const navigate = useNavigate();
     const isAdmin = user?.role === 'Admin';
     const pendingCount = usePendingCount(token ?? null, isAdmin);
+    const returnExchangeCount = useReturnExchangeCount(token ?? null, isAdmin);
 
     return (
         <header className="nav">
@@ -59,6 +79,22 @@ export function StaffNav() {
                                     {pendingCount > 99 ? '99+' : pendingCount}
                                 </span>
                             )}
+                        </button>
+                    )}
+                    {isAdmin && returnExchangeCount !== null && returnExchangeCount > 0 && (
+                        <button
+                            className="nav__pending-btn"
+                            onClick={() => navigate('/admin?view=returnExchange')}
+                            aria-label={`Return & Exchange orders: ${returnExchangeCount}`}
+                            title="View return & exchange orders"
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                            </svg>
+                            <span className="nav__pending-badge">
+                                {returnExchangeCount > 99 ? '99+' : returnExchangeCount}
+                            </span>
                         </button>
                     )}
                     {user?.role !== 'Courier' && <span className="nav__user">{user?.username}</span>}

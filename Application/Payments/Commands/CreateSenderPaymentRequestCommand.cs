@@ -62,7 +62,7 @@ public sealed class CreateSenderPaymentRequestCommandHandler
             throw new NotFoundException("Order", "one or more of the requested IDs");
 
         var invalid = orders
-            .Where(o => o.GroupOrder.CustomerId != request.CustomerId)
+            .Where(o => o.GroupOrder == null || o.GroupOrder.CustomerId != request.CustomerId)
             .Select(o => o.TrackingNumber)
             .ToList();
 

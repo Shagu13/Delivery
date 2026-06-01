@@ -80,9 +80,9 @@ public sealed class GetAllOrdersQueryHandler
                 o.RecipientLastName.ToLower().Contains(term) ||
                 o.RecipientPhone.Contains(term) ||
                 o.RecipientAddress.ToLower().Contains(term) ||
-                o.GroupOrder.SenderBusinessName.ToLower().Contains(term) ||
-                o.GroupOrder.SenderFirstName.ToLower().Contains(term) ||
-                o.GroupOrder.SenderLastName.ToLower().Contains(term)
+                (o.GroupOrder != null && o.GroupOrder.SenderBusinessName.ToLower().Contains(term)) ||
+                (o.GroupOrder != null && o.GroupOrder.SenderFirstName.ToLower().Contains(term)) ||
+                (o.GroupOrder != null && o.GroupOrder.SenderLastName.ToLower().Contains(term))
             );
         }
 
@@ -105,10 +105,10 @@ public sealed class GetAllOrdersQueryHandler
             .Select(o => new AdminOrderListDto(
                 Id:                       o.Id,
                 TrackingNumber:           o.TrackingNumber,
-                SenderBusinessName:       o.GroupOrder.SenderBusinessName,
-                SenderFirstName:          o.GroupOrder.SenderFirstName,
-                SenderLastName:           o.GroupOrder.SenderLastName,
-                SenderPhone:              o.GroupOrder.SenderPhone,
+                SenderBusinessName:       o.GroupOrder?.SenderBusinessName ?? string.Empty,
+                SenderFirstName:          o.GroupOrder?.SenderFirstName ?? string.Empty,
+                SenderLastName:           o.GroupOrder?.SenderLastName ?? string.Empty,
+                SenderPhone:              o.GroupOrder?.SenderPhone ?? string.Empty,
                 RecipientFirstName:       o.RecipientFirstName,
                 RecipientLastName:        o.RecipientLastName,
                 RecipientPhone:           o.RecipientPhone,

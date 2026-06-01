@@ -6,6 +6,7 @@ using Application.Orders.DTOs;
 using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
 using Application.Orders.Queries.GetOrderByTrackingNumber;
+using Application.Orders.Queries;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -245,6 +246,61 @@ public sealed class OrdersController : BaseController
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var result = await Sender.Send(new GetCourierDeliveryHistoryQuery(userId), ct);
         return Ok(result);
+    }
+
+    // ── GET /api/orders/return-exchange  (Admin) ──────────────────────────────
+    [HttpGet("return-exchange")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<ReturnExchangeOrderDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetReturnExchangeOrders(CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetReturnExchangeOrdersQuery(), ct);
+        return Ok(result);
+    }
+
+    // ── PUT /api/orders/{id}/assign-return-courier  (Admin) ───────────────────
+    [HttpPut("{id:guid}/assign-return-courier")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> AssignReturnCourier(
+        Guid id,
+        [FromBody] AssignCourierRequest request,
+        CancellationToken ct)
+    {
+        await Sender.Send(new AssignCourierToReturnOrderCommand(id, request.CourierId), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/orders/{id}/return-picked-up  (Courier) ──────────────────────
+    [HttpPut("{id:guid}/return-picked-up")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> ReturnPickedUp(Guid id, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await Sender.Send(new MarkReturnPickedUpCommand(id, userId), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/orders/{id}/return-delivered-warehouse  (Courier) ────────────
+    [HttpPut("{id:guid}/return-delivered-warehouse")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> ReturnDeliveredToWarehouse(Guid id, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await Sender.Send(new MarkReturnDeliveredToWarehouseCommand(id, userId), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/orders/{id}/mark-returned-to-sender  (Admin) ─────────────────
+    [HttpPut("{id:guid}/mark-returned-to-sender")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> MarkReturnedToSender(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new MarkReturnedToSenderCommand(id), ct);
+        return NoContent();
     }
 }
 

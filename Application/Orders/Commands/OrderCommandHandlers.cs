@@ -81,7 +81,7 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             await _recipientSms.SendCourierAssignedNotificationAsync(
                 order.RecipientPhone,
                 order.TrackingNumber,
-                order.GroupOrder.SenderBusinessName,
+                order.GroupOrder?.SenderBusinessName ?? string.Empty,
                 cancellationToken);
         }
         catch (Exception ex)
@@ -205,7 +205,9 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         await _context.SaveChangesAsync(cancellationToken);
 
         // Auto-close the parent GroupOrder when all packages are done
-        await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId, cancellationToken);
+        // (standalone Return orders have no GroupOrderId — skip)
+        if (order.GroupOrderId.HasValue)
+            await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
     }
 }
 
@@ -274,7 +276,9 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
         await _context.SaveChangesAsync(cancellationToken);
 
         // Auto-close the parent GroupOrder when all packages are done
-        await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId, cancellationToken);
+        // (standalone Return orders have no GroupOrderId — skip)
+        if (order.GroupOrderId.HasValue)
+            await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
     }
 }
 

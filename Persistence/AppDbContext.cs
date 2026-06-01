@@ -98,7 +98,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasOne(g => g.Warehouse).WithMany()
              .HasForeignKey(g => g.WarehouseId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(g => g.Orders).WithOne(o => o.GroupOrder)
-             .HasForeignKey(o => o.GroupOrderId).OnDelete(DeleteBehavior.Cascade);
+             .HasForeignKey(o => o.GroupOrderId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             e.Property(g => g.SenderFirstName).HasMaxLength(100).IsRequired();
             e.Property(g => g.SenderLastName).HasMaxLength(100).IsRequired();
             e.Property(g => g.SenderIdNumber).HasMaxLength(50);
@@ -122,6 +122,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(o => o.GroupOrderId);
             e.HasIndex(o => o.CompanyServicePaymentStatus);
             e.HasIndex(o => o.HasCompanyPaidTheSender);
+            e.HasOne(o => o.Customer).WithMany()
+             .HasForeignKey(o => o.CustomerId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(o => o.Courier).WithMany(c => c.Orders)
              .HasForeignKey(o => o.CourierId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(o => o.Warehouse).WithMany()
@@ -154,6 +156,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(o => o.CompanyRevenue).HasColumnType("decimal(18,2)");
             e.Property(o => o.AmountOfCashCollected).HasColumnType("decimal(18,2)");
             e.Property(o => o.AmountToCollectForPackage).HasColumnType("decimal(18,2)");
+
         });
 
         // ── DailySettlement ───────────────────────────────────────────────────

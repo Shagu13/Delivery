@@ -65,6 +65,9 @@ public sealed class CreateGroupOrderCommandHandler
 
         var trackingNumbers = await _trackingGen.GenerateManyAsync(dto.Orders.Count, cancellationToken);
 
+        // ── Split: Return orders become standalone; Send/Exchange go into GroupOrder ──
+        var standaloneReturns = new List<Order>();
+
         var groupOrder = new GroupOrder
         {
             CustomerId         = dto.CustomerId,
@@ -77,15 +80,20 @@ public sealed class CreateGroupOrderCommandHandler
             PickUpDistrict     = dto.PickUpDistrict,
             PickUpAddress      = dto.PickUpAddress,
             Note               = dto.Note,
-            NumberOfPackages   = dto.Orders.Count
+            NumberOfPackages   = dto.Orders.Count(o => o.OrderType != OrderType.Return)
         };
 
         for (int i = 0; i < dto.Orders.Count; i++)
         {
             var o = dto.Orders[i];
 
+            // For Return orders the fee is based on the return pickup district (where courier collects)
+            var districtName = o.OrderType == OrderType.Return
+                ? (o.ReturnPickupDistrict ?? o.RecipientDistrict)
+                : o.RecipientDistrict;
+
             var district = districts.FirstOrDefault(d =>
-                d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
+                d.DistrictName.Equals(districtName, StringComparison.OrdinalIgnoreCase));
 
             bool isCapital = district?.IsCapitalTerritory == true;
             bool isCity    = district?.IsCityTerritory    == true;
@@ -127,7 +135,7 @@ public sealed class CreateGroupOrderCommandHandler
                 amountToCollect = o.AmountToCollectForPackage;
             }
 
-            groupOrder.Orders.Add(new Order
+            var order = new Order
             {
                 RecipientFirstName        = o.RecipientFirstName,
                 RecipientLastName         = o.RecipientLastName,
@@ -143,34 +151,52 @@ public sealed class CreateGroupOrderCommandHandler
                 TrackingNumber            = trackingNumbers[i],
                 CompanyServicePrice       = companyServicePrice,
                 WeightPriceTierId         = o.WeightPriceTierId,
-                // ── Return / Exchange fields ──────────────────────────────────
-                OrderType             = o.OrderType,
-                ReturnPickupAddress   = o.OrderType == OrderType.Return ? o.ReturnPickupAddress  : null,
-                ReturnPickupCity      = o.OrderType == OrderType.Return ? o.ReturnPickupCity     : null,
-                ReturnPickupDistrict  = o.OrderType == OrderType.Return ? o.ReturnPickupDistrict : null,
-            });
+                OrderType                 = o.OrderType,
+                ReturnPickupAddress       = o.OrderType == OrderType.Return ? o.ReturnPickupAddress  : null,
+                ReturnPickupCity          = o.OrderType == OrderType.Return ? o.ReturnPickupCity     : null,
+                ReturnPickupDistrict      = o.OrderType == OrderType.Return ? o.ReturnPickupDistrict : null,
+            };
+
+            if (o.OrderType == OrderType.Return)
+            {
+                // Standalone — not part of the GroupOrder pickup flow
+                order.CustomerId = dto.CustomerId!.Value;
+                standaloneReturns.Add(order);
+                _context.Orders.Add(order);
+            }
+            else
+            {
+                groupOrder.Orders.Add(order);
+            }
         }
 
-        _context.GroupOrders.Add(groupOrder);
+        if (groupOrder.Orders.Count > 0)
+            _context.GroupOrders.Add(groupOrder);
+
         await _context.SaveChangesAsync(cancellationToken);
 
         // ── Notify admin via SMS ──────────────────────────────────────────────
-        try
+        if (groupOrder.Orders.Count > 0)
         {
-            await _adminSms.SendNewGroupOrderNotificationAsync(groupOrder, cancellationToken);
+            try
+            {
+                await _adminSms.SendNewGroupOrderNotificationAsync(groupOrder, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to send admin SMS notification for GroupOrder {GroupOrderId}",
+                    groupOrder.Id);
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Failed to send admin SMS notification for GroupOrder {GroupOrderId}",
-                groupOrder.Id);
-        }
+
+        var allOrders = groupOrder.Orders.Concat(standaloneReturns).ToList();
 
         return new CreateGroupOrderResultDto(
             GroupOrderId:       groupOrder.Id,
             SenderBusinessName: groupOrder.SenderBusinessName,
-            Orders: groupOrder.Orders
+            Orders: allOrders
                 .Select(o => new CreatedOrderDto(o.Id, o.TrackingNumber,
                     o.RecipientFirstName, o.RecipientLastName))
                 .ToList()

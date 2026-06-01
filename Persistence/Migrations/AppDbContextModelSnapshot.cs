@@ -504,7 +504,13 @@ namespace Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeliveredToWarehouseAt")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("DeliveryDateFrom")
@@ -517,7 +523,7 @@ namespace Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid>("GroupOrderId")
+                    b.Property<Guid?>("GroupOrderId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("HasCompanyPaidTheSender")
@@ -533,6 +539,9 @@ namespace Persistence.Migrations
 
                     b.Property<Guid?>("PaymentRequestId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PickedUpFromRecipientAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("PickedUpFromWarehouseAt")
                         .HasColumnType("datetime2");
@@ -618,6 +627,8 @@ namespace Persistence.Migrations
                     b.HasIndex("CourierId");
 
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CustomerId");
 
                     b.HasIndex("GroupOrderId");
 
@@ -1051,11 +1062,15 @@ namespace Persistence.Migrations
                         .HasForeignKey("CourierId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Domain.GroupOrder", "GroupOrder")
                         .WithMany("Orders")
                         .HasForeignKey("GroupOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Domain.PaymentRequest", "PaymentRequest")
                         .WithMany("Orders")
@@ -1073,6 +1088,8 @@ namespace Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Courier");
+
+                    b.Navigation("Customer");
 
                     b.Navigation("GroupOrder");
 

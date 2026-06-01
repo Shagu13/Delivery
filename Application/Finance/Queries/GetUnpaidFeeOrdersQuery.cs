@@ -59,7 +59,7 @@ public sealed class GetUnpaidFeeOrdersQueryHandler
     {
         var orders = await _context.Orders
             .AsNoTracking()
-            .Include(o => o.GroupOrder).ThenInclude(g => g.Customer)
+            .Include(o => o.GroupOrder).ThenInclude(g => g!.Customer)
             .Where(o => o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Unpaid
                      || o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Pending)
             .OrderByDescending(o => o.CreatedAt)
@@ -68,7 +68,7 @@ public sealed class GetUnpaidFeeOrdersQueryHandler
         return orders.Select(o => new UnpaidFeeOrderDto(
             OrderId:                    o.Id,
             TrackingNumber:             o.TrackingNumber,
-            CustomerId:                 o.GroupOrder.CustomerId,
+            CustomerId:                 o.GroupOrder!.CustomerId,
             SenderFirstName:            o.GroupOrder.SenderFirstName,
             SenderLastName:             o.GroupOrder.SenderLastName,
             SenderBusinessName:         o.GroupOrder.SenderBusinessName,
