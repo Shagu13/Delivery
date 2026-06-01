@@ -51,13 +51,17 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
             : a.recipientDistrict.localeCompare(b.recipientDistrict)
     );
 
-    const needsCollect = (o: CourierOrder) =>
-        o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
+    const needsCollect = (o: CourierOrder) => {
+        const codDue = o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null && o.amountToCollectForPackage > 0;
+        const feeDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
+        return codDue || feeDue;
+    };
 
-    const collectTotal = (o: CourierOrder) =>
-        o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null
-            ? o.amountToCollectForPackage + o.companyServicePrice
-            : o.companyServicePrice;
+    const collectTotal = (o: CourierOrder) => {
+        const cod = o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null ? o.amountToCollectForPackage : 0;
+        const fee = o.whoPaysForCompanyService === 'Recipient' ? o.companyServicePrice : 0;
+        return cod + fee;
+    };
 
     return (
         <div className="dashboard__section">
