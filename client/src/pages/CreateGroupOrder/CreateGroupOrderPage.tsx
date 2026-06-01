@@ -2,8 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { createGroupOrder, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
 import { getMyProfile } from '../../api/customers';
 import type { Customer } from '../../api/customers';
-import { fetchCities, fetchDistricts } from '../../api/cities';
-import type { City } from '../../api/cities';
+import { fetchCities, fetchDistricts, fetchAllDistrictsFlat } from '../../api/cities';
+import type { City, District } from '../../api/cities';
 import { fetchWeightPriceTiers } from '../../api/weightPriceTiers';
 import type { WeightPriceTier } from '../../api/weightPriceTiers';
 import type {
@@ -181,7 +181,26 @@ export function CreateGroupOrderPage() {
     // ── City / district cache for frontend validation ─────────────────────────
     const [cities,            setCities]            = useState<City[]>([]);
     const [cityDistrictCache, setCityDistrictCache] = useState<Record<string, Set<string>>>({});
+    const [districtLookup,    setDistrictLookup]    = useState<Record<string, District>>({});
     useEffect(() => { fetchCities().then(setCities).catch(() => {}); }, []);
+    useEffect(() => {
+        fetchAllDistrictsFlat().then(entries => {
+            const lookup: Record<string, District> = {};
+            for (const e of entries) {
+                const d: District = {
+                    id: e.districtId,
+                    districtName: e.districtName,
+                    districtNameGeo: e.districtNameGeo,
+                    companyServicePrice: e.companyServicePrice,
+                    isCapitalTerritory: e.isCapitalTerritory,
+                    isCityTerritory: e.isCityTerritory,
+                };
+                lookup[e.districtName] = d;
+                if (e.districtNameGeo) lookup[e.districtNameGeo] = d;
+            }
+            setDistrictLookup(lookup);
+        }).catch(() => {});
+    }, []);
 
     // ── Pre-fill from customer profile ────────────────────────────────────────
     useEffect(() => {
@@ -606,6 +625,7 @@ export function CreateGroupOrderPage() {
                                                 customerPricing={customerPricing}
                                                 weightTiers={weightTiers}
                                                 senderAddress={senderAddress}
+                                                districtLookup={districtLookup}
                                                 onChange={handlePackageChange}
                                                 onRemove={removePackage}
                                             />
@@ -629,6 +649,7 @@ export function CreateGroupOrderPage() {
                                     customerPricing={customerPricing}
                                     weightTiers={weightTiers}
                                     senderAddress={senderAddress}
+                                    districtLookup={districtLookup}
                                     onChange={handlePackageChange}
                                     onRemove={removePackage}
                                     onAdd={addPackage}

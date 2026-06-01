@@ -22,6 +22,8 @@ interface PackageCardProps {
   weightTiers?: WeightPriceTier[];
   /** Customer's registered address — used to auto-fill the 'Deliver Back To' fields when orderType is Return */
   senderAddress?: { city: string; district: string; address: string } | null;
+  /** Flat lookup of all districts by name (EN + Geo) — used to rehydrate district on weight tier change after layout switch */
+  districtLookup?: Record<string, District>;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
   onRemove: (index: number) => void;
 }
@@ -79,6 +81,7 @@ export function PackageCard({
   customerPricing,
   weightTiers = [],
   senderAddress,
+  districtLookup = {},
   onChange,
   onRemove,
 }: PackageCardProps) {
@@ -152,7 +155,9 @@ export function PackageCard({
 
   const handleWeightTierChange = (tierId: string) => {
     onChange(index, 'weightPriceTierId', tierId);
-    const activeDist = isReturn ? selectedReturnDistrict : selectedDistrict;
+    const activeDist = isReturn
+      ? (selectedReturnDistrict ?? (data.returnPickupDistrict ? districtLookup[data.returnPickupDistrict] ?? null : null))
+      : (selectedDistrict       ?? (data.recipientDistrict   ? districtLookup[data.recipientDistrict]    ?? null : null));
     if (activeDist) {
       const fee = computeServiceFee(activeDist, tierId || undefined);
       onChange(index, 'companyServicePrice', fee);

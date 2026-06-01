@@ -19,6 +19,8 @@ interface Props {
   customerPricing?: CustomerPricing | null;
   weightTiers?: WeightPriceTier[];
   senderAddress?: { city: string; district: string; address: string } | null;
+  /** Flat lookup of all districts by name (EN + Geo) — used to rehydrate district on weight tier change after layout switch */
+  districtLookup?: Record<string, District>;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
   onRemove: (index: number) => void;
   onAdd: () => void;
@@ -90,6 +92,7 @@ interface DetailProps {
   customerPricing?: CustomerPricing | null;
   weightTiers: WeightPriceTier[];
   senderAddress?: { city: string; district: string; address: string } | null;
+  districtLookup: Record<string, District>;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
   onRemove: (index: number) => void;
   onPrev: () => void;
@@ -101,7 +104,7 @@ interface DetailProps {
 
 function PackageDetail({
   index, pkg, errors, canRemove, customerPricing, weightTiers,
-  senderAddress, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
+  senderAddress, districtLookup, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
 }: DetailProps) {
   const { t } = useLanguage();
   const fe = (f: string) => errors[`orders[${index}].${f}`];
@@ -125,7 +128,9 @@ function PackageDetail({
 
   const handleWeightTierChange = (tierId: string) => {
     onChange(index, 'weightPriceTierId', tierId);
-    const activeDist = isReturn ? selectedReturnDistrict : selectedDistrict;
+    const activeDist = isReturn
+      ? (selectedReturnDistrict ?? (pkg.returnPickupDistrict ? districtLookup[pkg.returnPickupDistrict] ?? null : null))
+      : (selectedDistrict       ?? (pkg.recipientDistrict   ? districtLookup[pkg.recipientDistrict]    ?? null : null));
     if (activeDist) {
       onChange(index, 'companyServicePrice', computeFee(activeDist, tierId || undefined, weightTiers, customerPricing));
     }
@@ -422,7 +427,7 @@ function PackageDetail({
 
 // ── Main sidebar component ────────────────────────────────────────────────────
 
-export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, onChange, onRemove, onAdd }: Props) {
+export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, districtLookup = {}, onChange, onRemove, onAdd }: Props) {
   const { t } = useLanguage();
   const [activeIndex, setActiveIndex] = useState(0);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -536,6 +541,7 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
           customerPricing={customerPricing}
           weightTiers={weightTiers}
           senderAddress={senderAddress}
+          districtLookup={districtLookup}
           onChange={onChange}
           onRemove={handleRemove}
           onPrev={() => setActiveIndex(i => i - 1)}
