@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
@@ -9,7 +8,6 @@ import type { CreateCourierResponse, Courier, CourierOrder } from '../../api/cou
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
 import { fetchCouriers, fetchCourierOrders, setCourierSalary, setCourierActiveStatus } from '../../api/couriers';
-import { assignCourierToOrder } from '../../api/orders';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import AdminCustomersPage from './AdminCustomersPage';
 import AdminCitiesPage from './AdminCitiesPage';
@@ -797,19 +795,6 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const [filterStatus,   setFilterStatus]   = useState(initialStatus);
   const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
   const [actionToast,    setActionToast]    = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
-  // Bulk-assign state
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
-  const [bulkCourierId,    setBulkCourierId]    = useState('');
-  const [bulkAssigning,    setBulkAssigning]    = useState(false);
-
-  // ── Missing-salary guard ──────────────────────────────────────────────────
-  const [showSalaryWarning, setShowSalaryWarning] = useState(false);
-  const [showSalaryModal,   setShowSalaryModal]   = useState(false);
-  // orderId → draft salary string (editable in modal)
-  const [salaryDrafts,      setSalaryDrafts]      = useState<Record<string, string>>({});
-  // which rows admin has checked in the modal
-  const [salaryChecked,     setSalaryChecked]     = useState<Set<string>>(new Set());
-  const [salarySaving,      setSalarySaving]      = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
@@ -928,367 +913,35 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     });
   }, [filterParty, filterCity, filterDistricts]);
 
-  // Collect all order objects currently visible across all group orders
-  const allVisibleOrders = useMemo(() =>
-    groupOrders.flatMap(go => go.orders),
-  [groupOrders]);
-
-  // Bulk-assign all selected orders to one courier in parallel
-  const handleBulkAssign = async () => {
-    if (!bulkCourierId || selectedOrderIds.size === 0) return;
-
-    // Check if any selected orders are missing courier salary
-    const missingSalary = [...selectedOrderIds]
-      .map(id => allVisibleOrders.find(o => o.id === id))
-      .filter((o): o is NonNullable<typeof o> => !!o && (o.courierSalary == null));
-
-    if (missingSalary.length > 0) {
-      // Pre-populate drafts with empty strings for missing ones
-      const drafts: Record<string, string> = {};
-      const checked = new Set<string>();
-      missingSalary.forEach(o => {
-        drafts[o.id] = '';
-        checked.add(o.id);
-      });
-      setSalaryDrafts(drafts);
-      setSalaryChecked(checked);
-      setShowSalaryWarning(true);
-      return;
+  // ── Date section grouping ─────────────────────────────────────────────────
+  const groupByDate = (orders: AdminGroupOrder[]) => {
+    const today     = new Date(); today.setHours(0,0,0,0);
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const sections: { label: string; items: AdminGroupOrder[] }[] = [];
+    const buckets: Record<string, AdminGroupOrder[]> = {};
+    for (const go of orders) {
+      const d = new Date(go.createdAt); d.setHours(0,0,0,0);
+      const key = d.getTime() === today.getTime()     ? '__today__'
+                : d.getTime() === yesterday.getTime() ? '__yesterday__'
+                : go.createdAt.slice(0, 10);
+      (buckets[key] ??= []).push(go);
     }
-
-    await doAssign();
-  };
-
-  const doAssign = async () => {
-    setBulkAssigning(true);
-    const ids = [...selectedOrderIds];
-    let ok = 0; let fail = 0;
-    await Promise.all(ids.map(async id => {
-      try {
-        await assignCourierToOrder(token ?? '', id, bulkCourierId);
-        ok++;
-      } catch { fail++; }
-    }));
-    setBulkAssigning(false);
-    setSelectedOrderIds(new Set());
-    setBulkCourierId('');
-    void (async () => { setLoading(true); await load(search); })();
-    showToast(
-      fail === 0 ? t.goCourierAssigned(ok)
-                 : t.goCourierAssignedFail(ok, fail),
-      fail > 0 ? 'err' : 'ok'
-    );
-  };
-
-  const handleSalarySave = async () => {
-    const toSave = [...salaryChecked].filter(id => {
-      const val = parseFloat(salaryDrafts[id] ?? '');
-      return !isNaN(val) && val >= 0;
+    const orderedKeys = Object.keys(buckets).sort((a, b) => {
+      const ta = a === '__today__' ? today.getTime() : a === '__yesterday__' ? yesterday.getTime() : new Date(a).getTime();
+      const tb = b === '__today__' ? today.getTime() : b === '__yesterday__' ? yesterday.getTime() : new Date(b).getTime();
+      return tb - ta;
     });
-    if (toSave.length === 0) { setShowSalaryModal(false); return; }
-    setSalarySaving(true);
-    try {
-      await Promise.all(toSave.map(id =>
-        setCourierSalary(id, parseFloat(salaryDrafts[id]), token ?? '')
-      ));
-      // Refresh group orders so courierSalary values are up to date
-      const fresh = await fetchGroupOrders(token ?? '');
-      setGroupOrders(fresh);
-    } catch { /* best-effort */ }
-    setSalarySaving(false);
-    setShowSalaryModal(false);
-    showToast(`Salary set for ${toSave.length} order${toSave.length !== 1 ? 's' : ''}.`);
+    for (const key of orderedKeys) {
+      const label = key === '__today__'     ? 'Today'
+                  : key === '__yesterday__' ? 'Yesterday'
+                  : new Date(key).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      sections.push({ label, items: buckets[key] });
+    }
+    return sections;
   };
-
-  const toggleOrderSelect = (id: string) => {
-    setSelectedOrderIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  // Orders missing salary (for modal)
-  const missingSalaryOrders = useMemo(() =>
-    [...selectedOrderIds]
-      .map(id => allVisibleOrders.find(o => o.id === id))
-      .filter((o): o is NonNullable<typeof o> => !!o && o.courierSalary == null),
-  [selectedOrderIds, allVisibleOrders]);
-
-  // ── Portal modals (rendered into document.body to escape any scroll container) ──
-  const salaryWarningPortal = showSalaryWarning ? createPortal(
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: 'rgba(0,0,0,0.55)', display: 'flex',
-      alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div style={{
-        background: 'var(--color-bg-2)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 12, padding: '28px 32px',
-        maxWidth: 420, width: '90%', textAlign: 'center',
-        boxShadow: '0 16px 48px rgba(0,0,0,0.28)',
-      }}>
-        <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚠️</div>
-        <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 8, color: 'var(--color-text)' }}>
-          Orders missing courier salary
-        </div>
-        <div style={{ fontSize: '0.88rem', color: 'var(--color-text-subtle)', marginBottom: 24, lineHeight: 1.5 }}>
-          {missingSalaryOrders.length} of your selected order{missingSalaryOrders.length !== 1 ? 's have' : ' has'} no courier salary set.
-          You can fill them in now or cancel the assignment.
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button
-            onClick={() => setShowSalaryWarning(false)}
-            style={{
-              padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)',
-              background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer',
-              fontSize: '0.88rem', fontWeight: 600,
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => { setShowSalaryWarning(false); setShowSalaryModal(true); }}
-            style={{
-              padding: '8px 20px', borderRadius: 7, border: 'none',
-              background: 'var(--color-accent)', color: '#fff', cursor: 'pointer',
-              fontSize: '0.88rem', fontWeight: 600,
-            }}
-          >
-            Fill in Details
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  ) : null;
-
-  const salaryModalPortal = showSalaryModal ? createPortal((() => {
-    const allChecked = missingSalaryOrders.length > 0 && missingSalaryOrders.every(o => salaryChecked.has(o.id));
-    return (
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(0,0,0,0.55)', display: 'flex',
-        alignItems: 'center', justifyContent: 'center', padding: 16,
-      }}>
-        <div style={{
-          background: 'var(--color-bg-2)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 12, padding: '24px 28px',
-          width: '100%', maxWidth: 740,
-          maxHeight: '88vh', display: 'flex', flexDirection: 'column',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.28)',
-        }}>
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>
-                Set Courier Salary
-              </div>
-              <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
-                {missingSalaryOrders.length} order{missingSalaryOrders.length !== 1 ? 's' : ''} missing salary
-              </div>
-            </div>
-            <button
-              onClick={() => setShowSalaryModal(false)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
-
-          {/* Bulk setter banner */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '9px 12px', marginBottom: 12,
-            background: 'var(--color-accent-dim)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 8,
-          }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-              Apply to {salaryChecked.size > 0 ? `selected (${salaryChecked.size})` : 'all'}:
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'var(--color-bg-2)' }}>
-              <span style={{ padding: '0 6px 0 10px', fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>₾</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                id="bulk-salary-input"
-                style={{
-                  flex: 1, minWidth: 0, textAlign: 'left',
-                  padding: '6px 8px 6px 2px', border: 'none', outline: 'none',
-                  background: 'transparent',
-                  color: 'var(--color-text)', fontSize: '0.88rem',
-                }}
-              />
-            </div>
-            <button
-              onClick={() => {
-                const inp = document.getElementById('bulk-salary-input') as HTMLInputElement;
-                const val = inp?.value;
-                if (!val) return;
-                const targets = salaryChecked.size > 0
-                  ? [...salaryChecked]
-                  : missingSalaryOrders.map(o => o.id);
-                setSalaryDrafts(prev => {
-                  const next = { ...prev };
-                  targets.forEach(id => { next[id] = val; });
-                  return next;
-                });
-                setSalaryChecked(prev => {
-                  const next = new Set(prev);
-                  targets.forEach(id => next.add(id));
-                  return next;
-                });
-                inp.value = '';
-              }}
-              style={{
-                padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0,
-                background: 'var(--color-accent)', color: '#fff',
-                fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Apply
-            </button>
-          </div>
-
-          {/* Select all row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--color-border)' }}>
-            <input
-              type="checkbox"
-              style={{ cursor: 'pointer' }}
-              checked={allChecked}
-              onChange={e => setSalaryChecked(
-                e.target.checked ? new Set(missingSalaryOrders.map(o => o.id)) : new Set()
-              )}
-            />
-            <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>
-              Select all ({missingSalaryOrders.length})
-            </span>
-          </div>
-
-          {/* Table */}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
-              <thead>
-                <tr style={{ background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
-                  <th style={{ width: 28, padding: '6px 4px' }}></th>
-                  <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Tracking</th>
-                  <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Address</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Svc Price</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Salary</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {missingSalaryOrders.map(o => {
-                  const salary  = parseFloat(salaryDrafts[o.id] ?? '');
-                  const revenue = !isNaN(salary) ? o.companyServicePrice - salary : null;
-                  const isChecked = salaryChecked.has(o.id);
-                  return (
-                    <tr key={o.id} style={{
-                      borderBottom: '1px solid var(--color-border)',
-                      background: isChecked ? 'var(--color-accent-dim)' : 'var(--color-bg-2)',
-                    }}>
-                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          style={{ cursor: 'pointer' }}
-                          checked={isChecked}
-                          onChange={() => setSalaryChecked(prev => {
-                            const next = new Set(prev);
-                            isChecked ? next.delete(o.id) : next.add(o.id);
-                            return next;
-                          })}
-                        />
-                      </td>
-                      <td style={{ padding: '6px 8px' }}>
-                        <span className="tn-badge">{o.trackingNumber}</span>
-                      </td>
-                      <td style={{ padding: '6px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
-                      </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text)' }}>
-                        ₾{o.companyServicePrice.toFixed(2)}
-                      </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>₾</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={salaryDrafts[o.id] ?? ''}
-                            onChange={e => {
-                              setSalaryDrafts(prev => ({ ...prev, [o.id]: e.target.value }));
-                              if (e.target.value) setSalaryChecked(prev => { const n = new Set(prev); n.add(o.id); return n; });
-                            }}
-                            style={{
-                              width: 72, textAlign: 'right',
-                              padding: '3px 6px', borderRadius: 5,
-                              border: '1px solid var(--color-border)',
-                              background: 'var(--color-bg-3)',
-                              color: 'var(--color-text)', fontSize: '0.83rem',
-                            }}
-                          />
-                        </div>
-                      </td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
-                        {revenue !== null
-                          ? <span style={{ color: revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{revenue.toFixed(2)}</span>
-                          : <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
-                        }
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
-            <button
-              onClick={() => setShowSalaryModal(false)}
-              disabled={salarySaving}
-              style={{
-                padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)',
-                background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer',
-                fontSize: '0.88rem', fontWeight: 600,
-              }}
-            >
-              Close
-            </button>
-            <button
-              onClick={handleSalarySave}
-              disabled={salarySaving || salaryChecked.size === 0}
-              style={{
-                padding: '8px 18px', borderRadius: 7, border: 'none',
-                background: 'var(--color-accent)', color: '#fff', cursor: 'pointer',
-                fontSize: '0.88rem', fontWeight: 600,
-                opacity: (salarySaving || salaryChecked.size === 0) ? 0.6 : 1,
-              }}
-            >
-              {salarySaving ? 'Saving…' : `Save${salaryChecked.size > 0 ? ` (${salaryChecked.size})` : ''}`}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  })(), document.body) : null;
 
   return (
     <div className="content-card" style={{ overflow: 'hidden' }}>
-      {salaryWarningPortal}
-      {salaryModalPortal}
       {/* Search + Location filter (combined row) */}
       <div className="go-toolbar go-toolbar--search" style={{ flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
         {/* Search */}
@@ -1410,94 +1063,20 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
         </div>
       )}
 
-      {/* Bulk assign bar — appears when any orders are selected */}
-      {selectedOrderIds.size > 0 && (
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 10,
-          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-          padding: '10px 20px', background: 'var(--color-accent-dim)',
-          borderBottom: '1px solid rgba(196,127,23,0.3)',
-          animation: 'expand-in 0.15s ease both',
-        }}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--color-accent)', flexShrink: 0 }}>
-            <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.4"/>
-            <path d="M4 8l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-accent)', whiteSpace: 'nowrap' }}>
-            {t.goNSelected(selectedOrderIds.size)}
-          </span>
-          <div className="go-select-wrap" style={{ marginLeft: 4 }}>
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon">
-              <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
-              <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-            <select
-              className="go-select"
-              value={bulkCourierId}
-              onChange={e => setBulkCourierId(e.target.value)}
-              style={{ minWidth: 220 }}
-            >
-              <option value="">{t.goChooseCourier}</option>
-              {couriers.map(c => (
-                <option key={c.courierId} value={c.courierId}>
-                  {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
-                </option>
-              ))}
-            </select>
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron">
-              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <button
-            className="go-action-btn go-action-btn--assign"
-            disabled={!bulkCourierId || bulkAssigning}
-            onClick={handleBulkAssign}
-          >
-            {bulkAssigning ? t.goAssigning : t.goAssignCourier(selectedOrderIds.size)}
-          </button>
-          <button
-            className="go-action-btn go-action-btn--ghost"
-            onClick={() => setSelectedOrderIds(new Set())}
-            style={{ marginLeft: 'auto' }}
-          >
-            {t.goClearSelection}
-          </button>
-        </div>
-      )}
-
-      {/* Group order list */}
+      {/* Group order list — date-sectioned accordion */}
       {!loading && !error && visibleOrders.length > 0 && (() => {
         // ── Flat view: recipient party + location filter active ──────────────
         const showFlat = filterParty === 'recipient' && hasLocationFilter;
 
         if (showFlat) {
-          // Collect all matching individual orders (with their parent group order attached)
           const flatOrders = visibleOrders.flatMap(go =>
             visibleOrdersFor(go).map(o => ({ ...o, _go: go }))
-          );
-          const assignableFlat = flatOrders.filter(
-            o => o.status !== 'DeliveredToRecipient' && o.courierId === null
           );
           return (
             <div style={{ overflowX: 'auto' }}>
               <table className="go-orders-table">
                 <thead>
                   <tr>
-                    <th style={{ width: 36 }}>
-                      <input
-                        type="checkbox"
-                        title={t.goSelectAllAssignable}
-                        checked={assignableFlat.length > 0 && assignableFlat.every(o => selectedOrderIds.has(o.id))}
-                        onChange={e => {
-                          setSelectedOrderIds(prev => {
-                            const next = new Set(prev);
-                            assignableFlat.forEach(o => e.target.checked ? next.add(o.id) : next.delete(o.id));
-                            return next;
-                          });
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      />
-                    </th>
                     <th>{t.goThTracking}</th>
                     <th>{t.goThRecipient}</th>
                     <th>{t.goThPhone}</th>
@@ -1511,19 +1090,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                 </thead>
                 <tbody>
                   {flatOrders.map(o => (
-                    <tr key={o.id} style={{ background: selectedOrderIds.has(o.id) ? 'var(--color-accent-dim)' : undefined }}>
-                      <td onClick={e => e.stopPropagation()}>
-                        {o.status !== 'DeliveredToRecipient' && o.courierId === null ? (
-                          <input
-                            type="checkbox"
-                            checked={selectedOrderIds.has(o.id)}
-                            onChange={() => toggleOrderSelect(o.id)}
-                            style={{ cursor: 'pointer' }}
-                          />
-                        ) : (
-                          <span style={{ display: 'inline-block', width: 15, textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.75rem' }}>—</span>
-                        )}
-                      </td>
+                    <tr key={o.id}>
                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
                       <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
@@ -1538,14 +1105,11 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                       <td><StatusBadge status={o.status} /></td>
                       <td>
                         {o.productPaymentStatus === 'Paid' ? (
-                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>
-                            {t.goPaid}
-                          </span>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>{t.goPaid}</span>
                         ) : (() => {
                           const courierDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
                           const sub = o.productPaymentStatus === 'NotPaid' && courierDue ? t.goSubParcelAndFee
-                                    : courierDue                                         ? t.goSubFeeOnly
-                                                                                         : t.goSubParcelOnly;
+                                    : courierDue ? t.goSubFeeOnly : t.goSubParcelOnly;
                           return (
                             <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                               <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ef4444' }}>{t.goUnpaid}</span>
@@ -1555,14 +1119,9 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                         })()}
                       </td>
                       <td>
-                        <AdminOrderRowActions
-                          order={o}
-                          couriers={couriers}
-                          token={token ?? ''}
-                          onSuccess={msg => showToast(msg)}
-                          onError={msg => showToast(msg, 'err')}
-                          onRefresh={() => load(search)}
-                        />
+                        <AdminOrderRowActions order={o} couriers={couriers} token={token ?? ''}
+                          onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
+                          onRefresh={() => load(search)} />
                       </td>
                     </tr>
                   ))}
@@ -1572,147 +1131,130 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
           );
         }
 
-        // ── Default grouped accordion view ───────────────────────────────────
+        // ── Default: date-sectioned accordion ────────────────────────────────
+        const sections = groupByDate(visibleOrders);
         return (
-        <div className="go-list">
-          {visibleOrders.map(go => {
-            const expanded = expandedIds.has(go.id);
-            const filteredOrders = visibleOrdersFor(go);
-            const assignableOrders = filteredOrders.filter(
-              o => o.status !== 'DeliveredToRecipient' && o.courierId === null
-            );
-            return (
-              <div className="go-row" key={go.id}>
-                <div className="go-row-header" onClick={() => toggleExpand(go.id)}>
-                  <svg className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 16 16" fill="none">
-                    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <div className="go-list">
+            {sections.map(({ label, items }) => (
+              <div key={label}>
+                {/* Date section header */}
+                <div style={{
+                  padding: '7px 20px', fontSize: '0.68rem', fontWeight: 700,
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: 'var(--color-text-subtle)',
+                  background: 'var(--color-bg-3)',
+                  borderBottom: '1px solid var(--color-border)',
+                  borderTop: '1px solid var(--color-border)',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                    <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                    <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                   </svg>
-                  <div className="go-sender">
-                    <div className="go-sender__biz">{go.senderBusinessName}</div>
-                    <div className="go-sender__name">{go.senderFirstName} {go.senderLastName}</div>
-                  </div>
-                  <div className="go-meta">
-                    <span className="go-meta__phone">{go.senderPhone}</span>
-                    <span className="go-meta__city">{locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}</span>
-                    <StatusBadge status={go.status} />
-                    <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
-                    <span className="go-meta__date">{formatDate(go.createdAt)}</span>
-                  </div>
-                  <AdminGroupOrderActions
-                    groupOrder={go}
-                    couriers={couriers}
-                    token={token ?? ''}
-                    onSuccess={msg => showToast(msg)}
-                    onError={msg => showToast(msg, 'err')}
-                    onRefresh={() => load(search)}
-                  />
+                  {label}
+                  <span style={{ marginLeft: 4, fontWeight: 500, textTransform: 'none', letterSpacing: 0, fontSize: '0.72rem' }}>
+                    — {items.length} group order{items.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
+                {items.map(go => {
+                  const expanded = expandedIds.has(go.id);
+                  const filteredOrders = visibleOrdersFor(go);
+                  return (
+                    <div className="go-row" key={go.id}>
+                      <div className="go-row-header" onClick={() => toggleExpand(go.id)}>
+                        <svg className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 16 16" fill="none">
+                          <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <div className="go-sender">
+                          <div className="go-sender__biz">{go.senderBusinessName}</div>
+                          <div className="go-sender__name">{go.senderFirstName} {go.senderLastName}</div>
+                        </div>
+                        <div className="go-meta">
+                          <span className="go-meta__phone">{go.senderPhone}</span>
+                          <span className="go-meta__city">{locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}</span>
+                          <StatusBadge status={go.status} />
+                          <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
+                          <span className="go-meta__date">{formatDate(go.createdAt)}</span>
+                        </div>
+                        <AdminGroupOrderActions
+                          groupOrder={go} couriers={couriers} token={token ?? ''}
+                          onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
+                          onRefresh={() => load(search)}
+                        />
+                      </div>
 
-                {expanded && (
-                  <div className="go-orders">
-                    {filteredOrders.length === 0 ? (
-                      <div style={{ padding: '16px 20px', fontSize: '0.825rem', color: 'var(--color-text-subtle)' }}>
-                        {t.goNoLocationMatch}
-                      </div>
-                    ) : (
-                      <div style={{ overflowX: 'auto' }}>
-                        <table className="go-orders-table">
-                          <thead>
-                            <tr>
-                              <th style={{ width: 36 }}>
-                                <input
-                                  type="checkbox"
-                                  title={t.goSelectAllAssignable}
-                                  checked={assignableOrders.length > 0 && assignableOrders.every(o => selectedOrderIds.has(o.id))}
-                                  onChange={e => {
-                                    setSelectedOrderIds(prev => {
-                                      const next = new Set(prev);
-                                      assignableOrders.forEach(o => e.target.checked ? next.add(o.id) : next.delete(o.id));
-                                      return next;
-                                    });
-                                  }}
-                                  style={{ cursor: 'pointer' }}
-                                />
-                              </th>
-                              <th>{t.goThTracking}</th>
-                              <th>{t.goThRecipient}</th>
-                              <th>{t.goThPhone}</th>
-                              <th>{t.goThCityDistrict}</th>
-                              <th>{t.goThAddress}</th>
-                              <th>{t.goThDescription}</th>
-                              <th>{t.goThStatus}</th>
-                              <th>{t.goThPaid}</th>
-                              <th>{t.goThActions}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredOrders.map(o => (
-                              <tr key={o.id} style={{ background: selectedOrderIds.has(o.id) ? 'var(--color-accent-dim)' : undefined }}>
-                                <td onClick={e => e.stopPropagation()}>
-                                  {o.status !== 'DeliveredToRecipient' && o.courierId === null ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedOrderIds.has(o.id)}
-                                      onChange={() => toggleOrderSelect(o.id)}
-                                      style={{ cursor: 'pointer' }}
-                                    />
-                                  ) : (
-                                    <span style={{ display: 'inline-block', width: 15, textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.75rem' }}>—</span>
-                                  )}
-                                </td>
-                                <td><span className="tn-badge">{o.trackingNumber}</span></td>
-                                <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
-                                <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
-                                <td>
-                                  <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}</div>
-                                </td>
-                                <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
-                                <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
-                                  {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
-                                </td>
-                                <td><StatusBadge status={o.status} /></td>
-                                <td>
-                                  {o.productPaymentStatus === 'Paid' ? (
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>
-                                      {t.goPaid}
-                                    </span>
-                                  ) : (() => {
-                                    const courierDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
-                                    const sub = o.productPaymentStatus === 'NotPaid' && courierDue ? t.goSubParcelAndFee
-                                              : courierDue                                         ? t.goSubFeeOnly
-                                                                                                   : t.goSubParcelOnly;
-                                    return (
-                                      <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ef4444' }}>{t.goUnpaid}</span>
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#ef4444', opacity: 0.8 }}>{sub}</span>
-                                      </span>
-                                    );
-                                  })()}
-                                </td>
-                                <td>
-                                  <AdminOrderRowActions
-                                    order={o}
-                                    couriers={couriers}
-                                    token={token ?? ''}
-                                    onSuccess={msg => showToast(msg)}
-                                    onError={msg => showToast(msg, 'err')}
-                                    onRefresh={() => load(search)}
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                    {go.note && <div className="go-note"><strong>{t.goNote}:</strong> {go.note}</div>}
-                  </div>
-                )}
+                      {expanded && (
+                        <div className="go-orders">
+                          {filteredOrders.length === 0 ? (
+                            <div style={{ padding: '16px 20px', fontSize: '0.825rem', color: 'var(--color-text-subtle)' }}>
+                              {t.goNoLocationMatch}
+                            </div>
+                          ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                              <table className="go-orders-table">
+                                <thead>
+                                  <tr>
+                                    <th>{t.goThTracking}</th>
+                                    <th>{t.goThRecipient}</th>
+                                    <th>{t.goThPhone}</th>
+                                    <th>{t.goThCityDistrict}</th>
+                                    <th>{t.goThAddress}</th>
+                                    <th>{t.goThDescription}</th>
+                                    <th>{t.goThStatus}</th>
+                                    <th>{t.goThPaid}</th>
+                                    <th>{t.goThActions}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {filteredOrders.map(o => (
+                                    <tr key={o.id}>
+                                      <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                                      <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
+                                      <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
+                                      <td>
+                                        <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}</div>
+                                      </td>
+                                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
+                                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
+                                        {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
+                                      </td>
+                                      <td><StatusBadge status={o.status} /></td>
+                                      <td>
+                                        {o.productPaymentStatus === 'Paid' ? (
+                                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>{t.goPaid}</span>
+                                        ) : (() => {
+                                          const courierDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
+                                          const sub = o.productPaymentStatus === 'NotPaid' && courierDue ? t.goSubParcelAndFee
+                                                    : courierDue ? t.goSubFeeOnly : t.goSubParcelOnly;
+                                          return (
+                                            <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ef4444' }}>{t.goUnpaid}</span>
+                                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#ef4444', opacity: 0.8 }}>{sub}</span>
+                                            </span>
+                                          );
+                                        })()}
+                                      </td>
+                                      <td>
+                                        <AdminOrderRowActions order={o} couriers={couriers} token={token ?? ''}
+                                          onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
+                                          onRefresh={() => load(search)} />
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                          {go.note && <div className="go-note"><strong>{t.goNote}:</strong> {go.note}</div>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
         );
       })()}
 

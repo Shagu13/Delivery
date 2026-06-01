@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { setCourierSalary, setCompanyServicePrice } from '../../api/orders';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder } from '../../api/orders';
+import { assignReturnCourier } from '../../api/returnExchange';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
-import { EditOrderModal } from './EditOrderModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,19 +28,15 @@ export interface AdminOrderItem {
   recipientAddress: string;
   description: string | null;
   isFragile: boolean;
+  orderType: string;
   status: string;
   productPaymentStatus: string;
   whoPaysForCompanyService: string;
-  amountToCollectForPackage: number | null;
   companyServicePrice: number;
   courierSalary: number | null;
   companyRevenue: number | null;
   createdAt: string;
   deliveredAt: string | null;
-  orderType: string | null;
-  returnPickupCity: string | null;
-  returnPickupDistrict: string | null;
-  returnPickupAddress: string | null;
 }
 
 interface PagedResult {
@@ -56,21 +53,18 @@ async function fetchAllOrders(
   token: string,
   params: {
     city?: string; district?: string; search?: string;
-    courierId?: string; unpriced?: boolean; postponed?: boolean; orderType?: string;
+    courierId?: string; unpriced?: boolean;
     page?: number; pageSize?: number;
   }
 ): Promise<PagedResult> {
   const qs = new URLSearchParams();
-  if (params.city)       qs.set('city',       params.city);
-  if (params.district)   qs.set('district',   params.district);
-  if (params.search)     qs.set('search',     params.search);
-  if (params.courierId)  qs.set('courierId',  params.courierId);
-  if (params.unpriced)   qs.set('unpriced',   'true');
-  if (params.postponed)  qs.set('postponed',  'true');
-  if (params.orderType)  qs.set('orderType',  params.orderType);
-  qs.set('activeOnly', 'true');
-  if (params.page)       qs.set('page',       String(params.page));
-  if (params.pageSize)   qs.set('pageSize',   String(params.pageSize));
+  if (params.city)       qs.set('city',      params.city);
+  if (params.district)   qs.set('district',  params.district);
+  if (params.search)     qs.set('search',    params.search);
+  if (params.courierId)  qs.set('courierId', params.courierId);
+  if (params.unpriced)   qs.set('unpriced',  'true');
+  if (params.page)       qs.set('page',      String(params.page));
+  if (params.pageSize)   qs.set('pageSize',  String(params.pageSize));
   const res = await fetch(`/api/orders?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -93,51 +87,6 @@ async function fetchUnpricedCount(token: string, courierId?: string): Promise<nu
 
 function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
-}
-
-/** Truncate text at maxLen, showing title on hover */
-function Trunc({ text, max = 14, className }: { text: string; max?: number; className?: string }) {
-  if (!text) return <span style={{ opacity: 0.35 }}>—</span>;
-  if (text.length <= max) return <span className={className}>{text}</span>;
-  return (
-    <span className={className} title={text} style={{ cursor: 'default' }}>
-      {text.slice(0, max)}…
-    </span>
-  );
-}
-
-/** Tracking number cell: shows 8 chars, hover reveals full + copy button */
-function TrackingCell({ tn }: { tn: string }) {
-  const [hovered, setHovered] = useState(false);
-  const [copied,  setCopied]  = useState(false);
-
-  const copy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(tn).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
-  return (
-    <span
-      className="tn-cell"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <span className="tn-badge tn-badge--compact" title={tn}>
-        {hovered ? tn : tn.slice(0, 8)}
-      </span>
-      {hovered && (
-        <button className="tn-copy" onClick={copy} title="Copy tracking number">
-          {copied
-            ? <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            : <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="1" width="10" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.4"/><path d="M3 4H2a1 1 0 00-1 1v10a1 1 0 001 1h9a1 1 0 001-1v-1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-          }
-        </button>
-      )}
-    </span>
-  );
 }
 
 // ── Courier picker dropdown ───────────────────────────────────────────────────
@@ -211,7 +160,7 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
             </svg>
             <span>{t.aopAllCouriers}</span>
             <svg className="cp-chevron" width="11" height="11" viewBox="0 0 12 12" fill="none">
-              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
           </>
         )}
@@ -241,7 +190,10 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
           </div>
 
           <div className="cp-list">
-            <button className={`cp-item${!selected ? ' cp-item--active' : ''}`} onClick={() => handleSelect(null)}>
+            <button
+              className={`cp-item${!selected ? ' cp-item--active' : ''}`}
+              onClick={() => handleSelect(null)}
+            >
               <span className="cp-item-all-icon">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                   <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
@@ -252,7 +204,9 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
               <span className="cp-item-name">{t.aopAllCouriers}</span>
             </button>
 
-            {filtered.length === 0 && <div className="cp-empty">{t.aopNoCourierMatch(query)}</div>}
+            {filtered.length === 0 && (
+              <div className="cp-empty">{t.aopNoCourierMatch(query)}</div>
+            )}
 
             {filtered.map(c => (
               <button
@@ -279,87 +233,6 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
   );
 }
 
-// ── Order Detail Modal ───────────────────────────────────────────────────────
-
-function OrderDetailModal({ order, open, onClose }: { order: AdminOrderItem | null; open: boolean; onClose: () => void }) {
-  const { t, lang } = useLanguage();
-  if (!open || !order) return null;
-
-  const [bg, color] = STATUS_COLORS[order.status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];
-  const statusMeta  = getStatusMeta(order.status, lang);
-  const rcptPays    = order.whoPaysForCompanyService === 'Recipient';
-
-  const row = (label: string, value: React.ReactNode) => (
-    <div className="odm-row">
-      <span className="odm-label">{label}</span>
-      <span className="odm-value">{value}</span>
-    </div>
-  );
-
-  return (
-    <div className="odm-overlay" onClick={onClose}>
-      <div className="odm-panel" onClick={e => e.stopPropagation()}>
-        <div className="odm-header">
-          <div className="odm-header__left">
-            <span className="odm-tn">{order.trackingNumber}</span>
-            <span className="status-badge" style={{ background: bg, color }}>{statusMeta.short}</span>
-          </div>
-          <button className="odm-close" onClick={onClose}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-            </svg>
-          </button>
-        </div>
-
-        <div className="odm-body">
-          <div className="odm-section">
-            <div className="odm-section-title">{t.odmSectionSender}</div>
-            {row(t.odmLabelBusiness, order.senderBusinessName)}
-            {row(t.odmLabelName, `${order.senderFirstName} ${order.senderLastName}`)}
-            {row(t.odmLabelPhone, order.senderPhone)}
-          </div>
-
-          <div className="odm-section">
-            <div className="odm-section-title">{t.odmSectionRecipient}</div>
-            {row(t.odmLabelName, `${order.recipientFirstName} ${order.recipientLastName}`)}
-            {row(t.odmLabelPhone, order.recipientPhone)}
-            {row(t.odmLabelCity, lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity)}
-            {row(t.odmLabelDistrict, lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict)}
-            {row(t.odmLabelAddress, order.recipientAddress)}
-            {order.description && row(t.odmLabelDescription, order.description)}
-          </div>
-
-          <div className="odm-section">
-            <div className="odm-section-title">{t.odmSectionPackage}</div>
-            {row(t.odmLabelFragile, order.isFragile ? t.odmLabelFragileYes : t.odmLabelFragileNo)}
-            {row(t.odmLabelProductPayment, order.productPaymentStatus)}
-            {row(t.odmLabelWhoPays, rcptPays ? t.odmLabelWhoPaysRcpt : t.odmLabelWhoPaysSndr)}
-          </div>
-
-          <div className="odm-section">
-            <div className="odm-section-title">{t.odmSectionFinancials}</div>
-            {row(t.odmLabelCod, order.amountToCollectForPackage != null ? `₾${order.amountToCollectForPackage.toFixed(2)}` : '—')}
-            {row(t.odmLabelServicePrice, order.companyServicePrice > 0 ? `₾${order.companyServicePrice.toFixed(2)}` : t.aopNotSet)}
-            {row(t.odmLabelSalary, order.courierSalary != null && order.courierSalary > 0 ? `₾${order.courierSalary.toFixed(2)}` : t.aopNotSet)}
-            {row(t.odmLabelRevenue, order.companyRevenue != null ? `₾${order.companyRevenue.toFixed(2)}` : '—')}
-            {row('Total (COD + Service)', (() => {
-              const cod = order.amountToCollectForPackage ?? 0;
-              const srv = order.companyServicePrice ?? 0;
-              return <strong style={{ color: 'var(--color-text)' }}>₾{(cod + srv).toFixed(2)}</strong>;
-            })())}
-          </div>
-
-          <div className="odm-section">
-            <div className="odm-section-title">{t.odmSectionDates}</div>
-            {row(t.odmLabelCreated, new Date(order.createdAt).toLocaleString())}
-            {order.deliveredAt && row(t.odmLabelDelivered, new Date(order.deliveredAt).toLocaleString())}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 50;
@@ -375,11 +248,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [search,          setSearch]          = useState('');
   const [filterCity,      setFilterCity]      = useState('');
   const [filterDistrict,  setFilterDistrict]  = useState('');
-  const [filterOrderType, setFilterOrderType] = useState('');
   const [filterCourier,   setFilterCourier]   = useState<Courier | null>(null);
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
   const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
-  const [filterPostponed, setFilterPostponed] = useState(false);
   const [couriers,        setCouriers]        = useState<Courier[]>([]);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
@@ -390,16 +261,20 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [bulkBusy,      setBulkBusy]      = useState(false);
   const [toast,         setToast]         = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
 
-  // Edit modal
-  const [editOrder,     setEditOrder]     = useState<AdminOrderItem | null>(null);
-  const [editOpen,      setEditOpen]      = useState(false);
-
-  // Detail modal
-  const [detailOrder,   setDetailOrder]   = useState<AdminOrderItem | null>(null);
-  const [detailOpen,    setDetailOpen]    = useState(false);
+  // ── Mode toggle: 'assign' | 'prices' ────────────────────────────────────────
+  type BulkMode = 'assign' | 'prices';
+  const [bulkMode,       setBulkMode]       = useState<BulkMode>('assign');
+  const [bulkCourierId,  setBulkCourierId]  = useState('');
+  const [bulkAssigning,  setBulkAssigning]  = useState(false);
+  // Salary warning/modal (moved from Group Orders)
+  const [showSalaryWarning, setShowSalaryWarning] = useState(false);
+  const [showSalaryModal,   setShowSalaryModal]   = useState(false);
+  const [salaryDrafts,      setSalaryDrafts]      = useState<Record<string, string>>({});
+  const [salaryChecked,     setSalaryChecked]     = useState<Set<string>>(new Set());
+  const [salarySaving,      setSalarySaving]      = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, postponed: false, orderType: '' });
+  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false });
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
@@ -419,7 +294,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const load = useCallback(async (params: {
     city?: string; district?: string; search?: string;
-    courierId?: string; unpriced?: boolean; postponed?: boolean; orderType?: string; page?: number;
+    courierId?: string; unpriced?: boolean; page?: number;
   }) => {
     setLoading(true);
     setError(null);
@@ -441,8 +316,6 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       search,
       courierId: filterCourier?.courierId ?? '',
       unpriced:  filterUnpriced,
-      postponed: filterPostponed,
-      orderType: filterOrderType,
     };
 
     const filterChanged =
@@ -450,9 +323,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       prev.district  !== next.district  ||
       prev.search    !== next.search    ||
       prev.courierId !== next.courierId ||
-      prev.unpriced  !== next.unpriced  ||
-      prev.postponed !== next.postponed ||
-      prev.orderType !== next.orderType;
+      prev.unpriced  !== next.unpriced;
 
     filterRef.current = next;
 
@@ -461,8 +332,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const targetPage = filterChanged ? 1 : page;
-      if (filterChanged && page !== 1) setPage(1);
-      if (filterChanged)               setSelected(new Set());
+      if (filterChanged && page !== 1)  setPage(1);
+      if (filterChanged)                setSelected(new Set());
 
       void load({
         city:      filterCity     || undefined,
@@ -470,15 +341,13 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         search:    search         || undefined,
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
-        postponed: filterPostponed || undefined,
-        orderType: filterOrderType || undefined,
         page:      targetPage,
       });
     }, delay);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, filterPostponed, filterOrderType, page, load]);
+  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, page, load]);
 
   const cities = useMemo(() => {
     if (!data) return [];
@@ -494,9 +363,19 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const orders = data?.items ?? [];
 
-  const allSelected  = orders.length > 0 && orders.every(o => selected.has(o.id));
+  const selectableOrders = useMemo(() =>
+    bulkMode === 'assign'
+      ? orders.filter(o =>
+          o.status === 'AdminAcceptedOrderInWareHouse' ||
+          o.status === 'OrderIsOnItsWayToRecipientsCity' ||
+          (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'))
+        )
+      : orders,
+  [orders, bulkMode]);
+
+  const allSelected  = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id));
   const someSelected = selected.size > 0;
-  const toggleAll    = () => setSelected(allSelected ? new Set() : new Set(orders.map(o => o.id)));
+  const toggleAll    = () => setSelected(allSelected ? new Set() : new Set(selectableOrders.map(o => o.id)));
   const toggleOne    = (id: string) => setSelected(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -528,7 +407,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       setBulkSalary('');
       setSelected(new Set());
       await Promise.all([
-        load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, postponed: filterPostponed || undefined, orderType: filterOrderType || undefined, page }),
+        load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page }),
         refreshUnpricedCount(),
       ]);
     } catch (e) {
@@ -540,27 +419,80 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const cancelBulk = () => { setShowBulkModal(false); setBulkPrice(''); setBulkSalary(''); };
 
-  const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced || filterPostponed || filterOrderType;
+  // ── Assign courier ───────────────────────────────────────────────────────────
+  const missingSalaryOrders = useMemo(() =>
+    [...selected]
+      .map(id => orders.find(o => o.id === id))
+      .filter((o): o is AdminOrderItem => !!o && o.courierSalary == null),
+  [selected, orders]);
+
+  const handleBulkAssign = async () => {
+    if (!bulkCourierId || selected.size === 0) return;
+    if (missingSalaryOrders.length > 0) {
+      const drafts: Record<string, string> = {};
+      const checked = new Set<string>();
+      missingSalaryOrders.forEach(o => { drafts[o.id] = ''; checked.add(o.id); });
+      setSalaryDrafts(drafts);
+      setSalaryChecked(checked);
+      setShowSalaryWarning(true);
+      return;
+    }
+    await doAssign();
+  };
+
+  const doAssign = async () => {
+    setBulkAssigning(true);
+    const eligibleStatuses = new Set(['AdminAcceptedOrderInWareHouse', 'OrderIsOnItsWayToRecipientsCity']);
+    const ids = [...selected].filter(id => {
+      const o = orders.find(x => x.id === id);
+      return o && (
+        eligibleStatuses.has(o.status) ||
+        (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'))
+      );
+    });
+    let ok = 0; let fail = 0;
+    await Promise.all(ids.map(async id => {
+      const o = orders.find(x => x.id === id);
+      try {
+        if (o?.orderType === 'Return') {
+          await assignReturnCourier(token, id, bulkCourierId);
+        } else {
+          await assignCourierToOrder(token, id, bulkCourierId);
+        }
+        ok++;
+      }
+      catch { fail++; }
+    }));
+    setBulkAssigning(false);
+    // keep selection so user can immediately do Set Prices
+    setBulkCourierId('');
+    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page };
+    await Promise.all([load(reloadParams), refreshUnpricedCount()]);
+    showToast(fail === 0 ? `Assigned courier to ${ok} order${ok !== 1 ? 's' : ''}.`
+                         : `Assigned ${ok}, failed ${fail}.`, fail > 0 ? 'err' : 'ok');
+  };
+
+  const handleSalarySave = async () => {
+    const toSave = [...salaryChecked].filter(id => {
+      const val = parseFloat(salaryDrafts[id] ?? '');
+      return !isNaN(val) && val >= 0;
+    });
+    if (toSave.length === 0) { setShowSalaryModal(false); return; }
+    setSalarySaving(true);
+    try {
+      await Promise.all(toSave.map(id => setCourierSalary(token, id, parseFloat(salaryDrafts[id]))));
+      const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page };
+      await Promise.all([load(reloadParams), refreshUnpricedCount()]);
+    } catch { /* best-effort */ }
+    setSalarySaving(false);
+    setShowSalaryModal(false);
+    showToast(`Salary set for ${toSave.length} order${toSave.length !== 1 ? 's' : ''}.`);
+  };
+
+  const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced;
   const clearAll = () => {
     setFilterCity(''); setFilterDistrict(''); setSearch('');
-    setFilterCourier(null); setFilterUnpriced(false); setFilterPostponed(false); setFilterOrderType('');
-  };
-
-  const handleEditClick = (e: React.MouseEvent, order: AdminOrderItem) => {
-    e.stopPropagation();
-    setEditOrder(order);
-    setEditOpen(true);
-  };
-
-  const handleDetailClick = (e: React.MouseEvent, order: AdminOrderItem) => {
-    e.stopPropagation();
-    setDetailOrder(order);
-    setDetailOpen(true);
-  };
-
-  const handleEditSaved = () => {
-    showToast(t.aopOrderUpdated);
-    void load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, postponed: filterPostponed || undefined, orderType: filterOrderType || undefined, page });
+    setFilterCourier(null); setFilterUnpriced(false);
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -590,7 +522,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           )}
         </div>
 
-        <CourierPicker couriers={couriers} selected={filterCourier} onSelect={setFilterCourier} />
+        <CourierPicker
+          couriers={couriers}
+          selected={filterCourier}
+          onSelect={setFilterCourier}
+        />
 
         <div className="go-select-wrap">
           <svg className="go-select-icon" width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -617,31 +553,6 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
           </svg>
         </div>
-
-        <div className="go-select-wrap">
-          <select className="go-select" value={filterOrderType}
-            onChange={e => setFilterOrderType(e.target.value)}>
-            <option value="">{t.aopAllOrderTypes}</option>
-            <option value="Send">{t.aopOrderTypeSend}</option>
-            <option value="Return">{t.aopOrderTypeReturn}</option>
-            <option value="Exchange">{t.aopOrderTypeExchange}</option>
-          </select>
-          <svg className="go-select-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none">
-            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-          </svg>
-        </div>
-
-        <button
-          className={`aop-unpriced-btn${filterPostponed ? ' aop-unpriced-btn--active aop-postponed-btn--active' : ''}`}
-          onClick={() => setFilterPostponed(v => !v)}
-          title="Show postponed deliveries"
-        >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
-            <path d="M8 4.5v4l2.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          Postponed
-        </button>
 
         <button
           className={`aop-unpriced-btn${filterUnpriced ? ' aop-unpriced-btn--active' : ''}`}
@@ -684,7 +595,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               {t.aopMissingFinancials(unpricedCount)}
             </span>
           )}
-          <button className="aop-courier-banner__clear" onClick={() => setFilterCourier(null)} title={t.aopClearCourierTitle}>
+          <button
+            className="aop-courier-banner__clear"
+            onClick={() => setFilterCourier(null)}
+            title={t.aopClearCourierTitle}
+          >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
@@ -692,9 +607,33 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         </div>
       )}
 
-      {/* Bulk action bar */}
+      {/* Mode toggle + bulk action bar */}
       {someSelected && (
         <div className="aop-bulk-bar">
+          {/* Mode segmented switch */}
+          <div className="go-seg" style={{ flexShrink: 0 }}>
+            <button
+              className={`go-seg__btn${bulkMode === 'assign' ? ' go-seg__btn--active' : ''}`}
+              onClick={() => setBulkMode('assign')}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+              Assign Courier
+            </button>
+            <button
+              className={`go-seg__btn${bulkMode === 'prices' ? ' go-seg__btn--active' : ''}`}
+              onClick={() => setBulkMode('prices')}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M8 4.5v1M8 10.5v1M5.5 8c0-.83.67-1.5 1.5-1.5h2a1 1 0 010 2H7a1 1 0 000 2h2c.83 0 1.5-.67 1.5-1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              </svg>
+              Set Prices
+            </button>
+          </div>
+
           <span className="aop-bulk-count">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.4"/>
@@ -703,60 +642,221 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             {t.aopNSelected(selected.size)}
           </span>
 
-          {!showBulkModal && (
+          {/* Assign Courier mode */}
+          {bulkMode === 'assign' && (
             <>
-              <button className="aop-bulk-btn aop-bulk-btn--price" onClick={() => setShowBulkModal(true)}>
-                {t.aopSetPrices}
-              </button>
-              <button className="aop-bulk-btn aop-bulk-btn--ghost" onClick={() => setSelected(new Set())}>
-                {t.aopDeselectAll}
+              <div className="go-select-wrap">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon">
+                  <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+                  <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+                <select
+                  className="go-select"
+                  value={bulkCourierId}
+                  onChange={e => setBulkCourierId(e.target.value)}
+                  style={{ minWidth: 220 }}
+                >
+                  <option value="">Choose courier…</option>
+                  {couriers.map(c => (
+                    <option key={c.courierId} value={c.courierId}>
+                      {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
+                    </option>
+                  ))}
+                </select>
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron">
+                  <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <button
+                className="aop-bulk-btn aop-bulk-btn--salary"
+                disabled={!bulkCourierId || bulkAssigning}
+                onClick={handleBulkAssign}
+              >
+                {bulkAssigning ? 'Assigning…' : `Assign to ${selected.size} order${selected.size !== 1 ? 's' : ''}`}
               </button>
             </>
           )}
 
-          {showBulkModal && (
-            <div className="aop-bulk-input-row">
-              <span className="aop-bulk-label">{t.aopBulkSvcLabel}</span>
-              <div className="aop-bulk-input-wrap">
-                <span className="aop-bulk-currency">₾</span>
-                <input
-                  className="aop-bulk-input"
-                  type="number" min="0" step="0.01" placeholder={t.aopUnchangedPh}
-                  value={bulkPrice} autoFocus
-                  onChange={e => setBulkPrice(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Escape') cancelBulk(); }}
-                />
-              </div>
-              <span className="aop-bulk-label" style={{ marginLeft: 8 }}>{t.aopBulkSalLabel}</span>
-              <div className="aop-bulk-input-wrap">
-                <span className="aop-bulk-currency">₾</span>
-                <input
-                  className="aop-bulk-input"
-                  type="number" min="0" step="0.01" placeholder={t.aopUnchangedPh}
-                  value={bulkSalary}
-                  onChange={e => setBulkSalary(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') void handleBulkApply(); if (e.key === 'Escape') cancelBulk(); }}
-                />
-              </div>
-              <button className="aop-bulk-btn aop-bulk-btn--apply"
-                disabled={bulkBusy || (!bulkPrice && !bulkSalary)} onClick={handleBulkApply}>
-                {bulkBusy ? t.aopSaving : t.aopApply}
-              </button>
-              <button className="aop-bulk-btn aop-bulk-btn--ghost" disabled={bulkBusy} onClick={cancelBulk}>
-                {t.cancel}
-              </button>
-            </div>
+          {/* Set Prices mode */}
+          {bulkMode === 'prices' && (
+            <>
+              {!showBulkModal ? (
+                <button className="aop-bulk-btn aop-bulk-btn--price" onClick={() => setShowBulkModal(true)}>
+                  💰 Set Prices
+                </button>
+              ) : (
+                <div className="aop-bulk-input-row">
+                  <span className="aop-bulk-label">Service Price</span>
+                  <div className="aop-bulk-input-wrap">
+                    <span className="aop-bulk-currency">₾</span>
+                    <input
+                      className="aop-bulk-input"
+                      type="number" min="0" step="0.01" placeholder="unchanged"
+                      value={bulkPrice} autoFocus
+                      onChange={e => setBulkPrice(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Escape') cancelBulk(); }}
+                    />
+                  </div>
+                  <span className="aop-bulk-label" style={{ marginLeft: 8 }}>Courier Salary</span>
+                  <div className="aop-bulk-input-wrap">
+                    <span className="aop-bulk-currency">₾</span>
+                    <input
+                      className="aop-bulk-input"
+                      type="number" min="0" step="0.01" placeholder="unchanged"
+                      value={bulkSalary}
+                      onChange={e => setBulkSalary(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') void handleBulkApply(); if (e.key === 'Escape') cancelBulk(); }}
+                    />
+                  </div>
+                  <button className="aop-bulk-btn aop-bulk-btn--apply"
+                    disabled={bulkBusy || (!bulkPrice && !bulkSalary)} onClick={handleBulkApply}>
+                    {bulkBusy ? t.aopSaving : t.aopApply}
+                  </button>
+                  <button className="aop-bulk-btn aop-bulk-btn--ghost"
+                    disabled={bulkBusy} onClick={cancelBulk}>
+                    {t.cancel}
+                  </button>
+                </div>
+              )}
+            </>
           )}
+
+          <button
+            className="aop-bulk-btn aop-bulk-btn--ghost"
+            onClick={() => setSelected(new Set())}
+            style={{ marginLeft: 'auto' }}
+          >
+            {t.aopDeselectAll}
+          </button>
         </div>
       )}
 
+      {/* Salary warning portal */}
+      {showSalaryWarning && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '28px 32px', maxWidth: 420, width: '90%', textAlign: 'center', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
+            <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 8, color: 'var(--color-text)' }}>Orders missing courier salary</div>
+            <div style={{ fontSize: '0.88rem', color: 'var(--color-text-subtle)', marginBottom: 24, lineHeight: 1.5 }}>
+              {missingSalaryOrders.length} of your selected order{missingSalaryOrders.length !== 1 ? 's have' : ' has'} no courier salary set. You can fill them in now or proceed anyway.
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button onClick={() => setShowSalaryWarning(false)} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Cancel</button>
+              <button onClick={() => { setShowSalaryWarning(false); void doAssign(); }} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, border: '1px solid var(--color-border)' } as React.CSSProperties}>Proceed Anyway</button>
+              <button onClick={() => { setShowSalaryWarning(false); setShowSalaryModal(true); }} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Fill in Salaries</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Salary modal portal */}
+      {showSalaryModal && createPortal((() => {
+        const allChecked = missingSalaryOrders.length > 0 && missingSalaryOrders.every(o => salaryChecked.has(o.id));
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 740, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>Set Courier Salary</div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{missingSalaryOrders.length} order{missingSalaryOrders.length !== 1 ? 's' : ''} missing salary</div>
+                </div>
+                <button onClick={() => setShowSalaryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                </button>
+              </div>
+              {/* Bulk apply banner */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', marginBottom: 12, background: 'var(--color-accent-dim)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>Apply to {salaryChecked.size > 0 ? `selected (${salaryChecked.size})` : 'all'}:</span>
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'var(--color-bg-2)' }}>
+                  <span style={{ padding: '0 6px 0 10px', fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>₾</span>
+                  <input type="number" min="0" step="0.01" placeholder="0.00" id="bulk-salary-input-pkg"
+                    style={{ flex: 1, minWidth: 0, padding: '6px 8px 6px 2px', border: 'none', outline: 'none', background: 'transparent', color: 'var(--color-text)', fontSize: '0.88rem' }} />
+                </div>
+                <button onClick={() => {
+                  const inp = document.getElementById('bulk-salary-input-pkg') as HTMLInputElement;
+                  const val = inp?.value; if (!val) return;
+                  const targets = salaryChecked.size > 0 ? [...salaryChecked] : missingSalaryOrders.map(o => o.id);
+                  setSalaryDrafts(prev => { const next = { ...prev }; targets.forEach(id => { next[id] = val; }); return next; });
+                  setSalaryChecked(prev => { const next = new Set(prev); targets.forEach(id => next.add(id)); return next; });
+                  inp.value = '';
+                }} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0, background: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Apply</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--color-border)' }}>
+                <input type="checkbox" style={{ cursor: 'pointer' }} checked={allChecked}
+                  onChange={e => setSalaryChecked(e.target.checked ? new Set(missingSalaryOrders.map(o => o.id)) : new Set())} />
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Select all ({missingSalaryOrders.length})</span>
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
+                      <th style={{ width: 28, padding: '6px 4px' }}></th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Tracking</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Address</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Svc Price</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Salary</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missingSalaryOrders.map(o => {
+                      const salary = parseFloat(salaryDrafts[o.id] ?? '');
+                      const revenue = !isNaN(salary) ? o.companyServicePrice - salary : null;
+                      const isChecked = salaryChecked.has(o.id);
+                      return (
+                        <tr key={o.id} style={{ borderBottom: '1px solid var(--color-border)', background: isChecked ? 'var(--color-accent-dim)' : 'var(--color-bg-2)' }}>
+                          <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                            <input type="checkbox" style={{ cursor: 'pointer' }} checked={isChecked}
+                              onChange={() => setSalaryChecked(prev => { const next = new Set(prev); isChecked ? next.delete(o.id) : next.add(o.id); return next; })} />
+                          </td>
+                          <td style={{ padding: '6px 8px' }}><span className="tn-badge">{o.trackingNumber}</span></td>
+                          <td style={{ padding: '6px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text)' }}>₾{o.companyServicePrice.toFixed(2)}</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>₾</span>
+                              <input type="number" min="0" step="0.01" placeholder="0.00" value={salaryDrafts[o.id] ?? ''}
+                                onChange={e => { setSalaryDrafts(prev => ({ ...prev, [o.id]: e.target.value })); if (e.target.value) setSalaryChecked(prev => { const n = new Set(prev); n.add(o.id); return n; }); }}
+                                style={{ width: 72, textAlign: 'right', padding: '3px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', fontSize: '0.83rem' }} />
+                            </div>
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
+                            {revenue !== null ? <span style={{ color: revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{revenue.toFixed(2)}</span> : <span style={{ color: 'var(--color-text-subtle)' }}>—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
+                <button onClick={() => setShowSalaryModal(false)} disabled={salarySaving}
+                  style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Close</button>
+                <button onClick={handleSalarySave} disabled={salarySaving || salaryChecked.size === 0}
+                  style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (salarySaving || salaryChecked.size === 0) ? 0.6 : 1 }}>
+                  {salarySaving ? 'Saving…' : `Save${salaryChecked.size > 0 ? ` (${salaryChecked.size})` : ''}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
+
       {/* Table */}
       <div className="aop-table-wrap">
-        {loading && <div className="go-loading"><div className="go-spinner"/>{t.aopLoadingOrders}</div>}
-        {!loading && error && <div className="go-error">{error}</div>}
+        {loading && (
+          <div className="go-loading"><div className="go-spinner"/>{t.aopLoadingOrders}</div>
+        )}
+        {!loading && error && (
+          <div className="go-error">{error}</div>
+        )}
         {!loading && !error && orders.length === 0 && (
           <div className="go-loading" style={{ color: 'var(--color-text-subtle)' }}>
-            {filterPostponed ? 'No postponed orders.' : filterUnpriced ? t.aopAllPriced : t.aopNoOrdersMatch}
+            {filterUnpriced ? t.aopAllPriced : t.aopNoOrdersMatch}
           </div>
         )}
 
@@ -776,150 +876,87 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <th className="aop-th">{t.aopThRecipient}</th>
                 <th className="aop-th">{t.aopThPhone}</th>
                 <th className="aop-th">{t.aopThCityDistrict}</th>
-                <th className="aop-th aop-th--fin">COD / Srv</th>
+              {/*  <th className="aop-th">{t.aopThDescription}</th>*/}
+                <th className="aop-th">{t.aopThStatus}</th>
+                <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>
+                <th className="aop-th aop-th--num">{t.aopThSalary}</th>
+                <th className="aop-th aop-th--num">{t.aopThRevenue}</th>
                 <th className="aop-th">{t.aopThPaid}</th>
-                <th className="aop-th aop-th--actions" />
               </tr>
             </thead>
             <tbody>
               {orders.map(order => {
-                const isChecked     = selected.has(order.id);
-                const [bg, color]   = STATUS_COLORS[order.status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];
-                const statusMeta    = getStatusMeta(order.status, lang);
-                const missingPrice  = order.companyServicePrice === 0;
-                const missingSalary = order.courierSalary == null || order.courierSalary === 0;
-                const rcptPays      = order.whoPaysForCompanyService === 'Recipient';
+                const isChecked       = selected.has(order.id);
+                const [bg, color]     = STATUS_COLORS[order.status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];
+                const statusMeta      = getStatusMeta(order.status, lang);
+                const missingPrice    = order.companyServicePrice === 0;
+                const missingSalary   = order.courierSalary == null || order.courierSalary === 0;
+                const canAssign       = order.status === 'AdminAcceptedOrderInWareHouse' || order.status === 'OrderIsOnItsWayToRecipientsCity'
+                  || (order.orderType === 'Return' && (order.status === 'Pending' || order.status === 'CourierAssignedToPickUp'));
+                const selectable      = bulkMode === 'assign' ? canAssign : true;
                 return (
                   <tr key={order.id}
-                    className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}`}
-                    onClick={() => toggleOne(order.id)}
+                    className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}${!selectable ? ' aop-tr--disabled' : ''}`}
+                    onClick={() => selectable && toggleOne(order.id)}
+                    style={!selectable ? { opacity: 0.45, cursor: 'default' } : undefined}
                   >
                     <td className="aop-td aop-td--check" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" className="aop-checkbox" checked={isChecked}
-                        onChange={() => toggleOne(order.id)}/>
-                    </td>
-                    <td className="aop-td aop-td--tracking">
-                      <TrackingCell tn={order.trackingNumber} />
-                    </td>
-                    <td className="aop-td aop-td--sender">
-                      <Trunc text={order.senderBusinessName} max={13} className="aop-sender-biz" />
-                      <div className="aop-sender-name">
-                        <Trunc text={`${order.senderFirstName} ${order.senderLastName}`} max={12} />
-                      </div>
+                        disabled={!selectable}
+                        onChange={() => selectable && toggleOne(order.id)}/>
                     </td>
                     <td className="aop-td">
-                      <Trunc text={`${order.recipientFirstName} ${order.recipientLastName}`} max={13} className="aop-name" />
-                      <div className="aop-addr" title={order.recipientAddress}>
-                        <Trunc text={order.recipientAddress} max={16} />
-                      </div>
+                      <span className="tn-badge">{order.trackingNumber}</span>
+                    </td>
+                    <td className="aop-td">
+                      <div className="aop-sender-biz">{order.senderBusinessName}</div>
+                      <div className="aop-sender-name">{order.senderFirstName} {order.senderLastName}</div>
+                    </td>
+                    <td className="aop-td">
+                      <div className="aop-name">{order.recipientFirstName} {order.recipientLastName}</div>
+                      <div className="aop-addr">{order.recipientAddress}</div>
                     </td>
                     <td className="aop-td aop-td--mono">{order.recipientPhone}</td>
                     <td className="aop-td">
                       <div className="aop-city">{lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity}</div>
                       <div className="aop-district">{lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict}</div>
                     </td>
-                    {/* Combined COD / Service Price cell with hover tooltip */}
-                    <td className="aop-td aop-td--fin" onClick={e => e.stopPropagation()}>
-                      <div className="aop-fin-cell">
-                        <div className="aop-fin-row">
-                          <span className="aop-fin-label">COD</span>
-                          {order.amountToCollectForPackage != null
-                            ? <span className="aop-fin-val aop-fin-val--cod">₾{order.amountToCollectForPackage.toFixed(2)}</span>
-                            : <span className="aop-fin-val aop-fin-val--empty">—</span>
-                          }
-                        </div>
-                        <div className="aop-fin-row">
-                          <span className="aop-fin-label">Srv</span>
-                          {missingPrice
-                            ? <span className="aop-missing" style={{fontSize:'0.62rem',padding:'1px 3px'}}>!</span>
-                            : <span className="aop-fin-val">₾{order.companyServicePrice.toFixed(2)}</span>
-                          }
-                        </div>
-                        {(() => {
-                          const cod = order.amountToCollectForPackage ?? 0;
-                          const srv = order.companyServicePrice ?? 0;
-                          const total = cod + srv;
-                          return (
-                            <div className="aop-fin-row aop-fin-row--total">
-                              <span className="aop-fin-label">Tot</span>
-                              <span className="aop-fin-val aop-fin-val--total">₾{total.toFixed(2)}</span>
-                            </div>
-                          );
-                        })()}
-                        {/* Hover tooltip */}
-                        <div className="aop-fin-tooltip">
-                          <div className="aop-fin-tooltip__row">
-                            <span className="aop-fin-tooltip__label">Status</span>
-                            <span className="status-badge" style={{background:bg,color,fontSize:'0.65rem'}}>{statusMeta.short}</span>
-                          </div>
-                          <div className="aop-fin-tooltip__row">
-                            <span className="aop-fin-tooltip__label">Payer</span>
-                            <span className="aop-fin-tooltip__val">{rcptPays ? 'Recipient' : 'Sender'}</span>
-                          </div>
-                          <div className="aop-fin-tooltip__divider"/>
-                          <div className="aop-fin-tooltip__row">
-                            <span className="aop-fin-tooltip__label">COD</span>
-                            <span className="aop-fin-tooltip__val">{order.amountToCollectForPackage != null ? `₾${order.amountToCollectForPackage.toFixed(2)}` : '—'}</span>
-                          </div>
-                          <div className="aop-fin-tooltip__row">
-                            <span className="aop-fin-tooltip__label">Srv Price</span>
-                            <span className="aop-fin-tooltip__val">{missingPrice ? t.aopNotSet : `₾${order.companyServicePrice.toFixed(2)}`}</span>
-                          </div>
-                          <div className="aop-fin-tooltip__row">
-                            <span className="aop-fin-tooltip__label">Salary</span>
-                            <span className="aop-fin-tooltip__val">{missingSalary ? t.aopNotSet : `₾${order.courierSalary!.toFixed(2)}`}</span>
-                          </div>
-                          <div className="aop-fin-tooltip__row">
-                            <span className="aop-fin-tooltip__label">Revenue</span>
-                            <span className="aop-fin-tooltip__val">{order.companyRevenue != null ? `₾${order.companyRevenue.toFixed(2)}` : '—'}</span>
-                          </div>
-                          <div className="aop-fin-tooltip__divider"/>
-                          <div className="aop-fin-tooltip__row">
-                            <span className="aop-fin-tooltip__label">Total (COD+Srv)</span>
-                            <span className="aop-fin-tooltip__val aop-fin-tooltip__val--total">₾{((order.amountToCollectForPackage ?? 0) + (order.companyServicePrice ?? 0)).toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
+                    {/*<td className="aop-td aop-td--desc">*/}
+                    {/*  {order.isFragile && <span className="aop-fragile">{t.aopFragile}</span>}*/}
+                    {/*  {order.description && order.description !== 'Fragile – handle with care' && <span>{order.description}</span>}*/}
+                    {/*</td>*/}
+                    <td className="aop-td">
+                      <span
+                        className="status-badge"
+                        style={{ background: bg, color }}
+                        title={statusMeta.description}
+                      >
+                        {statusMeta.short}
+                      </span>
+                    </td>
+                    <td className="aop-td aop-td--num">
+                      {missingPrice
+                        ? <span className="aop-missing">{t.aopNotSet}</span>
+                        : <span className="aop-price">₾{order.companyServicePrice.toFixed(2)}</span>
+                      }
+                    </td>
+                    <td className="aop-td aop-td--num">
+                      {missingSalary
+                        ? <span className="aop-missing">{t.aopNotSet}</span>
+                        : <span className="aop-price">₾{order.courierSalary!.toFixed(2)}</span>
+                      }
+                    </td>
+                    <td className="aop-td aop-td--num">
+                      {order.companyRevenue != null
+                        ? <span className="aop-price">₾{order.companyRevenue.toFixed(2)}</span>
+                        : <span className="aop-price aop-price--empty">—</span>
+                      }
                     </td>
                     <td className="aop-td">
-                      {order.productPaymentStatus === 'Paid' ? (
-                        <span className="aop-paid">{t.aopPaid}</span>
-                      ) : (() => {
-                        const parcelDue  = order.productPaymentStatus === 'NotPaid';
-                        const courierDue = order.whoPaysForCompanyService === 'Recipient' && order.companyServicePrice > 0;
-                        const sub = parcelDue && courierDue ? t.aopSubParcelAndFee
-                                  : courierDue              ? t.aopSubFeeOnly
-                                                            : t.aopSubParcelOnly;
-                        return (
-                          <span className="aop-unpaid">
-                            {t.aopUnpaid}
-                            <span className="aop-unpaid__sub">{sub}</span>
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="aop-td aop-td--actions" onClick={e => e.stopPropagation()}>
-                      <div style={{display:'flex',gap:'4px',justifyContent:'center'}}>
-                      <button
-                        className="aop-action-btn"
-                        onClick={e => handleDetailClick(e, order)}
-                        title="View details"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                          <ellipse cx="8" cy="8" rx="7" ry="5" stroke="currentColor" strokeWidth="1.4"/>
-                          <circle cx="8" cy="8" r="2" fill="currentColor"/>
-                        </svg>
-                      </button>
-                      <button
-                        className="aop-action-btn"
-                        onClick={e => handleEditClick(e, order)}
-                        title={t.aopEditOrderTitle}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                          <path d="M11.5 2.5a1.5 1.5 0 012.12 2.12l-8 8L3 13.5l.88-2.62 8-8z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </button>
-                      </div>
+                      {order.productPaymentStatus === 'Paid'
+                        ? <span className="aop-paid">{t.aopPaid}</span>
+                        : <span className="aop-unpaid">{t.aopUnpaid}</span>
+                      }
                     </td>
                   </tr>
                 );
@@ -953,74 +990,155 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         </div>
       )}
 
-      {/* Edit Order Modal */}
-      <EditOrderModal
-        order={editOrder}
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        onSaved={handleEditSaved}
-        token={token}
-      />
-
-      <OrderDetailModal
-        order={detailOrder}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-      />
-
       <style>{`
         .aop-root { display: flex; flex-direction: column; min-height: 0; }
-        .aop-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; background: var(--color-bg); }
 
-        /* Courier picker */
+        /* ── Toolbar ── */
+        .aop-toolbar {
+          display: flex; align-items: center; gap: 10px; padding: 12px 20px;
+          border-bottom: 1px solid var(--color-border); flex-wrap: wrap;
+          background: var(--color-bg);
+        }
+
+        /* ── Courier picker ── */
         .cp-root { position: relative; }
-        .cp-trigger { display: flex; align-items: center; gap: 7px; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.8rem; font-weight: 500; padding: 7px 12px; cursor: pointer; transition: all var(--transition); white-space: nowrap; max-width: 240px; }
+        .cp-trigger {
+          display: flex; align-items: center; gap: 7px;
+          background: var(--color-bg-3); border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm); color: var(--color-text-subtle);
+          font-size: 0.8rem; font-weight: 500; padding: 7px 12px;
+          cursor: pointer; transition: all var(--transition); white-space: nowrap;
+          max-width: 240px;
+        }
         .cp-trigger:hover { color: var(--color-text); border-color: var(--color-text-subtle); }
-        .cp-trigger--active { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.4); color: #3b82f6; }
-        .cp-avatar { width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 0.62rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .cp-trigger--active {
+          background: rgba(59,130,246,0.08);
+          border-color: rgba(59,130,246,0.4); color: #3b82f6;
+        }
+        .cp-avatar {
+          width: 22px; height: 22px; border-radius: 50%;
+          background: #3b82f6; color: #fff;
+          font-size: 0.62rem; font-weight: 700;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
         .cp-trigger-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
         .cp-trigger-city { font-size: 0.74rem; opacity: 0.75; }
         .cp-chevron { margin-left: auto; flex-shrink: 0; }
-        .cp-clear { margin-left: 2px; display: flex; align-items: center; padding: 2px; border-radius: 3px; flex-shrink: 0; cursor: pointer; opacity: 0.6; }
+        .cp-clear {
+          margin-left: 2px; display: flex; align-items: center;
+          padding: 2px; border-radius: 3px; flex-shrink: 0;
+          cursor: pointer; opacity: 0.6;
+        }
         .cp-clear:hover { opacity: 1; }
-        .cp-dropdown { position: absolute; top: calc(100% + 6px); left: 0; z-index: 100; width: 280px; background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 8px 32px rgba(0,0,0,0.18); animation: expand-in 0.12s ease both; }
-        .cp-search-wrap { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--color-border); color: var(--color-text-subtle); }
-        .cp-search { flex: 1; background: none; border: none; outline: none; color: var(--color-text); font-size: 0.82rem; }
+
+        .cp-dropdown {
+          position: absolute; top: calc(100% + 6px); left: 0; z-index: 100;
+          width: 280px; background: var(--color-bg-2);
+          border: 1px solid var(--color-border); border-radius: var(--radius-md);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+          animation: expand-in 0.12s ease both;
+        }
+        .cp-search-wrap {
+          display: flex; align-items: center; gap: 8px;
+          padding: 10px 12px; border-bottom: 1px solid var(--color-border);
+          color: var(--color-text-subtle);
+        }
+        .cp-search {
+          flex: 1; background: none; border: none; outline: none;
+          color: var(--color-text); font-size: 0.82rem;
+        }
         .cp-search::placeholder { color: var(--color-text-subtle); }
-        .cp-search-clear { background: none; border: none; cursor: pointer; color: var(--color-text-subtle); padding: 0; display: flex; }
+        .cp-search-clear {
+          background: none; border: none; cursor: pointer;
+          color: var(--color-text-subtle); padding: 0; display: flex;
+        }
         .cp-search-clear:hover { color: var(--color-text); }
         .cp-list { max-height: 260px; overflow-y: auto; padding: 4px; }
-        .cp-item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; border-radius: var(--radius-sm); padding: 8px 10px; cursor: pointer; text-align: left; transition: background var(--transition); }
+        .cp-item {
+          display: flex; align-items: center; gap: 10px; width: 100%;
+          background: none; border: none; border-radius: var(--radius-sm);
+          padding: 8px 10px; cursor: pointer; text-align: left;
+          transition: background var(--transition);
+        }
         .cp-item:hover { background: var(--color-bg-3); }
         .cp-item--active { background: rgba(59,130,246,0.08); }
-        .cp-item-all-icon { width: 28px; height: 28px; border-radius: 50%; background: var(--color-bg-3); border: 1px solid var(--color-border); display: flex; align-items: center; justify-content: center; color: var(--color-text-subtle); flex-shrink: 0; }
-        .cp-item-avatar { width: 28px; height: 28px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .cp-item-all-icon {
+          width: 28px; height: 28px; border-radius: 50%;
+          background: var(--color-bg-3); border: 1px solid var(--color-border);
+          display: flex; align-items: center; justify-content: center;
+          color: var(--color-text-subtle); flex-shrink: 0;
+        }
+        .cp-item-avatar {
+          width: 28px; height: 28px; border-radius: 50%;
+          background: #3b82f6; color: #fff;
+          font-size: 0.65rem; font-weight: 700;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
         .cp-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
         .cp-item-name { font-size: 0.82rem; font-weight: 600; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .cp-item-meta { font-size: 0.72rem; color: var(--color-text-subtle); }
         .cp-item-check { margin-left: auto; color: #3b82f6; flex-shrink: 0; }
         .cp-empty { font-size: 0.78rem; color: var(--color-text-subtle); text-align: center; padding: 16px 10px; }
 
-        /* Courier banner */
-        .aop-courier-banner { display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: rgba(59,130,246,0.06); border-bottom: 1px solid rgba(59,130,246,0.2); animation: expand-in 0.15s ease both; }
-        .aop-courier-banner__avatar { width: 32px; height: 32px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        /* ── Courier banner ── */
+        .aop-courier-banner {
+          display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+          background: rgba(59,130,246,0.06); border-bottom: 1px solid rgba(59,130,246,0.2);
+          animation: expand-in 0.15s ease both;
+        }
+        .aop-courier-banner__avatar {
+          width: 32px; height: 32px; border-radius: 50%;
+          background: #3b82f6; color: #fff;
+          font-size: 0.7rem; font-weight: 700;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
         .aop-courier-banner__info { display: flex; flex-direction: column; gap: 1px; }
         .aop-courier-banner__name { font-size: 0.875rem; font-weight: 700; color: var(--color-text); }
         .aop-courier-banner__meta { font-size: 0.75rem; color: var(--color-text-subtle); }
-        .aop-courier-banner__unpriced { margin-left: 8px; font-size: 0.75rem; font-weight: 600; background: rgba(239,68,68,0.1); color: #ef4444; border-radius: 100px; padding: 3px 10px; }
-        .aop-courier-banner__clear { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--color-text-subtle); padding: 4px; border-radius: var(--radius-sm); display: flex; align-items: center; transition: color var(--transition); }
+        .aop-courier-banner__unpriced {
+          margin-left: 8px; font-size: 0.75rem; font-weight: 600;
+          background: rgba(239,68,68,0.1); color: #ef4444;
+          border-radius: 100px; padding: 3px 10px;
+        }
+        .aop-courier-banner__clear {
+          margin-left: auto; background: none; border: none;
+          cursor: pointer; color: var(--color-text-subtle);
+          padding: 4px; border-radius: var(--radius-sm);
+          display: flex; align-items: center;
+          transition: color var(--transition);
+        }
         .aop-courier-banner__clear:hover { color: var(--color-text); }
 
-        /* Unpriced toggle */
-        .aop-unpriced-btn { display: flex; align-items: center; gap: 7px; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.8rem; font-weight: 600; padding: 7px 13px; cursor: pointer; transition: all var(--transition); white-space: nowrap; }
-        .aop-unpriced-btn:hover:not(.aop-unpriced-btn--active) { color: var(--color-text); border-color: var(--color-text-subtle); }
-        .aop-unpriced-btn--active { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); color: #ef4444; }
-        .aop-postponed-btn--active { background: rgba(245,158,11,0.1) !important; border-color: rgba(245,158,11,0.4) !important; color: #f59e0b !important; }
-        .aop-unpriced-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 5px; background: #ef4444; color: #fff; border-radius: 100px; font-size: 0.68rem; font-weight: 700; }
+        /* ── Unpriced toggle ── */
+        .aop-unpriced-btn {
+          display: flex; align-items: center; gap: 7px;
+          background: var(--color-bg-3); border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm); color: var(--color-text-subtle);
+          font-size: 0.8rem; font-weight: 600; padding: 7px 13px;
+          cursor: pointer; transition: all var(--transition); white-space: nowrap;
+        }
+        .aop-unpriced-btn:hover:not(.aop-unpriced-btn--active) {
+          color: var(--color-text); border-color: var(--color-text-subtle);
+        }
+        .aop-unpriced-btn--active {
+          background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); color: #ef4444;
+        }
+        .aop-unpriced-badge {
+          display: inline-flex; align-items: center; justify-content: center;
+          min-width: 20px; height: 18px; padding: 0 5px;
+          background: #ef4444; color: #fff;
+          border-radius: 100px; font-size: 0.68rem; font-weight: 700; line-height: 1;
+        }
         .aop-unpriced-badge--active { background: #fff; color: #ef4444; }
 
-        /* Bulk bar */
-        .aop-bulk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 20px; background: var(--color-accent-dim); border-bottom: 1px solid rgba(196,127,23,0.25); animation: expand-in 0.15s ease both; }
+        /* ── Bulk bar ── */
+        .aop-bulk-bar {
+          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+          padding: 10px 20px; background: var(--color-accent-dim);
+          border-bottom: 1px solid rgba(196,127,23,0.25);
+          animation: expand-in 0.15s ease both;
+        }
         .aop-bulk-count { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--color-accent); }
         .aop-bulk-btn { border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
         .aop-bulk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -1035,98 +1153,41 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-bulk-input { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.875rem; padding: 7px 10px 7px 26px; width: 130px; outline: none; transition: border-color var(--transition); }
         .aop-bulk-input:focus { border-color: var(--color-accent); }
 
-        /* Table */
+        /* ── Table ── */
         .aop-table-wrap { overflow-x: auto; flex: 1; }
-        .aop-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1100px; }
-        .aop-th { text-align: left; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 9px 10px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; overflow: hidden; text-overflow: ellipsis; }
-        .aop-th--check { width: 40px; padding-left: 16px; }
+        .aop-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+        .aop-th { text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 10px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+        .aop-th--check { width: 44px; padding-left: 20px; }
         .aop-th--num { text-align: right; }
-        .aop-th--fin { width: 90px; text-align: right; }
-        .aop-th--actions { width: 64px; }
-        .aop-td { padding: 9px 10px; font-size: 0.8rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; cursor: pointer; overflow: hidden; }
-        .aop-td--check { padding-left: 16px; cursor: default; width: 40px; }
-        .aop-td--tracking { width: 100px; }
-        .aop-td--sender { width: 120px; }
-        .aop-td--mono { font-family: 'Courier New', monospace; font-size: 0.76rem; width: 100px; }
-        .aop-td--fin { width: 90px; cursor: default; }
-        .aop-td--actions { width: 64px; cursor: default; text-align: center; }
+        .aop-td { padding: 11px 14px; font-size: 0.82rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; cursor: pointer; }
+        .aop-td--check { padding-left: 20px; cursor: default; width: 44px; }
+        .aop-td--mono { font-family: 'Courier New', monospace; font-size: 0.78rem; }
+        .aop-td--num { text-align: right; }
+        .aop-td--desc { max-width: 180px; }
         .aop-tr { transition: background var(--transition); }
         .aop-tr:hover { background: var(--color-bg-3); }
         .aop-tr--selected { background: rgba(196,127,23,0.07) !important; }
         .aop-tr:last-child .aop-td { border-bottom: none; }
-
-        /* Cell content */
-        .aop-sender-biz { font-weight: 600; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 100%; }
-        .aop-sender-name { font-size: 0.72rem; color: var(--color-text-subtle); margin-top: 1px; }
-        .aop-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-        .aop-addr { font-size: 0.72rem; color: var(--color-text-subtle); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .aop-city { font-weight: 500; font-size: 0.8rem; }
-        .aop-district { font-size: 0.72rem; color: var(--color-text-subtle); margin-top: 1px; }
-        .aop-price { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.8rem; }
+        .aop-sender-biz { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+        .aop-sender-name { font-size: 0.75rem; color: var(--color-text-subtle); margin-top: 1px; }
+        .aop-name { font-weight: 500; }
+        .aop-addr { font-size: 0.75rem; color: var(--color-text-subtle); margin-top: 1px; }
+        .aop-city { font-weight: 500; }
+        .aop-district { font-size: 0.75rem; color: var(--color-text-subtle); margin-top: 1px; }
+        .aop-fragile { display: inline-block; font-size: 0.68rem; font-weight: 700; background: rgba(249,115,22,0.12); color: #f97316; border-radius: 4px; padding: 1px 6px; margin-right: 5px; }
+        .aop-price { font-weight: 600; font-variant-numeric: tabular-nums; }
         .aop-price--empty { color: var(--color-text-subtle); font-weight: 400; }
-        .aop-price--cod { color: #3b82f6; }
-        .aop-missing { font-size: 0.7rem; font-weight: 600; color: #ef4444; background: rgba(239,68,68,0.1); border-radius: 4px; padding: 2px 5px; }
-        .aop-paid { color: #10b981; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
-        .aop-unpaid { color: #ef4444; font-size: 0.75rem; font-weight: 600; white-space: nowrap; display: flex; flex-direction: column; gap: 1px; }
-        .aop-unpaid__sub { font-size: 0.68rem; font-weight: 600; opacity: 0.8; }
-        .aop-checkbox { width: 14px; height: 14px; cursor: pointer; accent-color: var(--color-accent); }
-        .aop-payer-badge { display: inline-block; font-size: 0.62rem; font-weight: 700; border-radius: 3px; padding: 1px 5px; background: rgba(59,130,246,0.1); color: #3b82f6; white-space: nowrap; }
-        .aop-payer-badge--rcpt { background: rgba(196,127,23,0.12); color: var(--color-accent); }
-        .aop-action-btn { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 4px 6px; cursor: pointer; color: var(--color-text-subtle); display: flex; align-items: center; transition: all var(--transition); }
-        .aop-action-btn:hover { background: var(--color-bg-3); color: var(--color-accent); border-color: rgba(196,127,23,0.4); }
-        .aop-td--actions { display: table-cell; }
-        .aop-td--actions > .aop-td { display: flex; gap: 4px; justify-content: center; }
-        td.aop-td--actions { display: table-cell; }
-        td.aop-td--actions > * { display: inline-flex; gap: 4px; justify-content: center; align-items: center; }
+        .aop-missing { font-size: 0.73rem; font-weight: 600; color: #ef4444; background: rgba(239,68,68,0.1); border-radius: 4px; padding: 2px 7px; }
+        .aop-paid   { color: #10b981; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+        .aop-unpaid { color: #ef4444; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+        .aop-checkbox { width: 15px; height: 15px; cursor: pointer; accent-color: var(--color-accent); }
 
-        /* Combined financials cell */
-        .aop-fin-cell { position: relative; display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
-        .aop-fin-row { display: flex; align-items: center; gap: 4px; }
-        .aop-fin-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; color: var(--color-text-subtle); letter-spacing: 0.04em; }
-        .aop-fin-val { font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-text); }
-        .aop-fin-val--cod { color: #3b82f6; }
-        .aop-fin-val--empty { color: var(--color-text-subtle); font-weight: 400; }
-        .aop-fin-row--total { border-top: 1px solid var(--color-border); margin-top: 2px; padding-top: 2px; }
-        .aop-fin-val--total { color: var(--color-accent); }
-        .aop-fin-tooltip__val--total { color: #f59e0b; }
-
-        /* Financials hover tooltip */
-        .aop-fin-tooltip { display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 200; width: 200px; background: #1e2026; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); animation: expand-in 0.1s ease both; }
-        .aop-fin-cell:hover .aop-fin-tooltip { display: flex; flex-direction: column; gap: 6px; }
-        .aop-fin-tooltip__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-        .aop-fin-tooltip__label { font-size: 0.7rem; color: rgba(255,255,255,0.5); white-space: nowrap; }
-        .aop-fin-tooltip__val { font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.9); font-variant-numeric: tabular-nums; }
-        .aop-fin-tooltip__divider { height: 1px; background: rgba(255,255,255,0.1); margin: 2px 0; }
-
-        /* Order detail modal */
-        .odm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; animation: expand-in 0.15s ease both; }
-        .odm-panel { background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); width: 100%; max-width: 480px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-        .odm-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--color-border); gap: 10px; }
-        .odm-header__left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-        .odm-tn { font-family: 'Courier New', monospace; font-size: 0.78rem; color: var(--color-text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .odm-close { background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 5px 7px; cursor: pointer; color: var(--color-text-subtle); display: flex; align-items: center; flex-shrink: 0; transition: all var(--transition); }
-        .odm-close:hover { color: var(--color-text); border-color: var(--color-text-subtle); }
-        .odm-body { overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
-        .odm-section { display: flex; flex-direction: column; gap: 6px; }
-        .odm-section-title { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-subtle); margin-bottom: 2px; }
-        .odm-row { display: flex; align-items: baseline; gap: 8px; }
-        .odm-label { font-size: 0.72rem; color: var(--color-text-subtle); min-width: 90px; flex-shrink: 0; }
-        .odm-value { font-size: 0.8rem; font-weight: 500; color: var(--color-text); word-break: break-word; }
-
-        /* Tracking cell */
-        .tn-cell { position: relative; display: inline-flex; align-items: center; gap: 5px; }
-        .tn-badge--compact { font-family: 'Courier New', monospace; font-size: 0.72rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 2px 6px; color: var(--color-text-muted); white-space: nowrap; transition: all 0.1s; }
-        .tn-copy { background: none; border: 1px solid var(--color-border); border-radius: 3px; cursor: pointer; color: var(--color-text-subtle); padding: 2px 4px; display: flex; align-items: center; animation: expand-in 0.1s ease both; }
-        .tn-copy:hover { color: var(--color-accent); border-color: var(--color-accent); }
-
-        /* Pagination */
+        /* ── Pagination ── */
         .aop-pagination { display: flex; align-items: center; gap: 14px; justify-content: center; padding: 16px 20px; border-top: 1px solid var(--color-border); }
         .aop-page-btn { background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.82rem; font-weight: 600; padding: 7px 16px; cursor: pointer; transition: background var(--transition); }
         .aop-page-btn:hover:not(:disabled) { background: var(--color-bg-2); }
         .aop-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .aop-page-info { font-size: 0.82rem; color: var(--color-text-subtle); }
-
-        @keyframes expand-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
     </div>
   );
