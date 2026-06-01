@@ -50,6 +50,10 @@ public sealed class GetAllOrdersQueryHandler
                 o.CourierSalary == null    ||
                 o.CourierSalary == 0);
 
+        // ── Postponed filter ─────────────────────────────────────────────────
+        if (request.Postponed)
+            query = query.Where(o => o.Status == OrderStatus.DeliveryPostponed);
+
         // ── Active-only filter (exclude terminal statuses) ───────────────────
         if (request.ActiveOnly)
         {

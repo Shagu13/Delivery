@@ -11,6 +11,7 @@ public sealed record GetAllOrdersQuery(
     string? OrderType  = null,   // "Send" | "Return" | "Exchange" | null (all)
     bool    Unpriced   = false,
     bool    ActiveOnly = false,  // when true, exclude terminal statuses
+    bool    Postponed  = false,  // when true, show only DeliveryPostponed orders
     int     Page       = 1,
     int     PageSize   = 50
 ) : IRequest<PagedResult<AdminOrderListDto>>;

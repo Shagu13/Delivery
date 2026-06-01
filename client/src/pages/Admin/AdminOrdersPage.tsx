@@ -56,7 +56,7 @@ async function fetchAllOrders(
   token: string,
   params: {
     city?: string; district?: string; search?: string;
-    courierId?: string; unpriced?: boolean; orderType?: string;
+    courierId?: string; unpriced?: boolean; postponed?: boolean; orderType?: string;
     page?: number; pageSize?: number;
   }
 ): Promise<PagedResult> {
@@ -66,6 +66,7 @@ async function fetchAllOrders(
   if (params.search)     qs.set('search',     params.search);
   if (params.courierId)  qs.set('courierId',  params.courierId);
   if (params.unpriced)   qs.set('unpriced',   'true');
+  if (params.postponed)  qs.set('postponed',  'true');
   if (params.orderType)  qs.set('orderType',  params.orderType);
   qs.set('activeOnly', 'true');
   if (params.page)       qs.set('page',       String(params.page));
@@ -378,6 +379,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [filterCourier,   setFilterCourier]   = useState<Courier | null>(null);
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
   const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
+  const [filterPostponed, setFilterPostponed] = useState(false);
   const [couriers,        setCouriers]        = useState<Courier[]>([]);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
@@ -397,7 +399,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [detailOpen,    setDetailOpen]    = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, orderType: '' });
+  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, postponed: false, orderType: '' });
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
@@ -417,7 +419,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const load = useCallback(async (params: {
     city?: string; district?: string; search?: string;
-    courierId?: string; unpriced?: boolean; orderType?: string; page?: number;
+    courierId?: string; unpriced?: boolean; postponed?: boolean; orderType?: string; page?: number;
   }) => {
     setLoading(true);
     setError(null);
@@ -439,6 +441,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       search,
       courierId: filterCourier?.courierId ?? '',
       unpriced:  filterUnpriced,
+      postponed: filterPostponed,
       orderType: filterOrderType,
     };
 
@@ -448,6 +451,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       prev.search    !== next.search    ||
       prev.courierId !== next.courierId ||
       prev.unpriced  !== next.unpriced  ||
+      prev.postponed !== next.postponed ||
       prev.orderType !== next.orderType;
 
     filterRef.current = next;
@@ -466,6 +470,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         search:    search         || undefined,
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
+        postponed: filterPostponed || undefined,
         orderType: filterOrderType || undefined,
         page:      targetPage,
       });
@@ -473,7 +478,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, filterOrderType, page, load]);
+  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, filterPostponed, filterOrderType, page, load]);
 
   const cities = useMemo(() => {
     if (!data) return [];
@@ -523,7 +528,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       setBulkSalary('');
       setSelected(new Set());
       await Promise.all([
-        load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, orderType: filterOrderType || undefined, page }),
+        load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, postponed: filterPostponed || undefined, orderType: filterOrderType || undefined, page }),
         refreshUnpricedCount(),
       ]);
     } catch (e) {
@@ -535,10 +540,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const cancelBulk = () => { setShowBulkModal(false); setBulkPrice(''); setBulkSalary(''); };
 
-  const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced || filterOrderType;
+  const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced || filterPostponed || filterOrderType;
   const clearAll = () => {
     setFilterCity(''); setFilterDistrict(''); setSearch('');
-    setFilterCourier(null); setFilterUnpriced(false); setFilterOrderType('');
+    setFilterCourier(null); setFilterUnpriced(false); setFilterPostponed(false); setFilterOrderType('');
   };
 
   const handleEditClick = (e: React.MouseEvent, order: AdminOrderItem) => {
@@ -555,7 +560,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const handleEditSaved = () => {
     showToast(t.aopOrderUpdated);
-    void load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, orderType: filterOrderType || undefined, page });
+    void load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, postponed: filterPostponed || undefined, orderType: filterOrderType || undefined, page });
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -625,6 +630,18 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
           </svg>
         </div>
+
+        <button
+          className={`aop-unpriced-btn${filterPostponed ? ' aop-unpriced-btn--active aop-postponed-btn--active' : ''}`}
+          onClick={() => setFilterPostponed(v => !v)}
+          title="Show postponed deliveries"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M8 4.5v4l2.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Postponed
+        </button>
 
         <button
           className={`aop-unpriced-btn${filterUnpriced ? ' aop-unpriced-btn--active' : ''}`}
@@ -739,7 +756,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         {!loading && error && <div className="go-error">{error}</div>}
         {!loading && !error && orders.length === 0 && (
           <div className="go-loading" style={{ color: 'var(--color-text-subtle)' }}>
-            {filterUnpriced ? t.aopAllPriced : t.aopNoOrdersMatch}
+            {filterPostponed ? 'No postponed orders.' : filterUnpriced ? t.aopAllPriced : t.aopNoOrdersMatch}
           </div>
         )}
 
@@ -998,6 +1015,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-unpriced-btn { display: flex; align-items: center; gap: 7px; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.8rem; font-weight: 600; padding: 7px 13px; cursor: pointer; transition: all var(--transition); white-space: nowrap; }
         .aop-unpriced-btn:hover:not(.aop-unpriced-btn--active) { color: var(--color-text); border-color: var(--color-text-subtle); }
         .aop-unpriced-btn--active { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); color: #ef4444; }
+        .aop-postponed-btn--active { background: rgba(245,158,11,0.1) !important; border-color: rgba(245,158,11,0.4) !important; color: #f59e0b !important; }
         .aop-unpriced-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 5px; background: #ef4444; color: #fff; border-radius: 100px; font-size: 0.68rem; font-weight: 700; }
         .aop-unpriced-badge--active { background: #fff; color: #ef4444; }
 
