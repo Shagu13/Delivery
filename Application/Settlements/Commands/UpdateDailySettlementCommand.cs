@@ -80,6 +80,9 @@ public sealed class UpdateDailySettlementCommandHandler
                 string.Join(", ", incomplete));
 
         // ── 5. Recompute immutable physical totals ────────────────────────────
+        var prevSalary   = settlement.TotalCourierSalary;
+        var prevTransfer = settlement.TotalCourierTransferToCompany;
+
         var totalCashCollected     = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
         var totalServiceRevenue    = orders.Sum(o => o.CompanyServicePrice);
         var totalCourierSalary     = orders.Sum(o => o.CourierSalary ?? 0m);
@@ -101,8 +104,28 @@ public sealed class UpdateDailySettlementCommandHandler
         settlement.TotalCourierTransferToCompany = totalTransferToCompany;
         settlement.TotalCompanyNetIncome         = totalNetIncome;
 
-        // ── 7. Update pending PaymentRequests linked to this settlement ───────
-        // Only update unconfirmed requests — confirmed ones are immutable.
+        // ── 7. Auto-reset payment flags when amounts change ──────────────────
+        // If the salary or transfer amount changed, the previously recorded
+        // payment is no longer accurate — reset the flag and remove the record.
+        if (totalCourierSalary != prevSalary && settlement.WasCourierPaid)
+        {
+            settlement.WasCourierPaid = false;
+            settlement.CourierPaidAt  = null;
+            var pr = settlement.PaymentRequests
+                .FirstOrDefault(p => p.Type == PaymentRequestType.CompanyPaysCourier);
+            if (pr is not null) _context.PaymentRequests.Remove(pr);
+        }
+
+        if (totalTransferToCompany != prevTransfer && settlement.HasCourierHandedOverRevenue)
+        {
+            settlement.HasCourierHandedOverRevenue = false;
+            settlement.RevenueHandedOverAt         = null;
+            var pr = settlement.PaymentRequests
+                .FirstOrDefault(p => p.Type == PaymentRequestType.CourierHandsOverRevenue);
+            if (pr is not null) _context.PaymentRequests.Remove(pr);
+        }
+
+        // ── 9. Update pending (unconfirmed) PaymentRequests ──────────────────
         foreach (var pr in settlement.PaymentRequests
             .Where(p => p.Status != PaymentRequestStatus.Confirmed))
         {

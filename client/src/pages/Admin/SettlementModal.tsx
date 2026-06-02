@@ -6,6 +6,7 @@ import {
     updateSettlement,
     SettlementApiError,
 } from '../../api/settlements';
+import { markSettlementEvent, unmarkSettlementEvent } from '../../api/payments';
 import type { SettlementPreview } from '../../api/settlements';
 
 interface Props {
@@ -37,6 +38,8 @@ export function SettlementModal({
     const [saving,        setSaving]        = useState(false);
     const [error,         setError]         = useState<string | null>(null);
     const [alreadyExists, setAlreadyExists] = useState(false);
+    const [payBusy,       setPayBusy]       = useState<string | null>(null);
+    const [payError,      setPayError]      = useState<string | null>(null);
 
     const loadPreview = useCallback(async (d: string) => {
         setLoading(true);
@@ -67,6 +70,26 @@ export function SettlementModal({
     }, [open, onClose]);
 
     const handleDateChange = (d: string) => { setDate(d); loadPreview(d); };
+
+    const handlePayAction = async (
+        action: 'mark' | 'unmark',
+        eventType: 'CompanyPaysCourier' | 'CourierHandsOverRevenue',
+    ) => {
+        if (!preview?.existingSettlementId) return;
+        setPayBusy(eventType); setPayError(null);
+        try {
+            if (action === 'mark') {
+                await markSettlementEvent(token, preview.existingSettlementId, eventType);
+            } else {
+                await unmarkSettlementEvent(token, preview.existingSettlementId, eventType);
+            }
+            await loadPreview(date);
+        } catch (err) {
+            setPayError(err instanceof Error ? err.message : 'Action failed.');
+        } finally {
+            setPayBusy(null);
+        }
+    };
 
     const handleSave = async () => {
         if (!preview) return;
@@ -324,6 +347,87 @@ export function SettlementModal({
                                     No delivered orders found for {date}.
                                 </p>
                             )}
+
+                            {/* ── Payment tracking (existing settlements only) ── */}
+                            {alreadyExists && (
+                                <fieldset className="modal__fieldset">
+                                    <legend className="modal__legend">Payment Status</legend>
+                                    {payError && (
+                                        <div className="modal__global-error" style={{ marginBottom: 12 }} role="alert">
+                                            {payError}
+                                        </div>
+                                    )}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        {/* Salary */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>Courier Salary</div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 1 }}>
+                                                    {fmt(preview.totalCourierSalary)}
+                                                </div>
+                                            </div>
+                                            {preview.wasCourierPaid ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="currentColor" strokeWidth="1.2"/><path d="M3.5 6l1.5 1.5 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                                        Paid {preview.courierPaidAt ? new Date(preview.courierPaidAt).toLocaleDateString('ka-GE', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => void handlePayAction('unmark', 'CompanyPaysCourier')}
+                                                        disabled={payBusy !== null}
+                                                        style={payUndoBtn}
+                                                    >
+                                                        {payBusy === 'CompanyPaysCourier' ? '…' : 'Undo'}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => void handlePayAction('mark', 'CompanyPaysCourier')}
+                                                    disabled={payBusy !== null}
+                                                    style={payMarkBtn}
+                                                >
+                                                    {payBusy === 'CompanyPaysCourier' ? 'Saving…' : `Mark Salary Paid`}
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Revenue handover — only when courier had cash to hand over */}
+                                        {preview.totalCourierTransferToCompany > 0 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 8, borderTop: '1px solid var(--color-border)' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>Revenue Handover</div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 1 }}>
+                                                        {fmt(preview.totalCourierTransferToCompany)} to hand over
+                                                    </div>
+                                                </div>
+                                                {preview.hasCourierHandedOverRevenue ? (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="currentColor" strokeWidth="1.2"/><path d="M3.5 6l1.5 1.5 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                                            Received {preview.revenueHandedOverAt ? new Date(preview.revenueHandedOverAt).toLocaleDateString('ka-GE', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => void handlePayAction('unmark', 'CourierHandsOverRevenue')}
+                                                            disabled={payBusy !== null}
+                                                            style={payUndoBtn}
+                                                        >
+                                                            {payBusy === 'CourierHandsOverRevenue' ? '…' : 'Undo'}
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => void handlePayAction('mark', 'CourierHandsOverRevenue')}
+                                                        disabled={payBusy !== null}
+                                                        style={payMarkBtn}
+                                                    >
+                                                        {payBusy === 'CourierHandsOverRevenue' ? 'Saving…' : `Mark Revenue Received`}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </fieldset>
+                            )}
                         </>
                     )}
                 </div>
@@ -431,6 +535,19 @@ export function SettlementModal({
         document.body
     );
 }
+
+// ── Payment button styles ─────────────────────────────────────────────────────
+
+const payMarkBtn: React.CSSProperties = {
+    padding: '6px 14px', background: 'var(--color-accent)', color: '#fff',
+    border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer',
+};
+
+const payUndoBtn: React.CSSProperties = {
+    padding: '4px 10px', background: 'none',
+    border: '1px solid var(--color-border)', borderRadius: 6,
+    color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer',
+};
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
