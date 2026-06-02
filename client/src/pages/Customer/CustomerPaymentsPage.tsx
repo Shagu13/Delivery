@@ -663,6 +663,70 @@ export default function CustomerPaymentsPage({ token }: { token: string }) {
         </button>
       </div>
 
+      {/* Monthly overview */}
+      {data && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 12,
+        }}>
+          <div style={{
+            background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)', padding: '16px 20px',
+            borderLeft: '3px solid var(--color-error)',
+          }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.08em', color: 'var(--color-text-subtle)', marginBottom: 6 }}>
+              Paid to Company
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-error)', lineHeight: 1 }}>
+              ₾{fmt(data.monthlyServiceFeePaid)}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 4 }}>
+              Service fees confirmed this month
+            </div>
+          </div>
+
+          <div style={{
+            background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)', padding: '16px 20px',
+            borderLeft: '3px solid var(--color-success)',
+          }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.08em', color: 'var(--color-text-subtle)', marginBottom: 6 }}>
+              Earned from COD
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-success)', lineHeight: 1 }}>
+              ₾{fmt(data.monthlyCodEarned)}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 4 }}>
+              COD payouts received this month
+            </div>
+          </div>
+
+          <div style={{
+            background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)', padding: '16px 20px',
+            borderLeft: `3px solid ${(data.monthlyCodEarned - data.monthlyServiceFeePaid) >= 0 ? 'var(--color-success)' : 'var(--color-error)'}`,
+          }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.08em', color: 'var(--color-text-subtle)', marginBottom: 6 }}>
+              Net This Month
+            </div>
+            <div style={{
+              fontSize: '1.5rem', fontWeight: 800, lineHeight: 1,
+              color: (data.monthlyCodEarned - data.monthlyServiceFeePaid) >= 0
+                ? 'var(--color-success)' : 'var(--color-error)',
+            }}>
+              ₾{fmt(data.monthlyCodEarned - data.monthlyServiceFeePaid)}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 4 }}>
+              COD earned − service fees paid
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)' }}>
         {tabs.map(([key, label]) => (

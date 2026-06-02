@@ -155,16 +155,35 @@ public sealed class GetCustomerPaymentsQueryHandler
             .Where(o => o.HasCompanyPaidTheSender)
             .Sum(o => o.AmountToCollectForPackage ?? 0m);
 
+        // ── 6. Monthly cash-flow totals (based on confirmation date) ──────────
+        // These reflect actual money movement in the selected month.
+        var monthlyServiceFeePaid = await _context.PaymentRequests
+            .Where(p => p.CustomerId  == customer.Id
+                     && p.Type        == PaymentRequestType.SenderPaysCompany
+                     && p.ConfirmedAt >= monthStart
+                     && p.ConfirmedAt <  monthEnd)
+            .SumAsync(p => p.AmountConfirmed, cancellationToken);
+
+        var monthlyCodEarned = await _context.PaymentRequests
+            .Where(p => p.CustomerId  == customer.Id
+                     && p.Type        == PaymentRequestType.CompanyPaysSender
+                     && p.Status      == PaymentRequestStatus.Confirmed
+                     && p.ConfirmedAt >= monthStart
+                     && p.ConfirmedAt <  monthEnd)
+            .SumAsync(p => p.AmountConfirmed, cancellationToken);
+
         return new CustomerPaymentsPageDto(
-            ServiceFeeOrders:        serviceFeeDtos,
-            PaymentRequests:         paymentRequests,
-            CodIncomeOrders:         codDtos,
-            CodPayouts:              codPayouts,
-            TotalServiceFeeUnpaid:   totalUnpaid,
-            TotalServiceFeePending:  totalPending,
-            TotalServiceFeePaid:     totalPaid,
-            TotalCodPending:         totalCodPending,
-            TotalCodReceived:        totalCodReceived
+            ServiceFeeOrders:       serviceFeeDtos,
+            PaymentRequests:        paymentRequests,
+            CodIncomeOrders:        codDtos,
+            CodPayouts:             codPayouts,
+            TotalServiceFeeUnpaid:  totalUnpaid,
+            TotalServiceFeePending: totalPending,
+            TotalServiceFeePaid:    totalPaid,
+            TotalCodPending:        totalCodPending,
+            TotalCodReceived:       totalCodReceived,
+            MonthlyServiceFeePaid:  monthlyServiceFeePaid,
+            MonthlyCodEarned:       monthlyCodEarned
         );
     }
 }

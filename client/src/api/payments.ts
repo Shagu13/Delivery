@@ -144,6 +144,8 @@ export interface CustomerPaymentsPage {
   totalServiceFeePaid:    number;
   totalCodPending:        number;
   totalCodReceived:       number;
+  monthlyServiceFeePaid:  number;
+  monthlyCodEarned:       number;
 }
 
 // ── API functions ─────────────────────────────────────────────────────────────

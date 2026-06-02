@@ -164,5 +164,9 @@ public sealed record CustomerPaymentsPageDto(
     decimal TotalServiceFeePending,
     decimal TotalServiceFeePaid,
     decimal TotalCodPending,
-    decimal TotalCodReceived
+    decimal TotalCodReceived,
+    /// <summary>Service fees actually confirmed/received by the company in the selected month.</summary>
+    decimal MonthlyServiceFeePaid,
+    /// <summary>COD amounts actually paid out to this customer in the selected month.</summary>
+    decimal MonthlyCodEarned
 );
