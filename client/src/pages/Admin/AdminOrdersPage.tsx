@@ -35,6 +35,10 @@ export interface AdminOrderItem {
   companyServicePrice: number;
   courierSalary: number | null;
   companyRevenue: number | null;
+  amountToCollectForPackage: number | null;
+  returnPickupCity: string | null;
+  returnPickupDistrict: string | null;
+  returnPickupAddress: string | null;
   createdAt: string;
   deliveredAt: string | null;
 }
@@ -742,7 +746,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setShowSalaryWarning(false)} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Cancel</button>
-              <button onClick={() => { setShowSalaryWarning(false); void doAssign(); }} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, border: '1px solid var(--color-border)' } as React.CSSProperties}>Proceed Anyway</button>
+              <button onClick={() => { setShowSalaryWarning(false); void doAssign(); }} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 } as React.CSSProperties}>Proceed Anyway</button>
               <button onClick={() => { setShowSalaryWarning(false); setShowSalaryModal(true); }} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Fill in Salaries</button>
             </div>
           </div>
