@@ -145,6 +145,30 @@ public sealed class MarkCompanyPaidSenderCommandHandler
 
         _context.PaymentRequests.Add(paymentRequest);
 
+        // ── 5b. Record the sender's service-fee payment (deducted from COD) ───
+        // The sender effectively paid their service fee via COD deduction.
+        // The actual amount settled is capped at grossCod (can't deduct more than owed).
+        if (totalFeeOffset > 0)
+        {
+            var effectiveOffset = Math.Min(totalFeeOffset, grossCod);
+            var feePaymentNote  = $"Service fee ₾{effectiveOffset:F2} settled via COD deduction";
+            if (request.Note is not null)
+                feePaymentNote = $"{feePaymentNote}. {request.Note}";
+
+            var feePaymentRequest = new PaymentRequest
+            {
+                Type            = PaymentRequestType.SenderPaysCompany,
+                Status          = PaymentRequestStatus.Confirmed,
+                CustomerId      = request.CustomerId,
+                TotalAmount     = effectiveOffset,
+                AmountConfirmed = effectiveOffset,
+                ConfirmedAt     = DateTime.UtcNow,
+                Note            = feePaymentNote,
+            };
+
+            _context.PaymentRequests.Add(feePaymentRequest);
+        }
+
         // ── 6. Mark COD orders as paid ────────────────────────────────────────
         foreach (var order in codOrders)
             order.HasCompanyPaidTheSender = true;
