@@ -150,8 +150,12 @@ export async function updateSettlement(
  * Courier-facing: fetches all daily settlement records for the authenticated courier.
  * Returns newest first. Requires a Courier-role JWT.
  */
-export async function fetchMySettlements(token: string): Promise<CourierSettlementItem[]> {
-    const res = await fetch('/api/settlements/my', {
+export async function fetchMySettlements(
+    token: string,
+    year: number,
+    month: number,
+): Promise<CourierSettlementItem[]> {
+    const res = await fetch(`/api/settlements/my?year=${year}&month=${month}`, {
         headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {

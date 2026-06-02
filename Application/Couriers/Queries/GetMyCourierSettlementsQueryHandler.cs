@@ -22,9 +22,14 @@ public sealed class GetMyCourierSettlementsQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CourierUserId, cancellationToken)
             ?? throw new NotFoundException("Courier", request.CourierUserId);
 
+        var monthStart = new DateTime(request.Year, request.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var monthEnd   = monthStart.AddMonths(1);
+
         var settlements = await _context.DailySettlements
             .AsNoTracking()
-            .Where(s => s.CourierId == courier.Id)
+            .Where(s => s.CourierId == courier.Id
+                     && s.CreatedAt >= monthStart
+                     && s.CreatedAt <  monthEnd)
             .OrderByDescending(s => s.CreatedAt)
             .ToListAsync(cancellationToken);
 

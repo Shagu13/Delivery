@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { fetchMySettlements } from '../../api/settlements';
 import type { CourierSettlementItem } from '../../api/settlements';
 import '../../styles/dashboard.css';
+
+const MONTHS = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December',
+];
 
 function fmtDate(dateStr: string): string {
     const d = new Date(dateStr + 'T00:00:00');
@@ -90,6 +95,12 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
     );
 }
 
+const navBtnStyle: React.CSSProperties = {
+    background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', padding: '5px 9px', cursor: 'pointer',
+    color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center',
+};
+
 function SummaryBar({ items }: { items: CourierSettlementItem[] }) {
     const { t } = useLanguage();
     const totalSalary     = items.reduce((s, i) => s + i.totalCourierSalary, 0);
@@ -115,27 +126,64 @@ function SummaryBar({ items }: { items: CourierSettlementItem[] }) {
 export function CourierSettlementsPage() {
     const { token } = useAuth();
     const { t } = useLanguage();
-    const [items, setItems]     = useState<CourierSettlementItem[]>([]);
+    const now = new Date();
+    const [year,    setYear]    = useState(now.getFullYear());
+    const [month,   setMonth]   = useState(now.getMonth() + 1);
+    const [items,   setItems]   = useState<CourierSettlementItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError]     = useState<string | null>(null);
+    const [error,   setError]   = useState<string | null>(null);
 
-    useEffect(() => {
+    const load = useCallback(() => {
         if (!token) return;
-        let cancelled = false;
-        // No synchronous setState — only inside promise callbacks
-        fetchMySettlements(token)
-            .then(data => { if (!cancelled) setItems(data); })
-            .catch(() => { if (!cancelled) setError(t.cdSettFailed); })
-            .finally(() => { if (!cancelled) setLoading(false); });
-        return () => { cancelled = true; };
-    }, [token]);
+        setLoading(true); setError(null);
+        fetchMySettlements(token, year, month)
+            .then(data => { setItems(data); setLoading(false); })
+            .catch(() => { setError(t.cdSettFailed); setLoading(false); });
+    }, [token, year, month, t.cdSettFailed]);
+
+    useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect
+
+    const goMonth = (delta: number) => {
+        let m = month + delta, y = year;
+        if (m > 12) { m = 1;  y++; }
+        if (m < 1)  { m = 12; y--; }
+        setMonth(m); setYear(y);
+    };
 
     if (loading) return <div className="dashboard__loader">{t.cdSettLoading}</div>;
-    if (error)   return <div className="dashboard__error">{error} <button onClick={() => window.location.reload()}>{t.cdRetry}</button></div>;
+    if (error)   return <div className="dashboard__error">{error} <button onClick={load}>{t.cdRetry}</button></div>;
 
     return (
         <div className="dashboard__section">
             <h2 className="dashboard__title">{t.cdSettTitle}</h2>
+
+            {/* Month picker */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                <button onClick={() => goMonth(-1)} style={navBtnStyle}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                </button>
+                <span style={{ fontWeight: 700, fontSize: '0.95rem', minWidth: 140, textAlign: 'center' }}>
+                    {MONTHS[month - 1]} {year}
+                </span>
+                <button
+                    onClick={() => goMonth(1)}
+                    disabled={year === now.getFullYear() && month === now.getMonth() + 1}
+                    style={navBtnStyle}
+                >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                </button>
+                <button onClick={load} title="Refresh" style={{ ...navBtnStyle, marginLeft: 4 }}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M2 8a6 6 0 1 0 1-3.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <path d="M2 4v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+
             {items.length === 0 ? (
                 <div className="dashboard__empty" style={{ marginTop: 40 }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📊</div>

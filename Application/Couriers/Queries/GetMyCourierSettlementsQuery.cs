@@ -7,5 +7,8 @@ namespace Application.Settlements.Queries;
 /// Courier-facing query: returns all daily settlement records for the
 /// currently authenticated courier, newest first.
 /// </summary>
-public sealed record GetMyCourierSettlementsQuery(string CourierUserId)
-    : IRequest<IReadOnlyList<CourierSettlementItemDto>>;
+public sealed record GetMyCourierSettlementsQuery(
+    string CourierUserId,
+    int    Year,
+    int    Month
+) : IRequest<IReadOnlyList<CourierSettlementItemDto>>;

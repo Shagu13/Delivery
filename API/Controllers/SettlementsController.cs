@@ -27,10 +27,18 @@ public sealed class SettlementsController : BaseController
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(typeof(IReadOnlyList<Application.Settlements.DTOs.CourierSettlementItemDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetMy(CancellationToken ct)
+    public async Task<IActionResult> GetMy(
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        CancellationToken ct)
     {
+        var now    = DateTime.UtcNow;
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        var result = await Sender.Send(new GetMyCourierSettlementsQuery(userId), ct);
+        var result = await Sender.Send(new GetMyCourierSettlementsQuery(
+            CourierUserId: userId,
+            Year:          year  ?? now.Year,
+            Month:         month ?? now.Month
+        ), ct);
         return Ok(result);
     }
 
