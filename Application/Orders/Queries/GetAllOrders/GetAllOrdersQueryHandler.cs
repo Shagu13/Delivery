@@ -133,6 +133,7 @@ public sealed class GetAllOrdersQueryHandler
                 CompanyServicePrice:      o.CompanyServicePrice,
                 CourierSalary:            o.CourierSalary,
                 CompanyRevenue:           o.CompanyRevenue,
+                CourierId:                o.CourierId,
                 CreatedAt:                o.CreatedAt,
                 DeliveredAt:              o.DeliveredAt
             ))

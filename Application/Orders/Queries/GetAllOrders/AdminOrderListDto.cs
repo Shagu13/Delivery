@@ -34,6 +34,8 @@ public sealed record AdminOrderListDto(
     decimal  CompanyServicePrice,
     decimal? CourierSalary,
     decimal? CompanyRevenue,
+    // Courier assignment
+    Guid?    CourierId,
     // Dates
     DateTime CreatedAt,
     DateTime? DeliveredAt

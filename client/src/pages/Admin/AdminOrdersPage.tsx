@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder } from '../../api/orders';
+import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMarkOrderDelivered, adminMarkReturnAtWarehouse } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
@@ -39,6 +39,7 @@ export interface AdminOrderItem {
   returnPickupCity: string | null;
   returnPickupDistrict: string | null;
   returnPickupAddress: string | null;
+  courierId: string | null;
   createdAt: string;
   deliveredAt: string | null;
 }
@@ -264,6 +265,12 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [bulkSalary,    setBulkSalary]    = useState('');
   const [bulkBusy,      setBulkBusy]      = useState(false);
   const [toast,         setToast]         = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const [actionBusy,    setActionBusy]    = useState<Set<string>>(new Set());
+  const [confirmModal,  setConfirmModal]  = useState<{
+    order: AdminOrderItem;
+    action: 'delivered' | 'warehouse';
+    assignCourierId: string;
+  } | null>(null);
 
   // ── Mode toggle: 'assign' | 'prices' ────────────────────────────────────────
   type BulkMode = 'assign' | 'prices';
@@ -283,6 +290,31 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const openConfirm = (order: AdminOrderItem, action: 'delivered' | 'warehouse') => {
+    setConfirmModal({ order, action, assignCourierId: '' });
+  };
+
+  const handleConfirmAction = async () => {
+    if (!confirmModal) return;
+    const { order, action, assignCourierId } = confirmModal;
+    setConfirmModal(null);
+    setActionBusy(prev => new Set(prev).add(order.id));
+    try {
+      if (assignCourierId) {
+        await assignCourierToOrder(token, order.id, assignCourierId);
+      }
+      if (action === 'delivered') await adminMarkOrderDelivered(token, order.id);
+      else await adminMarkReturnAtWarehouse(token, order.id);
+      showToast(action === 'delivered' ? 'Marked as delivered.' : 'Marked as at warehouse.');
+      const reloadParams = { city: filterRef.current.city || undefined, district: filterRef.current.district || undefined, search: filterRef.current.search || undefined, page };
+      await load(reloadParams);
+    } catch (e: unknown) {
+      showToast(e instanceof Error ? e.message : 'Action failed.', 'err');
+    } finally {
+      setActionBusy(prev => { const next = new Set(prev); next.delete(order.id); return next; });
+    }
   };
 
   useEffect(() => {
@@ -886,6 +918,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <th className="aop-th aop-th--num">{t.aopThSalary}</th>
                 <th className="aop-th aop-th--num">{t.aopThRevenue}</th>
                 <th className="aop-th">{t.aopThPaid}</th>
+                <th className="aop-th">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -898,6 +931,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 const canAssign       = order.status === 'AdminAcceptedOrderInWareHouse' || order.status === 'OrderIsOnItsWayToRecipientsCity'
                   || (order.orderType === 'Return' && (order.status === 'Pending' || order.status === 'CourierAssignedToPickUp'));
                 const selectable      = bulkMode === 'assign' ? canAssign : true;
+                const isTerminal      = ['DeliveredToRecipient','ExchangeCompleted','DeliveredReturnOrderToWarehouse',
+                                         'ReturnedToSender','CancelledByAdmin','CancelledBySender','OrderNotAccepted','AllDelivered'].includes(order.status);
+                const canMarkDelivered   = !isTerminal && order.orderType !== 'Return';
+                const canMarkWarehouse   = !isTerminal && order.orderType === 'Return';
+                const isBusy             = actionBusy.has(order.id);
                 return (
                   <tr key={order.id}
                     className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}${!selectable ? ' aop-tr--disabled' : ''}`}
@@ -962,6 +1000,38 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                         : <span className="aop-unpaid">{t.aopUnpaid}</span>
                       }
                     </td>
+                    <td className="aop-td" onClick={e => e.stopPropagation()}>
+                      {canMarkDelivered && (
+                        <button
+                          disabled={isBusy}
+                          onClick={() => openConfirm(order, 'delivered')}
+                          style={{
+                            padding: '3px 10px', fontSize: '0.72rem', fontWeight: 600,
+                            background: 'rgba(16,185,129,0.1)', color: '#10b981',
+                            border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-sm)',
+                            cursor: isBusy ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+                            opacity: isBusy ? 0.6 : 1,
+                          }}
+                        >
+                          {isBusy ? '…' : '✓ Delivered'}
+                        </button>
+                      )}
+                      {canMarkWarehouse && (
+                        <button
+                          disabled={isBusy}
+                          onClick={() => openConfirm(order, 'warehouse')}
+                          style={{
+                            padding: '3px 10px', fontSize: '0.72rem', fontWeight: 600,
+                            background: 'rgba(249,115,22,0.1)', color: '#f97316',
+                            border: '1px solid rgba(249,115,22,0.3)', borderRadius: 'var(--radius-sm)',
+                            cursor: isBusy ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
+                            opacity: isBusy ? 0.6 : 1,
+                          }}
+                        >
+                          {isBusy ? '…' : '✓ At Warehouse'}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -981,6 +1051,71 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             {t.aopNextPage}
           </button>
         </div>
+      )}
+
+      {/* Confirm action modal */}
+      {confirmModal && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '28px 32px', maxWidth: 440, width: '100%', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
+            <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 6, color: 'var(--color-text)' }}>
+              {confirmModal.action === 'delivered' ? 'Mark as Delivered' : 'Mark as At Warehouse'}
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: 20 }}>
+              <span className="tn-badge" style={{ fontSize: '0.75rem', marginRight: 6 }}>{confirmModal.order.trackingNumber}</span>
+              {confirmModal.order.recipientFirstName} {confirmModal.order.recipientLastName} · {confirmModal.order.recipientCity}
+            </div>
+
+            {/* Courier warning + optional assignment (only for Delivered on unassigned orders) */}
+            {confirmModal.action === 'delivered' && !confirmModal.order.courierId && (
+              <div style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.3)', borderRadius: 8, padding: '12px 14px', marginBottom: 20 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f97316', marginBottom: 8 }}>
+                  ⚠ No courier assigned
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 10 }}>
+                  You can assign a courier now (optional) or proceed without one.
+                </div>
+                <div className="go-select-wrap" style={{ width: '100%' }}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon">
+                    <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                  <select
+                    className="go-select"
+                    value={confirmModal.assignCourierId}
+                    onChange={e => setConfirmModal(m => m ? { ...m, assignCourierId: e.target.value } : m)}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="">Skip — no courier</option>
+                    {couriers.map(c => (
+                      <option key={c.courierId} value={c.courierId}>
+                        {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
+                      </option>
+                    ))}
+                  </select>
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron">
+                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setConfirmModal(null)}
+                style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleConfirmAction()}
+                style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: confirmModal.action === 'delivered' ? '#10b981' : '#f97316', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}
+              >
+                {confirmModal.action === 'delivered' ? 'Mark Delivered' : 'Mark At Warehouse'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Toast */}
