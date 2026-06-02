@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { updateOrder } from '../../api/orders';
+import { updateOrder, adminMarkOrderDelivered, adminMarkReturnAtWarehouse, assignCourierToOrder, setCourierSalary } from '../../api/orders';
 import type { AdminOrderItem } from './AdminOrdersPage';
+import type { Courier } from '../../api/couriers';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 
 interface Props {
@@ -10,6 +11,10 @@ interface Props {
     onClose: () => void;
     onSaved: () => void;
     token: string;
+    canMarkDelivered?: boolean;
+    canMarkWarehouse?: boolean;
+    couriers?: Courier[];
+    onActioned?: () => void;
 }
 
 const ORDER_TYPE_OPTIONS = [
@@ -25,7 +30,7 @@ const STATUS_OVERRIDE_OPTIONS = [
     { value: 'CancelledByAdmin',  label: '✗ Cancel (Admin)' },
 ];
 
-export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) {
+export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDelivered, canMarkWarehouse, couriers = [], onActioned }: Props) {
     // ── Form state ────────────────────────────────────────────────────────────
     const [firstName,   setFirstName]   = useState('');
     const [lastName,    setLastName]    = useState('');
@@ -51,6 +56,13 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
     const [saving,     setSaving]     = useState(false);
     const [error,      setError]      = useState<string | null>(null);
     const [activeTab,  setActiveTab]  = useState<'delivery' | 'financials' | 'type'>('delivery');
+
+    // ── Status action state ───────────────────────────────────────────────────
+    const [actionConfirm,   setActionConfirm]   = useState<'delivered' | 'warehouse' | null>(null);
+    const [actionCourierId, setActionCourierId] = useState('');
+    const [actionSalary,    setActionSalary]    = useState('');
+    const [actionBusy,      setActionBusy]      = useState(false);
+    const [actionError,     setActionError]     = useState<string | null>(null);
 
     // Populate form when order changes
     useEffect(() => {
@@ -87,7 +99,33 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
 
     if (!open || !order) return null;
 
-    const isReturn = orderType === 'Return';
+    const isReturn      = orderType === 'Return';
+    const needsSalary   = order.courierSalary == null || order.courierSalary === 0;
+    const salaryVal     = parseFloat(actionSalary);
+    const salaryValid   = !isNaN(salaryVal) && salaryVal >= 0;
+    const canConfirm    = !needsSalary || salaryValid;
+
+    const handleAction = async () => {
+        if (!order || !actionConfirm) return;
+        setActionBusy(true);
+        setActionError(null);
+        try {
+            if (actionCourierId) await assignCourierToOrder(token, order.id, actionCourierId);
+            const salaryVal = parseFloat(actionSalary);
+            if (actionSalary && !isNaN(salaryVal)) await setCourierSalary(token, order.id, salaryVal);
+            if (actionConfirm === 'delivered') await adminMarkOrderDelivered(token, order.id);
+            else await adminMarkReturnAtWarehouse(token, order.id);
+            setActionConfirm(null);
+            setActionCourierId('');
+            setActionSalary('');
+            onActioned?.();
+            onClose();
+        } catch (e) {
+            setActionError(e instanceof Error ? e.message : 'Action failed.');
+        } finally {
+            setActionBusy(false);
+        }
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -354,6 +392,103 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
                     )}
                 </div>
 
+                {/* Status actions panel */}
+                {(canMarkDelivered || canMarkWarehouse) && (
+                    <div className="eom-actions-panel">
+                        {actionError && (
+                            <div style={{ fontSize: '0.78rem', color: '#ef4444', marginBottom: 8 }}>{actionError}</div>
+                        )}
+
+                        {actionConfirm ? (
+                            <div className="eom-action-confirm">
+                                <span className="eom-action-confirm__label">
+                                    {actionConfirm === 'delivered' ? 'Confirm mark as delivered?' : 'Confirm mark as at warehouse?'}
+                                </span>
+
+                                {/* Optional courier assignment for unassigned delivered orders */}
+                                {actionConfirm === 'delivered' && !order?.courierId && couriers.length > 0 && (
+                                    <select
+                                        className="eom-input eom-action-courier-select"
+                                        value={actionCourierId}
+                                        onChange={e => setActionCourierId(e.target.value)}
+                                    >
+                                        <option value="">Skip — no courier</option>
+                                        {couriers.map(c => (
+                                            <option key={c.courierId} value={c.courierId}>
+                                                {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+
+                                {/* Required salary input when order has no salary set */}
+                                {needsSalary && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#ef4444', whiteSpace: 'nowrap' }}>
+                                            Salary *
+                                        </span>
+                                        <div className="eom-currency-wrap" style={{ width: 100 }}>
+                                            <span className="eom-currency">₾</span>
+                                            <input
+                                                className="eom-input eom-input--currency"
+                                                type="number" min="0" step="0.01" placeholder="0.00"
+                                                value={actionSalary}
+                                                onChange={e => setActionSalary(e.target.value)}
+                                                style={{ padding: '5px 8px 5px 22px', fontSize: '0.82rem' }}
+                                                autoFocus
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                        type="button"
+                                        className="eom-action-btn eom-action-btn--ghost"
+                                        disabled={actionBusy}
+                                        onClick={() => { setActionConfirm(null); setActionCourierId(''); setActionSalary(''); setActionError(null); }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`eom-action-btn${actionConfirm === 'delivered' ? ' eom-action-btn--delivered' : ' eom-action-btn--warehouse'}`}
+                                        disabled={actionBusy || !canConfirm}
+                                        title={!canConfirm ? 'Enter courier salary to proceed' : undefined}
+                                        onClick={() => void handleAction()}
+                                    >
+                                        {actionBusy ? '…' : 'Confirm'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-subtle)', marginRight: 4 }}>
+                                    Mark as:
+                                </span>
+                                {canMarkDelivered && (
+                                    <button
+                                        type="button"
+                                        className="eom-action-btn eom-action-btn--delivered"
+                                        onClick={() => setActionConfirm('delivered')}
+                                    >
+                                        ✓ Delivered to Recipient
+                                    </button>
+                                )}
+                                {canMarkWarehouse && (
+                                    <button
+                                        type="button"
+                                        className="eom-action-btn eom-action-btn--warehouse"
+                                        onClick={() => setActionConfirm('warehouse')}
+                                    >
+                                        ✓ Delivered to Warehouse
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Footer */}
                 <div className="modal__footer" style={{ padding: '16px 24px' }}>
                     <button type="button" className="modal__btn-cancel" onClick={onClose} disabled={saving}>Cancel</button>
@@ -412,6 +547,19 @@ export function EditOrderModal({ order, open, onClose, onSaved, token }: Props) 
                 .eom-toggle-btn--active { background:var(--color-accent-dim);border-color:rgba(196,127,23,0.4);color:var(--color-accent); }
                 .eom-revenue-preview { font-size:0.82rem;color:var(--color-text-subtle);padding:8px 10px;background:var(--color-bg-3);border-radius:var(--radius-sm);border:1px solid var(--color-border);display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
                 .eom-hint { font-style:italic;font-size:0.75rem; }
+
+                .eom-actions-panel { padding:12px 24px;border-top:1px solid var(--color-border);background:var(--color-bg-3); }
+                .eom-action-confirm { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+                .eom-action-confirm__label { font-size:0.82rem;font-weight:600;color:var(--color-text);flex-shrink:0; }
+                .eom-action-courier-select { flex:1;min-width:180px;font-size:0.8rem;padding:6px 8px; }
+                .eom-action-btn { padding:6px 14px;border-radius:var(--radius-sm);font-size:0.78rem;font-weight:600;cursor:pointer;border:none;white-space:nowrap;transition:opacity 0.15s; }
+                .eom-action-btn:disabled { opacity:0.5;cursor:not-allowed; }
+                .eom-action-btn--delivered { background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.35); }
+                .eom-action-btn--delivered:hover:not(:disabled) { background:rgba(16,185,129,0.2); }
+                .eom-action-btn--warehouse { background:rgba(249,115,22,0.12);color:#f97316;border:1px solid rgba(249,115,22,0.35); }
+                .eom-action-btn--warehouse:hover:not(:disabled) { background:rgba(249,115,22,0.2); }
+                .eom-action-btn--ghost { background:var(--color-bg-2);color:var(--color-text-subtle);border:1px solid var(--color-border); }
+                .eom-action-btn--ghost:hover:not(:disabled) { color:var(--color-text); }
             `}</style>
         </>,
         document.body

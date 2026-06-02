@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Domain;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -133,6 +134,41 @@ public sealed class UpdateDailySettlementCommandHandler
                 pr.TotalAmount = totalTransferToCompany;
             else if (pr.Type == PaymentRequestType.CompanyPaysCourier)
                 pr.TotalAmount = totalCourierSalary;
+        }
+
+        // ── 10. Auto-mark payment events (re-mark anything reset above) ───────
+        if (totalTransferToCompany > 0 && !settlement.HasCourierHandedOverRevenue)
+        {
+            settlement.HasCourierHandedOverRevenue = true;
+            settlement.RevenueHandedOverAt         = DateTime.UtcNow;
+            settlement.WasCourierPaid              = true;
+            settlement.CourierPaidAt               = DateTime.UtcNow;
+            _context.PaymentRequests.Add(new PaymentRequest
+            {
+                Type              = PaymentRequestType.CourierHandsOverRevenue,
+                Status            = PaymentRequestStatus.Confirmed,
+                CourierId         = settlement.CourierId,
+                DailySettlementId = settlement.Id,
+                TotalAmount       = totalTransferToCompany,
+                AmountConfirmed   = totalTransferToCompany,
+                ConfirmedAt       = DateTime.UtcNow,
+            });
+        }
+        else if (totalCourierSalary > 0 && !settlement.WasCourierPaid)
+        {
+            var owedToCourier = totalCourierSalary - totalCashCollected;
+            settlement.WasCourierPaid = true;
+            settlement.CourierPaidAt  = DateTime.UtcNow;
+            _context.PaymentRequests.Add(new PaymentRequest
+            {
+                Type              = PaymentRequestType.CompanyPaysCourier,
+                Status            = PaymentRequestStatus.Confirmed,
+                CourierId         = settlement.CourierId,
+                DailySettlementId = settlement.Id,
+                TotalAmount       = owedToCourier,
+                AmountConfirmed   = owedToCourier,
+                ConfirmedAt       = DateTime.UtcNow,
+            });
         }
 
         await _context.SaveChangesAsync(cancellationToken);
