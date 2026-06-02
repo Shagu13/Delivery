@@ -12,7 +12,7 @@ export function CollectConfirmModal({ order, isBusy, onCancel, onConfirm }: Coll
     const { t } = useLanguage();
     const hasProductAmount = order.productPaymentStatus === 'NotPaid' && order.amountToCollectForPackage != null && order.amountToCollectForPackage > 0;
     const hasServiceFee = order.companyServicePrice > 0 && order.whoPaysForCompanyService === 'Recipient';
-    const total = hasProductAmount ? order.amountToCollectForPackage! + order.companyServicePrice : order.companyServicePrice;
+    const total = (hasProductAmount ? order.amountToCollectForPackage! : 0) + (hasServiceFee ? order.companyServicePrice : 0);
 
     return (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(0,0,0,0.50)', borderRadius: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
