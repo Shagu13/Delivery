@@ -87,7 +87,13 @@ public sealed record AdminCourierSettlementDto(
 public sealed record AdminPaymentsPageDto(
     AdminCollectFromSendersDto               CollectFromSenders,
     IReadOnlyList<AdminCodOwedToSenderDto>   PayToSenders,
-    IReadOnlyList<AdminCourierSettlementDto> CourierSettlements
+    IReadOnlyList<AdminCourierSettlementDto> CourierSettlements,
+    /// <summary>Service fees confirmed received from senders in the selected month.</summary>
+    decimal MonthlyCollectedFromSenders,
+    /// <summary>COD amounts paid out to senders in the selected month.</summary>
+    decimal MonthlyCodPaidToSenders,
+    /// <summary>Courier salaries paid out in the selected month.</summary>
+    decimal MonthlyCourierSalaryPaid
 );
 
 // ── Customer: service fee section ────────────────────────────────────────────

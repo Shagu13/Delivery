@@ -27,9 +27,16 @@ public sealed class PaymentsController : BaseController
     [ProducesResponseType(typeof(AdminPaymentsPageDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAdminPayments(
         [FromQuery] DateTime? settlementFrom,
+        [FromQuery] int? year,
+        [FromQuery] int? month,
         CancellationToken ct)
     {
-        var result = await Sender.Send(new GetAdminPaymentsQuery(settlementFrom), ct);
+        var now = DateTime.UtcNow;
+        var result = await Sender.Send(new GetAdminPaymentsQuery(
+            Year:               year  ?? now.Year,
+            Month:              month ?? now.Month,
+            SettlementMonthStart: settlementFrom
+        ), ct);
         return Ok(result);
     }
 

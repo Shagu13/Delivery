@@ -83,9 +83,12 @@ export interface AdminCourierSettlement {
 }
 
 export interface AdminPaymentsPage {
-  collectFromSenders: AdminCollectFromSenders;
-  payToSenders:       AdminCodOwedToSender[];
-  courierSettlements: AdminCourierSettlement[];
+  collectFromSenders:          AdminCollectFromSenders;
+  payToSenders:                AdminCodOwedToSender[];
+  courierSettlements:          AdminCourierSettlement[];
+  monthlyCollectedFromSenders: number;
+  monthlyCodPaidToSenders:     number;
+  monthlyCourierSalaryPaid:    number;
 }
 
 export interface CustomerServiceFeeOrder {
@@ -152,12 +155,13 @@ export interface CustomerPaymentsPage {
 
 export async function getAdminPayments(
   token: string,
+  year: number,
+  month: number,
   settlementFrom?: string,
 ): Promise<AdminPaymentsPage> {
-  const params = settlementFrom
-    ? `?settlementFrom=${encodeURIComponent(settlementFrom)}`
-    : '';
-  const res = await fetch(`${BASE}/admin${params}`, {
+  const params = new URLSearchParams({ year: String(year), month: String(month) });
+  if (settlementFrom) params.set('settlementFrom', settlementFrom);
+  const res = await fetch(`${BASE}/admin?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(await res.text());

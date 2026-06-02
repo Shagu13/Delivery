@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.Payments.Queries;
 
 public sealed record GetAdminPaymentsQuery(
+    int       Year,
+    int       Month,
     DateTime? SettlementMonthStart = null
 ) : IRequest<AdminPaymentsPageDto>;
 
@@ -151,10 +153,40 @@ public sealed class GetAdminPaymentsQueryHandler
             RevenueHandedOverAt:           d.RevenueHandedOverAt
         )).ToList();
 
+        // ── 5. Monthly cash-flow totals (based on confirmation date) ─────────
+        var monthStart = new DateTime(request.Year, request.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var monthEnd   = monthStart.AddMonths(1);
+
+        var monthlyPayments = await _context.PaymentRequests
+            .AsNoTracking()
+            .Where(p => p.Status      == PaymentRequestStatus.Confirmed
+                     && p.ConfirmedAt >= monthStart
+                     && p.ConfirmedAt <  monthEnd
+                     && (p.Type == PaymentRequestType.SenderPaysCompany
+                      || p.Type == PaymentRequestType.CompanyPaysSender
+                      || p.Type == PaymentRequestType.CompanyPaysCourier))
+            .Select(p => new { p.Type, p.AmountConfirmed })
+            .ToListAsync(cancellationToken);
+
+        var monthlyCollectedFromSenders = monthlyPayments
+            .Where(p => p.Type == PaymentRequestType.SenderPaysCompany)
+            .Sum(p => p.AmountConfirmed);
+
+        var monthlyCodPaidToSenders = monthlyPayments
+            .Where(p => p.Type == PaymentRequestType.CompanyPaysSender)
+            .Sum(p => p.AmountConfirmed);
+
+        var monthlyCourierSalaryPaid = monthlyPayments
+            .Where(p => p.Type == PaymentRequestType.CompanyPaysCourier)
+            .Sum(p => p.AmountConfirmed);
+
         return new AdminPaymentsPageDto(
-            CollectFromSenders: collectFromSenders,
-            PayToSenders:       payToSenders,
-            CourierSettlements: settlementDtos
+            CollectFromSenders:          collectFromSenders,
+            PayToSenders:                payToSenders,
+            CourierSettlements:          settlementDtos,
+            MonthlyCollectedFromSenders: monthlyCollectedFromSenders,
+            MonthlyCodPaidToSenders:     monthlyCodPaidToSenders,
+            MonthlyCourierSalaryPaid:    monthlyCourierSalaryPaid
         );
     }
 

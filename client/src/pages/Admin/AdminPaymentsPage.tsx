@@ -729,27 +729,42 @@ function PaidBadge({ label }: { label: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
+const MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+
 type Tab = 'senders' | 'cod' | 'settlements';
 
 export default function AdminPaymentsPage({ token }: { token: string }) {
-  const [tab, setTab] = useState<Tab>('senders');
-  const [data, setData] = useState<AdminPaymentsPage | null>(null);
+  const now = new Date();
+  const [tab,   setTab]   = useState<Tab>('senders');
+  const [year,  setYear]  = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [data,  setData]  = useState<AdminPaymentsPage | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const d = await getAdminPayments(token);
+      const d = await getAdminPayments(token, year, month);
       setData(d);
     } catch (e: any) {
       setError('Failed to load payments data.');
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, year, month]);
 
   useEffect(() => { load(); }, [load]);
+
+  const goMonth = (delta: number) => {
+    let m = month + delta, y = year;
+    if (m > 12) { m = 1;  y++; }
+    if (m < 1)  { m = 12; y--; }
+    setMonth(m); setYear(y);
+  };
 
   const tabs: [Tab, string, string][] = [
     ['senders',     'Collect from Senders',    data ? String(data.collectFromSenders.pendingRequests.length) : '—'],
@@ -759,6 +774,93 @@ export default function AdminPaymentsPage({ token }: { token: string }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Month picker */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={() => goMonth(-1)} style={navBtnStyle}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        <span style={{ fontWeight: 700, fontSize: '0.95rem', minWidth: 150, textAlign: 'center' }}>
+          {MONTHS[month - 1]} {year}
+        </span>
+        <button
+          onClick={() => goMonth(1)}
+          disabled={year === now.getFullYear() && month === now.getMonth() + 1}
+          style={navBtnStyle}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        <button onClick={load} title="Refresh" style={{ ...navBtnStyle, marginLeft: 4 }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M2 8a6 6 0 1 0 1-3.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M2 4v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Monthly overview */}
+      {data && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 12,
+        }}>
+          <div style={{
+            background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)', padding: '16px 20px',
+            borderLeft: '3px solid #1e7e5a',
+          }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.08em', color: 'var(--color-text-subtle)', marginBottom: 6 }}>
+              Collected from Senders
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1e7e5a', lineHeight: 1 }}>
+              ₾{fmt(data.monthlyCollectedFromSenders)}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 4 }}>
+              Service fees confirmed this month
+            </div>
+          </div>
+
+          <div style={{
+            background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)', padding: '16px 20px',
+            borderLeft: '3px solid #6366f1',
+          }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.08em', color: 'var(--color-text-subtle)', marginBottom: 6 }}>
+              Paid as COD to Senders
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#6366f1', lineHeight: 1 }}>
+              ₾{fmt(data.monthlyCodPaidToSenders)}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 4 }}>
+              COD forwarded to senders this month
+            </div>
+          </div>
+
+          <div style={{
+            background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)', padding: '16px 20px',
+            borderLeft: '3px solid var(--color-accent)',
+          }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.08em', color: 'var(--color-text-subtle)', marginBottom: 6 }}>
+              Courier Salaries Paid
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-accent)', lineHeight: 1 }}>
+              ₾{fmt(data.monthlyCourierSalaryPaid)}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 4 }}>
+              Salaries paid out this month
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab bar */}
       <div style={{
         display: 'flex', gap: 6, borderBottom: '1px solid var(--color-border)', paddingBottom: 0,
@@ -786,19 +888,6 @@ export default function AdminPaymentsPage({ token }: { token: string }) {
             </span>
           </button>
         ))}
-        <button
-          onClick={load}
-          title="Refresh"
-          style={{
-            marginLeft: 'auto', background: 'none', border: 'none',
-            cursor: 'pointer', color: 'var(--color-text-subtle)', padding: '8px 10px',
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M2 8a6 6 0 1 0 1-3.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            <path d="M2 4v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
       </div>
 
       {/* Content */}
@@ -925,6 +1014,12 @@ const cancelBtnStyle: React.CSSProperties = {
   padding: '7px 18px', background: 'var(--color-bg-3)', color: 'var(--color-text)',
   border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
   fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer',
+};
+
+const navBtnStyle: React.CSSProperties = {
+  background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-sm)', padding: '6px 10px', cursor: 'pointer',
+  color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center',
 };
 
 const outlineBtnStyle: React.CSSProperties = {
