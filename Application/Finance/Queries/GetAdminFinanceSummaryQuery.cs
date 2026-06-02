@@ -52,6 +52,18 @@ public sealed record AdminFinanceSummaryDto(
 );
 
 /// <summary>
+/// All-time cash position of the company derived from every confirmed PaymentRequest ever.
+/// CashIn  = CourierHandsOverRevenue + SenderPaysCompany (confirmed AmountConfirmed)
+/// CashOut = CompanyPaysSender + CompanyPaysCourier (confirmed AmountConfirmed)
+/// Balance = CashIn − CashOut
+/// </summary>
+public sealed record CompanyCashBalanceDto(
+    decimal CashIn,
+    decimal CashOut,
+    decimal Balance
+);
+
+/// <summary>
 /// A single PaymentRequest event row in the ledger history.
 /// </summary>
 public sealed record FinanceLedgerEntryDto(
@@ -69,9 +81,10 @@ public sealed record FinanceLedgerEntryDto(
 public sealed record AdminFinancePageDto(
     IReadOnlyList<AdminFinanceSummaryDto> MonthlySummaries,
     IReadOnlyList<FinanceLedgerEntryDto>  LedgerEntries,
-    int    TotalLedgerCount,
-    int    Page,
-    int    PageSize
+    int                  TotalLedgerCount,
+    int                  Page,
+    int                  PageSize,
+    CompanyCashBalanceDto CashBalance
 );
 
 // ── Query ─────────────────────────────────────────────────────────────────────
@@ -145,6 +158,23 @@ public sealed class GetAdminFinanceSummaryQueryHandler
             })
             .ToListAsync(cancellationToken);
 
+        // All-time cash balance — not scoped to the display range
+        var allConfirmed = await _context.PaymentRequests
+            .AsNoTracking()
+            .Where(p => p.Status == PaymentRequestStatus.Confirmed)
+            .Select(p => new { p.Type, p.AmountConfirmed })
+            .ToListAsync(cancellationToken);
+
+        var cashIn  = allConfirmed
+            .Where(p => p.Type == PaymentRequestType.CourierHandsOverRevenue
+                     || p.Type == PaymentRequestType.SenderPaysCompany)
+            .Sum(p => p.AmountConfirmed);
+        var cashOut = allConfirmed
+            .Where(p => p.Type == PaymentRequestType.CompanyPaysSender
+                     || p.Type == PaymentRequestType.CompanyPaysCourier)
+            .Sum(p => p.AmountConfirmed);
+        var cashBalance = new CompanyCashBalanceDto(cashIn, cashOut, cashIn - cashOut);
+
         // Build month buckets
         var monthlySummaries = new List<AdminFinanceSummaryDto>();
         for (int i = 0; i < request.MonthsBack; i++)
@@ -159,7 +189,11 @@ public sealed class GetAdminFinanceSummaryQueryHandler
             var grossRevenue    = mo.Sum(o => o.CompanyServicePrice);
             var totalSalaries   = mo.Sum(o => o.CourierSalary ?? 0m);
             var totalCodCollected = mo.Sum(o => o.AmountOfCashCollected ?? 0m);
-            var codPaid         = mo.Where(o => o.HasCompanyPaidTheSender).Sum(o => o.AmountToCollectForPackage ?? 0m);
+            // Use confirmed CompanyPaysSender PaymentRequests for accuracy (accounts for service-fee netting)
+            var codPaid         = mp
+                .Where(p => p.Type   == PaymentRequestType.CompanyPaysSender
+                         && p.Status == PaymentRequestStatus.Confirmed)
+                .Sum(p => p.AmountConfirmed);
             var codOwed         = mo.Where(o => !o.HasCompanyPaidTheSender && (o.AmountToCollectForPackage ?? 0m) > 0)
                                     .Sum(o => o.AmountToCollectForPackage ?? 0m);
 
@@ -245,7 +279,8 @@ public sealed class GetAdminFinanceSummaryQueryHandler
             LedgerEntries:    ledgerDtos,
             TotalLedgerCount: totalCount,
             Page:             request.LedgerPage,
-            PageSize:         request.LedgerPageSize
+            PageSize:         request.LedgerPageSize,
+            CashBalance:      cashBalance
         );
     }
 }

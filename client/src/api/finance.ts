@@ -28,12 +28,19 @@ export interface FinanceLedgerEntry {
   confirmedAt:      string | null;
 }
 
+export interface CompanyCashBalance {
+  cashIn:  number;
+  cashOut: number;
+  balance: number;
+}
+
 export interface AdminFinancePage {
   monthlySummaries:  AdminFinanceSummary[];
   ledgerEntries:     FinanceLedgerEntry[];
   totalLedgerCount:  number;
   page:              number;
   pageSize:          number;
+  cashBalance:       CompanyCashBalance;
 }
 
 export type LedgerTypeFilter =

@@ -95,6 +95,7 @@ public sealed record AdminPaymentsPageDto(
 public sealed record CustomerServiceFeeOrderDto(
     Guid    OrderId,
     string  TrackingNumber,
+    string  OrderType,
     string  RecipientFirstName,
     string  RecipientCity,
     string  RecipientDistrict,

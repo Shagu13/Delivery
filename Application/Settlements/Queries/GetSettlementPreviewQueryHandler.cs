@@ -36,11 +36,14 @@ public sealed class GetSettlementPreviewQueryHandler
         // ── Delivered orders for the day ──────────────────────────────────────
         var orders = await _context.Orders
             .AsNoTracking()
-            .Where(o => o.CourierId   == request.CourierId
-                     && o.Status      == OrderStatus.DeliveredToRecipient
-                     && o.DeliveredAt >= dayStart
-                     && o.DeliveredAt <= dayEnd)
-            .OrderBy(o => o.DeliveredAt)
+            .Where(o => o.CourierId == request.CourierId
+                     && ((o.Status == OrderStatus.DeliveredToRecipient
+                          && o.DeliveredAt >= dayStart
+                          && o.DeliveredAt <= dayEnd)
+                       || (o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                          && o.DeliveredToWarehouseAt >= dayStart
+                          && o.DeliveredToWarehouseAt <= dayEnd)))
+            .OrderBy(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt)
             .ToListAsync(cancellationToken);
 
         // ── GroupOrders picked up on the day → drives TotalOrdersPickedUp ────
@@ -93,7 +96,7 @@ public sealed class GetSettlementPreviewQueryHandler
             CourierSalary:         o.CourierSalary,
             CompanyRevenue:        o.CompanyRevenue,
             AmountOfCashCollected: o.AmountOfCashCollected,
-            DeliveredAt:           o.DeliveredAt
+            DeliveredAt:           o.DeliveredAt ?? o.DeliveredToWarehouseAt
         )).ToList();
 
         return new SettlementPreviewDto(

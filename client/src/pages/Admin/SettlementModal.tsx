@@ -235,13 +235,23 @@ export function SettlementModal({
                                         <span className="stl-fin-label">Company Net Income</span>
                                         <span className="stl-fin-value stl-fin-value--income">{fmt(preview.totalCompanyNetIncome)}</span>
                                     </div>
-                                    <div className="stl-fin-row">
-                                        <span className="stl-fin-label">
-                                            Courier Transfer to Company
-                                            <span className="stl-fin-hint">Total cash held − salary</span>
-                                        </span>
-                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(preview.totalCourierTransferToCompany)}</span>
-                                    </div>
+                                    {preview.totalCourierTransferToCompany >= 0 ? (
+                                        <div className="stl-fin-row">
+                                            <span className="stl-fin-label">
+                                                Courier Transfer to Company
+                                                <span className="stl-fin-hint">Cash held − salary</span>
+                                            </span>
+                                            <span className="stl-fin-value stl-fin-value--transfer">{fmt(preview.totalCourierTransferToCompany)}</span>
+                                        </div>
+                                    ) : (
+                                        <div className="stl-fin-row">
+                                            <span className="stl-fin-label">
+                                                Company Pays Courier
+                                                <span className="stl-fin-hint">No cash collected — company owes salary</span>
+                                            </span>
+                                            <span className="stl-fin-value" style={{ color: '#6366f1' }}>{fmt(Math.abs(preview.totalCourierTransferToCompany))}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </fieldset>
 

@@ -61,8 +61,11 @@ public sealed class CreateSenderPaymentRequestCommandHandler
         if (orders.Count != request.OrderIds.Count)
             throw new NotFoundException("Order", "one or more of the requested IDs");
 
+        // Group-order-based orders (Send/Exchange) own the customer via GroupOrder.CustomerId.
+        // Standalone Return orders own the customer directly via o.CustomerId.
         var invalid = orders
-            .Where(o => o.GroupOrder == null || o.GroupOrder.CustomerId != request.CustomerId)
+            .Where(o => o.GroupOrder?.CustomerId != request.CustomerId
+                     && o.CustomerId             != request.CustomerId)
             .Select(o => o.TrackingNumber)
             .ToList();
 

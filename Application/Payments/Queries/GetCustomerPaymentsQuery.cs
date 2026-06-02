@@ -39,10 +39,11 @@ public sealed class GetCustomerPaymentsQueryHandler
         var monthEnd   = monthStart.AddMonths(1);
 
         // ── 1. Service fee orders for the month ───────────────────────────────
+        // Include both group-order-based orders (Send/Exchange) and standalone Return orders.
+        // Standalone Returns own the Customer via o.CustomerId; group orders own it via o.GroupOrder.CustomerId.
         var serviceFeeOrders = await _context.Orders
             .Include(o => o.GroupOrder)
-            .Where(o => o.GroupOrderId != null
-                     && o.GroupOrder!.CustomerId    == customer.Id
+            .Where(o => (o.GroupOrder!.CustomerId == customer.Id || o.CustomerId == customer.Id)
                      && o.WhoPaysForCompanyService == ServicePayer.Sender
                      && o.CreatedAt               >= monthStart
                      && o.CreatedAt               <  monthEnd)
@@ -52,6 +53,7 @@ public sealed class GetCustomerPaymentsQueryHandler
         var serviceFeeDtos = serviceFeeOrders.Select(o => new CustomerServiceFeeOrderDto(
             OrderId:                     o.Id,
             TrackingNumber:              o.TrackingNumber,
+            OrderType:                   o.OrderType.ToString(),
             RecipientFirstName:          o.RecipientFirstName,
             RecipientCity:               o.RecipientCity,
             RecipientDistrict:           o.RecipientDistrict,
@@ -60,7 +62,8 @@ public sealed class GetCustomerPaymentsQueryHandler
             CompanyServicePaymentStatus: o.CompanyServicePaymentStatus.ToString(),
             PaymentRequestId:            o.PaymentRequestId,
             CreatedAt:                   o.CreatedAt,
-            DeliveredAt:                 o.DeliveredAt
+            // Return orders record completion in DeliveredToWarehouseAt, not DeliveredAt
+            DeliveredAt:                 o.DeliveredAt ?? o.DeliveredToWarehouseAt
         )).ToList();
 
         // ── 2. SenderPaysCompany request history (all time) ───────────────────
@@ -121,9 +124,19 @@ public sealed class GetCustomerPaymentsQueryHandler
             .ToListAsync(cancellationToken);
 
         // ── 5. Totals ─────────────────────────────────────────────────────────
+        // "Unpaid" = fee is owed and order has reached a terminal delivery state.
+        // For Send/Exchange: DeliveredToRecipient or ExchangeCompleted.
+        // For Return: DeliveredReturnOrderToWarehouse or ReturnedToSender.
+        var completedStatuses = new HashSet<OrderStatus>
+        {
+            OrderStatus.DeliveredToRecipient,
+            OrderStatus.ExchangeCompleted,
+            OrderStatus.DeliveredReturnOrderToWarehouse,
+            OrderStatus.ReturnedToSender,
+        };
         var totalUnpaid = serviceFeeOrders
             .Where(o => o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Unpaid
-                     && o.Status == OrderStatus.DeliveredToRecipient)
+                     && completedStatuses.Contains(o.Status))
             .Sum(o => o.CompanyServicePrice);
 
         var totalPending = serviceFeeOrders

@@ -22,13 +22,17 @@ function FinRow({ label, value, highlight = false }: { label: string; value: str
 function SettlementCard({ item }: { item: CourierSettlementItem }) {
     const { t } = useLanguage();
     const [expanded, setExpanded] = useState(false);
+    // For negative-transfer days the company owes the courier their salary;
+    // those days are "done" once wasCourierPaid, not waiting for isTheDayClosed.
+    const isDone = item.isTheDayClosed
+        || (item.totalCourierTransferToCompany < 0 && item.wasCourierPaid);
     return (
         <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <button onClick={() => setExpanded(e => !e)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', background: expanded ? 'var(--color-bg-2)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-text)' }}>{fmtDate(item.date)}</span>
-                        {item.isTheDayClosed
+                        {isDone
                             ? <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#059669', background: '#d1fae5', borderRadius: '100px', padding: '2px 8px' }}>{t.cdSettClosed}</span>
                             : <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#f97316', background: 'rgba(249,115,22,0.1)', borderRadius: '100px', padding: '2px 8px' }}>{t.cdSettPending}</span>
                         }
@@ -58,13 +62,26 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
                     <FinRow label={t.cdSettCashCollected} value={`₾${item.totalAmountOfCashCollected.toFixed(2)}`} />
                     <FinRow label={t.cdSettTotalFees}     value={`₾${item.totalCompanyServiceRevenue.toFixed(2)}`} />
                     <FinRow label={t.cdSettYourSalary}    value={`₾${item.totalCourierSalary.toFixed(2)}`} highlight />
-                    {item.totalAmountOfCashCollected > 0 && (
-                        <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: '8px', background: item.isTheDayClosed ? '#d1fae5' : '#fef3c7', border: `1px solid ${item.isTheDayClosed ? '#6ee7b7' : '#fde047'}` }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: item.isTheDayClosed ? '#065f46' : '#92400e', marginBottom: '4px' }}>
-                                {item.isTheDayClosed ? t.cdSettTransferDone : t.cdSettTransferPending}
+                    {item.totalAmountOfCashCollected > 0 && item.totalCourierTransferToCompany >= 0 && (
+                        <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: '8px', background: isDone ? '#d1fae5' : '#fef3c7', border: `1px solid ${isDone ? '#6ee7b7' : '#fde047'}` }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: isDone ? '#065f46' : '#92400e', marginBottom: '4px' }}>
+                                {isDone ? t.cdSettTransferDone : t.cdSettTransferPending}
                             </div>
-                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: item.isTheDayClosed ? '#059669' : '#b45309' }}>₾{item.totalCourierTransferToCompany.toFixed(2)}</div>
-                            <div style={{ fontSize: '0.73rem', color: item.isTheDayClosed ? '#047857' : '#92400e', marginTop: '2px' }}>{t.cdSettTransferHint}</div>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: isDone ? '#059669' : '#b45309' }}>₾{item.totalCourierTransferToCompany.toFixed(2)}</div>
+                            <div style={{ fontSize: '0.73rem', color: isDone ? '#047857' : '#92400e', marginTop: '2px' }}>{t.cdSettTransferHint}</div>
+                        </div>
+                    )}
+                    {item.totalCourierTransferToCompany < 0 && (
+                        <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: '8px', background: item.wasCourierPaid ? '#d1fae5' : '#eff6ff', border: `1px solid ${item.wasCourierPaid ? '#6ee7b7' : '#93c5fd'}` }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: item.wasCourierPaid ? '#065f46' : '#1d4ed8', marginBottom: '4px' }}>
+                                {item.wasCourierPaid ? 'Salary received from company' : 'Company will pay your salary'}
+                            </div>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: item.wasCourierPaid ? '#059669' : '#2563eb' }}>
+                                ₾{Math.abs(item.totalCourierTransferToCompany).toFixed(2)}
+                            </div>
+                            <div style={{ fontSize: '0.73rem', color: item.wasCourierPaid ? '#047857' : '#3b82f6', marginTop: '2px' }}>
+                                Service fees were paid directly by senders
+                            </div>
                         </div>
                     )}
                 </div>

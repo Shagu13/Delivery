@@ -44,18 +44,21 @@ public sealed class GetAdminPaymentsQueryHandler
         )).ToList();
 
         // ── 2. Unpaid sender groups (no request submitted yet) ────────────────
+        // Include standalone Return orders (CustomerId on Order) alongside group orders (via GroupOrder).
         var unpaidOrders = await _context.Orders
             .Include(o => o.GroupOrder).ThenInclude(g => g!.Customer)
+            .Include(o => o.Customer)
             .Where(o => o.WhoPaysForCompanyService    == ServicePayer.Sender
                      && o.CompanyServicePaymentStatus == CompanyServicePaymentStatus.Unpaid
-                     && o.GroupOrder!.CustomerId       != null)
+                     && (o.GroupOrder!.CustomerId != null || o.CustomerId != null))
             .ToListAsync(cancellationToken);
 
         var unpaidGroups = unpaidOrders
-            .GroupBy(o => o.GroupOrder!.CustomerId!.Value)
+            .GroupBy(o => o.GroupOrder?.CustomerId ?? o.CustomerId!.Value)
             .Select(g =>
             {
-                var customer = g.First().GroupOrder!.Customer!;
+                var first    = g.First();
+                var customer = first.GroupOrder?.Customer ?? first.Customer!;
                 return new AdminUnpaidSenderGroupDto(
                     CustomerId:           g.Key,
                     CustomerBusinessName: customer.BusinessName,

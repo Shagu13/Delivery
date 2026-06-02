@@ -4,6 +4,7 @@ import {
   getUnpaidFeeOrders,
   type AdminFinancePage,
   type AdminFinanceSummary,
+  type CompanyCashBalance,
   type FinanceLedgerEntry,
   type LedgerTypeFilter,
   type UnpaidFeeOrder,
@@ -70,6 +71,57 @@ function StatCard({
       {sub && (
         <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{sub}</div>
       )}
+    </div>
+  );
+}
+
+// ── Cash balance card ──────────────────────────────────────────────────────────
+
+function CashBalanceCard({ balance }: { balance: CompanyCashBalance }) {
+  const isPositive = balance.balance >= 0;
+  return (
+    <div style={{
+      background: 'var(--color-bg-2)',
+      border: `1px solid ${isPositive ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+      borderRadius: 'var(--radius-md)',
+      padding: '16px 20px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      gridColumn: '1 / -1',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{
+          width: 32, height: 32, borderRadius: 'var(--radius-sm)',
+          background: isPositive ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+          color: isPositive ? '#10b981' : '#ef4444',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="4" width="14" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M1 7h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            <circle cx="12" cy="10" r="1" fill="currentColor"/>
+          </svg>
+        </span>
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>
+          Company Cash on Hand <span style={{ fontWeight: 400, opacity: 0.7 }}>(all-time, confirmed transactions)</span>
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: isPositive ? '#10b981' : '#ef4444', lineHeight: 1.1 }}>
+          {isPositive ? '' : '−'}₾{fmt(Math.abs(balance.balance))}
+        </div>
+        <div style={{ display: 'flex', gap: 20, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+          <span>
+            <span style={{ color: '#10b981', fontWeight: 600 }}>↓ In: ₾{fmt(balance.cashIn)}</span>
+            <span style={{ opacity: 0.6 }}> (couriers + senders)</span>
+          </span>
+          <span>
+            <span style={{ color: '#ef4444', fontWeight: 600 }}>↑ Out: ₾{fmt(balance.cashOut)}</span>
+            <span style={{ opacity: 0.6 }}> (couriers + senders)</span>
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -593,6 +645,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
 
       {/* Top stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
+        <CashBalanceCard balance={data.cashBalance} />
         <StatCard
           label="Gross Service Revenue"
           value={`₾${fmt(totalGross)}`}

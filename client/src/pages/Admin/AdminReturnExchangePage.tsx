@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
     fetchReturnExchangeOrders,
     assignReturnCourier,
     markReturnedToSender,
     type ReturnExchangeOrder,
 } from '../../api/returnExchange';
+import { setCourierSalary } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -136,13 +138,16 @@ function OrderRow({
     token: string;
     onRefresh: () => void;
 }) {
-    const [assigning, setAssigning]     = useState(false);
-    const [completing, setCompleting]   = useState(false);
-    const [selectedCourier, setSelected] = useState('');
-    const [rowError, setRowError]       = useState<string | null>(null);
+    const [assigning, setAssigning]         = useState(false);
+    const [completing, setCompleting]       = useState(false);
+    const [selectedCourier, setSelected]    = useState('');
+    const [rowError, setRowError]           = useState<string | null>(null);
+    const [showSalaryWarning, setShowSalaryWarning] = useState(false);
+    const [showSalaryModal, setShowSalaryModal]     = useState(false);
+    const [salaryInput, setSalaryInput]             = useState('');
+    const [salarySaving, setSalarySaving]           = useState(false);
 
-    const handleAssign = async () => {
-        if (!selectedCourier) return;
+    const doAssign = async () => {
         setAssigning(true); setRowError(null);
         try {
             await assignReturnCourier(token, order.id, selectedCourier);
@@ -150,6 +155,27 @@ function OrderRow({
         } catch (e) {
             setRowError(e instanceof Error ? e.message : 'Failed');
         } finally { setAssigning(false); }
+    };
+
+    const handleAssign = async () => {
+        if (!selectedCourier) return;
+        if (order.courierSalary == null) {
+            setShowSalaryWarning(true);
+            return;
+        }
+        await doAssign();
+    };
+
+    const handleSalarySave = async () => {
+        const val = parseFloat(salaryInput);
+        if (isNaN(val) || val < 0) return;
+        setSalarySaving(true);
+        try {
+            await setCourierSalary(token, order.id, val);
+        } catch { /* best-effort */ }
+        setSalarySaving(false);
+        setShowSalaryModal(false);
+        await doAssign();
     };
 
     const handleMarkReturned = async () => {
@@ -270,6 +296,62 @@ function OrderRow({
                     )}
                 </div>
             </td>
+
+            {/* Salary warning portal */}
+            {showSalaryWarning && createPortal(
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '28px 32px', maxWidth: 420, width: '90%', textAlign: 'center', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
+                        <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚠️</div>
+                        <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 8, color: 'var(--color-text)' }}>Order missing courier salary</div>
+                        <div style={{ fontSize: '0.88rem', color: 'var(--color-text-subtle)', marginBottom: 24, lineHeight: 1.5 }}>
+                            This order has no courier salary set. You can fill it in now or proceed anyway.
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                            <button onClick={() => setShowSalaryWarning(false)} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Cancel</button>
+                            <button onClick={() => { setShowSalaryWarning(false); void doAssign(); }} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Proceed Anyway</button>
+                            <button onClick={() => { setShowSalaryWarning(false); setSalaryInput(''); setShowSalaryModal(true); }} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Fill in Salary</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Salary modal portal */}
+            {showSalaryModal && createPortal(
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+                    <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 400, boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>Set Courier Salary</div>
+                                <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+                                    <span className="tn-badge" style={{ fontSize: '0.75rem' }}>{order.trackingNumber}</span>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowSalaryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}>
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>Courier Salary ₾</span>
+                            <input
+                                type="number" min="0" step="0.01" placeholder="0.00"
+                                autoFocus
+                                value={salaryInput}
+                                onChange={e => setSalaryInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') void handleSalarySave(); if (e.key === 'Escape') setShowSalaryModal(false); }}
+                                style={{ flex: 1, padding: '7px 10px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', fontSize: '0.88rem', outline: 'none' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button onClick={() => setShowSalaryModal(false)} disabled={salarySaving} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Cancel</button>
+                            <button onClick={handleSalarySave} disabled={salarySaving || !salaryInput} style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (salarySaving || !salaryInput) ? 0.6 : 1 }}>
+                                {salarySaving ? 'Saving…' : 'Save & Assign'}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </tr>
     );
 }

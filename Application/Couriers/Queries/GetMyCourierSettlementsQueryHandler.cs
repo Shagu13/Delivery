@@ -37,7 +37,8 @@ public sealed class GetMyCourierSettlementsQueryHandler
             TotalCompanyServiceRevenue:    s.TotalCompanyServiceRevenue,
             TotalCourierSalary:            s.TotalCourierSalary,
             TotalCourierTransferToCompany: s.TotalCourierTransferToCompany,
-            IsTheDayClosed:               s.IsTheDayClosed
+            IsTheDayClosed:               s.IsTheDayClosed,
+            WasCourierPaid:               s.WasCourierPaid
         )).ToList();
     }
 }

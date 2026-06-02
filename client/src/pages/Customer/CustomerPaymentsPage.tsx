@@ -200,7 +200,7 @@ function ServiceFeeSection({
                     style={{ cursor: 'pointer' }}
                   />
                 </th>
-                {['Tracking', 'Recipient', 'City / District', 'Fee', 'Status', 'Delivered'].map(h => (
+                {['Tracking', 'Type', 'Recipient', 'City / District', 'Fee', 'Status', 'Delivered'].map(h => (
                   <th key={h} style={{
                     padding: '8px 12px', textAlign: 'left', fontWeight: 700,
                     color: 'var(--color-text-subtle)', fontSize: '0.68rem',
@@ -230,6 +230,21 @@ function ServiceFeeSection({
                     <td style={{ padding: '8px 12px', fontFamily: 'monospace',
                       fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
                       {o.trackingNumber}
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>
+                      <span style={{
+                        display: 'inline-block', padding: '1px 7px', borderRadius: 99,
+                        fontSize: '0.65rem', fontWeight: 800, letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        background: o.orderType === 'Return'   ? 'rgba(239,68,68,0.1)'
+                                  : o.orderType === 'Exchange' ? 'rgba(59,130,246,0.1)'
+                                  : 'rgba(16,185,129,0.1)',
+                        color:      o.orderType === 'Return'   ? '#ef4444'
+                                  : o.orderType === 'Exchange' ? '#3b82f6'
+                                  : '#10b981',
+                      }}>
+                        {o.orderType}
+                      </span>
                     </td>
                     <td style={{ padding: '8px 12px' }}>{o.recipientFirstName}</td>
                     <td style={{ padding: '8px 12px', color: 'var(--color-text-muted)' }}>

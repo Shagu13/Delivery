@@ -91,6 +91,7 @@ export interface AdminPaymentsPage {
 export interface CustomerServiceFeeOrder {
   orderId:                    string;
   trackingNumber:             string;
+  orderType:                  'Send' | 'Return' | 'Exchange';
   recipientFirstName:         string;
   recipientCity:              string;
   recipientDistrict:          string;

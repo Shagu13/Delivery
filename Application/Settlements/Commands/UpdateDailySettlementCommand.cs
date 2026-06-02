@@ -57,10 +57,13 @@ public sealed class UpdateDailySettlementCommandHandler
 
         // ── 3. Re-load all delivered orders for the day ───────────────────────
         var orders = await _context.Orders
-            .Where(o => o.CourierId   == request.CourierId
-                     && o.Status      == OrderStatus.DeliveredToRecipient
-                     && o.DeliveredAt >= dayStart
-                     && o.DeliveredAt <= dayEnd)
+            .Where(o => o.CourierId == request.CourierId
+                     && ((o.Status == OrderStatus.DeliveredToRecipient
+                          && o.DeliveredAt >= dayStart
+                          && o.DeliveredAt <= dayEnd)
+                       || (o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                          && o.DeliveredToWarehouseAt >= dayStart
+                          && o.DeliveredToWarehouseAt <= dayEnd)))
             .ToListAsync(cancellationToken);
 
         // ── 4. All orders must have full financial data ───────────────────────

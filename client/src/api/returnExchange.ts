@@ -33,6 +33,7 @@ export interface ReturnExchangeOrder {
     courierFullName: string | null;
     courierPhone: string | null;
     companyServicePrice: number;
+    courierSalary: number | null;
     createdAt: string;
     pickedUpFromRecipientAt: string | null;
     deliveredToWarehouseAt: string | null;

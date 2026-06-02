@@ -50,6 +50,7 @@ public sealed class GetReturnExchangeOrdersQueryHandler
                 CourierFullName:         o.Courier is null ? null : $"{o.Courier.FirstName} {o.Courier.LastName}",
                 CourierPhone:            o.Courier?.PhoneNumber,
                 CompanyServicePrice:     o.CompanyServicePrice,
+                CourierSalary:           o.CourierSalary,
                 CreatedAt:               o.CreatedAt,
                 PickedUpFromRecipientAt: o.PickedUpFromRecipientAt,
                 DeliveredToWarehouseAt:  o.DeliveredToWarehouseAt,

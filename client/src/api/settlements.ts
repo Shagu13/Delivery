@@ -66,6 +66,7 @@ export interface CourierSettlementItem {
     /** Amount the courier must hand over to the company (cash − salary). */
     totalCourierTransferToCompany: number;
     isTheDayClosed: boolean;
+    wasCourierPaid: boolean;
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────────

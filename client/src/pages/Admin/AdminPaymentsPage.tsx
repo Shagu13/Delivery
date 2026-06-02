@@ -644,23 +644,29 @@ function CourierSettlementsTab({
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
             gap: 12, padding: 16,
           }}>
-            {[
-              ['Courier Salary',    s.totalCourierSalary,           '#1e7e5a'],
-              ['Transfer to Co.',   s.totalCourierTransferToCompany,'#6366f1'],
-              ['Service Revenue',   s.totalCompanyServiceRevenue,   'var(--color-accent)'],
-              ['Net Income',        s.totalCompanyNetIncome,        'var(--color-text)'],
-              ['Cash Collected',    s.totalAmountOfCashCollected ?? 0, 'var(--color-text-muted)'],
-            ].map(([label, value, color]) => (
-              <div key={label as string}>
-                <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
-                  letterSpacing: '0.07em', color: 'var(--color-text-subtle)', marginBottom: 2 }}>
-                  {label}
+            {(() => {
+              const transfer = s.totalCourierTransferToCompany;
+              const rows: [string, number, string][] = [
+                ['Courier Salary',   s.totalCourierSalary,              '#1e7e5a'],
+                transfer >= 0
+                  ? ['Transfer to Co.',  transfer,                      '#6366f1']
+                  : ['Co. Pays Courier', Math.abs(transfer),            '#ef4444'],
+                ['Service Revenue',  s.totalCompanyServiceRevenue,      'var(--color-accent)'],
+                ['Net Income',       s.totalCompanyNetIncome,           'var(--color-text)'],
+                ['Cash Collected',   s.totalAmountOfCashCollected ?? 0, 'var(--color-text-muted)'],
+              ];
+              return rows.map(([label, value, color]) => (
+                <div key={label}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
+                    letterSpacing: '0.07em', color: 'var(--color-text-subtle)', marginBottom: 2 }}>
+                    {label}
+                  </div>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color }}>
+                    ₾{fmt(value)}
+                  </div>
                 </div>
-                <div style={{ fontSize: '1rem', fontWeight: 800, color: color as string }}>
-                  ₾{fmt(value as number)}
-                </div>
-              </div>
-            ))}
+              ));
+            })()}
           </div>
 
           {/* Action buttons */}
@@ -681,19 +687,21 @@ function CourierSettlementsTab({
               </button>
             )}
 
-            {/* Revenue handover */}
-            {s.hasCourierHandedOverRevenue ? (
-              <PaidBadge label={`Revenue received ${formatDate(s.revenueHandedOverAt)}`} />
-            ) : (
-              <button
-                onClick={() => mark(s.settlementId, 'CourierHandsOverRevenue')}
-                disabled={busy === s.settlementId + 'CourierHandsOverRevenue'}
-                style={outlineBtnStyle}
-              >
-                {busy === s.settlementId + 'CourierHandsOverRevenue'
-                  ? 'Saving…'
-                  : `Revenue Received (₾${fmt(s.totalCourierTransferToCompany)})`}
-              </button>
+            {/* Revenue handover — only relevant when courier collected cash to hand over */}
+            {s.totalCourierTransferToCompany > 0 && (
+              s.hasCourierHandedOverRevenue ? (
+                <PaidBadge label={`Revenue received ${formatDate(s.revenueHandedOverAt)}`} />
+              ) : (
+                <button
+                  onClick={() => mark(s.settlementId, 'CourierHandsOverRevenue')}
+                  disabled={busy === s.settlementId + 'CourierHandsOverRevenue'}
+                  style={outlineBtnStyle}
+                >
+                  {busy === s.settlementId + 'CourierHandsOverRevenue'
+                    ? 'Saving…'
+                    : `Revenue Received (₾${fmt(s.totalCourierTransferToCompany)})`}
+                </button>
+              )
             )}
           </div>
         </div>
