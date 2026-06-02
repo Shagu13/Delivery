@@ -586,7 +586,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
   const summaries     = data.monthlySummaries;
   const totalGross    = summaries.reduce((s, m) => s + m.grossServiceRevenue,      0);
   const totalNet      = summaries.reduce((s, m) => s + m.netServiceIncome,         0);
-  const totalSalaries = summaries.reduce((s, m) => s + m.totalCourierSalaries,     0);
+  const totalSalaries = summaries.reduce((s, m) => s + m.totalCourierSalaryPaid,   0);
   const totalCodOwed  = summaries.reduce((s, m) => s + m.totalCodOwedToSenders,    0);
   const totalReceived = summaries.reduce((s, m) => s + m.totalReceivedFromSenders, 0);
   const totalOrders   = summaries.reduce((s, m) => s + m.totalOrdersDelivered,     0);

@@ -169,9 +169,11 @@ public sealed class GetAdminFinanceSummaryQueryHandler
             .Where(p => p.Type == PaymentRequestType.CourierHandsOverRevenue
                      || p.Type == PaymentRequestType.SenderPaysCompany)
             .Sum(p => p.AmountConfirmed);
+        // CompanyPaysCourier is excluded: CourierHandsOverRevenue is already the
+        // net amount (cash collected − salary), so deducting salary again would
+        // double-count it.
         var cashOut = allConfirmed
-            .Where(p => p.Type == PaymentRequestType.CompanyPaysSender
-                     || p.Type == PaymentRequestType.CompanyPaysCourier)
+            .Where(p => p.Type == PaymentRequestType.CompanyPaysSender)
             .Sum(p => p.AmountConfirmed);
         var cashBalance = new CompanyCashBalanceDto(cashIn, cashOut, cashIn - cashOut);
 

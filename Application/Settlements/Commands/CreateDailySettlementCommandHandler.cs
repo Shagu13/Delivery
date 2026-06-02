@@ -99,44 +99,39 @@ public sealed class CreateDailySettlementCommandHandler
         _context.DailySettlements.Add(settlement);
 
         // ── 8. Auto-mark payment events ───────────────────────────────────────
-        // When the courier collected more cash than their salary they keep the
-        // salary themselves and hand over the remainder — no separate company
-        // cash outflow exists.  Only create CompanyPaysCourier when the company
-        // must actually send cash to the courier (transfer is zero or negative).
-        if (totalTransferToCompany > 0)
+        // Read directly from the settlement record — totals are already computed.
+
+        // Courier hands over the net amount (cash collected minus their salary).
+        if (settlement.TotalCourierTransferToCompany > 0)
         {
-            // Courier hands over net cash; salary was self-funded from collections.
             settlement.HasCourierHandedOverRevenue = true;
             settlement.RevenueHandedOverAt         = DateTime.UtcNow;
-            settlement.WasCourierPaid              = true;
-            settlement.CourierPaidAt               = DateTime.UtcNow;
             _context.PaymentRequests.Add(new PaymentRequest
             {
-                Type              = PaymentRequestType.CourierHandsOverRevenue,
-                Status            = PaymentRequestStatus.Confirmed,
-                CourierId         = settlement.CourierId,
-                DailySettlement   = settlement,
-                TotalAmount       = totalTransferToCompany,
-                AmountConfirmed   = totalTransferToCompany,
-                ConfirmedAt       = DateTime.UtcNow,
+                Type            = PaymentRequestType.CourierHandsOverRevenue,
+                Status          = PaymentRequestStatus.Confirmed,
+                CourierId       = settlement.CourierId,
+                DailySettlement = settlement,
+                TotalAmount     = settlement.TotalCourierTransferToCompany,
+                AmountConfirmed = settlement.TotalCourierTransferToCompany,
+                ConfirmedAt     = DateTime.UtcNow,
             });
         }
-        else if (totalCourierSalary > 0)
+
+        // Company pays courier their full salary regardless of who covered it.
+        if (settlement.TotalCourierSalary > 0)
         {
-            // Courier collected no cash (or less than salary) — company pays the
-            // outstanding amount directly.  Amount = salary − cash collected.
-            var owedToCourier = totalCourierSalary - totalCashCollected;
             settlement.WasCourierPaid = true;
             settlement.CourierPaidAt  = DateTime.UtcNow;
             _context.PaymentRequests.Add(new PaymentRequest
             {
-                Type              = PaymentRequestType.CompanyPaysCourier,
-                Status            = PaymentRequestStatus.Confirmed,
-                CourierId         = settlement.CourierId,
-                DailySettlement   = settlement,
-                TotalAmount       = owedToCourier,
-                AmountConfirmed   = owedToCourier,
-                ConfirmedAt       = DateTime.UtcNow,
+                Type            = PaymentRequestType.CompanyPaysCourier,
+                Status          = PaymentRequestStatus.Confirmed,
+                CourierId       = settlement.CourierId,
+                DailySettlement = settlement,
+                TotalAmount     = settlement.TotalCourierSalary,
+                AmountConfirmed = settlement.TotalCourierSalary,
+                ConfirmedAt     = DateTime.UtcNow,
             });
         }
 

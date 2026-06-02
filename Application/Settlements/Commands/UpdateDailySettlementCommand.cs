@@ -131,32 +131,30 @@ public sealed class UpdateDailySettlementCommandHandler
             .Where(p => p.Status != PaymentRequestStatus.Confirmed))
         {
             if (pr.Type == PaymentRequestType.CourierHandsOverRevenue)
-                pr.TotalAmount = totalTransferToCompany;
+                pr.TotalAmount = settlement.TotalCourierTransferToCompany;
             else if (pr.Type == PaymentRequestType.CompanyPaysCourier)
-                pr.TotalAmount = totalCourierSalary;
+                pr.TotalAmount = settlement.TotalCourierSalary;
         }
 
-        // ── 10. Auto-mark payment events (re-mark anything reset above) ───────
-        if (totalTransferToCompany > 0 && !settlement.HasCourierHandedOverRevenue)
+        // ── 10. Auto-mark payment events — read from settlement fields directly ─
+        if (settlement.TotalCourierTransferToCompany > 0 && !settlement.HasCourierHandedOverRevenue)
         {
             settlement.HasCourierHandedOverRevenue = true;
             settlement.RevenueHandedOverAt         = DateTime.UtcNow;
-            settlement.WasCourierPaid              = true;
-            settlement.CourierPaidAt               = DateTime.UtcNow;
             _context.PaymentRequests.Add(new PaymentRequest
             {
                 Type              = PaymentRequestType.CourierHandsOverRevenue,
                 Status            = PaymentRequestStatus.Confirmed,
                 CourierId         = settlement.CourierId,
                 DailySettlementId = settlement.Id,
-                TotalAmount       = totalTransferToCompany,
-                AmountConfirmed   = totalTransferToCompany,
+                TotalAmount       = settlement.TotalCourierTransferToCompany,
+                AmountConfirmed   = settlement.TotalCourierTransferToCompany,
                 ConfirmedAt       = DateTime.UtcNow,
             });
         }
-        else if (totalCourierSalary > 0 && !settlement.WasCourierPaid)
+
+        if (settlement.TotalCourierSalary > 0 && !settlement.WasCourierPaid)
         {
-            var owedToCourier = totalCourierSalary - totalCashCollected;
             settlement.WasCourierPaid = true;
             settlement.CourierPaidAt  = DateTime.UtcNow;
             _context.PaymentRequests.Add(new PaymentRequest
@@ -165,8 +163,8 @@ public sealed class UpdateDailySettlementCommandHandler
                 Status            = PaymentRequestStatus.Confirmed,
                 CourierId         = settlement.CourierId,
                 DailySettlementId = settlement.Id,
-                TotalAmount       = owedToCourier,
-                AmountConfirmed   = owedToCourier,
+                TotalAmount       = settlement.TotalCourierSalary,
+                AmountConfirmed   = settlement.TotalCourierSalary,
                 ConfirmedAt       = DateTime.UtcNow,
             });
         }
