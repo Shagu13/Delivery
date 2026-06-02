@@ -144,6 +144,28 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/{id}/admin-mark-delivered  (Admin) ───────────────────
+    [HttpPut("{id:guid}/admin-mark-delivered")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AdminMarkDelivered(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new AdminMarkOrderDeliveredCommand(id), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/orders/{id}/admin-mark-at-warehouse  (Admin) ─────────────────
+    [HttpPut("{id:guid}/admin-mark-at-warehouse")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AdminMarkAtWarehouse(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new AdminMarkReturnDeliveredToWarehouseCommand(id), ct);
+        return NoContent();
+    }
+
     // ── PUT /api/orders/{id}/cancel-by-admin  (Admin) ────────────────────────
     [HttpPut("{id:guid}/cancel-by-admin")]
     [Authorize(Roles = "Admin")]

@@ -25,6 +25,17 @@ public sealed record RetryDeliveryCommand(Guid OrderId, string CourierUserId) : 
 public sealed record CancelOrderByAdminCommand(Guid OrderId) : IRequest;
 
 /// <summary>
+/// Admin force-marks a Send/Exchange order as delivered to recipient from any active status.
+/// Applies the same cash-collection logic as the courier version.
+/// </summary>
+public sealed record AdminMarkOrderDeliveredCommand(Guid OrderId) : IRequest;
+
+/// <summary>
+/// Admin force-marks a Return order as delivered to warehouse from any active status.
+/// </summary>
+public sealed record AdminMarkReturnDeliveredToWarehouseCommand(Guid OrderId) : IRequest;
+
+/// <summary>
 /// Admin sets (or updates) the courier salary for a specific order.
 /// CompanyRevenue is auto-calculated as CompanyServicePrice - CourierSalary.
 /// </summary>

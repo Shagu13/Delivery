@@ -387,6 +387,91 @@ public sealed class SetDistrictCompanyServicePriceCommandHandler : IRequestHandl
     }
 }
 
+// ── AdminMarkOrderDelivered ───────────────────────────────────────────────────
+public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<AdminMarkOrderDeliveredCommand>
+{
+    private readonly IAppDbContext _context;
+    public AdminMarkOrderDeliveredCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(AdminMarkOrderDeliveredCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        var terminalStatuses = new[]
+        {
+            OrderStatus.DeliveredToRecipient,
+            OrderStatus.ExchangeCompleted,
+            OrderStatus.CancelledByAdmin,
+            OrderStatus.CancelledBySender,
+            OrderStatus.OrderNotAccepted,
+        };
+        if (terminalStatuses.Contains(order.Status))
+            throw new ConflictException($"Order is already in a terminal status: {order.Status}.");
+
+        var wasNotPaid = order.ProductPaymentStatus == PaymentStatus.NotPaid;
+
+        order.Status               = OrderStatus.DeliveredToRecipient;
+        order.ProductPaymentStatus = PaymentStatus.Paid;
+
+        if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
+        {
+            if (wasNotPaid && order.AmountToCollectForPackage.HasValue)
+                order.AmountOfCashCollected = order.AmountToCollectForPackage.Value + order.CompanyServicePrice;
+            else if (!wasNotPaid)
+                order.AmountOfCashCollected = order.CompanyServicePrice;
+
+            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+        }
+        else if (order.WhoPaysForCompanyService == ServicePayer.Sender
+              && order.AmountToCollectForPackage.HasValue
+              && order.AmountToCollectForPackage.Value > 0)
+        {
+            order.AmountOfCashCollected = order.AmountToCollectForPackage.Value;
+        }
+
+        order.DeliveredAt    = DateTime.UtcNow;
+        order.PostponeReason = null;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        if (order.GroupOrderId.HasValue)
+            await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
+    }
+}
+
+// ── AdminMarkReturnDeliveredToWarehouse ───────────────────────────────────────
+public sealed class AdminMarkReturnDeliveredToWarehouseCommandHandler
+    : IRequestHandler<AdminMarkReturnDeliveredToWarehouseCommand>
+{
+    private readonly IAppDbContext _context;
+    public AdminMarkReturnDeliveredToWarehouseCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(AdminMarkReturnDeliveredToWarehouseCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        if (order.OrderType != OrderType.Return)
+            throw new ConflictException("This action is only valid for Return orders.");
+
+        var terminalStatuses = new[]
+        {
+            OrderStatus.DeliveredReturnOrderToWarehouse,
+            OrderStatus.ReturnedToSender,
+            OrderStatus.CancelledByAdmin,
+            OrderStatus.CancelledBySender,
+        };
+        if (terminalStatuses.Contains(order.Status))
+            throw new ConflictException($"Order is already in a terminal status: {order.Status}.");
+
+        order.Status                = OrderStatus.DeliveredReturnOrderToWarehouse;
+        order.DeliveredToWarehouseAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}
+
 // ── SetDistrictTerritory ──────────────────────────────────────────────────────
 public sealed class SetDistrictTerritoryCommandHandler : IRequestHandler<SetDistrictTerritoryCommand>
 {

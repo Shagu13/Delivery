@@ -94,7 +94,9 @@ async function orderAction(token: string, id: string, action: string, body?: obj
 export const sendOrderToCity        = (token: string, id: string) => orderAction(token, id, 'send-to-city');
 export const assignCourierToOrder   = (token: string, id: string, courierId: string) =>
     orderAction(token, id, 'assign-courier', { courierId });
-export const cancelOrderByAdmin     = (token: string, id: string) => orderAction(token, id, 'cancel-by-admin');
+export const cancelOrderByAdmin          = (token: string, id: string) => orderAction(token, id, 'cancel-by-admin');
+export const adminMarkOrderDelivered     = (token: string, id: string) => orderAction(token, id, 'admin-mark-delivered');
+export const adminMarkReturnAtWarehouse  = (token: string, id: string) => orderAction(token, id, 'admin-mark-at-warehouse');
 export const setCourierSalary       = (token: string, id: string, salary: number) =>
     orderAction(token, id, 'courier-salary', { salary });
 export const setCompanyServicePrice = (token: string, id: string, price: number) =>
