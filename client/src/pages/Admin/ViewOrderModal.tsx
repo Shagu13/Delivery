@@ -92,7 +92,7 @@ export function ViewOrderModal({ order, open, onClose }: Props) {
                 <div className="modal__body vom-body">
 
                     <Section title="Order Info">
-                        <Row label="Status"       value={<span className="status-badge" style={{ background: bg, color }}>{statusMeta.label ?? statusMeta.short}</span>} />
+                        <Row label="Status"       value={<span className="status-badge" style={{ background: bg, color }}>{statusMeta.short}</span>} />
                         <Row label="Type"         value={order.orderType} />
                         <Row label="Created"      value={formatDate(order.createdAt)} />
                         <Row label="Delivered"    value={formatDate(order.deliveredAt)} />

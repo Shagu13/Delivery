@@ -973,12 +973,6 @@ const navBtnStyle: React.CSSProperties = {
   color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center',
 };
 
-const outlineBtnStyle: React.CSSProperties = {
-  padding: '6px 14px', background: 'none',
-  border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
-  color: 'var(--color-text)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer',
-};
-
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
