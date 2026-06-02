@@ -4,6 +4,7 @@ import {
   confirmSenderPayment,
   markCompanyPaidSenderCod,
   markSettlementEvent,
+  unmarkSettlementEvent,
   type AdminPaymentsPage,
   type AdminSenderPaymentRequest,
   type AdminCodOwedToSender,
@@ -607,6 +608,21 @@ function CourierSettlementsTab({
     }
   };
 
+  const unmark = async (
+    settlementId: string,
+    eventType: 'CompanyPaysCourier' | 'CourierHandsOverRevenue',
+  ) => {
+    setBusy(settlementId + 'Unmark' + eventType); setError(null);
+    try {
+      await unmarkSettlementEvent(token, settlementId, eventType);
+      onRefresh();
+    } catch (e: any) {
+      setError(e.message ?? 'Action failed.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (settlements.length === 0) return <EmptyState label="No settlement records found." />;
 
   return (
@@ -676,7 +692,17 @@ function CourierSettlementsTab({
           }}>
             {/* Courier salary */}
             {s.wasCourierPaid ? (
-              <PaidBadge label={`Salary paid ${formatDate(s.courierPaidAt)}`} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <PaidBadge label={`Salary paid ${formatDate(s.courierPaidAt)}`} />
+                <button
+                  onClick={() => unmark(s.settlementId, 'CompanyPaysCourier')}
+                  disabled={busy === s.settlementId + 'UnmarkCompanyPaysCourier'}
+                  style={undoBtnStyle}
+                  title="Undo — mark as unpaid"
+                >
+                  {busy === s.settlementId + 'UnmarkCompanyPaysCourier' ? '…' : 'Undo'}
+                </button>
+              </div>
             ) : (
               <button
                 onClick={() => mark(s.settlementId, 'CompanyPaysCourier')}
@@ -690,7 +716,17 @@ function CourierSettlementsTab({
             {/* Revenue handover — only relevant when courier collected cash to hand over */}
             {s.totalCourierTransferToCompany > 0 && (
               s.hasCourierHandedOverRevenue ? (
-                <PaidBadge label={`Revenue received ${formatDate(s.revenueHandedOverAt)}`} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PaidBadge label={`Revenue received ${formatDate(s.revenueHandedOverAt)}`} />
+                  <button
+                    onClick={() => unmark(s.settlementId, 'CourierHandsOverRevenue')}
+                    disabled={busy === s.settlementId + 'UnmarkCourierHandsOverRevenue'}
+                    style={undoBtnStyle}
+                    title="Undo — mark as not received"
+                  >
+                    {busy === s.settlementId + 'UnmarkCourierHandsOverRevenue' ? '…' : 'Undo'}
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={() => mark(s.settlementId, 'CourierHandsOverRevenue')}
@@ -1026,6 +1062,12 @@ const outlineBtnStyle: React.CSSProperties = {
   padding: '6px 14px', background: 'none',
   border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
   color: 'var(--color-text)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer',
+};
+
+const undoBtnStyle: React.CSSProperties = {
+  padding: '3px 10px', background: 'none',
+  border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
+  color: 'var(--color-text-muted)', fontWeight: 600, fontSize: '0.72rem', cursor: 'pointer',
 };
 
 // ── Icons ─────────────────────────────────────────────────────────────────────

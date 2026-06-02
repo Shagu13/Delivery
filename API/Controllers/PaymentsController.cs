@@ -106,6 +106,29 @@ public sealed class PaymentsController : BaseController
         return CreatedAtAction(nameof(GetAdminPayments), new { }, new { paymentRequestId = id });
     }
 
+    // ── POST /api/payments/admin/settlement-event/unmark ─────────────────────
+    /// <summary>
+    /// Resets a previously marked settlement event (undo paid/handed-over).
+    /// Deletes the associated PaymentRequest record.
+    /// </summary>
+    [HttpPost("admin/settlement-event/unmark")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UnmarkSettlementEvent(
+        [FromBody] UnmarkSettlementEventRequest request,
+        CancellationToken ct)
+    {
+        if (!Enum.TryParse<PaymentRequestType>(request.EventType, out var eventType))
+            return BadRequest(new { error = "Invalid EventType. Use 'CompanyPaysCourier' or 'CourierHandsOverRevenue'." });
+
+        await Sender.Send(new UnmarkCourierSettlementEventCommand(
+            request.DailySettlementId,
+            eventType), ct);
+        return Ok();
+    }
+
     // ═════════════════════════════════════════════════════════════════════════
     // CUSTOMER ENDPOINTS
     // ═════════════════════════════════════════════════════════════════════════
@@ -202,4 +225,9 @@ public sealed record MarkSettlementEventRequest(
 public sealed record CreateSenderPaymentRequestApiRequest(
     List<Guid> OrderIds,
     string?    Note
+);
+
+public sealed record UnmarkSettlementEventRequest(
+    Guid   DailySettlementId,
+    string EventType
 );

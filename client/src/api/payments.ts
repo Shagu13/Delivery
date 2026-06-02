@@ -211,6 +211,19 @@ export async function markSettlementEvent(
   if (!res.ok) throw new Error(await res.text());
 }
 
+export async function unmarkSettlementEvent(
+  token:             string,
+  dailySettlementId: string,
+  eventType:         'CompanyPaysCourier' | 'CourierHandsOverRevenue',
+): Promise<void> {
+  const res = await fetch(`${BASE}/admin/settlement-event/unmark`, {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ dailySettlementId, eventType }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 export async function getMyPayments(
   token: string,
   year:  number,
