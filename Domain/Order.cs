@@ -76,8 +76,6 @@ public class Order
     public CompanyServicePaymentStatus CompanyServicePaymentStatus { get; set; }
         = CompanyServicePaymentStatus.Unpaid;
     public bool HasCompanyPaidTheSender { get; set; } = false;
-    public Guid? PaymentRequestId { get; set; }
-    public PaymentRequest? PaymentRequest { get; set; }
 
     // ── Financials (admin-managed) ───────────────────────────────────────────
     public decimal CompanyServicePrice { get; set; } = 0;

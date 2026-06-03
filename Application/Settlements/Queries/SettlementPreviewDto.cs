@@ -54,13 +54,7 @@ public sealed record SettlementPreviewDto(
     IReadOnlyList<SettlementOrderLineDto> Orders,
 
     /// <summary>Tracking numbers of delivered orders that still have missing/zero financial data.</summary>
-    IReadOnlyList<string> IncompleteOrderTrackingNumbers,
-
-    // ── Payment status — only meaningful when ExistingSettlementId is not null ──
-    bool      WasCourierPaid,
-    DateTime? CourierPaidAt,
-    bool      HasCourierHandedOverRevenue,
-    DateTime? RevenueHandedOverAt
+    IReadOnlyList<string> IncompleteOrderTrackingNumbers
 );
 
 public sealed record SettlementOrderLineDto(

@@ -16,6 +16,5 @@ public interface IAppDbContext
     DbSet<DailySettlement>      DailySettlements     { get; }
     DbSet<WeightPriceTier>      WeightPriceTiers     { get; }
     DbSet<PasswordResetToken>   PasswordResetTokens  { get; }
-    DbSet<PaymentRequest>       PaymentRequests      { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

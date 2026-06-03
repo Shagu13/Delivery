@@ -27,10 +27,7 @@ function FinRow({ label, value, highlight = false }: { label: string; value: str
 function SettlementCard({ item }: { item: CourierSettlementItem }) {
     const { t } = useLanguage();
     const [expanded, setExpanded] = useState(false);
-    // For negative-transfer days the company owes the courier their salary;
-    // those days are "done" once wasCourierPaid, not waiting for isTheDayClosed.
-    const isDone = item.isTheDayClosed
-        || (item.totalCourierTransferToCompany < 0 && item.wasCourierPaid);
+    const isDone = item.isTheDayClosed;
     return (
         <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <button onClick={() => setExpanded(e => !e)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', background: expanded ? 'var(--color-bg-2)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s' }}>
@@ -77,14 +74,14 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
                         </div>
                     )}
                     {item.totalCourierTransferToCompany < 0 && (
-                        <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: '8px', background: item.wasCourierPaid ? '#d1fae5' : '#eff6ff', border: `1px solid ${item.wasCourierPaid ? '#6ee7b7' : '#93c5fd'}` }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: item.wasCourierPaid ? '#065f46' : '#1d4ed8', marginBottom: '4px' }}>
-                                {item.wasCourierPaid ? 'Salary received from company' : 'Company will pay your salary'}
+                        <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #93c5fd' }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '4px' }}>
+                                Company will pay your salary
                             </div>
-                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: item.wasCourierPaid ? '#059669' : '#2563eb' }}>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#2563eb' }}>
                                 ₾{Math.abs(item.totalCourierTransferToCompany).toFixed(2)}
                             </div>
-                            <div style={{ fontSize: '0.73rem', color: item.wasCourierPaid ? '#047857' : '#3b82f6', marginTop: '2px' }}>
+                            <div style={{ fontSize: '0.73rem', color: '#3b82f6', marginTop: '2px' }}>
                                 Service fees were paid directly by senders
                             </div>
                         </div>

@@ -30,13 +30,7 @@ public sealed class GetSettlementPreviewQueryHandler
             .Where(d => d.CourierId  == request.CourierId
                      && d.CreatedAt >= dayStart
                      && d.CreatedAt <= dayEnd)
-            .Select(d => new {
-                d.Id,
-                d.WasCourierPaid,
-                d.CourierPaidAt,
-                d.HasCourierHandedOverRevenue,
-                d.RevenueHandedOverAt,
-            })
+            .Select(d => new { d.Id })
             .FirstOrDefaultAsync(cancellationToken);
 
         // ── Delivered orders for the day ──────────────────────────────────────
@@ -121,11 +115,7 @@ public sealed class GetSettlementPreviewQueryHandler
             TotalCompanyNetIncome:                  totalNetIncome,
             TotalCourierTransferToCompany:          totalTransferToCompany,
             Orders:                                 lines,
-            IncompleteOrderTrackingNumbers:         incomplete,
-            WasCourierPaid:                         existingSettlement?.WasCourierPaid         ?? false,
-            CourierPaidAt:                          existingSettlement?.CourierPaidAt,
-            HasCourierHandedOverRevenue:             existingSettlement?.HasCourierHandedOverRevenue ?? false,
-            RevenueHandedOverAt:                    existingSettlement?.RevenueHandedOverAt
+            IncompleteOrderTrackingNumbers:         incomplete
         );
     }
 }

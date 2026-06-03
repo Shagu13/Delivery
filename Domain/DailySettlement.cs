@@ -8,7 +8,7 @@ namespace Domain;
 /// Only stores immutable physical facts recorded at settlement time.
 /// Stale snapshot fields (TotalCodOwedToSenders, TotalServiceFeesOwedBySenders,
 /// CompanyNetCashAfterCod) were removed — those are derived live from Orders
-/// and PaymentRequests so they never go stale.
+/// so they never go stale.
 /// </summary>
 public class DailySettlement
 {
@@ -74,27 +74,4 @@ public class DailySettlement
     /// Once closed, no further changes should be made to this record.
     /// </summary>
     public bool IsTheDayClosed { get; set; } = false;
-
-    // ── Payment tracking ─────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Whether the company has paid this courier their salary for this settlement.
-    /// When admin marks this true, a PaymentRequest of type CompanyPaysCourier is created.
-    /// </summary>
-    public bool WasCourierPaid { get; set; } = false;
-
-    /// <summary>Timestamp when admin marked the courier salary as paid.</summary>
-    public DateTime? CourierPaidAt { get; set; }
-
-    /// <summary>
-    /// Whether the courier has handed over the collected cash to the company.
-    /// When admin marks this true, a PaymentRequest of type CourierHandsOverRevenue is created.
-    /// </summary>
-    public bool HasCourierHandedOverRevenue { get; set; } = false;
-
-    /// <summary>Timestamp when courier handed over cash.</summary>
-    public DateTime? RevenueHandedOverAt { get; set; }
-
-    // ── Navigation ───────────────────────────────────────────────────────────
-    public ICollection<PaymentRequest> PaymentRequests { get; set; } = new List<PaymentRequest>();
 }

@@ -324,52 +324,6 @@ export function SettlementModal({
                                     No delivered orders found for {date}.
                                 </p>
                             )}
-
-                            {/* ── Payment tracking (existing settlements only) ── */}
-                            {alreadyExists && (
-                                <fieldset className="modal__fieldset">
-                                    <legend className="modal__legend">Payment Status</legend>
-<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                        {/* Salary */}
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                                            <div>
-                                                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>Courier Salary</div>
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 1 }}>
-                                                    {fmt(preview.totalCourierSalary)}
-                                                </div>
-                                            </div>
-                                            {preview.wasCourierPaid ? (
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '0.78rem', fontWeight: 600 }}>
-                                                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="currentColor" strokeWidth="1.2"/><path d="M3.5 6l1.5 1.5 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                                                    Paid {preview.courierPaidAt ? new Date(preview.courierPaidAt).toLocaleDateString('ka-GE', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
-                                                </span>
-                                            ) : (
-                                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontStyle: 'italic' }}>Auto-recorded on save</span>
-                                            )}
-                                        </div>
-
-                                        {/* Revenue handover — only when courier had cash to hand over */}
-                                        {preview.totalCourierTransferToCompany > 0 && (
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 8, borderTop: '1px solid var(--color-border)' }}>
-                                                <div>
-                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>Revenue Handover</div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 1 }}>
-                                                        {fmt(preview.totalCourierTransferToCompany)} to hand over
-                                                    </div>
-                                                </div>
-                                                {preview.hasCourierHandedOverRevenue ? (
-                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, background: 'rgba(16,185,129,0.1)', color: '#10b981', fontSize: '0.78rem', fontWeight: 600 }}>
-                                                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="currentColor" strokeWidth="1.2"/><path d="M3.5 6l1.5 1.5 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                                                        Received {preview.revenueHandedOverAt ? new Date(preview.revenueHandedOverAt).toLocaleDateString('ka-GE', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
-                                                    </span>
-                                                ) : (
-                                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontStyle: 'italic' }}>Auto-recorded on save</span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                </fieldset>
-                            )}
                         </>
                     )}
                 </div>

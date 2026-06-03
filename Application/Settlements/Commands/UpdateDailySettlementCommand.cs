@@ -18,9 +18,6 @@ namespace Application.Settlements.Commands;
 /// - Settlement must already exist for this courier + date.
 /// - If IsTheDayClosed == true the settlement is locked and cannot be updated.
 /// - All delivered orders for the day are re-summed; partial updates are not supported.
-/// - If a pending (unconfirmed) CourierHandsOverRevenue PaymentRequest exists
-///   for this settlement it is updated to reflect the new transfer amount.
-/// - Confirmed PaymentRequests are never modified.
 /// </summary>
 public sealed record UpdateDailySettlementCommand(
     Guid     CourierId,
@@ -42,7 +39,6 @@ public sealed class UpdateDailySettlementCommandHandler
 
         // ── 1. Find existing settlement ───────────────────────────────────────
         var settlement = await _context.DailySettlements
-            .Include(d => d.PaymentRequests)
             .FirstOrDefaultAsync(d => d.CourierId  == request.CourierId
                                    && d.CreatedAt >= dayStart
                                    && d.CreatedAt <= dayEnd,
@@ -81,9 +77,6 @@ public sealed class UpdateDailySettlementCommandHandler
                 string.Join(", ", incomplete));
 
         // ── 5. Recompute immutable physical totals ────────────────────────────
-        var prevSalary   = settlement.TotalCourierSalary;
-        var prevTransfer = settlement.TotalCourierTransferToCompany;
-
         var totalCashCollected     = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
         var totalServiceRevenue    = orders.Sum(o => o.CompanyServicePrice);
         var totalCourierSalary     = orders.Sum(o => o.CourierSalary ?? 0m);
@@ -104,70 +97,6 @@ public sealed class UpdateDailySettlementCommandHandler
         settlement.TotalCourierSalary            = totalCourierSalary;
         settlement.TotalCourierTransferToCompany = totalTransferToCompany;
         settlement.TotalCompanyNetIncome         = totalNetIncome;
-
-        // ── 7. Auto-reset payment flags when amounts change ──────────────────
-        // If the salary or transfer amount changed, the previously recorded
-        // payment is no longer accurate — reset the flag and remove the record.
-        if (totalCourierSalary != prevSalary && settlement.WasCourierPaid)
-        {
-            settlement.WasCourierPaid = false;
-            settlement.CourierPaidAt  = null;
-            var pr = settlement.PaymentRequests
-                .FirstOrDefault(p => p.Type == PaymentRequestType.CompanyPaysCourier);
-            if (pr is not null) _context.PaymentRequests.Remove(pr);
-        }
-
-        if (totalTransferToCompany != prevTransfer && settlement.HasCourierHandedOverRevenue)
-        {
-            settlement.HasCourierHandedOverRevenue = false;
-            settlement.RevenueHandedOverAt         = null;
-            var pr = settlement.PaymentRequests
-                .FirstOrDefault(p => p.Type == PaymentRequestType.CourierHandsOverRevenue);
-            if (pr is not null) _context.PaymentRequests.Remove(pr);
-        }
-
-        // ── 9. Update pending (unconfirmed) PaymentRequests ──────────────────
-        foreach (var pr in settlement.PaymentRequests
-            .Where(p => p.Status != PaymentRequestStatus.Confirmed))
-        {
-            if (pr.Type == PaymentRequestType.CourierHandsOverRevenue)
-                pr.TotalAmount = settlement.TotalCourierTransferToCompany;
-            else if (pr.Type == PaymentRequestType.CompanyPaysCourier)
-                pr.TotalAmount = settlement.TotalCourierSalary;
-        }
-
-        // ── 10. Auto-mark payment events — read from settlement fields directly ─
-        if (settlement.TotalCourierTransferToCompany > 0 && !settlement.HasCourierHandedOverRevenue)
-        {
-            settlement.HasCourierHandedOverRevenue = true;
-            settlement.RevenueHandedOverAt         = DateTime.UtcNow;
-            _context.PaymentRequests.Add(new PaymentRequest
-            {
-                Type              = PaymentRequestType.CourierHandsOverRevenue,
-                Status            = PaymentRequestStatus.Confirmed,
-                CourierId         = settlement.CourierId,
-                DailySettlementId = settlement.Id,
-                TotalAmount       = settlement.TotalCourierTransferToCompany,
-                AmountConfirmed   = settlement.TotalCourierTransferToCompany,
-                ConfirmedAt       = DateTime.UtcNow,
-            });
-        }
-
-        if (settlement.TotalCourierSalary > 0 && !settlement.WasCourierPaid)
-        {
-            settlement.WasCourierPaid = true;
-            settlement.CourierPaidAt  = DateTime.UtcNow;
-            _context.PaymentRequests.Add(new PaymentRequest
-            {
-                Type              = PaymentRequestType.CompanyPaysCourier,
-                Status            = PaymentRequestStatus.Confirmed,
-                CourierId         = settlement.CourierId,
-                DailySettlementId = settlement.Id,
-                TotalAmount       = settlement.TotalCourierSalary,
-                AmountConfirmed   = settlement.TotalCourierSalary,
-                ConfirmedAt       = DateTime.UtcNow,
-            });
-        }
 
         await _context.SaveChangesAsync(cancellationToken);
         return settlement.Id;

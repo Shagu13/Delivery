@@ -98,43 +98,6 @@ public sealed class CreateDailySettlementCommandHandler
 
         _context.DailySettlements.Add(settlement);
 
-        // ── 8. Auto-mark payment events ───────────────────────────────────────
-        // Read directly from the settlement record — totals are already computed.
-
-        // Courier hands over the net amount (cash collected minus their salary).
-        if (settlement.TotalCourierTransferToCompany > 0)
-        {
-            settlement.HasCourierHandedOverRevenue = true;
-            settlement.RevenueHandedOverAt         = DateTime.UtcNow;
-            _context.PaymentRequests.Add(new PaymentRequest
-            {
-                Type            = PaymentRequestType.CourierHandsOverRevenue,
-                Status          = PaymentRequestStatus.Confirmed,
-                CourierId       = settlement.CourierId,
-                DailySettlement = settlement,
-                TotalAmount     = settlement.TotalCourierTransferToCompany,
-                AmountConfirmed = settlement.TotalCourierTransferToCompany,
-                ConfirmedAt     = DateTime.UtcNow,
-            });
-        }
-
-        // Company pays courier their full salary regardless of who covered it.
-        if (settlement.TotalCourierSalary > 0)
-        {
-            settlement.WasCourierPaid = true;
-            settlement.CourierPaidAt  = DateTime.UtcNow;
-            _context.PaymentRequests.Add(new PaymentRequest
-            {
-                Type            = PaymentRequestType.CompanyPaysCourier,
-                Status          = PaymentRequestStatus.Confirmed,
-                CourierId       = settlement.CourierId,
-                DailySettlement = settlement,
-                TotalAmount     = settlement.TotalCourierSalary,
-                AmountConfirmed = settlement.TotalCourierSalary,
-                ConfirmedAt     = DateTime.UtcNow,
-            });
-        }
-
         await _context.SaveChangesAsync(cancellationToken);
 
         return settlement.Id;

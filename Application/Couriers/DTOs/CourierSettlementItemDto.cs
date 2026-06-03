@@ -13,6 +13,5 @@ public sealed record CourierSettlementItemDto(
     decimal TotalCompanyServiceRevenue,      // sum of all delivery fees for the day
     decimal TotalCourierSalary,              // what the courier earns
     decimal TotalCourierTransferToCompany,   // cash − salary = hand-over amount
-    bool    IsTheDayClosed,
-    bool    WasCourierPaid
+    bool    IsTheDayClosed
 );

@@ -19,8 +19,6 @@ import '../../styles/dashboard.css';
 import { fetchSmsBalance } from '../../api/sms';
 import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
 import AdminHistoryPage from './AdminHistoryPage';
-import AdminPaymentsPage from './AdminPaymentsPage';
-import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
 import { fetchReturnExchangeOrders, getPendingReturnExchangeCount } from '../../api/returnExchange';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
@@ -37,7 +35,7 @@ const ACTIVE_ORDER_STATUSES_ONLY = new Set([
 ]);
 
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'payments' | 'finance' | 'returnExchange';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'returnExchange';
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -205,29 +203,6 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">{t.sidebarHistory}</span>
           </button>
           <button
-            className={`sidebar__link ${activeView === 'payments' ? 'sidebar__link--active' : ''}`}
-            onClick={() => goTo('payments')}
-            title="Payments"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-              <path d="M1 8h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              <circle cx="5" cy="11" r="1" fill="currentColor"/>
-            </svg>
-            <span className="sidebar__link-text">Payments</span>
-          </button>
-          <button
-            className={`sidebar__link ${activeView === 'finance' ? 'sidebar__link--active' : ''}`}
-            onClick={() => goTo('finance')}
-            title="Finance"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M2 12l4-4 3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <rect x="1" y="11" width="14" height="1" rx="0.5" fill="currentColor" opacity="0.3"/>
-            </svg>
-            <span className="sidebar__link-text">Finance</span>
-          </button>
-          <button
             className={`sidebar__link ${activeView === 'returnExchange' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('returnExchange')}
             title="Returns & Exchanges"
@@ -274,8 +249,6 @@ export function AdminDashboard() {
             {activeView === 'cities' && t.topbarCities}
             {activeView === 'weightTiers' && t.topbarWeightTiers}
             {activeView === 'history' && t.topbarHistory}
-            {activeView === 'payments' && 'Payments'}
-            {activeView === 'finance' && 'Finance'}
             {activeView === 'returnExchange' && 'Returns & Exchanges'}
           </span>
           {activeView === 'couriers' && (
@@ -298,8 +271,6 @@ export function AdminDashboard() {
                       <AdminWeightPriceTiersPage token={token} />
                   )}
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
-          {activeView === 'payments' && token && <AdminPaymentsPage token={token} />}
-          {activeView === 'finance' && token && <AdminFinancePage token={token} />}
           {activeView === 'returnExchange' && token && (
             <AdminReturnExchangePage
               token={token}

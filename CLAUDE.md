@@ -70,14 +70,6 @@ All business logic lives in `Application` as MediatR `IRequest<T>` commands/quer
 - `TotalCourierTransferToCompany = TotalAmountOfCashCollected - TotalCourierSalary`
 - Can be **negative** when the sender pays the company (courier collects no COD cash but earns a salary). Negative value means the company owes the courier their salary.
 
-**PaymentRequest** — universal financial ledger. Four types:
-- `CourierHandsOverRevenue` (IN) — courier gives cash to company
-- `SenderPaysCompany` (IN) — sender pays service fee
-- `CompanyPaysSender` (OUT) — company forwards COD to sender (may include `ServiceFeeOffset` netting)
-- `CompanyPaysCourier` (OUT) — company pays courier salary
-
-Company all-time cash balance = sum of confirmed IN `AmountConfirmed` − sum of confirmed OUT `AmountConfirmed`.
-
 ### Frontend structure
 - `client/src/api/` — one file per domain area; each exports typed fetch functions and TypeScript interfaces that mirror backend DTOs
 - `client/src/pages/` — role-segregated: `Admin/`, `Courier/`, `Customer/`, plus public pages

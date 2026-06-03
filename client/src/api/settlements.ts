@@ -39,11 +39,6 @@ export interface SettlementPreview {
     totalCourierTransferToCompany: number;
     orders: SettlementOrderLine[];
     incompleteOrderTrackingNumbers: string[];
-    // Payment status — only meaningful when existingSettlementId is not null
-    wasCourierPaid: boolean;
-    courierPaidAt: string | null;
-    hasCourierHandedOverRevenue: boolean;
-    revenueHandedOverAt: string | null;
 }
 
 /** All financial totals are computed server-side; only the identity fields are required. */
@@ -71,7 +66,6 @@ export interface CourierSettlementItem {
     /** Amount the courier must hand over to the company (cash − salary). */
     totalCourierTransferToCompany: number;
     isTheDayClosed: boolean;
-    wasCourierPaid: boolean;
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────────

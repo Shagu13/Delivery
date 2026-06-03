@@ -13,11 +13,10 @@ import type { Customer, CustomerGroupOrder } from '../../api/customers';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
-import CustomerPaymentsPage from './CustomerPaymentsPage';
 import '../../styles/dashboard.css';
 
 
-type View = 'overview' | 'shipments' | 'profile' | 'password' | 'calculator' | 'payments';
+type View = 'overview' | 'shipments' | 'profile' | 'password' | 'calculator';
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
@@ -99,7 +98,6 @@ export function CustomerDashboard() {
             ['calculator',  t.custNavCalculator,     calcIcon],
             ['profile',     t.custNavProfile,        profileIcon],
             ['password',    t.custNavPassword,       lockIcon],
-            ['payments',    t.custNavPayments,        paymentsIcon],
           ] as [View, string, React.ReactNode][]).map(([v, label, icon]) => (
             <button
               key={v}
@@ -136,7 +134,6 @@ export function CustomerDashboard() {
             {view === 'calculator'  && t.custTopbarCalculator}
             {view === 'profile'     && t.custNavProfile}
             {view === 'password'    && t.custTopbarPassword}
-            {view === 'payments'    && t.custNavPayments}
           </span>
           {view === 'shipments' && (
             <a href="/send" className="btn-primary">
@@ -177,7 +174,6 @@ export function CustomerDashboard() {
               {view === 'password'  && token && (
                 <ChangePasswordView token={token} />
               )}
-              {view === 'payments' && token && <CustomerPaymentsPage token={token} />}
             </>
           )}
         </main>
@@ -654,14 +650,6 @@ const lockIcon = (
     <rect x="2.5" y="7" width="11" height="8" rx="2" stroke="currentColor" strokeWidth="1.4" />
     <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     <circle cx="8" cy="11" r="1" fill="currentColor" />
-  </svg>
-);
-
-const paymentsIcon = (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-    <rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
-    <path d="M1 8h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-    <circle cx="5" cy="11" r="1" fill="currentColor"/>
   </svg>
 );
 
