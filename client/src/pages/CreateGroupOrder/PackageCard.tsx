@@ -126,7 +126,12 @@ export function PackageCard({
   const handleCityChange = (cityName: string) => {
     onChange(index, 'recipientCity', cityName);
     onChange(index, 'recipientDistrict', '');
-    setSelectedDistrict(null);
+    // For Return, the recipient block is the deliver-back-to address and its fee
+    // comes from the return pickup district — don't disturb the fee here.
+    if (!isReturn) {
+      setSelectedDistrict(null);
+      onChange(index, 'companyServicePrice', 0);
+    }
   };
 
   const handleDistrictChange = (districtName: string) => {

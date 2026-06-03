@@ -124,6 +124,7 @@ function PackageDetail({
   const handleReturnDistrictSelect = useCallback((district: District | null) => {
     setSelectedReturnDistrict(district);
     if (district) onChange(index, 'companyServicePrice', computeFee(district, pkg.weightPriceTierId, weightTiers, customerPricing));
+    else onChange(index, 'companyServicePrice', 0);
   }, [index, pkg.weightPriceTierId, weightTiers, customerPricing, onChange]);
 
   const handleWeightTierChange = (tierId: string) => {
@@ -256,7 +257,7 @@ function PackageDetail({
             <CityDistrictPicker
               cityValue={pkg.returnPickupCity ?? ''}
               districtValue={pkg.returnPickupDistrict ?? ''}
-              onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); onChange(index, 'companyServicePrice', 0); }}
+              onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', 0); }}
               onDistrictChange={v => onChange(index, 'returnPickupDistrict', v)}
               onDistrictSelect={handleReturnDistrictSelect}
               cityError={fe('returnPickupCity')}
@@ -397,6 +398,7 @@ function PackageDetail({
                   value={pkg.companyServicePrice ?? ''}
                   placeholder={t.cgoServiceFeePlaceholder}
                 />
+                <p className="form-field__hint">{pkg.whoPaysForCompanyService === 'Recipient' ? t.cgoServiceFeeHintRecipient : t.cgoServiceFeeHintSender}</p>
                 {fe('companyServicePrice') && <p className="form-field__error">{fe('companyServicePrice')}</p>}
               </div>
             </div>
@@ -411,6 +413,8 @@ function PackageDetail({
                 value={pkg.companyServicePrice ?? ''}
                 placeholder={t.cgoServiceFeePlaceholder}
               />
+              <p className="form-field__hint">{pkg.whoPaysForCompanyService === 'Recipient' ? t.cgoServiceFeeHintRecipient : t.cgoServiceFeeHintSender}</p>
+              {fe('companyServicePrice') && <p className="form-field__error">{fe('companyServicePrice')}</p>}
             </div>
           )}
 
@@ -419,6 +423,7 @@ function PackageDetail({
             <span className="package-card__fragile-icon" aria-hidden="true">⚠</span>
             <span>{t.cgoFragile}</span>
           </label>
+          {fe('isFragile') && <p className="form-field__error">{fe('isFragile')}</p>}
         </div>
       </div>
     </div>
