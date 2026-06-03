@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { fetchMyDeliveryHistory } from '../../api/orders';
@@ -17,11 +18,53 @@ function fmt(dateStr: string | null | undefined): string {
 function StatusBadge({ status }: { status: string }) {
     const [bg, color] = STATUS_COLORS[status] ?? ['rgba(100,100,100,0.1)', '#666'];
     const { short } = getStatusMeta(status);
+    return <span className="hist-badge" style={{ background: bg, color }}>{short}</span>;
+}
+
+interface HistoryCardProps {
+    title: ReactNode;
+    subtitle?: ReactNode;
+    status: string;
+    location: string;
+    address: string;
+    note?: string | null;
+    extraLine?: ReactNode;
+    dates: ReactNode;
+}
+
+function HistoryCard({ title, subtitle, status, location, address, note, extraLine, dates }: HistoryCardProps) {
     return (
-        <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 600, background: bg, color, whiteSpace: 'nowrap' }}>
-            {short}
-        </span>
+        <div className="hist-card">
+            <div className="hist-card__top">
+                <div>
+                    <div className="hist-card__title">{title}</div>
+                    {subtitle && <div className="hist-card__subtitle">{subtitle}</div>}
+                </div>
+                <StatusBadge status={status} />
+            </div>
+            <div className="hist-card__line"><span>📍</span><span>{location}</span></div>
+            <div className="hist-card__indent">{address}</div>
+            {extraLine}
+            {note && <div className="hist-card__indent hist-card__note">{note}</div>}
+            <div className="hist-card__dates">{dates}</div>
+        </div>
     );
+}
+
+function HistoryState({ error, empty, emptyHint, onRetry, hasItems, children }: {
+    error: string | null; empty: string; emptyHint: string;
+    onRetry: () => void; hasItems: boolean; children: ReactNode;
+}) {
+    const { t } = useLanguage();
+    if (error)   return <div className="dashboard__error">{error} <button onClick={onRetry}>{t.cdRetry}</button></div>;
+    if (!hasItems) return (
+        <div className="dashboard__empty" style={{ marginTop: 40 }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📭</div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{empty}</div>
+            <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{emptyHint}</div>
+        </div>
+    );
+    return <div className="hist-list">{children}</div>;
 }
 
 // ── Delivery History Tab ──────────────────────────────────────────────────────
@@ -52,42 +95,26 @@ function DeliveryHistoryTab({ token }: { token: string }) {
     };
 
     if (loading) return <div className="dashboard__loader">{t.cdHistDeliveryLoading}</div>;
-    if (error)   return <div className="dashboard__error">{error} <button onClick={retry}>{t.cdRetry}</button></div>;
-    if (!items.length) return (
-        <div className="dashboard__empty" style={{ marginTop: 40 }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📭</div>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.cdHistDeliveryEmpty}</div>
-            <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t.cdHistDeliveryEmptyHint}</div>
-        </div>
-    );
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <HistoryState error={error} empty={t.cdHistDeliveryEmpty} emptyHint={t.cdHistDeliveryEmptyHint}
+            onRetry={retry} hasItems={items.length > 0}>
             {items.map(order => (
-                <div key={order.id} style={{ background: 'var(--color-bg-2, #f9fafb)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: '1.1rem' }}>{order.isFragile ? '🥚' : '📦'}</span>
-                            <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{order.recipientFirstName}</span>
-                        </div>
-                        <StatusBadge status={order.status} />
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                        <span>📍</span><span>{order.recipientCity}, {order.recipientDistrict}</span>
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', paddingLeft: 22 }}>{order.recipientAddress}</div>
-                    {order.description && (
-                        <div style={{ fontSize: '0.825rem', color: 'var(--color-text-muted)', fontStyle: 'italic', paddingLeft: 22 }}>{order.description}</div>
-                    )}
-                    <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap' }}>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>🗓 {t.cdHistCreated} {fmt(order.createdAt)}</div>
+                <HistoryCard key={order.id}
+                    title={<>{order.isFragile ? '🥚' : '📦'} {order.recipientFirstName}</>}
+                    status={order.status}
+                    location={`${order.recipientCity}, ${order.recipientDistrict}`}
+                    address={order.recipientAddress}
+                    note={order.description}
+                    dates={<>
+                        <div className="hist-card__date">🗓 {t.cdHistCreated} {fmt(order.createdAt)}</div>
                         {order.deliveredAt && (
-                            <div style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>✅ {t.cdHistDelivered} {fmt(order.deliveredAt)}</div>
+                            <div className="hist-card__date hist-card__date--done">✅ {t.cdHistDelivered} {fmt(order.deliveredAt)}</div>
                         )}
-                    </div>
-                </div>
+                    </>}
+                />
             ))}
-        </div>
+        </HistoryState>
     );
 }
 
@@ -119,49 +146,36 @@ function PickupHistoryTab({ token }: { token: string }) {
     };
 
     if (loading) return <div className="dashboard__loader">{t.cdHistPickupLoading}</div>;
-    if (error)   return <div className="dashboard__error">{error} <button onClick={retry}>{t.cdRetry}</button></div>;
-    if (!items.length) return (
-        <div className="dashboard__empty" style={{ marginTop: 40 }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📭</div>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.cdHistPickupEmpty}</div>
-            <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t.cdHistPickupEmptyHint}</div>
-        </div>
-    );
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <HistoryState error={error} empty={t.cdHistPickupEmpty} emptyHint={t.cdHistPickupEmptyHint}
+            onRetry={retry} hasItems={items.length > 0}>
             {items.map(go => (
-                <div key={go.id} style={{ background: 'var(--color-bg-2, #f9fafb)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                        <div>
-                            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{go.senderBusinessName}</div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{go.senderFirstName} {go.senderLastName}</div>
+                <HistoryCard key={go.id}
+                    title={go.senderBusinessName}
+                    subtitle={`${go.senderFirstName} ${go.senderLastName}`}
+                    status={go.status}
+                    location={`${go.pickUpCity}, ${go.pickUpDistrict}`}
+                    address={go.pickUpAddress}
+                    note={go.note}
+                    extraLine={
+                        <div className="hist-card__line">
+                            <span>📦</span>
+                            <span style={{ fontWeight: 600 }}>{t.cdLabelPackageCount(go.numberOfPackages)}</span>
                         </div>
-                        <StatusBadge status={go.status} />
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                        <span>📍</span><span>{go.pickUpCity}, {go.pickUpDistrict}</span>
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', paddingLeft: 22 }}>{go.pickUpAddress}</div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
-                        <span>📦</span>
-                        <span style={{ fontWeight: 600 }}>{t.cdLabelPackageCount(go.numberOfPackages)}</span>
-                    </div>
-                    {go.note && (
-                        <div style={{ fontSize: '0.825rem', color: 'var(--color-text-muted)', fontStyle: 'italic', paddingLeft: 22 }}>{go.note}</div>
-                    )}
-                    <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap' }}>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>🗓 {t.cdHistCreated} {fmt(go.createdAt)}</div>
+                    }
+                    dates={<>
+                        <div className="hist-card__date">🗓 {t.cdHistCreated} {fmt(go.createdAt)}</div>
                         {go.pickedUpAt && (
-                            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>🚚 {t.cdHistPickedUp} {fmt(go.pickedUpAt)}</div>
+                            <div className="hist-card__date">🚚 {t.cdHistPickedUp} {fmt(go.pickedUpAt)}</div>
                         )}
                         {go.deliveredToWarehouseAt && (
-                            <div style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>🏭 {t.cdHistToWarehouse} {fmt(go.deliveredToWarehouseAt)}</div>
+                            <div className="hist-card__date hist-card__date--done">🏭 {t.cdHistToWarehouse} {fmt(go.deliveredToWarehouseAt)}</div>
                         )}
-                    </div>
-                </div>
+                    </>}
+                />
             ))}
-        </div>
+        </HistoryState>
     );
 }
 
@@ -174,15 +188,15 @@ export function CourierHistoryPage() {
     if (!token) return null;
 
     return (
-        <div style={{ padding: '24px 20px', maxWidth: 680, margin: '0 auto' }}>
-            <div style={{ marginBottom: 24 }}>
-                <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800 }}>{t.cdHistTitle}</h1>
-                <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t.cdHistSubtitle}</p>
+        <div className="hist-page">
+            <div className="hist-page__header">
+                <h1 className="hist-page__title">{t.cdHistTitle}</h1>
+                <p className="hist-page__subtitle">{t.cdHistSubtitle}</p>
             </div>
 
-            <div style={{ display: 'flex', gap: 4, background: 'var(--color-bg-2, #f3f4f6)', borderRadius: 10, padding: 4, marginBottom: 20 }}>
+            <div className="hist-tabs">
                 {(['deliveries', 'pickups'] as const).map(key => (
-                    <button key={key} onClick={() => setTab(key)} style={{ flex: 1, padding: '9px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: tab === key ? 700 : 500, fontSize: '0.875rem', background: tab === key ? 'var(--color-bg)' : 'transparent', color: tab === key ? 'var(--color-text)' : 'var(--color-text-muted)', boxShadow: tab === key ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition: 'all 0.15s' }}>
+                    <button key={key} onClick={() => setTab(key)} className={`hist-tab${tab === key ? ' hist-tab--active' : ''}`}>
                         {key === 'deliveries' ? t.cdHistTabDeliveries : t.cdHistTabPickups}
                     </button>
                 ))}

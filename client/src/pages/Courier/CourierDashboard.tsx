@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -47,43 +47,24 @@ export function CourierDashboard() {
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
-    const loadPickups = async (silent = false) => {
+    const loadPickups = useCallback(async (silent = false) => {
         if (!token) return;
         if (!silent) { setPickupLoading(true); setPickupError(null); }
         try { setPickups(await fetchMyPickups(token)); }
         catch { if (!silent) setPickupError(t.cdPickupsLoading); }
         finally { if (!silent) setPickupLoading(false); }
-    };
+    }, [token, t.cdPickupsLoading]);
 
-    const loadDeliveries = async (silent = false) => {
+    const loadDeliveries = useCallback(async (silent = false) => {
         if (!token) return;
         if (!silent) { setDeliveriesLoading(true); setDeliveriesError(null); }
         try { setDeliveries(await fetchMyDeliveries(token)); }
         catch { if (!silent) setDeliveriesError(t.cdDeliveriesLoading); }
         finally { if (!silent) setDeliveriesLoading(false); }
-    };
+    }, [token, t.cdDeliveriesLoading]);
 
-    useEffect(() => {
-        if (!token) return; let cancelled = false;
-        const run = async () => {
-            setPickupLoading(true); setPickupError(null);
-            try { const d = await fetchMyPickups(token); if (!cancelled) setPickups(d); }
-            catch { if (!cancelled) setPickupError(t.cdPickupsLoading); }
-            finally { if (!cancelled) setPickupLoading(false); }
-        };
-        run(); return () => { cancelled = true; };
-    }, [token]);
-
-    useEffect(() => {
-        if (!token) return; let cancelled = false;
-        const run = async () => {
-            setDeliveriesLoading(true); setDeliveriesError(null);
-            try { const d = await fetchMyDeliveries(token); if (!cancelled) setDeliveries(d); }
-            catch { if (!cancelled) setDeliveriesError(t.cdDeliveriesLoading); }
-            finally { if (!cancelled) setDeliveriesLoading(false); }
-        };
-        run(); return () => { cancelled = true; };
-    }, [token]);
+    useEffect(() => { loadPickups(); }, [loadPickups]);
+    useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
 
     async function act(id: string, fn: () => Promise<void>, msg: string) {
         setBusyId(id);

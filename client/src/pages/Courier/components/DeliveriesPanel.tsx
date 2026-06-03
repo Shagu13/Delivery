@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markOrderDelivering, markOrderDelivered, postponeOrder, retryDelivery,
@@ -29,7 +29,10 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
     const [postponingId, setPostponingId] = useState<string | null>(null);
     const [collectConfirmOrderId, setCollectConfirmOrderId] = useState<string | null>(null);
 
-    const addresses = deliveries.map(o => ({ address: o.recipientAddress, district: o.recipientDistrict, city: o.recipientCity }));
+    const addresses = useMemo(
+        () => deliveries.map(o => ({ address: o.recipientAddress, district: o.recipientDistrict, city: o.recipientCity })),
+        [deliveries]
+    );
     const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding } = useGeoSort(addresses);
 
     const toggle = (id: string) =>
@@ -210,12 +213,12 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                                 onSwipe={() => onAct(order.id, () => retryDelivery(token, order.id), t.cdDeliveryToastRetry)} />
                                         )}
                                         {order.status === 'CourierAssignedToPickUp' && order.orderType === 'Return' && (
-                                            <SwipeButton label="Swipe — Picked Up from Recipient" variant="primary" disabled={isBusy}
-                                                onSwipe={() => onAct(order.id, () => markReturnPickedUp(token, order.id), 'Picked up from recipient')} />
+                                            <SwipeButton label={t.cdDeliverySwipeReturnPickup} variant="primary" disabled={isBusy}
+                                                onSwipe={() => onAct(order.id, () => markReturnPickedUp(token, order.id), t.cdDeliveryToastReturnPickup)} />
                                         )}
                                         {order.status === 'PickedUpFromRecipient' && order.orderType === 'Return' && (
-                                            <SwipeButton label="Swipe — Delivered to Warehouse" variant="success" disabled={isBusy}
-                                                onSwipe={() => onAct(order.id, () => markReturnDeliveredWarehouse(token, order.id), 'Return delivered to warehouse')} />
+                                            <SwipeButton label={t.cdDeliverySwipeReturnWarehouse} variant="success" disabled={isBusy}
+                                                onSwipe={() => onAct(order.id, () => markReturnDeliveredWarehouse(token, order.id), t.cdDeliveryToastReturnWarehouse)} />
                                         )}
                                     </div>
                                     {collectConfirmOrderId === order.id && (

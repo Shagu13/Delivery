@@ -23,6 +23,12 @@ export function SwipeButton({ label, onSwipe, disabled = false, variant = 'prima
         ro.observe(el); return () => ro.disconnect();
     }, []);
 
+    // Drive the control to its confirmed state — shared by swipe-release and keyboard activation.
+    const confirm = () => {
+        startXRef.current = null; setOffset(maxTravel); setSwipeState('confirmed');
+        setTimeout(() => { onSwipe(); setTimeout(() => { setSwipeState('idle'); setOffset(0); }, 500); }, 280);
+    };
+
     const handlePointerDown = (e: React.PointerEvent) => {
         if (disabled || swipeState === 'confirmed') return;
         startXRef.current = e.clientX;
@@ -32,12 +38,14 @@ export function SwipeButton({ label, onSwipe, disabled = false, variant = 'prima
         if (startXRef.current === null || swipeState === 'confirmed') return;
         const dx = Math.max(0, Math.min(e.clientX - startXRef.current, maxTravel));
         setOffset(dx);
-        if (dx / maxTravel >= THRESHOLD) {
-            startXRef.current = null; setOffset(maxTravel); setSwipeState('confirmed');
-            setTimeout(() => { onSwipe(); setTimeout(() => { setSwipeState('idle'); setOffset(0); }, 500); }, 280);
-        }
+        if (dx / maxTravel >= THRESHOLD) confirm();
     };
     const handlePointerUp = () => { if (swipeState === 'confirmed') return; startXRef.current = null; setOffset(0); };
+    // Keyboard / assistive-tech equivalent of completing the swipe.
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (disabled || swipeState === 'confirmed') return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); confirm(); }
+    };
 
     const progress = maxTravel > 0 ? offset / maxTravel : 0;
     const isSnappingBack = swipeState === 'idle' && offset === 0;
@@ -50,6 +58,9 @@ export function SwipeButton({ label, onSwipe, disabled = false, variant = 'prima
     return (
         <div ref={trackRef} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp}
+            onKeyDown={handleKeyDown}
+            role="button" tabIndex={disabled ? -1 : 0}
+            aria-label={label} aria-disabled={disabled}
             style={{ position: 'relative', height: '56px', borderRadius: '100px',
                 background: disabled ? 'var(--color-bg-3)' : c.bg, overflow: 'hidden', userSelect: 'none',
                 cursor: disabled ? 'not-allowed' : 'ew-resize', opacity: disabled ? 0.55 : 1,

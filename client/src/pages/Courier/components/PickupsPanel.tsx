@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markPickingUp, markPickedUp, markDeliveredToWarehouse,
@@ -24,7 +24,10 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    const addresses = pickups.map(go => ({ address: go.pickUpAddress, district: go.pickUpDistrict, city: go.pickUpCity }));
+    const addresses = useMemo(
+        () => pickups.map(go => ({ address: go.pickUpAddress, district: go.pickUpDistrict, city: go.pickUpCity })),
+        [pickups]
+    );
     const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding } = useGeoSort(addresses);
 
     const toggle = (id: string) =>

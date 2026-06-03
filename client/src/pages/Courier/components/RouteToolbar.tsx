@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useLanguage } from '../../../contexts/useLanguage';
 import type { Stop, GeocodeCache } from './mapUtils';
 import { buildGoogleRouteUrl, buildYandexRouteUrl, buildYandexNaviRouteUrl } from './mapUtils';
 
 interface RouteToolbarProps { stops: Stop[]; onClear: () => void; geocodeCache?: GeocodeCache; }
 
 export function RouteToolbar({ stops, onClear, geocodeCache }: RouteToolbarProps) {
+    const { t } = useLanguage();
     const [locState, setLocState] = useState<'idle' | 'loading' | 'ready' | 'denied'>('idle');
     const [currentLoc, setCurrentLoc] = useState<string | undefined>(undefined);
 
@@ -25,23 +27,23 @@ export function RouteToolbar({ stops, onClear, geocodeCache }: RouteToolbarProps
 
     return (
         <div className="route-toolbar">
-            <span className="route-toolbar__count">{stops.length} stops</span>
+            <span className="route-toolbar__count">{t.rtStops(stops.length)}</span>
             {locState === 'idle' && (
                 <button onClick={requestLocation} className="route-toolbar__btn route-toolbar__btn--loc">
-                    📍 Use my location
+                    {t.rtUseLocation}
                 </button>
             )}
-            {locState === 'loading' && <span className="route-toolbar__count">Locating…</span>}
-            {locState === 'denied'  && <span className="route-toolbar__count" style={{ color: '#f97316' }}>Location denied</span>}
-            {locState === 'ready'   && <span className="route-toolbar__count" style={{ color: '#10b981' }}>📍 Location set</span>}
+            {locState === 'loading' && <span className="route-toolbar__count">{t.rtLocating}</span>}
+            {locState === 'denied'  && <span className="route-toolbar__count" style={{ color: '#f97316' }}>{t.rtLocDenied}</span>}
+            {locState === 'ready'   && <span className="route-toolbar__count" style={{ color: '#10b981' }}>{t.rtLocSet}</span>}
             <a href={buildGoogleRouteUrl(stops, currentLoc)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--google">
-                🗺 Google Maps
+                {t.rtGoogleMaps}
             </a>
             <a href={buildYandexRouteUrl(stops, currentLoc, geocodeCache)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandex">
-                🗺 Yandex Maps
+                {t.rtYandexMaps}
             </a>
             <a href={buildYandexNaviRouteUrl(stops, currentLoc, geocodeCache)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandexgo">
-                🧭 Yandex Navi
+                {t.rtYandexNavi}
             </a>
             <button onClick={onClear} className="route-toolbar__clear">✕</button>
         </div>

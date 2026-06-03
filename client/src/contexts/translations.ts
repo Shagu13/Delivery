@@ -571,6 +571,10 @@ const en = {
   cdDeliveryToastDelivered:  'Order delivered to recipient.',
   cdDeliveryToastPostponed:  'Delivery postponed.',
   cdDeliveryToastRetry:      'Retrying delivery.',
+  cdDeliverySwipeReturnPickup:    '↩ Swipe — Picked Up from Recipient',
+  cdDeliverySwipeReturnWarehouse: '🏭 Swipe — Delivered to Warehouse',
+  cdDeliveryToastReturnPickup:    'Picked up from recipient.',
+  cdDeliveryToastReturnWarehouse: 'Return delivered to warehouse.',
   cdToastFailed:             'Action failed.',
 
   // Collect confirm modal
@@ -607,6 +611,19 @@ const en = {
   cdSettSummaryDeliveries:  'Total Deliveries',
   cdSettSummarySalary:      'Total Salary Earned',
   cdSettSummaryCash:        'Cash Collected',
+  cdSettRefresh:            'Refresh',
+  cdSettCompanyPaysTitle:   'Company will pay your salary',
+  cdSettCompanyPaysHint:    'Service fees were paid directly by senders',
+
+  // Route toolbar
+  rtStops:         (n: number) => `${n} stops`,
+  rtUseLocation:   '📍 Use my location',
+  rtLocating:      'Locating…',
+  rtLocDenied:     'Location denied',
+  rtLocSet:        '📍 Location set',
+  rtGoogleMaps:    '🗺 Google Maps',
+  rtYandexMaps:    '🗺 Yandex Maps',
+  rtYandexNavi:    '🧭 Yandex Navi',
 
   // History page
   cdHistTitle:           '📋 History',
@@ -882,6 +899,10 @@ const en = {
   sidebarHistory:            'Order History',
   topbarHistory:             'Order History',
   pillAllDelivered:          'All Delivered',
+  histPillDelivered:         'Delivered',
+  histPillCancelled:         'Cancelled',
+  histPillReturned:          'Returned',
+  histPillExchanged:         'Exchanged',
   goHistoryLoading:          'Loading history…',
   goHistoryNoOrders:         'No completed orders yet.',
     goHistoryNoMatch: 'No completed orders match your filters.',
@@ -1597,6 +1618,10 @@ const ka: typeof en = {
   cdDeliveryToastDelivered:  'შეკვეთა ჩაბარდა.',
   cdDeliveryToastPostponed:  'მიტანა გადაიდო.',
   cdDeliveryToastRetry:      'ხელახლა მიტანა.',
+  cdDeliverySwipeReturnPickup:    '↩ გადაფურცლე — მიმღებისგან ავიღე',
+  cdDeliverySwipeReturnWarehouse: '🏭 გადაფურცლე — საწყობში ჩავაბარე',
+  cdDeliveryToastReturnPickup:    'მიმღებისგან აღებულია.',
+  cdDeliveryToastReturnWarehouse: 'დაბრუნება საწყობში ჩაბარდა.',
   cdToastFailed:             'მოქმედება ვერ შესრულდა.',
 
   // Collect confirm modal
@@ -1633,6 +1658,19 @@ const ka: typeof en = {
   cdSettSummaryDeliveries:  'სულ მიტანები',
   cdSettSummarySalary:      'სულ ხელფასი',
   cdSettSummaryCash:        'სულ ნაღდი',
+  cdSettRefresh:            'განახლება',
+  cdSettCompanyPaysTitle:   'კომპანია გადაგიხდის ხელფასს',
+  cdSettCompanyPaysHint:    'საკურიერო პირდაპირ გამგზავნებმა გადაიხადეს',
+
+  // Route toolbar
+  rtStops:         (n: number) => `${n} გაჩერება`,
+  rtUseLocation:   '📍 ჩემი მდებარეობა',
+  rtLocating:      'მდებარეობა იძებნება…',
+  rtLocDenied:     'მდებარეობა უარყოფილია',
+  rtLocSet:        '📍 მდებარეობა მითითებულია',
+  rtGoogleMaps:    '🗺 Google Maps',
+  rtYandexMaps:    '🗺 Yandex Maps',
+  rtYandexNavi:    '🧭 Yandex Navi',
 
   // History page
   cdHistTitle:           '📋 ისტორია',
@@ -1908,6 +1946,10 @@ const ka: typeof en = {
   sidebarHistory:            'შეკვეთების ისტორია',
   topbarHistory:             'შეკვეთების ისტორია',
   pillAllDelivered:          'ყველა ჩაბარდა',
+  histPillDelivered:         'ჩაბარდა',
+  histPillCancelled:         'გაუქმდა',
+  histPillReturned:          'დაბრუნდა',
+  histPillExchanged:         'გაცვლა შედგა',
   goHistoryLoading:          'ისტორია იტვირთება…',
   goHistoryNoOrders:         'დასრულებული შეკვეთები ჯერ არ არის.',
     goHistoryNoMatch: 'ფილტრებით შეკვეთები ვერ მოიძებნა.',
