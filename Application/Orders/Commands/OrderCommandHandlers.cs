@@ -204,6 +204,8 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         order.PostponeReason = null;
         await _context.SaveChangesAsync(cancellationToken);
 
+        await CustomerSettlements.CustomerSettlementService.UpsertAsync(_context, order, cancellationToken);
+
         // Auto-close the parent GroupOrder when all packages are done
         // (standalone Return orders have no GroupOrderId — skip)
         if (order.GroupOrderId.HasValue)
@@ -434,6 +436,8 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
         order.DeliveredAt    = DateTime.UtcNow;
         order.PostponeReason = null;
         await _context.SaveChangesAsync(cancellationToken);
+
+        await CustomerSettlements.CustomerSettlementService.UpsertAsync(_context, order, cancellationToken);
 
         if (order.GroupOrderId.HasValue)
             await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);

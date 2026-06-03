@@ -70,6 +70,65 @@ internal static class CustomerSettlementService
         return new MonthlyFigures(ordersPlaced, delivered.Count, cod, service);
     }
 
+    /// <summary>
+    /// Creates or updates the customer's settlement for the month of the delivered order.
+    /// Resolves the customer via GroupOrder.CustomerId (Send/Exchange) or Order.CustomerId (Return).
+    /// </summary>
+    public static async Task UpsertAsync(IAppDbContext context, Order order, CancellationToken ct)
+    {
+        Guid customerId;
+        if (order.GroupOrderId.HasValue)
+        {
+            var groupCustomerId = await context.GroupOrders
+                .Where(g => g.Id == order.GroupOrderId.Value)
+                .Select(g => (Guid?)g.CustomerId)
+                .FirstOrDefaultAsync(ct);
+            if (groupCustomerId == null) return;
+            customerId = groupCustomerId.Value;
+        }
+        else if (order.CustomerId.HasValue)
+        {
+            customerId = order.CustomerId.Value;
+        }
+        else return;
+
+        var deliveredAt = order.DeliveredAt!.Value;
+        int year  = deliveredAt.Year;
+        int month = deliveredAt.Month;
+
+        var figures = await ComputeAsync(context, customerId, year, month, ct);
+
+        var existing = await context.CustomerSettlements
+            .FirstOrDefaultAsync(s => s.CustomerId == customerId
+                                   && s.Year  == year
+                                   && s.Month == month, ct);
+
+        if (existing == null)
+        {
+            context.CustomerSettlements.Add(new CustomerSettlement
+            {
+                CustomerId                            = customerId,
+                Year                                  = year,
+                Month                                 = month,
+                TotalNumberOfOrdersPlaced             = figures.OrdersPlaced,
+                TotalNumberOfOrderDelivered           = figures.OrdersDelivered,
+                TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages,
+                TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed,
+                CreatedAt                             = DateTime.UtcNow,
+            });
+        }
+        else
+        {
+            existing.TotalNumberOfOrdersPlaced             = figures.OrdersPlaced;
+            existing.TotalNumberOfOrderDelivered           = figures.OrdersDelivered;
+            existing.TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages;
+            existing.TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed;
+            existing.UpdatedAt                             = DateTime.UtcNow;
+        }
+
+        await context.SaveChangesAsync(ct);
+    }
+
     /// <summary>Maps a stored settlement row to its DTO, deriving outstanding balances.</summary>
     public static CustomerSettlementDto ToDto(CustomerSettlement s, string businessName) =>
         new(

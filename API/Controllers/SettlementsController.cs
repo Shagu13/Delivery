@@ -42,6 +42,17 @@ public sealed class SettlementsController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/settlements/by-courier/{courierId}  (Admin) ─────────────────
+    [HttpGet("by-courier/{courierId:guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<Application.Settlements.DTOs.CourierSettlementItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetByCourier(Guid courierId, CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetAdminCourierSettlementsQuery(courierId), ct);
+        return Ok(result);
+    }
+
     // ── POST /api/settlements  (Admin) — create new ───────────────────────────
     [HttpPost]
     [Authorize(Roles = "Admin")]

@@ -51,6 +51,22 @@ export interface CreateSettlementResponse {
     settlementId: string;
 }
 
+/** Daily settlement record with all admin-visible fields (payment amounts, cancel/postpone counts). */
+export interface AdminCourierSettlementItem {
+    id: string;
+    date: string;
+    totalOrdersPickedUp: number;
+    totalOrdersDelivered: number;
+    numberOfOrdersCancelled: number;
+    numberOfOrderPostponed: number;
+    totalAmountOfCashCollected: number;
+    totalCompanyServiceRevenue: number;
+    totalCourierSalary: number;
+    amountCourierWasPaid: number;
+    totalCourierTransferToCompany: number;
+    isTheDayClosed: boolean;
+}
+
 /** A daily settlement record as returned to the courier (no admin-only fields). */
 export interface CourierSettlementItem {
     id: string;
@@ -143,6 +159,26 @@ export async function updateSettlement(
         );
     }
     return res.json() as Promise<CreateSettlementResponse>;
+}
+
+/**
+ * Admin: fetches all daily settlement records for a specific courier.
+ */
+export async function fetchCourierSettlementsAdmin(
+    courierId: string,
+    token: string,
+): Promise<AdminCourierSettlementItem[]> {
+    const res = await fetch(`/api/settlements/by-courier/${courierId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new SettlementApiError(
+            res.status,
+            body?.title ?? `Failed to load courier settlements (${res.status})`,
+        );
+    }
+    return res.json() as Promise<AdminCourierSettlementItem[]>;
 }
 
 /**
