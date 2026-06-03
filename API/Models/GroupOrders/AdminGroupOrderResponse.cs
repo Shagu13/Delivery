@@ -49,12 +49,19 @@ public sealed record AdminOrderResponse(
     string  Status,
     string  ProductPaymentStatus,
     string  WhoPaysForCompanyService,
+    /// <summary>COD — cash to collect from the recipient for the product.</summary>
+    decimal? AmountToCollectForPackage,
+    /// <summary>Cash the courier actually collected (set during settlement).</summary>
+    decimal? AmountOfCashCollected,
     decimal? CourierSalary,
     /// <summary>Company service fee for this package — shown to the sender on their dashboard.</summary>
     decimal  CompanyServicePrice,
+    /// <summary>Company revenue (margin) — admin only; null on customer responses.</summary>
+    decimal? CompanyRevenue,
     // Last-mile delivery courier (null until assigned)
     Guid?    CourierId,
     DateTime CreatedAt,
     DateTime? DeliveryDateFrom,
-    DateTime? DeliveryDateTo
+    DateTime? DeliveryDateTo,
+    DateTime? DeliveredAt
 );

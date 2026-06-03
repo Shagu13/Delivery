@@ -25,6 +25,7 @@ export type OrderStatus =
 
 export type PaymentStatus = 'Paid' | 'NotPaid';
 export type ServicePayer  = 'Sender' | 'Recipient';
+export type OrderType     = 'Send' | 'Return' | 'Exchange';
 
 export interface AdminOrder {
     id: string;
@@ -39,6 +40,10 @@ export interface AdminOrder {
     recipientAddress: string;
     description: string | null;
     isFragile: boolean;
+    orderType: OrderType;
+    returnPickupAddress?: string | null;
+    returnPickupCity?: string | null;
+    returnPickupDistrict?: string | null;
     status: OrderStatus;
     productPaymentStatus: PaymentStatus;
     whoPaysForCompanyService: ServicePayer;

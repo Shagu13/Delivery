@@ -98,7 +98,7 @@ public sealed class GroupOrdersController : BaseController
     public async Task<IActionResult> GetAll([FromQuery] string? search, CancellationToken ct)
     {
         var result = await Sender.Send(new GetAllGroupOrdersQuery(search), ct);
-        return Ok(result.Select(MapToAdminResponse).ToList());
+        return Ok(result.Select(go => MapToAdminResponse(go)).ToList());
     }
 
     // ── GET /api/grouporders/{id} ────────────────────────────────────────────
@@ -136,7 +136,8 @@ public sealed class GroupOrdersController : BaseController
             return Forbid();
 
         var result = await Sender.Send(new GetCustomerGroupOrdersQuery(customerId), ct);
-        return Ok(result.Select(MapToAdminResponse).ToList());
+        // Customers must not see internal company revenue/margin.
+        return Ok(result.Select(go => MapToAdminResponse(go, includeRevenue: false)).ToList());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -701,7 +702,7 @@ public sealed class GroupOrdersController : BaseController
     // ══════════════════════════════════════════════════════════════════════════
     //  Private mapper
     // ══════════════════════════════════════════════════════════════════════════
-    private static AdminGroupOrderResponse MapToAdminResponse(AdminGroupOrderDto go) =>
+    private static AdminGroupOrderResponse MapToAdminResponse(AdminGroupOrderDto go, bool includeRevenue = true) =>
         new(
             Id:                      go.Id,
             CreatedAt:               go.CreatedAt,
@@ -741,12 +742,16 @@ public sealed class GroupOrdersController : BaseController
                 Status:                           o.Status.ToString(),
                 ProductPaymentStatus:             o.ProductPaymentStatus.ToString(),
                 WhoPaysForCompanyService:         o.WhoPaysForCompanyService.ToString(),
+                AmountToCollectForPackage:        o.AmountToCollectForPackage,
+                AmountOfCashCollected:            o.AmountOfCashCollected,
                 CourierSalary:                    o.CourierSalary,
                 CompanyServicePrice:              o.CompanyServicePrice,
+                CompanyRevenue:                   includeRevenue ? o.CompanyRevenue : null,
                 CourierId:                        o.CourierId,
                 CreatedAt:                        o.CreatedAt,
                 DeliveryDateFrom:                 o.DeliveryDateFrom,
-                DeliveryDateTo:                   o.DeliveryDateTo
+                DeliveryDateTo:                   o.DeliveryDateTo,
+                DeliveredAt:                      o.DeliveredAt
             )).ToList()
         );
 }

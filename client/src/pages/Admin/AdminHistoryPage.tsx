@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
-import type { AdminGroupOrder } from '../../api/adminGroupOrders';
+import type { AdminGroupOrder, OrderStatus } from '../../api/adminGroupOrders';
+import { fetchReturnExchangeOrders } from '../../api/returnExchange';
+import type { ReturnExchangeOrder } from '../../api/returnExchange';
 import { getStatusMeta } from '../../utils/statusMeta';
-import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,15 +31,119 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── History status pills ──────────────────────────────────────────────────────
 
-type HistoryFilter = '' | 'AllDelivered' | 'CancelledBySender' | 'CancelledByAdmin' | 'OrderNotAccepted';
+type HistoryFilter = 'delivered' | 'cancelled' | 'returned' | 'exchanged';
 
 const HISTORY_PILLS: { value: HistoryFilter; labelKey: string }[] = [
-  { value: '',                  labelKey: 'pillAll' },
-  { value: 'AllDelivered',      labelKey: 'pillAllDelivered' },
-  { value: 'CancelledBySender', labelKey: 'pillCancelledSender' },
-  { value: 'CancelledByAdmin',  labelKey: 'pillCancelledAdmin' },
-  { value: 'OrderNotAccepted',  labelKey: 'pillDeclined' },
+  { value: 'delivered', labelKey: 'histPillDelivered' },
+  { value: 'cancelled', labelKey: 'histPillCancelled' },
+  { value: 'returned',  labelKey: 'histPillReturned' },
+  { value: 'exchanged', labelKey: 'histPillExchanged' },
 ];
+
+const CANCELLED_STATUSES = new Set<string>(['CancelledBySender', 'CancelledByAdmin', 'OrderNotAccepted']);
+
+// Which history category does a (real or wrapped) group order belong to?
+// A group order can match more than one category when it mixes order types.
+// Status-driven (not orderType-driven) so delivered orders always surface even
+// if orderType is missing or the group still holds other in-progress packages.
+function matchesHistoryFilter(go: AdminGroupOrder, filter: HistoryFilter): boolean {
+  switch (filter) {
+    case 'cancelled':
+      return CANCELLED_STATUSES.has(go.status) || go.orders.some(o => CANCELLED_STATUSES.has(o.status));
+    case 'returned':
+      return go.orders.some(o => o.status === 'ReturnedToSender');
+    case 'exchanged':
+      return go.orders.some(o => o.status === 'ExchangeCompleted');
+    case 'delivered':
+      return go.status === 'AllDelivered' ||
+        go.orders.some(o => o.status === 'DeliveredToRecipient' && o.orderType !== 'Exchange');
+  }
+}
+
+// The individual packages within a group that belong to the active category.
+// Prevents the expanded view from showing unrelated, non-terminal siblings.
+function ordersForFilter(go: AdminGroupOrder, filter: HistoryFilter): AdminGroupOrder['orders'] {
+  switch (filter) {
+    case 'cancelled':
+      // A group cancelled/declined as a whole may still hold non-terminal packages — show them all.
+      return CANCELLED_STATUSES.has(go.status)
+        ? go.orders
+        : go.orders.filter(o => CANCELLED_STATUSES.has(o.status));
+    case 'returned':
+      return go.orders.filter(o => o.status === 'ReturnedToSender');
+    case 'exchanged':
+      return go.orders.filter(o => o.status === 'ExchangeCompleted');
+    case 'delivered':
+      return go.orders.filter(o => o.status === 'DeliveredToRecipient' && o.orderType !== 'Exchange');
+  }
+}
+
+// Standalone Return orders live outside any GroupOrder, so wrap each one as a
+// single-package pseudo group order to reuse the existing accordion rendering.
+function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
+  return {
+    id: r.id,
+    createdAt: r.createdAt,
+    status: r.status as OrderStatus,
+    senderFirstName: '',
+    senderLastName: '',
+    senderIdNumber: null,
+    senderBusinessName: r.senderName,
+    senderPhone: r.senderPhone,
+    pickUpCity: r.returnPickupCity ?? r.recipientCity,
+    pickUpDistrict: r.returnPickupDistrict ?? r.recipientDistrict,
+    pickUpAddress: r.returnPickupAddress ?? r.recipientAddress,
+    note: null,
+    numberOfPackages: 1,
+    whenPackagePickedUpDate: null,
+    courierId: r.courierId,
+    courierFullName: r.courierFullName,
+    orders: [{
+      id: r.id,
+      trackingNumber: r.trackingNumber,
+      recipientFirstName: r.recipientFirstName,
+      recipientLastName: r.recipientLastName,
+      recipientPhone: r.recipientPhone,
+      recipientCity: r.recipientCity,
+      recipientDistrict: r.recipientDistrict,
+      recipientAddress: r.recipientAddress,
+      description: null,
+      isFragile: false,
+      orderType: 'Return',
+      returnPickupAddress: r.returnPickupAddress,
+      returnPickupCity: r.returnPickupCity,
+      returnPickupDistrict: r.returnPickupDistrict,
+      status: r.status as OrderStatus,
+      productPaymentStatus: 'NotPaid',
+      whoPaysForCompanyService: 'Sender',
+      amountToCollectForPackage: null,
+      amountOfCashCollected: null,
+      companyServicePrice: r.companyServicePrice,
+      courierSalary: r.courierSalary,
+      companyRevenue: null,
+      courierId: r.courierId,
+      createdAt: r.createdAt,
+      deliveryDateFrom: null,
+      deliveryDateTo: null,
+      deliveredAt: r.deliveredAt ?? r.deliveredToWarehouseAt,
+    }],
+  };
+}
+
+// Client-side search for wrapped returns (group orders are searched server-side).
+function groupOrderMatchesSearch(go: AdminGroupOrder, term: string): boolean {
+  const q = term.trim().toLowerCase();
+  if (!q) return true;
+  if (go.senderBusinessName.toLowerCase().includes(q)) return true;
+  if (go.senderPhone.toLowerCase().includes(q)) return true;
+  if (go.pickUpCity.toLowerCase().includes(q)) return true;
+  return go.orders.some(o =>
+    o.recipientFirstName.toLowerCase().includes(q) ||
+    o.recipientLastName.toLowerCase().includes(q) ||
+    o.recipientPhone.toLowerCase().includes(q) ||
+    o.recipientCity.toLowerCase().includes(q) ||
+    o.trackingNumber.toLowerCase().includes(q));
+}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -48,10 +153,11 @@ export default function AdminHistoryPage({ token }: { token: string }) {
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
 
   const [groupOrders,   setGroupOrders]  = useState<AdminGroupOrder[]>([]);
+  const [returnOrders,  setReturnOrders] = useState<AdminGroupOrder[]>([]);
   const [loading,       setLoading]      = useState(true);
   const [error,         setError]        = useState<string | null>(null);
   const [search,        setSearch]       = useState('');
-  const [filterStatus,  setFilterStatus] = useState<HistoryFilter>('');
+  const [filterStatus,  setFilterStatus] = useState<HistoryFilter>('delivered');
   const [expandedIds,   setExpandedIds]  = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -70,6 +176,19 @@ export default function AdminHistoryPage({ token }: { token: string }) {
   useEffect(() => {
     void (async () => { setLoading(true); await load(''); })();
   }, [load]);
+
+  // Standalone Return orders are not part of any GroupOrder, so fetch them
+  // separately and keep the terminal ones (returned to sender / cancelled).
+  useEffect(() => {
+    fetchReturnExchangeOrders(token)
+      .then(orders => setReturnOrders(
+        orders
+          .filter(o => o.orderType === 'Return'
+            && (o.status === 'ReturnedToSender' || o.status === 'CancelledByAdmin'))
+          .map(wrapReturnAsGroupOrder)
+      ))
+      .catch(() => setReturnOrders([]));
+  }, [token]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -91,40 +210,47 @@ export default function AdminHistoryPage({ token }: { token: string }) {
     });
   };
 
-  const completedOrders = useMemo(
-    () => groupOrders.filter(isCompletedGroupOrder),
-    [groupOrders],
+  // Group orders are searched server-side; wrapped returns are searched here.
+  // A group order belongs in History if it contains at least one order that
+  // falls into one of the four history categories (delivered/cancelled/returned/exchanged).
+  const completedOrders = useMemo(() => {
+    const merged = [
+      ...groupOrders,
+      ...returnOrders.filter(go => groupOrderMatchesSearch(go, search)),
+    ];
+    return merged
+      .filter(go => HISTORY_PILLS.some(p => matchesHistoryFilter(go, p.value)))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [groupOrders, returnOrders, search]);
+
+  const visibleOrders = useMemo(
+    () => completedOrders.filter(go => matchesHistoryFilter(go, filterStatus)),
+    [completedOrders, filterStatus],
   );
 
-  const visibleOrders = useMemo(() => {
-    if (!filterStatus) return completedOrders;
-    if (filterStatus === 'AllDelivered') {
-      return completedOrders.filter(go =>
-        go.status === 'AllDelivered' ||
-        (go.orders.length > 0 && go.orders.every(o => o.status === 'DeliveredToRecipient'))
-      );
-    }
-    return completedOrders.filter(go => go.status === filterStatus);
-  }, [completedOrders, filterStatus]);
-
-  const hasFilters = !!(search || filterStatus);
+  const hasFilters = true;
 
   const counts = useMemo(() => ({
-    all:               completedOrders.length,
-    AllDelivered:      completedOrders.filter(go =>
-      go.status === 'AllDelivered' ||
-      (go.orders.length > 0 && go.orders.every(o => o.status === 'DeliveredToRecipient'))
-    ).length,
-    CancelledBySender: completedOrders.filter(go => go.status === 'CancelledBySender').length,
-    CancelledByAdmin:  completedOrders.filter(go => go.status === 'CancelledByAdmin').length,
-    OrderNotAccepted:  completedOrders.filter(go => go.status === 'OrderNotAccepted').length,
+    delivered: completedOrders.filter(go => matchesHistoryFilter(go, 'delivered')).length,
+    cancelled: completedOrders.filter(go => matchesHistoryFilter(go, 'cancelled')).length,
+    returned:  completedOrders.filter(go => matchesHistoryFilter(go, 'returned')).length,
+    exchanged: completedOrders.filter(go => matchesHistoryFilter(go, 'exchanged')).length,
   }), [completedOrders]);
 
-  const pillCount = (v: HistoryFilter) =>
-    v === '' ? counts.all : counts[v as keyof typeof counts] ?? 0;
+  const pillCount = (v: HistoryFilter) => counts[v];
 
   return (
     <div className="content-card" style={{ overflow: 'hidden' }}>
+      <style>{`
+        .hist-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+        .hist-table th { text-align: left; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-subtle); padding: 8px 10px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; }
+        .hist-table td { padding: 8px 10px; font-size: 0.8rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; white-space: nowrap; }
+        .hist-table tbody tr:last-child td { border-bottom: none; }
+        .hist-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+        .hist-table th.num, .hist-table td.num { text-align: right; }
+        .hist-table .hist-totals td { background: var(--color-bg-3); border-top: 2px solid var(--color-border); border-bottom: none; font-weight: 700; font-size: 0.74rem; }
+        .hist-table .hist-totals td:first-child { font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-subtle); }
+      `}</style>
 
       {/* Search */}
       <div className="go-toolbar go-toolbar--search" style={{ gap: 10, alignItems: 'center' }}>
@@ -206,10 +332,12 @@ export default function AdminHistoryPage({ token }: { token: string }) {
           {visibleOrders.map(go => {
             const expanded = expandedIds.has(go.id);
 
-            const totalSvc      = go.orders.reduce((s, o) => s + (o.companyServicePrice ?? 0), 0);
-            const totalRevenue  = go.orders.reduce((s, o) => s + (o.companyRevenue ?? 0), 0);
-            const totalCod      = go.orders.reduce((s, o) => s + (o.amountToCollectForPackage ?? 0), 0);
-            const totalCash     = go.orders.reduce((s, o) => s + (o.amountOfCashCollected ?? 0), 0);
+            // Only the packages that belong to the active history category.
+            const rows = ordersForFilter(go, filterStatus);
+            const totalSvc      = rows.reduce((s, o) => s + (o.companyServicePrice ?? 0), 0);
+            const totalRevenue  = rows.reduce((s, o) => s + (o.companyRevenue ?? 0), 0);
+            const totalCod      = rows.reduce((s, o) => s + (o.amountToCollectForPackage ?? 0), 0);
+            const totalCash     = rows.reduce((s, o) => s + (o.amountOfCashCollected ?? 0), 0);
 
             return (
               <div className="go-row" key={go.id}>
@@ -233,7 +361,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                       {locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}
                     </span>
                     <StatusBadge status={go.status} />
-                    <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
+                    <span className="go-meta__pkgs">{t.goPkgs(rows.length)}</span>
                     <span className="go-meta__date">{formatDate(go.createdAt)}</span>
                   </div>
 
@@ -264,81 +392,49 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                 {/* ── Expanded orders table ── */}
                 {expanded && (
                   <div className="go-orders">
-                    {go.orders.length === 0 ? (
+                    {rows.length === 0 ? (
                       <div style={{ padding: '16px 20px', fontSize: '0.825rem', color: 'var(--color-text-subtle)' }}>
                         No packages in this order.
                       </div>
                     ) : (
                       <div style={{ overflowX: 'auto' }}>
-                        <table className="go-orders-table">
+                        <table className="hist-table">
                           <thead>
                             <tr>
                               <th>{t.goThTracking}</th>
                               <th>{t.goThRecipient}</th>
-                              <th>{t.goThPhone}</th>
                               <th>{t.goThCityDistrict}</th>
-                              <th>{t.goThAddress}</th>
-                              <th>{t.goThDescription}</th>
                               <th>{t.goThStatus}</th>
-                              <th title="Fragile">🔸</th>
-                              <th title="Who pays service fee">Payer</th>
                               <th title="Product payment status">{t.goThPaid}</th>
-                              <th title="COD — cash to collect from recipient for product">COD ₾</th>
-                              <th title="Cash actually collected by courier">Collected ₾</th>
-                              <th title="Company service price">Svc ₾</th>
-                              <th title="Courier salary">Salary ₾</th>
-                              <th title="Company revenue">Revenue ₾</th>
-                              <th title="Delivered date">Delivered</th>
+                              <th className="num" title="COD — cash to collect from recipient for product">COD ₾</th>
+                              <th className="num" title="Cash actually collected by courier">Collected ₾</th>
+                              <th className="num" title="Company service price">Svc ₾</th>
+                              <th className="num" title="Courier salary">Salary ₾</th>
+                              <th className="num" title="Company revenue">Revenue ₾</th>
+                              <th className="num" title="Delivered date">Delivered</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {go.orders.map(o => (
+                            {rows.map(o => (
                               <tr key={o.id}>
                                 <td><span className="tn-badge">{o.trackingNumber}</span></td>
                                 <td>
                                   <div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div>
-                                </td>
-                                <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>
-                                  {o.recipientPhone}
+                                  <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>
+                                    {o.recipientPhone}
+                                  </div>
                                 </td>
                                 <td>
                                   <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>
                                     {locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}
                                   </div>
                                 </td>
-                                <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
-                                  {o.recipientAddress}
-                                </td>
-                                <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 140 }}>
-                                  {o.description ?? <span style={{ opacity: 0.35 }}>—</span>}
-                                </td>
                                 <td><StatusBadge status={o.status} /></td>
 
-                                <td style={{ textAlign: 'center' }}>
-                                  {o.isFragile
-                                    ? <span title="Fragile" style={{ fontSize: '0.78rem', color: '#f97316' }}>🔸</span>
-                                    : <span style={{ opacity: 0.25, fontSize: '0.78rem' }}>—</span>}
-                                </td>
-
                                 <td>
                                   <span style={{
-                                    fontSize: '0.72rem',
-                                    fontWeight: 600,
-                                    padding: '2px 7px',
-                                    borderRadius: 'var(--radius-sm)',
-                                    background: o.whoPaysForCompanyService === 'Sender'
-                                      ? 'var(--color-bg-3)' : 'var(--color-accent-dim)',
-                                    color: o.whoPaysForCompanyService === 'Sender'
-                                      ? 'var(--color-text-subtle)' : 'var(--color-accent)',
-                                  }}>
-                                    {o.whoPaysForCompanyService === 'Sender' ? 'Sndr' : 'Rcpt'}
-                                  </span>
-                                </td>
-
-                                <td>
-                                  <span style={{
-                                    fontSize: '0.75rem',
+                                    fontSize: '0.74rem',
                                     fontWeight: 600,
                                     color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444',
                                   }}>
@@ -346,27 +442,27 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                                   </span>
                                 </td>
 
-                                <td style={{ fontWeight: 600, color: '#d97706' }}>
+                                <td className="num" style={{ fontWeight: 600, color: '#d97706' }}>
                                   {o.amountToCollectForPackage != null && o.amountToCollectForPackage > 0
                                     ? `₾${o.amountToCollectForPackage.toFixed(2)}`
                                     : <span style={{ opacity: 0.35 }}>—</span>}
                                 </td>
 
-                                <td style={{ fontWeight: 600, color: '#16a34a' }}>
+                                <td className="num" style={{ fontWeight: 600, color: '#16a34a' }}>
                                   {o.amountOfCashCollected != null && o.amountOfCashCollected > 0
                                     ? `₾${o.amountOfCashCollected.toFixed(2)}`
                                     : <span style={{ opacity: 0.35 }}>—</span>}
                                 </td>
 
-                                <td style={{ fontWeight: 600 }}>
+                                <td className="num" style={{ fontWeight: 600 }}>
                                   {money(o.companyServicePrice)}
                                 </td>
 
-                                <td style={{ color: '#f97316', fontWeight: 600 }}>
+                                <td className="num" style={{ color: '#f97316', fontWeight: 600 }}>
                                   {money(o.courierSalary)}
                                 </td>
 
-                                <td style={{
+                                <td className="num" style={{
                                   fontWeight: 600,
                                   color: o.companyRevenue != null
                                     ? (o.companyRevenue >= 0 ? '#10b981' : '#ef4444')
@@ -375,7 +471,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                                   {money(o.companyRevenue)}
                                 </td>
 
-                                <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap' }}>
+                                <td className="num" style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap' }}>
                                   {o.deliveredAt
                                     ? new Date(o.deliveredAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                                     : <span style={{ opacity: 0.35 }}>—</span>}
@@ -384,22 +480,20 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                             ))}
                           </tbody>
 
-                          {go.orders.length > 1 && (
+                          {rows.length > 1 && (
                             <tfoot>
-                              <tr style={{ background: 'var(--color-bg-3)', borderTop: '2px solid var(--color-border)' }}>
-                                <td colSpan={12} style={{ padding: '8px 12px', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)' }}>
-                                  Totals
-                                </td>
-                                <td style={{ fontWeight: 700, padding: '8px 12px' }}>
-                                  ₾{go.orders.reduce((s, o) => s + (o.companyServicePrice ?? 0), 0).toFixed(2)}
-                                </td>
-                                <td style={{ fontWeight: 700, color: '#f97316', padding: '8px 12px' }}>
-                                  {go.orders.some(o => o.courierSalary != null)
-                                    ? `₾${go.orders.reduce((s, o) => s + (o.courierSalary ?? 0), 0).toFixed(2)}`
+                              <tr className="hist-totals">
+                                <td colSpan={5}>Totals</td>
+                                <td className="num">{totalCod > 0 ? `₾${totalCod.toFixed(2)}` : <span style={{ opacity: 0.35 }}>—</span>}</td>
+                                <td className="num">{totalCash > 0 ? `₾${totalCash.toFixed(2)}` : <span style={{ opacity: 0.35 }}>—</span>}</td>
+                                <td className="num">₾{totalSvc.toFixed(2)}</td>
+                                <td className="num" style={{ color: '#f97316' }}>
+                                  {rows.some(o => o.courierSalary != null)
+                                    ? `₾${rows.reduce((s, o) => s + (o.courierSalary ?? 0), 0).toFixed(2)}`
                                     : <span style={{ opacity: 0.35 }}>—</span>}
                                 </td>
-                                <td style={{ fontWeight: 700, padding: '8px 12px', color: totalRevenue >= 0 ? '#10b981' : '#ef4444' }}>
-                                  {go.orders.some(o => o.companyRevenue != null)
+                                <td className="num" style={{ color: totalRevenue >= 0 ? '#10b981' : '#ef4444' }}>
+                                  {rows.some(o => o.companyRevenue != null)
                                     ? `₾${totalRevenue.toFixed(2)}`
                                     : <span style={{ opacity: 0.35 }}>—</span>}
                                 </td>

@@ -153,7 +153,7 @@ function CustomerLedger({ token }: { token: string }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {/* Picker */}
-            <div className="content-card" style={{ padding: '10px 14px' }}>
+            <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5 }}>
                 <CustomerPicker token={token} selected={customer} onSelect={setCustomer} onClear={() => { setCustomer(null); setRecords([]); setError(null); }} />
             </div>
 

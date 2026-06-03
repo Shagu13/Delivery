@@ -320,7 +320,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
             {tab === 'customers' && (
                 <>
                     {/* Toolbar: customer picker + period nav in one row */}
-                    <div className="content-card" style={{ padding: '10px 14px' }}>
+                    <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5 }}>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                             <CustomerPicker
                                 token={token}
