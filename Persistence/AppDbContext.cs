@@ -18,7 +18,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<TrackingEvent>    TrackingEvents    => Set<TrackingEvent>();
     public DbSet<City>             Cities            => Set<City>();
     public DbSet<District>         Districts         => Set<District>();
-    public DbSet<DailySettlement>  DailySettlements  => Set<DailySettlement>();
+    public DbSet<CourierSettlement> CourierSettlements => Set<CourierSettlement>();
+    public DbSet<CustomerSettlement> CustomerSettlements => Set<CustomerSettlement>();
     public DbSet<WeightPriceTier>  WeightPriceTiers  => Set<WeightPriceTier>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
@@ -155,20 +156,38 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
 
         });
 
-        // ── DailySettlement ───────────────────────────────────────────────────
-        modelBuilder.Entity<DailySettlement>(e =>
+        // ── CourierSettlement ─────────────────────────────────────────────────
+        modelBuilder.Entity<CourierSettlement>(e =>
         {
             e.HasKey(d => d.Id);
             e.HasIndex(d => d.CourierId);
             e.HasIndex(d => d.CreatedAt);
             e.HasIndex(d => new { d.CourierId, d.CreatedAt });
-            e.HasOne(d => d.Courier).WithMany(c => c.DailySettlements)
+            e.HasOne(d => d.Courier).WithMany(c => c.CourierSettlements)
              .HasForeignKey(d => d.CourierId).OnDelete(DeleteBehavior.Restrict);
             e.Property(d => d.TotalAmountOfCashCollected).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCompanyServiceRevenue).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCompanyNetIncome).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCourierSalary).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCourierTransferToCompany).HasColumnType("decimal(18,2)");
+            e.Property(d => d.AmountCourierWasPaid).HasColumnType("decimal(18,2)");
+        });
+
+        // ── CustomerSettlement ────────────────────────────────────────────────
+        modelBuilder.Entity<CustomerSettlement>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.CustomerId);
+            // One settlement per customer per month.
+            e.HasIndex(s => new { s.CustomerId, s.Year, s.Month }).IsUnique();
+            e.HasOne(s => s.Customer).WithMany(c => c.CustomerSettlements)
+             .HasForeignKey(s => s.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(s => s.TotalCODCompanyCollectedForPackages).HasColumnType("decimal(18,2)");
+            e.Property(s => s.TotalCompanyServicePriceOwedToCompany).HasColumnType("decimal(18,2)");
+            e.Property(s => s.TotalAmountOfCollectedCodPaidByCompany).HasColumnType("decimal(18,2)");
+            e.Property(s => s.AmountOfCollectedCodPaidByCompany).HasColumnType("decimal(18,2)");
+            e.Property(s => s.TotalAmountPaidToCompanyForCompanyService).HasColumnType("decimal(18,2)");
+            e.Property(s => s.AmountPaidToCompanyForCompanyService).HasColumnType("decimal(18,2)");
         });
 
         // ── TrackingEvent ─────────────────────────────────────────────────────

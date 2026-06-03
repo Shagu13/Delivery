@@ -10,7 +10,7 @@ namespace Domain;
 /// CompanyNetCashAfterCod) were removed — those are derived live from Orders
 /// so they never go stale.
 /// </summary>
-public class DailySettlement
+public class CourierSettlement
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -28,6 +28,19 @@ public class DailySettlement
 
     /// <summary>Number of orders successfully delivered to recipients on this day.</summary>
     public int TotalOrdersDelivered { get; set; } = 0;
+
+    /// <summary>
+    /// Number of orders for this courier cancelled on this day
+    /// (Status == CancelledByAdmin, attributed to the day by Order.CreatedAt).
+    /// </summary>
+    public int NumberOfOrdersCancelled { get; set; } = 0;
+
+    /// <summary>
+    /// Number of orders this courier postponed on this day
+    /// (counted via Order.PostponedAt falling within the day, regardless of
+    /// the order's current status — a postponed order may later be delivered).
+    /// </summary>
+    public int NumberOfOrderPostponed { get; set; } = 0;
 
     // ── Cash collected ───────────────────────────────────────────────────────
     /// <summary>
@@ -53,6 +66,13 @@ public class DailySettlement
     /// </summary>
     public decimal TotalCourierSalary { get; set; } = 0;
 
+    /// <summary>
+    /// Amount the courier was actually paid for this settlement.
+    /// When the admin pays in full this equals TotalCourierSalary; when paying
+    /// partly it is the amount the admin entered. Defaults to 0 until recorded.
+    /// </summary>
+    public decimal AmountCourierWasPaid { get; set; } = 0;
+
     // ── Transfer & net ───────────────────────────────────────────────────────
     /// <summary>
     /// How much cash the courier must physically hand over to the company.
@@ -68,6 +88,11 @@ public class DailySettlement
 
     // ── Meta ─────────────────────────────────────────────────────────────────
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// When the settlement was last recomputed/updated. Null until first update.
+    /// </summary>
+    public DateTime? UpdatedAt { get; set; }
 
     /// <summary>
     /// Set to true by admin when the day is formally closed.

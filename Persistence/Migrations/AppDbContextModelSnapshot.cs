@@ -190,6 +190,65 @@ namespace Persistence.Migrations
                     b.ToTable("Couriers");
                 });
 
+            modelBuilder.Entity("Domain.CourierSettlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountCourierWasPaid")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("CourierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsTheDayClosed")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("NumberOfOrderPostponed")
+                        .HasColumnType("int");
+
+                    b.Property<int>("NumberOfOrdersCancelled")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("TotalAmountOfCashCollected")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCompanyNetIncome")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCompanyServiceRevenue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCourierSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCourierTransferToCompany")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("TotalOrdersDelivered")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalOrdersPickedUp")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourierId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("CourierId", "CreatedAt");
+
+                    b.ToTable("CourierSettlements");
+                });
+
             modelBuilder.Entity("Domain.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -269,51 +328,59 @@ namespace Persistence.Migrations
                     b.ToTable("Customers");
                 });
 
-            modelBuilder.Entity("Domain.DailySettlement", b =>
+            modelBuilder.Entity("Domain.CustomerSettlement", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("CourierId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<decimal>("AmountOfCollectedCodPaidByCompany")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AmountPaidToCompanyForCompanyService")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool>("IsTheDayClosed")
-                        .HasColumnType("bit");
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal?>("TotalAmountOfCashCollected")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("TotalCompanyNetIncome")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("TotalCompanyServiceRevenue")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("TotalCourierSalary")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("TotalCourierTransferToCompany")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("TotalOrdersDelivered")
+                    b.Property<int>("Month")
                         .HasColumnType("int");
 
-                    b.Property<int>("TotalOrdersPickedUp")
+                    b.Property<decimal>("TotalAmountOfCollectedCodPaidByCompany")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalAmountPaidToCompanyForCompanyService")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCODCompanyCollectedForPackages")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCompanyServicePriceOwedToCompany")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("TotalNumberOfOrderDelivered")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalNumberOfOrdersPlaced")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Year")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CourierId");
+                    b.HasIndex("CustomerId");
 
-                    b.HasIndex("CreatedAt");
+                    b.HasIndex("CustomerId", "Year", "Month")
+                        .IsUnique();
 
-                    b.HasIndex("CourierId", "CreatedAt");
-
-                    b.ToTable("DailySettlements");
+                    b.ToTable("CustomerSettlements");
                 });
 
             modelBuilder.Entity("Domain.District", b =>
@@ -916,6 +983,17 @@ namespace Persistence.Migrations
                     b.Navigation("ApplicationUser");
                 });
 
+            modelBuilder.Entity("Domain.CourierSettlement", b =>
+                {
+                    b.HasOne("Domain.Courier", "Courier")
+                        .WithMany("CourierSettlements")
+                        .HasForeignKey("CourierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Courier");
+                });
+
             modelBuilder.Entity("Domain.Customer", b =>
                 {
                     b.HasOne("Domain.ApplicationUser", "ApplicationUser")
@@ -927,15 +1005,15 @@ namespace Persistence.Migrations
                     b.Navigation("ApplicationUser");
                 });
 
-            modelBuilder.Entity("Domain.DailySettlement", b =>
+            modelBuilder.Entity("Domain.CustomerSettlement", b =>
                 {
-                    b.HasOne("Domain.Courier", "Courier")
-                        .WithMany("DailySettlements")
-                        .HasForeignKey("CourierId")
+                    b.HasOne("Domain.Customer", "Customer")
+                        .WithMany("CustomerSettlements")
+                        .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Courier");
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("Domain.District", b =>
@@ -1078,11 +1156,16 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Courier", b =>
                 {
-                    b.Navigation("DailySettlements");
+                    b.Navigation("CourierSettlements");
 
                     b.Navigation("GroupOrders");
 
                     b.Navigation("Orders");
+                });
+
+            modelBuilder.Entity("Domain.Customer", b =>
+                {
+                    b.Navigation("CustomerSettlements");
                 });
 
             modelBuilder.Entity("Domain.GroupOrder", b =>

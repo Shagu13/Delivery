@@ -66,7 +66,7 @@ All business logic lives in `Application` as MediatR `IRequest<T>` commands/quer
 - `DeliveredToRecipient`, `ExchangeCompleted` — Send/Exchange terminal
 - `DeliveredReturnOrderToWarehouse`, `ReturnedToSender` — Return terminal
 
-**DailySettlement** — one record per courier per working day.
+**CourierSettlement** — one record per courier per working day.
 - `TotalCourierTransferToCompany = TotalAmountOfCashCollected - TotalCourierSalary`
 - Can be **negative** when the sender pays the company (courier collects no COD cash but earns a salary). Negative value means the company owes the courier their salary.
 
@@ -95,5 +95,5 @@ Redis is used when `ConnectionStrings:Redis` is configured; falls back to in-mem
 ## Do NOT
 - Put logic in Domain entities
 - Return entities from queries — always map to DTOs
-- Add computed/snapshot columns to DailySettlement (derive live instead)
+- Add computed/snapshot columns to CourierSettlement (derive live instead)
 - Rewrite entire files — make surgical targeted edits only

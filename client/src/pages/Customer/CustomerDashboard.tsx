@@ -13,10 +13,11 @@ import type { Customer, CustomerGroupOrder } from '../../api/customers';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
+import { CustomerStatisticsPage } from './CustomerStatisticsPage';
 import '../../styles/dashboard.css';
 
 
-type View = 'overview' | 'shipments' | 'profile' | 'password' | 'calculator';
+type View = 'overview' | 'shipments' | 'statistics' | 'profile' | 'password' | 'calculator';
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
@@ -95,6 +96,7 @@ export function CustomerDashboard() {
           {([
             ['overview',    t.sidebarOverview,      overviewIcon],
             ['shipments',   t.custNavShipments,      shipmentsIcon],
+            ['statistics',  t.navStatistics,         statisticsIcon],
             ['calculator',  t.custNavCalculator,     calcIcon],
             ['profile',     t.custNavProfile,        profileIcon],
             ['password',    t.custNavPassword,       lockIcon],
@@ -131,6 +133,7 @@ export function CustomerDashboard() {
           <span className="dashboard__topbar-title">
             {view === 'overview'    && t.sidebarOverview}
             {view === 'shipments'   && t.custNavShipments}
+            {view === 'statistics'  && t.navStatistics}
             {view === 'calculator'  && t.custTopbarCalculator}
             {view === 'profile'     && t.custNavProfile}
             {view === 'password'    && t.custTopbarPassword}
@@ -163,6 +166,7 @@ export function CustomerDashboard() {
                 />
               )}
               {view === 'shipments'   && <ShipmentsView orders={orders} />}
+              {view === 'statistics'  && <CustomerStatisticsPage />}
               {view === 'calculator'  && token && <PriceCalculatorCard token={token} />}
               {view === 'profile'   && profile && token && (
                 <EditProfileView
@@ -635,6 +639,15 @@ const calcIcon = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
     <rect x="1.5" y="1.5" width="13" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.4"/>
     <path d="M4.5 5h7M4.5 8h3.5M10 7v3M11.5 8.5H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+
+const statisticsIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M2 14V2M2 14h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <rect x="4.5" y="8" width="2.2" height="4" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
+    <rect x="8.2" y="5" width="2.2" height="7" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
+    <rect x="11.9" y="9.5" width="2.2" height="2.5" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
   </svg>
 );
 

@@ -53,7 +53,9 @@ public sealed class SettlementsController : BaseController
         CancellationToken ct)
     {
         var id = await Sender.Send(
-            new CreateDailySettlementCommand(request.CourierId, request.Date), ct);
+            new CreateCourierSettlementCommand(
+                request.CourierId, request.Date,
+                request.PayCourierFully, request.PartialAmountPaid), ct);
 
         return CreatedAtAction(
             nameof(GetPreview),
@@ -63,7 +65,7 @@ public sealed class SettlementsController : BaseController
 
     // ── PUT /api/settlements  (Admin) — update existing ───────────────────────
     /// <summary>
-    /// Recomputes and updates an existing DailySettlement for a courier on a given date.
+    /// Recomputes and updates an existing CourierSettlement for a courier on a given date.
     /// Use when new orders were delivered after the initial settlement was saved.
     /// Returns 404 if no settlement exists for that courier+date.
     /// Returns 409 if the settlement is locked (IsTheDayClosed = true).
@@ -78,7 +80,9 @@ public sealed class SettlementsController : BaseController
         CancellationToken ct)
     {
         var id = await Sender.Send(
-            new UpdateDailySettlementCommand(request.CourierId, request.Date), ct);
+            new UpdateCourierSettlementCommand(
+                request.CourierId, request.Date,
+                request.PayCourierFully, request.PartialAmountPaid), ct);
 
         return Ok(new { settlementId = id });
     }
@@ -87,5 +91,7 @@ public sealed class SettlementsController : BaseController
 // ── Local request model ────────────────────────────────────────────────────────
 public sealed record CreateSettlementRequest(
     Guid     CourierId,
-    DateOnly Date
+    DateOnly Date,
+    bool     PayCourierFully  = false,  // true → courier paid full earned salary
+    decimal? PartialAmountPaid = null   // used when PayCourierFully is false
 );

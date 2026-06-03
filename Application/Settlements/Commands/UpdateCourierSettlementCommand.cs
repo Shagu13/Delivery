@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.Settlements.Commands;
 
 /// <summary>
-/// Updates an existing DailySettlement for a courier on a given date,
+/// Updates an existing CourierSettlement for a courier on a given date,
 /// recomputing all financial totals from the current set of delivered orders.
 ///
 /// Use case: admin already saved a settlement but later assigned/delivered
@@ -19,32 +19,34 @@ namespace Application.Settlements.Commands;
 /// - If IsTheDayClosed == true the settlement is locked and cannot be updated.
 /// - All delivered orders for the day are re-summed; partial updates are not supported.
 /// </summary>
-public sealed record UpdateDailySettlementCommand(
+public sealed record UpdateCourierSettlementCommand(
     Guid     CourierId,
-    DateOnly Date
+    DateOnly Date,
+    bool     PayCourierFully  = false,
+    decimal? PartialAmountPaid = null
 ) : IRequest<Guid>;
 
-public sealed class UpdateDailySettlementCommandHandler
-    : IRequestHandler<UpdateDailySettlementCommand, Guid>
+public sealed class UpdateCourierSettlementCommandHandler
+    : IRequestHandler<UpdateCourierSettlementCommand, Guid>
 {
     private readonly IAppDbContext _context;
-    public UpdateDailySettlementCommandHandler(IAppDbContext context) => _context = context;
+    public UpdateCourierSettlementCommandHandler(IAppDbContext context) => _context = context;
 
     public async Task<Guid> Handle(
-        UpdateDailySettlementCommand request,
+        UpdateCourierSettlementCommand request,
         CancellationToken cancellationToken)
     {
         var dayStart = request.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var dayEnd   = request.Date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
         // ── 1. Find existing settlement ───────────────────────────────────────
-        var settlement = await _context.DailySettlements
+        var settlement = await _context.CourierSettlements
             .FirstOrDefaultAsync(d => d.CourierId  == request.CourierId
                                    && d.CreatedAt >= dayStart
                                    && d.CreatedAt <= dayEnd,
                                  cancellationToken)
             ?? throw new NotFoundException(
-                "DailySettlement",
+                "CourierSettlement",
                 $"courier {request.CourierId} on {request.Date:yyyy-MM-dd}");
 
         // ── 2. Locked settlements cannot be changed ───────────────────────────
@@ -89,14 +91,38 @@ public sealed class UpdateDailySettlementCommandHandler
                      && g.PickedUpAt <= dayEnd)
             .SumAsync(g => (int?)g.NumberOfPackages, cancellationToken) ?? 0;
 
+        // Cancelled (by Order.CreatedAt — no CancelledAt exists) and postponed
+        // (by Order.PostponedAt) counts for the day.
+        var numberOfOrdersCancelled = await _context.Orders
+            .CountAsync(o => o.CourierId == request.CourierId
+                          && o.Status == OrderStatus.CancelledByAdmin
+                          && o.CreatedAt >= dayStart
+                          && o.CreatedAt <= dayEnd,
+                        cancellationToken);
+
+        var numberOfOrderPostponed = await _context.Orders
+            .CountAsync(o => o.CourierId == request.CourierId
+                          && o.PostponedAt != null
+                          && o.PostponedAt >= dayStart
+                          && o.PostponedAt <= dayEnd,
+                        cancellationToken);
+
+        var amountCourierWasPaid = request.PayCourierFully
+            ? totalCourierSalary
+            : (request.PartialAmountPaid ?? 0m);
+
         // ── 6. Patch settlement record ────────────────────────────────────────
         settlement.TotalOrdersPickedUp           = totalOrdersPickedUp;
         settlement.TotalOrdersDelivered          = orders.Count;
+        settlement.NumberOfOrdersCancelled       = numberOfOrdersCancelled;
+        settlement.NumberOfOrderPostponed        = numberOfOrderPostponed;
         settlement.TotalAmountOfCashCollected    = totalCashCollected > 0 ? totalCashCollected : null;
         settlement.TotalCompanyServiceRevenue    = totalServiceRevenue;
         settlement.TotalCourierSalary            = totalCourierSalary;
+        settlement.AmountCourierWasPaid          = amountCourierWasPaid;
         settlement.TotalCourierTransferToCompany = totalTransferToCompany;
         settlement.TotalCompanyNetIncome         = totalNetIncome;
+        settlement.UpdatedAt                     = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
         return settlement.Id;

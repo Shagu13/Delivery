@@ -19,6 +19,7 @@ import '../../styles/dashboard.css';
 import { fetchSmsBalance } from '../../api/sms';
 import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
 import AdminHistoryPage from './AdminHistoryPage';
+import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
 import { fetchReturnExchangeOrders, getPendingReturnExchangeCount } from '../../api/returnExchange';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
@@ -35,7 +36,7 @@ const ACTIVE_ORDER_STATUSES_ONLY = new Set([
 ]);
 
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'returnExchange';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'returnExchange' | 'finance';
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -219,6 +220,17 @@ export function AdminDashboard() {
               </span>
             )}
           </button>
+          <button
+            className={`sidebar__link ${activeView === 'finance' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('finance')}
+            title={t.navFinance}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M8 4.5v7M9.8 6c0-.8-.8-1.3-1.8-1.3S6.2 5.2 6.2 6s.8 1.1 1.8 1.4S9.9 8.2 9.9 9s-.8 1.3-1.9 1.3S6.1 9.8 6.1 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            <span className="sidebar__link-text">{t.navFinance}</span>
+          </button>
         </nav>
         <div className="sidebar__footer">
           <LanguageToggle className="sidebar__lang-toggle" />
@@ -250,6 +262,7 @@ export function AdminDashboard() {
             {activeView === 'weightTiers' && t.topbarWeightTiers}
             {activeView === 'history' && t.topbarHistory}
             {activeView === 'returnExchange' && 'Returns & Exchanges'}
+            {activeView === 'finance' && t.navFinance}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
@@ -271,6 +284,7 @@ export function AdminDashboard() {
                       <AdminWeightPriceTiersPage token={token} />
                   )}
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
+          {activeView === 'finance' && <AdminFinancePage token={token ?? ''} />}
           {activeView === 'returnExchange' && token && (
             <AdminReturnExchangePage
               token={token}

@@ -9,9 +9,12 @@ public sealed record CourierSettlementItemDto(
     string  Date,                            // "YYYY-MM-DD" derived from CreatedAt
     int     TotalOrdersPickedUp,
     int     TotalOrdersDelivered,
+    int     NumberOfOrdersCancelled,         // orders cancelled on this day
+    int     NumberOfOrderPostponed,          // orders postponed on this day
     decimal TotalAmountOfCashCollected,      // cash received from recipients
     decimal TotalCompanyServiceRevenue,      // sum of all delivery fees for the day
     decimal TotalCourierSalary,              // what the courier earns
+    decimal AmountCourierWasPaid,            // what the courier was actually paid
     decimal TotalCourierTransferToCompany,   // cash − salary = hand-over amount
     bool    IsTheDayClosed
 );

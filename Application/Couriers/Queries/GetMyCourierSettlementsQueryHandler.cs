@@ -25,7 +25,7 @@ public sealed class GetMyCourierSettlementsQueryHandler
         var monthStart = new DateTime(request.Year, request.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var monthEnd   = monthStart.AddMonths(1);
 
-        var settlements = await _context.DailySettlements
+        var settlements = await _context.CourierSettlements
             .AsNoTracking()
             .Where(s => s.CourierId == courier.Id
                      && s.CreatedAt >= monthStart
@@ -38,9 +38,12 @@ public sealed class GetMyCourierSettlementsQueryHandler
             Date:                          DateOnly.FromDateTime(s.CreatedAt).ToString("yyyy-MM-dd"),
             TotalOrdersPickedUp:           s.TotalOrdersPickedUp,
             TotalOrdersDelivered:          s.TotalOrdersDelivered,
+            NumberOfOrdersCancelled:       s.NumberOfOrdersCancelled,
+            NumberOfOrderPostponed:        s.NumberOfOrderPostponed,
             TotalAmountOfCashCollected:    s.TotalAmountOfCashCollected ?? 0m,
             TotalCompanyServiceRevenue:    s.TotalCompanyServiceRevenue,
             TotalCourierSalary:            s.TotalCourierSalary,
+            AmountCourierWasPaid:          s.AmountCourierWasPaid,
             TotalCourierTransferToCompany: s.TotalCourierTransferToCompany,
             IsTheDayClosed:               s.IsTheDayClosed
         )).ToList();

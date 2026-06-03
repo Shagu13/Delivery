@@ -50,4 +50,7 @@ public class Customer
     // ── Identity link ────────────────────────────────────────────────────────
     public required string ApplicationUserId { get; set; }
     public ApplicationUser ApplicationUser   { get; set; } = null!;
+
+    // ── Navigation ─────────────────────────────────────────────────────────────
+    public ICollection<CustomerSettlement> CustomerSettlements { get; set; } = new List<CustomerSettlement>();
 }

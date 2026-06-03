@@ -13,7 +13,8 @@ public interface IAppDbContext
     DbSet<TrackingEvent>        TrackingEvents       { get; }
     DbSet<City>                 Cities               { get; }
     DbSet<District>             Districts            { get; }
-    DbSet<DailySettlement>      DailySettlements     { get; }
+    DbSet<CourierSettlement>    CourierSettlements   { get; }
+    DbSet<CustomerSettlement>   CustomerSettlements  { get; }
     DbSet<WeightPriceTier>      WeightPriceTiers     { get; }
     DbSet<PasswordResetToken>   PasswordResetTokens  { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

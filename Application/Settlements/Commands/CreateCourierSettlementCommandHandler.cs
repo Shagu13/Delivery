@@ -7,14 +7,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Application.Settlements.Commands;
 
-public sealed class CreateDailySettlementCommandHandler
-    : IRequestHandler<CreateDailySettlementCommand, Guid>
+public sealed class CreateCourierSettlementCommandHandler
+    : IRequestHandler<CreateCourierSettlementCommand, Guid>
 {
     private readonly IAppDbContext _context;
-    public CreateDailySettlementCommandHandler(IAppDbContext context) => _context = context;
+    public CreateCourierSettlementCommandHandler(IAppDbContext context) => _context = context;
 
     public async Task<Guid> Handle(
-        CreateDailySettlementCommand request,
+        CreateCourierSettlementCommand request,
         CancellationToken cancellationToken)
     {
         // ── 1. Courier must exist ─────────────────────────────────────────────
@@ -28,7 +28,7 @@ public sealed class CreateDailySettlementCommandHandler
         var dayStart = request.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var dayEnd   = request.Date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
-        var alreadyExists = await _context.DailySettlements
+        var alreadyExists = await _context.CourierSettlements
             .AnyAsync(d => d.CourierId  == request.CourierId
                         && d.CreatedAt >= dayStart
                         && d.CreatedAt <= dayEnd,
@@ -81,22 +81,48 @@ public sealed class CreateDailySettlementCommandHandler
                      && g.PickedUpAt <= dayEnd)
             .SumAsync(g => (int?)g.NumberOfPackages, cancellationToken) ?? 0;
 
+        // ── 6b. Cancelled / postponed counts for the day ──────────────────────
+        // Cancelled: no CancelledAt timestamp exists, so the day is attributed
+        // via Order.CreatedAt. Postponed: counted via PostponedAt regardless of
+        // the order's current status (a postponed order may later be delivered).
+        var numberOfOrdersCancelled = await _context.Orders
+            .CountAsync(o => o.CourierId == request.CourierId
+                          && o.Status == OrderStatus.CancelledByAdmin
+                          && o.CreatedAt >= dayStart
+                          && o.CreatedAt <= dayEnd,
+                        cancellationToken);
+
+        var numberOfOrderPostponed = await _context.Orders
+            .CountAsync(o => o.CourierId == request.CourierId
+                          && o.PostponedAt != null
+                          && o.PostponedAt >= dayStart
+                          && o.PostponedAt <= dayEnd,
+                        cancellationToken);
+
+        // ── 6c. Amount the courier was paid ───────────────────────────────────
+        var amountCourierWasPaid = request.PayCourierFully
+            ? totalCourierSalary
+            : (request.PartialAmountPaid ?? 0m);
+
         // ── 7. Create settlement ──────────────────────────────────────────────
-        var settlement = new DailySettlement
+        var settlement = new CourierSettlement
         {
             CourierId                     = request.CourierId,
             TotalOrdersPickedUp           = totalOrdersPickedUp,
             TotalOrdersDelivered          = orders.Count,
+            NumberOfOrdersCancelled       = numberOfOrdersCancelled,
+            NumberOfOrderPostponed        = numberOfOrderPostponed,
             TotalAmountOfCashCollected    = totalCashCollected > 0 ? totalCashCollected : null,
             TotalCompanyServiceRevenue    = totalServiceRevenue,
             TotalCourierSalary            = totalCourierSalary,
+            AmountCourierWasPaid          = amountCourierWasPaid,
             TotalCourierTransferToCompany = totalTransferToCompany,
             TotalCompanyNetIncome         = totalNetIncome,
             CreatedAt                     = dayStart,
             IsTheDayClosed                = false,
         };
 
-        _context.DailySettlements.Add(settlement);
+        _context.CourierSettlements.Add(settlement);
 
         await _context.SaveChangesAsync(cancellationToken);
 

@@ -25,7 +25,7 @@ public sealed class GetSettlementPreviewQueryHandler
         var dayEnd   = request.Date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
         // ── Check if a settlement already exists for this day ──────────────────
-        var existingSettlement = await _context.DailySettlements
+        var existingSettlement = await _context.CourierSettlements
             .AsNoTracking()
             .Where(d => d.CourierId  == request.CourierId
                      && d.CreatedAt >= dayStart
