@@ -11,6 +11,8 @@ import {
     CustomerSettlementApiError,
 } from '../../api/customerSettlements';
 import type { CustomerSettlement, CustomerSettlementPreview } from '../../api/customerSettlements';
+import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
+import type { CompanyFinanceOverview } from '../../api/companyFinance';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -90,6 +92,79 @@ function Row({ label, value, strong = false, tone }: {
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--color-border)', fontSize: '0.85rem' }}>
             <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
             <span style={{ fontWeight: strong ? 800 : 600, color }}>{value}</span>
+        </div>
+    );
+}
+
+// ── Company finance overview (live) ──────────────────────────────────────────────
+
+function Tile({ label, value, accent = false, small = false, muted = false }: {
+    label: string; value: string; accent?: boolean; small?: boolean; muted?: boolean;
+}) {
+    return (
+        <div style={{ background: accent ? 'var(--color-accent-dim)' : 'var(--color-bg-2)', border: `1px solid ${accent ? 'rgba(196,127,23,0.25)' : 'var(--color-border)'}`, borderRadius: 10, padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: small ? '0.95rem' : '1.15rem', fontWeight: 800, color: accent ? 'var(--color-accent)' : muted ? 'var(--color-text-muted)' : 'var(--color-text)' }}>{value}</div>
+            <div style={{ fontSize: '0.66rem', color: 'var(--color-text-subtle)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+        </div>
+    );
+}
+
+const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function CompanyOverviewCard({ token }: { token: string }) {
+    const { t } = useLanguage();
+    const now = new Date();
+    const [from, setFrom] = useState(isoDate(new Date(now.getFullYear(), now.getMonth(), 1)));
+    const [to, setTo] = useState(isoDate(now));
+    const [data, setData] = useState<CompanyFinanceOverview | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const load = useCallback(() => {
+        setLoading(true); setError(null);
+        fetchCompanyFinanceOverview(from, to, token)
+            .then(setData)
+            .catch(e => setError(e instanceof CompanyFinanceApiError ? e.message : t.finOvLoadFailed))
+            .finally(() => setLoading(false));
+    }, [from, to, token, t.finOvLoadFailed]);
+
+    useEffect(() => { load(); }, [load]);
+
+    return (
+        <div className="content-card" style={{ padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-text)' }}>{t.finOvTitle}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{t.finOvFrom}</label>
+                    <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)} style={dateInputStyle} />
+                    <label style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{t.finOvTo}</label>
+                    <input type="date" value={to} min={from} max={isoDate(now)} onChange={e => setTo(e.target.value)} style={dateInputStyle} />
+                </div>
+            </div>
+
+            {error ? (
+                <div className="dashboard__error" style={{ color: '#ef4444' }}>{error}</div>
+            ) : loading || !data ? (
+                <div style={{ padding: 24, textAlign: 'center' }}><div className="go-spinner" style={{ margin: '0 auto' }} /></div>
+            ) : (
+                <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                        <Tile label={t.finOvDelivered}      value={String(data.ordersDelivered)} />
+                        <Tile label={t.finOvServiceRevenue} value={gel(data.serviceRevenue)} />
+                        <Tile label={t.finOvCourierSalary}  value={gel(data.courierSalary)} />
+                        <Tile label={t.finOvNetMargin}      value={gel(data.netOperatingMargin)} accent />
+                    </div>
+                    <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                        <Tile label={t.finOvCollectedByRecipient} value={gel(data.serviceCollectedByRecipient)} small />
+                        <Tile label={t.finOvInvoicedToSenders}    value={gel(data.serviceInvoicedToSenders)} small />
+                        <Tile label={t.finOvCod}                  value={gel(data.codPassThrough)} small muted />
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: '0.75rem', color: 'var(--color-text-subtle)', lineHeight: 1.5 }}>
+                        <div>• {t.finOvNetHint}</div>
+                        <div>• {t.finOvCodHint}</div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }
@@ -180,6 +255,9 @@ export default function AdminFinancePage({ token }: { token: string }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Company-wide live overview */}
+            <CompanyOverviewCard token={token} />
+
             {/* Toolbar: customer + month */}
             <div className="content-card" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -326,4 +404,10 @@ const inputStyle: React.CSSProperties = {
     width: '100%', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.875rem',
     padding: '8px 10px', outline: 'none',
+};
+
+const dateInputStyle: React.CSSProperties = {
+    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.82rem',
+    padding: '5px 8px', outline: 'none',
 };

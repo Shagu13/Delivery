@@ -70,6 +70,10 @@ public sealed class CreateCourierSettlementCommandHandler
         // For Sender-payer orders: AmountOfCashCollected is only the package COD.
         var totalCashCollected    = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
         var totalServiceRevenue   = orders.Sum(o => o.CompanyServicePrice);
+        // Service fees the recipient paid in cash (already inside totalCashCollected).
+        var totalServiceCollectedByRecipient = orders
+            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
+            .Sum(o => o.CompanyServicePrice);
         var totalCourierSalary    = orders.Sum(o => o.CourierSalary ?? 0m);
         var totalTransferToCompany = totalCashCollected - totalCourierSalary;
         var totalNetIncome        = totalServiceRevenue - totalCourierSalary;
@@ -114,6 +118,7 @@ public sealed class CreateCourierSettlementCommandHandler
             NumberOfOrderPostponed        = numberOfOrderPostponed,
             TotalAmountOfCashCollected    = totalCashCollected > 0 ? totalCashCollected : null,
             TotalCompanyServiceRevenue    = totalServiceRevenue,
+            TotalCompanyServicePriceCollectedByRecipient = totalServiceCollectedByRecipient,
             TotalCourierSalary            = totalCourierSalary,
             AmountCourierWasPaid          = amountCourierWasPaid,
             TotalCourierTransferToCompany = totalTransferToCompany,

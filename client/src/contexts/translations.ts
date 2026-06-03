@@ -976,6 +976,21 @@ const en = {
     finErrAction:        'Action failed.',
     finErrEnterAmount:   'Enter a COD and/or service amount.',
     finErrPositive:      'Payment amounts must be positive numbers.',
+
+    // Admin Finance — company overview (live)
+    finOvTitle:               'Company finance overview',
+    finOvFrom:                'From',
+    finOvTo:                  'To',
+    finOvDelivered:           'Orders delivered',
+    finOvServiceRevenue:      'Service revenue',
+    finOvCollectedByRecipient:'Collected from recipients',
+    finOvInvoicedToSenders:   'Invoiced to senders',
+    finOvCourierSalary:       'Courier salary',
+    finOvNetMargin:           'Net operating margin',
+    finOvCod:                 'COD (pass-through)',
+    finOvNetHint:             'Service revenue − courier salary. Excludes operating expenses.',
+    finOvCodHint:             'Customer money collected and owed back — not company revenue.',
+    finOvLoadFailed:          'Failed to load overview.',
 };
 
 const ka: typeof en = {
@@ -1949,6 +1964,21 @@ const ka: typeof en = {
     finErrAction:        'მოქმედება ვერ შესრულდა.',
     finErrEnterAmount:   'შეიყვანეთ COD და/ან მომსახურების თანხა.',
     finErrPositive:      'გადახდის თანხები უნდა იყოს დადებითი რიცხვები.',
+
+    // Admin Finance — company overview (live)
+    finOvTitle:               'კომპანიის ფინანსური მიმოხილვა',
+    finOvFrom:                'დან',
+    finOvTo:                  'მდე',
+    finOvDelivered:           'მიტანილი შეკვეთები',
+    finOvServiceRevenue:      'მომსახურების შემოსავალი',
+    finOvCollectedByRecipient:'მიმღებებისგან შეგროვებული',
+    finOvInvoicedToSenders:   'გამგზავნებზე გამოწერილი',
+    finOvCourierSalary:       'კურიერის ხელფასი',
+    finOvNetMargin:           'საოპერაციო მოგება',
+    finOvCod:                 'COD (გამტარი თანხა)',
+    finOvNetHint:             'მომსახურების შემოსავალი − კურიერის ხელფასი. არ მოიცავს საოპერაციო ხარჯებს.',
+    finOvCodHint:             'მომხმარებლის ფული, შეგროვებული და დასაბრუნებელი — არ არის კომპანიის შემოსავალი.',
+    finOvLoadFailed:          'მიმოხილვის ჩატვირთვა ვერ მოხერხდა.',
 
 };
 

@@ -167,6 +167,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
              .HasForeignKey(d => d.CourierId).OnDelete(DeleteBehavior.Restrict);
             e.Property(d => d.TotalAmountOfCashCollected).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCompanyServiceRevenue).HasColumnType("decimal(18,2)");
+            e.Property(d => d.TotalCompanyServicePriceCollectedByRecipient).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCompanyNetIncome).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCourierSalary).HasColumnType("decimal(18,2)");
             e.Property(d => d.TotalCourierTransferToCompany).HasColumnType("decimal(18,2)");

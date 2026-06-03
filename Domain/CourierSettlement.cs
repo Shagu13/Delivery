@@ -59,6 +59,15 @@ public class CourierSettlement
     /// </summary>
     public decimal TotalCompanyServiceRevenue { get; set; } = 0;
 
+    /// <summary>
+    /// Sum of CompanyServicePrice for delivered orders where the recipient pays
+    /// the service fee — i.e. the slice of service revenue the courier physically
+    /// collected as cash at delivery (already inside TotalAmountOfCashCollected).
+    /// The remainder (TotalCompanyServiceRevenue − this) is the sender-pays slice
+    /// invoiced to customers and tracked as a receivable on CustomerSettlement.
+    /// </summary>
+    public decimal TotalCompanyServicePriceCollectedByRecipient { get; set; } = 0;
+
     // ── Courier salary ───────────────────────────────────────────────────────
     /// <summary>
     /// Total salary earned by the courier for this day's deliveries.
