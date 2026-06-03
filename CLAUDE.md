@@ -43,7 +43,12 @@ In development, Vite proxies `/api/*` to the .NET backend. The backend serves th
 | `client/` | React 19 + TypeScript SPA (Vite, React Router v7) |
 
 ### CQRS pattern
-All business logic lives in `Application` as MediatR `IRequest<T>` commands/queries and their handlers. Controllers are thin — they extract the caller's identity, build the request object, call `_mediator.Send(...)`, and return the result. MediatR pipeline behaviors (in order): `LoggingBehavior` → `ValidationBehavior` → `CachingBehavior`.
+All business logic lives in `Application` as MediatR `IRequest<T>` commands/queries and their handlers. Controllers are thin — they extract the caller's identity, build the request object, call `Sender.Send(...)`, and return the result. MediatR pipeline behaviors (in order): `LoggingBehavior` → `ValidationBehavior` → `CachingBehavior`.
+
+Controllers derive from `BaseController` (`API/Controllers/BaseController.cs`), which is decorated `[ApiController]` + `[Route("api/[controller]")]` and exposes:
+- `Sender` — lazily resolved `ISender` (no constructor injection needed)
+- `CurrentUserId` — `ApplicationUser.Id` from the JWT `sub` claim
+- `CurrentCourierId` — domain `Courier.Id` from the JWT `courierId` claim (Courier endpoints only)
 
 ### Key domain concepts
 
@@ -66,9 +71,23 @@ All business logic lives in `Application` as MediatR `IRequest<T>` commands/quer
 - `DeliveredToRecipient`, `ExchangeCompleted` — Send/Exchange terminal
 - `DeliveredReturnOrderToWarehouse`, `ReturnedToSender` — Return terminal
 
-**CourierSettlement** — one record per courier per working day.
+**Company service fee** (საკურიერო — the delivery fee the company charges)
+- `Order.WhoPaysForCompanyService` (`ServicePayer`: `Sender` | `Recipient`) decides who pays it.
+  - `Recipient` — courier collects it as cash at delivery (bundled into `TotalAmountOfCashCollected`).
+  - `Sender` — invoiced to the customer; tracked as a receivable on `CustomerSettlement`, never in courier cash.
+- `Order.CompanyServicePaymentStatus` (`Unpaid` → `Pending` → `Paid`) tracks sender-paid fee collection (only relevant when `WhoPaysForCompanyService == Sender`).
+
+**CourierSettlement** — one record per courier per working day. Immutable once `IsTheDayClosed == true`.
 - `TotalCourierTransferToCompany = TotalAmountOfCashCollected - TotalCourierSalary`
 - Can be **negative** when the sender pays the company (courier collects no COD cash but earns a salary). Negative value means the company owes the courier their salary.
+- Stores only immutable physical facts recorded at settlement time; stale snapshot fields were deliberately removed — derive other figures live from Orders.
+
+**CustomerSettlement** — one record per customer per calendar month (`Year` + `Month`). Tracks two opposite money flows:
+- COD the company collected for the customer's packages — *company owes customer* (`TotalCODCompanyCollectedForPackages`).
+- Sender-paid service fees the customer owes the company — *customer owes company* (`TotalCompanyServicePriceOwedToCompany`).
+- The four aggregate figures are auto-computed from the month's orders and refreshed on recompute. Payment fields accumulate: the plain field holds the most recent payment, the `Total*` field the running sum.
+
+**Finance endpoints** — `CompanyFinanceController` (`/api/companyfinance/overview`, date-range admin overview), `SettlementsController` (courier settlements), `CustomerSettlementsController` (monthly customer settlements).
 
 ### Frontend structure
 - `client/src/api/` — one file per domain area; each exports typed fetch functions and TypeScript interfaces that mirror backend DTOs
