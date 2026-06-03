@@ -13,6 +13,7 @@ import {
 import type { CustomerSettlement, CustomerSettlementPreview } from '../../api/customerSettlements';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import type { CompanyFinanceOverview } from '../../api/companyFinance';
+import { CourierSettlementsSection } from './CourierSettlementsSection';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -174,6 +175,7 @@ function CompanyOverviewCard({ token }: { token: string }) {
 export default function AdminFinancePage({ token }: { token: string }) {
     const { t } = useLanguage();
     const now = new Date();
+    const [tab, setTab] = useState<'customers' | 'couriers'>('customers');
     const [customer, setCustomer] = useState<AdminCustomer | null>(null);
     const [year, setYear] = useState(now.getFullYear());
     const [month, setMonth] = useState(now.getMonth() + 1);
@@ -258,6 +260,18 @@ export default function AdminFinancePage({ token }: { token: string }) {
             {/* Company-wide live overview */}
             <CompanyOverviewCard token={token} />
 
+            {/* Settlement scope toggle */}
+            <div className="content-card" style={{ padding: 12 }}>
+                <div className="go-seg" style={{ display: 'inline-flex' }}>
+                    <button className={`go-seg__btn ${tab === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('customers')}>{t.finTabCustomers}</button>
+                    <button className={`go-seg__btn ${tab === 'couriers' ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('couriers')}>{t.finTabCouriers}</button>
+                </div>
+            </div>
+
+            {tab === 'couriers' && <CourierSettlementsSection token={token} />}
+
+            {tab === 'customers' && (
+              <>
             {/* Toolbar: customer + month */}
             <div className="content-card" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -385,6 +399,8 @@ export default function AdminFinancePage({ token }: { token: string }) {
                         </table>
                     </div>
                 </div>
+            )}
+              </>
             )}
 
             {toast && (

@@ -991,6 +991,14 @@ const en = {
     finOvNetHint:             'Service revenue − courier salary. Excludes operating expenses.',
     finOvCodHint:             'Customer money collected and owed back — not company revenue.',
     finOvLoadFailed:          'Failed to load overview.',
+
+    // Admin Finance — settlement scope tabs + courier section
+    finTabCustomers:     'Customers',
+    finTabCouriers:      'Couriers',
+    finCourierSelect:    'Select courier',
+    finCourierOpen:      'Open settlement',
+    finCourierPrompt:    'Select a courier to create or update their daily settlement.',
+    finCourierSavedToast: (name: string) => `Settlement saved for ${name}`,
 };
 
 const ka: typeof en = {
@@ -1979,6 +1987,14 @@ const ka: typeof en = {
     finOvNetHint:             'მომსახურების შემოსავალი − კურიერის ხელფასი. არ მოიცავს საოპერაციო ხარჯებს.',
     finOvCodHint:             'მომხმარებლის ფული, შეგროვებული და დასაბრუნებელი — არ არის კომპანიის შემოსავალი.',
     finOvLoadFailed:          'მიმოხილვის ჩატვირთვა ვერ მოხერხდა.',
+
+    // Admin Finance — settlement scope tabs + courier section
+    finTabCustomers:     'მომხმარებლები',
+    finTabCouriers:      'კურიერები',
+    finCourierSelect:    'აირჩიეთ კურიერი',
+    finCourierOpen:      'ანგარიშსწორების გახსნა',
+    finCourierPrompt:    'აირჩიეთ კურიერი მისი დღიური ანგარიშსწორების შესაქმნელად ან განსაახლებლად.',
+    finCourierSavedToast: (name: string) => `ანგარიშსწორება შენახულია — ${name}`,
 
 };
 

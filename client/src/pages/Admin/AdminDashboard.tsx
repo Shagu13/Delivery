@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
-import { SettlementModal } from './SettlementModal';
 import type { CreateCourierResponse, Courier, CourierOrder } from '../../api/couriers';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
@@ -1314,8 +1313,6 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
   const [bulkSalary,      setBulkSalary]      = useState('');
   const [saving,          setSaving]          = useState(false);
   const [rowToast,        setRowToast]        = useState<{ msg: string; err: boolean } | null>(null);
-  const [showSettlement,  setShowSettlement]  = useState(false);
-  const [settlementToast, setSettlementToast] = useState<string | null>(null);
   const [togglingActive,  setTogglingActive]  = useState(false);
 
   const showRowToast = (msg: string, err = false) => {
@@ -1435,35 +1432,8 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
           >
             {togglingActive ? '…' : !courier.isDeleted ? 'Deactivate' : 'Activate'}
           </button>
-          <button
-            className="go-action-btn go-action-btn--assign"
-            style={{ padding: '5px 13px', fontSize: '0.75rem' }}
-            onClick={e => { e.stopPropagation(); setShowSettlement(true); }}
-          >
-            Settlement
-          </button>
         </div>
       </div>
-
-      {/* Settlement toast */}
-      {settlementToast && (
-        <div className="action-toast" style={{ bottom: 60 }}>
-          {settlementToast}
-        </div>
-      )}
-
-      {/* Settlement modal */}
-      <SettlementModal
-        open={showSettlement}
-        onClose={() => setShowSettlement(false)}
-        onCreated={() => {
-          setSettlementToast(`Settlement saved for ${courier.fullName}`);
-          setTimeout(() => setSettlementToast(null), 4000);
-        }}
-        courierId={courier.courierId}
-        courierFullName={courier.fullName}
-        token={token}
-      />
 
       {/* Orders panel */}
       {expanded && (
