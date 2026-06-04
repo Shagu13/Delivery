@@ -71,7 +71,7 @@ public sealed class CreateCourierSettlementCommandHandler
         var totalCashCollected    = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
         var totalServiceRevenue   = orders.Sum(o => o.CompanyServicePrice);
         // Service fees the recipient paid in cash (already inside totalCashCollected).
-        var totalServiceCollectedByRecipient = orders
+        var totalServiceCollectedFromRecipient = orders
             .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
             .Sum(o => o.CompanyServicePrice);
         var totalCourierSalary    = orders.Sum(o => o.CourierSalary ?? 0m);
@@ -118,7 +118,7 @@ public sealed class CreateCourierSettlementCommandHandler
             NumberOfOrderPostponed        = numberOfOrderPostponed,
             TotalAmountOfCashCollected    = totalCashCollected > 0 ? totalCashCollected : null,
             TotalCompanyServiceRevenue    = totalServiceRevenue,
-            TotalCompanyServicePriceCollectedByRecipient = totalServiceCollectedByRecipient,
+            TotalCompanyServicePriceCollectedFromRecipient = totalServiceCollectedFromRecipient,
             TotalCourierSalary            = totalCourierSalary,
             AmountCourierWasPaid          = amountCourierWasPaid,
             TotalCourierTransferToCompany = totalTransferToCompany,

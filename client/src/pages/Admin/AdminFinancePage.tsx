@@ -202,7 +202,7 @@ function CompanyOverviewCard({ token }: { token: string }) {
                     {/* Secondary footnote bar */}
                     <div style={{ borderTop: '1px solid var(--color-border)', padding: '5px 14px', display: 'flex', flexWrap: 'wrap', gap: '2px 18px', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.71rem', color: 'var(--color-text-subtle)' }}>
-                            {t.finOvCollectedByRecipient}: <strong style={{ color: 'var(--color-text-muted)' }}>{gel(data.serviceCollectedByRecipient)}</strong>
+                            {t.finOvCollectedFromRecipient}: <strong style={{ color: 'var(--color-text-muted)' }}>{gel(data.serviceCollectedFromRecipient)}</strong>
                         </span>
                         <span style={{ fontSize: '0.71rem', color: 'var(--color-text-subtle)' }}>
                             {t.finOvInvoicedToSenders}: <strong style={{ color: 'var(--color-text-muted)' }}>{gel(data.serviceInvoicedToSenders)}</strong>

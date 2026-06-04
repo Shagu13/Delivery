@@ -6,8 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Backend (.NET 10)
 ```powershell
-# Build the solution (run from repo root)
-dotnet build
+# Build a project. Do NOT run `dotnet build` at the repo root — the solution
+# (Delivery.slnx) registers client/ as a .NETFramework "Website" project, so a
+# root build fails with MSB4249. Build the project you need directly:
+dotnet build API/API.csproj
+dotnet build Application/Application.csproj   # or Persistence/, Domain/, Infrastructure/
 
 # Run the API (serves both API and frontend in production)
 dotnet run --project API
@@ -18,6 +21,13 @@ dotnet ef migrations add <MigrationName> --project Persistence --startup-project
 # Apply pending migrations manually
 dotnet ef database update --project Persistence --startup-project API
 ```
+
+> **While the API is running** (`dotnet run --project API`), it locks `API/bin/*.dll`,
+> so any build that writes there — `dotnet build API`, `dotnet ef ...` (which builds
+> the startup project), etc. — fails with MSB3026 "file in use". To verify a *backend*
+> change compiles without stopping the app, build a library project directly
+> (`Application`, `Persistence`, …); those write to their own `bin`. To run EF
+> migration commands, stop the API first.
 
 ### Frontend (React + Vite, in `client/`)
 ```powershell

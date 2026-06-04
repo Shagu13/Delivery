@@ -6,7 +6,7 @@ export interface CompanyFinanceOverview {
     to: string;                         // "YYYY-MM-DD" inclusive
     ordersDelivered: number;
     serviceRevenue: number;             // Σ CompanyServicePrice (all payers)
-    serviceCollectedByRecipient: number;// cash slice collected at delivery
+    serviceCollectedFromRecipient: number;// cash slice collected at delivery
     serviceInvoicedToSenders: number;   // receivable slice
     courierSalary: number;              // direct cost
     netOperatingMargin: number;         // serviceRevenue − courierSalary

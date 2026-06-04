@@ -220,7 +220,7 @@ namespace Persistence.Migrations
                     b.Property<decimal>("TotalCompanyNetIncome")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("TotalCompanyServicePriceCollectedByRecipient")
+                    b.Property<decimal>("TotalCompanyServicePriceCollectedFromRecipient")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("TotalCompanyServiceRevenue")

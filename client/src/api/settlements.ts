@@ -21,6 +21,8 @@ export interface SettlementPreview {
     date: string;                              // "YYYY-MM-DD"
     /** Non-null if a settlement already exists for this courier+date. */
     existingSettlementId: string | null;
+    /** When a settlement already exists, the amount the courier was last recorded as paid; null otherwise. */
+    existingAmountCourierWasPaid: number | null;
     totalOrdersPickedUp: number;
     totalOrdersDelivered: number;
     /** Sum of AmountOfCashCollected — total cash physically collected (COD + service fees bundled for Recipient-payer orders). */
@@ -41,10 +43,15 @@ export interface SettlementPreview {
     incompleteOrderTrackingNumbers: string[];
 }
 
-/** All financial totals are computed server-side; only the identity fields are required. */
+/**
+ * All financial totals are computed server-side. The caller supplies the identity
+ * fields plus how much the admin actually paid the courier for this settlement.
+ */
 export interface CreateSettlementRequest {
     courierId: string;
     date: string;                              // "YYYY-MM-DD"
+    /** Amount the admin paid the courier for this settlement → recorded as AmountCourierWasPaid. */
+    partialAmountPaid: number;
 }
 
 export interface CreateSettlementResponse {

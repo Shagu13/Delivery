@@ -81,7 +81,7 @@ public sealed class UpdateCourierSettlementCommandHandler
         // ── 5. Recompute immutable physical totals ────────────────────────────
         var totalCashCollected     = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
         var totalServiceRevenue    = orders.Sum(o => o.CompanyServicePrice);
-        var totalServiceCollectedByRecipient = orders
+        var totalServiceCollectedFromRecipient = orders
             .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
             .Sum(o => o.CompanyServicePrice);
         var totalCourierSalary     = orders.Sum(o => o.CourierSalary ?? 0m);
@@ -121,7 +121,7 @@ public sealed class UpdateCourierSettlementCommandHandler
         settlement.NumberOfOrderPostponed        = numberOfOrderPostponed;
         settlement.TotalAmountOfCashCollected    = totalCashCollected > 0 ? totalCashCollected : null;
         settlement.TotalCompanyServiceRevenue    = totalServiceRevenue;
-        settlement.TotalCompanyServicePriceCollectedByRecipient = totalServiceCollectedByRecipient;
+        settlement.TotalCompanyServicePriceCollectedFromRecipient = totalServiceCollectedFromRecipient;
         settlement.TotalCourierSalary            = totalCourierSalary;
         settlement.AmountCourierWasPaid          = amountCourierWasPaid;
         settlement.TotalCourierTransferToCompany = totalTransferToCompany;

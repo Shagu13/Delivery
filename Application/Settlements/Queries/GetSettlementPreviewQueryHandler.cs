@@ -30,7 +30,7 @@ public sealed class GetSettlementPreviewQueryHandler
             .Where(d => d.CourierId  == request.CourierId
                      && d.CreatedAt >= dayStart
                      && d.CreatedAt <= dayEnd)
-            .Select(d => new { d.Id })
+            .Select(d => new { d.Id, d.AmountCourierWasPaid })
             .FirstOrDefaultAsync(cancellationToken);
 
         // ── Delivered orders for the day ──────────────────────────────────────
@@ -104,6 +104,7 @@ public sealed class GetSettlementPreviewQueryHandler
             CourierFullName:                        $"{courier.FirstName} {courier.LastName}",
             Date:                                   request.Date,
             ExistingSettlementId:                   existingSettlement?.Id,
+            ExistingAmountCourierWasPaid:           existingSettlement?.AmountCourierWasPaid,
             TotalOrdersPickedUp:                    pickedUpPackages,
             TotalOrdersDelivered:                   orders.Count,
             TotalAmountOfCashCollected:             totalCash,

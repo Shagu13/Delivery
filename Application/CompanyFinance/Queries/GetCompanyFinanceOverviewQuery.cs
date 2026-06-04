@@ -43,7 +43,7 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         var serviceRevenue = await delivered
             .SumAsync(o => (decimal?)o.CompanyServicePrice, cancellationToken) ?? 0m;
 
-        var serviceCollectedByRecipient = await delivered
+        var serviceCollectedFromRecipient = await delivered
             .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
             .SumAsync(o => (decimal?)o.CompanyServicePrice, cancellationToken) ?? 0m;
 
@@ -58,8 +58,8 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             To:                          request.To.ToString("yyyy-MM-dd"),
             OrdersDelivered:             ordersDelivered,
             ServiceRevenue:              serviceRevenue,
-            ServiceCollectedByRecipient: serviceCollectedByRecipient,
-            ServiceInvoicedToSenders:    serviceRevenue - serviceCollectedByRecipient,
+            ServiceCollectedFromRecipient: serviceCollectedFromRecipient,
+            ServiceInvoicedToSenders:    serviceRevenue - serviceCollectedFromRecipient,
             CourierSalary:               courierSalary,
             NetOperatingMargin:          serviceRevenue - courierSalary,
             CodPassThrough:              codPassThrough

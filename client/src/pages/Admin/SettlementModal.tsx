@@ -37,6 +37,7 @@ export function SettlementModal({
     const [saving,        setSaving]        = useState(false);
     const [error,         setError]         = useState<string | null>(null);
     const [alreadyExists, setAlreadyExists] = useState(false);
+    const [amountPaid,    setAmountPaid]    = useState('0.00');
 
     const loadPreview = useCallback(async (d: string) => {
         setLoading(true);
@@ -47,6 +48,13 @@ export function SettlementModal({
             const data = await fetchSettlementPreview(courierId, d, token);
             setPreview(data);
             setAlreadyExists(!!data.existingSettlementId);
+            // Pre-fill the payment with the previously recorded amount on update,
+            // or the full earned salary on a fresh settlement.
+            const defaultPaid =
+                data.existingSettlementId != null && data.existingAmountCourierWasPaid != null
+                    ? data.existingAmountCourierWasPaid
+                    : data.totalCourierSalary;
+            setAmountPaid(defaultPaid.toFixed(2));
         } catch (err) {
             setError(err instanceof SettlementApiError ? err.message : 'Failed to load preview.');
         } finally {
@@ -68,15 +76,19 @@ export function SettlementModal({
 
     const handleDateChange = (d: string) => { setDate(d); loadPreview(d); };
 
+    const paidNum   = parseFloat(amountPaid);
+    const paidValid = !isNaN(paidNum) && paidNum >= 0;
+
     const handleSave = async () => {
-        if (!preview) return;
+        if (!preview || !paidValid) return;
         setSaving(true);
         setError(null);
         try {
+            const payload = { courierId, date, partialAmountPaid: paidNum };
             if (alreadyExists) {
-                await updateSettlement({ courierId, date }, token);
+                await updateSettlement(payload, token);
             } else {
-                await createSettlement({ courierId, date }, token);
+                await createSettlement(payload, token);
             }
             onCreated();
             onClose();
@@ -90,6 +102,13 @@ export function SettlementModal({
     if (!open) return null;
 
     const hasIncomplete = (preview?.incompleteOrderTrackingNumbers ?? []).length > 0;
+    const paidExceedsSalary = !!preview && paidValid && paidNum > preview.totalCourierSalary;
+    // When the salary is larger than the cash the courier is holding, the company
+    // must pay the courier the difference out of pocket. Zero when the courier
+    // held enough cash to cover their own salary.
+    const cashShortfall = preview
+        ? Math.max(0, preview.totalCourierSalary - preview.totalCashCourierHolds)
+        : 0;
 
     return createPortal(
         <>
@@ -140,8 +159,8 @@ export function SettlementModal({
                                 <path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
                                 <path d="M8 6v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                             </svg>
-                            A settlement already exists for this date. Saving will overwrite it.
-                            Confirmed payments will not be changed.
+                            A settlement already exists for this date. Saving will recalculate
+                            its totals and update the recorded courier payment to the amount below.
                         </div>
                     )}
 
@@ -247,9 +266,78 @@ export function SettlementModal({
                                         <div className="stl-fin-row">
                                             <span className="stl-fin-label">
                                                 Company Pays Courier
-                                                <span className="stl-fin-hint">No cash collected — company owes salary</span>
+                                                <span className="stl-fin-hint">Salary exceeds cash held — company owes the difference</span>
                                             </span>
                                             <span className="stl-fin-value" style={{ color: '#6366f1' }}>{fmt(Math.abs(preview.totalCourierTransferToCompany))}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </fieldset>
+
+                            {/* ── Courier payment ──────────────────────────── */}
+                            <fieldset className="modal__fieldset">
+                                <legend className="modal__legend">Courier Payment</legend>
+                                <div className="stl-fin-rows">
+                                    <div className="stl-fin-row">
+                                        <span className="stl-fin-label">
+                                            Courier Salary (earned)
+                                            <span className="stl-fin-hint">Total salary earned this day</span>
+                                        </span>
+                                        <span className="stl-fin-value stl-fin-value--salary">{fmt(preview.totalCourierSalary)}</span>
+                                    </div>
+                                    <div className="stl-fin-row">
+                                        <span className="stl-fin-label">
+                                            Cash courier holds
+                                            <span className="stl-fin-hint">Collected from recipients — counts toward salary</span>
+                                        </span>
+                                        <span className="stl-fin-value">{fmt(preview.totalCashCourierHolds)}</span>
+                                    </div>
+                                    {cashShortfall > 0 ? (
+                                        <div className="stl-fin-row">
+                                            <span className="stl-fin-label">
+                                                Missing — company pays courier
+                                                <span className="stl-fin-hint">
+                                                    Salary exceeds cash held: {fmt(preview.totalCourierSalary)} − {fmt(preview.totalCashCourierHolds)}
+                                                </span>
+                                            </span>
+                                            <span className="stl-fin-value" style={{ color: '#6366f1', fontWeight: 700 }}>{fmt(cashShortfall)}</span>
+                                        </div>
+                                    ) : (
+                                        <div className="stl-fin-row">
+                                            <span className="stl-fin-label">
+                                                Covered from collected cash
+                                                <span className="stl-fin-hint">Courier keeps salary from cash; nothing owed by company</span>
+                                            </span>
+                                            <span className="stl-fin-value stl-fin-value--income">{fmt(preview.totalCourierSalary)}</span>
+                                        </div>
+                                    )}
+                                    <div className="stl-fin-divider" />
+                                    <div className="stl-pay-input-row">
+                                        <label htmlFor="stl-amount-paid" className="stl-fin-label">
+                                            Amount paid to courier
+                                            <span className="stl-fin-hint">How much you are paying the courier for this settlement</span>
+                                        </label>
+                                        <div className="stl-pay-input-wrap" data-invalid={!paidValid}>
+                                            <span className="stl-pay-currency">₾</span>
+                                            <input
+                                                id="stl-amount-paid"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                inputMode="decimal"
+                                                className="stl-pay-input"
+                                                value={amountPaid}
+                                                onChange={e => setAmountPaid(e.target.value)}
+                                                aria-invalid={!paidValid}
+                                            />
+                                        </div>
+                                    </div>
+                                    {!paidValid && (
+                                        <div className="stl-pay-note stl-pay-note--err">Enter a valid non-negative amount.</div>
+                                    )}
+                                    {paidExceedsSalary && (
+                                        <div className="stl-pay-note stl-pay-note--warn">
+                                            Amount exceeds the salary earned ({fmt(preview.totalCourierSalary)}).
                                         </div>
                                     )}
                                 </div>
@@ -342,8 +430,12 @@ export function SettlementModal({
                         type="button"
                         className="modal__btn-submit"
                         onClick={handleSave}
-                        disabled={saving || loading || !preview || hasIncomplete}
-                        title={hasIncomplete ? 'Fix incomplete orders before saving' : undefined}
+                        disabled={saving || loading || !preview || hasIncomplete || !paidValid}
+                        title={
+                            hasIncomplete ? 'Fix incomplete orders before saving'
+                            : !paidValid ? 'Enter a valid amount paid to the courier'
+                            : undefined
+                        }
                     >
                         {saving ? (
                             <><span className="btn__spinner" />{alreadyExists ? 'Updating…' : 'Saving…'}</>
@@ -421,6 +513,17 @@ export function SettlementModal({
                 .stl-fin-value--income { color:#10b981; }
                 .stl-fin-value--transfer { color:var(--color-accent); }
                 .stl-fin-divider { border:none;border-top:1px solid var(--color-border);margin:2px 0; }
+
+                /* Courier payment input */
+                .stl-pay-input-row { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+                .stl-pay-input-wrap { display:inline-flex;align-items:center;gap:4px;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:0 10px;transition:border-color var(--transition); }
+                .stl-pay-input-wrap:focus-within { border-color:var(--color-accent); }
+                .stl-pay-input-wrap[data-invalid="true"] { border-color:#ef4444; }
+                .stl-pay-currency { color:var(--color-text-subtle);font-size:0.9rem;font-family:'Courier New',monospace; }
+                .stl-pay-input { width:110px;background:transparent;border:none;outline:none;color:var(--color-text);font-size:0.95rem;font-weight:600;font-family:'Courier New',monospace;padding:8px 0;text-align:right; }
+                .stl-pay-note { font-size:0.78rem;line-height:1.4; }
+                .stl-pay-note--err { color:#ef4444; }
+                .stl-pay-note--warn { color:#d97706; }
 
                 /* Payer badge */
                 .stl-payer-badge { display:inline-block;font-size:0.65rem;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:0.04em; }

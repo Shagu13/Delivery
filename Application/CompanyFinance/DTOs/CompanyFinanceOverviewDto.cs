@@ -15,7 +15,7 @@ public sealed record CompanyFinanceOverviewDto(
     int     OrdersDelivered,
 
     decimal ServiceRevenue,                // Σ CompanyServicePrice (all payers)
-    decimal ServiceCollectedByRecipient,   // cash slice (collected by courier at delivery)
+    decimal ServiceCollectedFromRecipient, // cash slice (collected by courier at delivery)
     decimal ServiceInvoicedToSenders,      // receivable slice (= revenue − recipient slice)
 
     decimal CourierSalary,                 // Σ CourierSalary (direct cost)

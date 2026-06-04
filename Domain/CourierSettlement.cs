@@ -66,7 +66,7 @@ public class CourierSettlement
     /// The remainder (TotalCompanyServiceRevenue − this) is the sender-pays slice
     /// invoiced to customers and tracked as a receivable on CustomerSettlement.
     /// </summary>
-    public decimal TotalCompanyServicePriceCollectedByRecipient { get; set; } = 0;
+    public decimal TotalCompanyServicePriceCollectedFromRecipient { get; set; } = 0;
 
     // ── Courier salary ───────────────────────────────────────────────────────
     /// <summary>
