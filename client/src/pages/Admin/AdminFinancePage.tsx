@@ -18,6 +18,10 @@ import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
+// Outstanding: red when something is still owed, green once settled (0 or overpaid).
+// Rounds to 2 decimals first so floating-point residue never shows red on a ₾0.00 row.
+const outstandingTone = (n: number): 'red' | 'paid' => (Math.round(n * 100) > 0 ? 'red' : 'paid');
+
 // ── Customer search/select ──────────────────────────────────────────────────────
 
 function CustomerPicker({ token, selected, onSelect, onClear }: {
@@ -119,9 +123,9 @@ function CustomerPicker({ token, selected, onSelect, onClear }: {
 // ── Figure row ──────────────────────────────────────────────────────────────────
 
 function Row({ label, value, strong = false, tone }: {
-    label: string; value: string; strong?: boolean; tone?: 'paid' | 'out';
+    label: string; value: string; strong?: boolean; tone?: 'paid' | 'out' | 'red';
 }) {
-    const color = tone === 'paid' ? '#059669' : tone === 'out' ? '#b45309' : 'var(--color-text)';
+    const color = tone === 'paid' ? '#059669' : tone === 'red' ? '#ef4444' : tone === 'out' ? '#b45309' : 'var(--color-text)';
     return (
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--color-border)', fontSize: '0.85rem' }}>
             <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
@@ -134,7 +138,7 @@ function Row({ label, value, strong = false, tone }: {
 
 const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function CompanyOverviewCard({ token }: { token: string }) {
+function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshSignal: number }) {
     const { t } = useLanguage();
     const now = new Date();
     const [from, setFrom] = useState(isoDate(new Date(now.getFullYear(), now.getMonth(), 1)));
@@ -151,7 +155,9 @@ function CompanyOverviewCard({ token }: { token: string }) {
             .finally(() => setLoading(false));
     }, [from, to, token, t.finOvLoadFailed]);
 
-    useEffect(() => { load(); }, [load]);
+    // Reload on date change AND whenever a settlement action bumps refreshSignal,
+    // so the cash position reflects a just-recorded payment without a page refresh.
+    useEffect(() => { load(); }, [load, refreshSignal]);
 
     const stats = data ? [
         { label: t.finOvDelivered,      value: String(data.ordersDelivered),    accent: false },
@@ -211,8 +217,54 @@ function CompanyOverviewCard({ token }: { token: string }) {
                             {t.finOvCod}: <strong style={{ color: 'var(--color-text-muted)' }}>{gel(data.codPassThrough)}</strong>
                         </span>
                     </div>
+
+                    {/* ── Cash position ────────────────────────────────────────── */}
+                    <div style={{ borderTop: '4px solid var(--color-border)', padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)' }}>
+                                {t.finCashTitle}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)' }}>
+                                {t.finCashAsOf} {data.to}
+                            </span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '4px 28px' }}>
+                            {/* Cash ledger → net position */}
+                            <div>
+                                <SignedRow label={t.finCashInFromCouriers}    value={data.cashInFromCouriers}   sign="+" />
+                                <SignedRow label={t.finCashSenderServicePaid} value={data.senderServicePaid}    sign="+" />
+                                <SignedRow label={t.finCashCodPaidOut}        value={data.codPaidToCustomers}   sign="−" />
+                                <SignedRow label={t.finCashSalaryPaid}        value={data.salaryPaidToCouriers} sign="−" />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0 2px', fontSize: '0.92rem' }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>{t.finCashOnHand}</span>
+                                    <span style={{ fontWeight: 800, color: 'var(--color-accent)' }}>{gel(data.netCashPosition)}</span>
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.finCashOnHandHint}</div>
+                            </div>
+
+                            {/* Outstanding balances */}
+                            <div>
+                                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', padding: '6px 0 2px' }}>{t.finCashOutTitle}</div>
+                                <Row label={t.finCashCodOwed}           value={gel(data.outstandingCodOwedToCustomers)} tone="out" />
+                                <Row label={t.finCashServiceReceivable} value={gel(data.outstandingServiceReceivable)}  tone="paid" />
+                                <Row label={t.finCashSalaryOwed}        value={gel(data.outstandingSalaryOwed)}         tone="out" />
+                            </div>
+                        </div>
+                    </div>
                 </>
             )}
+        </div>
+    );
+}
+
+// ── Signed cash-ledger row (+ inflow / − outflow) ─────────────────────────────────
+
+function SignedRow({ label, value, sign }: { label: string; value: number; sign: '+' | '−' }) {
+    return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--color-border)', fontSize: '0.85rem' }}>
+            <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+            <span style={{ fontWeight: 600, color: sign === '+' ? '#059669' : '#b45309' }}>{sign} {gel(value)}</span>
         </div>
     );
 }
@@ -236,6 +288,9 @@ export default function AdminFinancePage({ token }: { token: string }) {
 
     const [codInput, setCodInput] = useState('');
     const [serviceInput, setServiceInput] = useState('');
+
+    // Bumped after any settlement action to force the company cash-position card to reload.
+    const [overviewRefresh, setOverviewRefresh] = useState(0);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
@@ -270,6 +325,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
             await fn();
             showToast(successMsg);
             loadPreview();
+            setOverviewRefresh(k => k + 1);
         } catch (e) {
             setError(e instanceof CustomerSettlementApiError ? e.message : t.finErrAction);
         } finally {
@@ -305,7 +361,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {/* Company overview */}
-            <CompanyOverviewCard token={token} />
+            <CompanyOverviewCard token={token} refreshSignal={overviewRefresh} />
 
             {/* Tab bar — no wrapping card */}
             <div className="go-seg" style={{ display: 'inline-flex', alignSelf: 'flex-start' }}>
@@ -389,12 +445,12 @@ export default function AdminFinancePage({ token }: { token: string }) {
                                     <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 2 }}>{t.finCodDir}</div>
                                     <Row label={t.finCollected}   value={gel(existing.totalCODCompanyCollectedForPackages)} />
                                     <Row label={t.finPaid}        value={gel(existing.totalAmountOfCollectedCodPaidByCompany)} tone="paid" />
-                                    <Row label={t.finOutstanding} value={gel(existing.outstandingCodOwedToCustomer)} tone="out" strong />
+                                    <Row label={t.finOutstanding} value={gel(existing.outstandingCodOwedToCustomer)} tone={outstandingTone(existing.outstandingCodOwedToCustomer)} strong />
 
                                     <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', margin: '10px 0 2px' }}>{t.finServiceDir}</div>
                                     <Row label={t.finOwed}        value={gel(existing.totalCompanyServicePriceOwedToCompany)} />
                                     <Row label={t.finPaid}        value={gel(existing.totalAmountPaidToCompanyForCompanyService)} tone="paid" />
-                                    <Row label={t.finOutstanding} value={gel(existing.outstandingServiceOwedToCompany)} tone="out" strong />
+                                    <Row label={t.finOutstanding} value={gel(existing.outstandingServiceOwedToCompany)} tone={outstandingTone(existing.outstandingServiceOwedToCompany)} strong />
 
                                     <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
                                         <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 8 }}>{t.finRecordPayment}</div>

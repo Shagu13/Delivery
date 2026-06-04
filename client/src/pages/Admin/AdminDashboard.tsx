@@ -37,6 +37,8 @@ const ACTIVE_ORDER_STATUSES_ONLY = new Set([
 
 type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'returnExchange' | 'finance';
 
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'history', 'returnExchange', 'finance'];
+
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
   const { t } = useLanguage();
@@ -45,12 +47,17 @@ export function AdminDashboard() {
 
   const tabParam    = searchParams.get('tab') ?? '';
   const statusParam = searchParams.get('status') ?? '';
+  const viewParam   = searchParams.get('view') ?? '';
 
-  const [sidebarView, setSidebarView] = useState<AdminView>('overview');
+  // Seed the active view from the URL so a page refresh stays on the current page.
+  const [sidebarView, setSidebarView] = useState<AdminView>(
+    (ADMIN_VIEWS as readonly string[]).includes(viewParam) ? (viewParam as AdminView) : 'overview'
+  );
   const activeView: AdminView = tabParam === 'orders' ? 'orders' : sidebarView;
 
   const goTo = (view: AdminView) => {
-    navigate('/admin', { replace: true });
+    // Persist the view in the URL (replace, no history spam) so refresh restores it.
+    navigate(view === 'overview' ? '/admin' : `/admin?view=${view}`, { replace: true });
     setSidebarView(view);
   };
 

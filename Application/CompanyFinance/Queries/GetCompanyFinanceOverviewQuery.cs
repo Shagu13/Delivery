@@ -53,6 +53,39 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         var codPassThrough = await delivered
             .SumAsync(o => o.AmountToCollectForPackage, cancellationToken) ?? 0m;
 
+        // ── Cash position (actual money, from settlement tables) ───────────────
+        // Net cash from operations as of To: every settlement up to that date.
+
+        // Courier side: dated by CreatedAt up to To.
+        var courierSettlements = _context.CourierSettlements
+            .AsNoTracking()
+            .Where(c => c.CreatedAt < toDt);
+
+        var cashInFromCouriers = await courierSettlements
+            .SumAsync(c => (decimal?)c.TotalAmountOfCashCollected, cancellationToken) ?? 0m;
+        var salaryPaidToCouriers = await courierSettlements
+            .SumAsync(c => (decimal?)c.AmountCourierWasPaid, cancellationToken) ?? 0m;
+        var salaryEarned = await courierSettlements
+            .SumAsync(c => (decimal?)c.TotalCourierSalary, cancellationToken) ?? 0m;
+
+        // Customer side: bucketed by calendar month; include up to To's month whole.
+        int toMonthOrd = request.To.Year * 12 + request.To.Month;
+
+        var customerSettlements = _context.CustomerSettlements
+            .AsNoTracking()
+            .Where(s => s.Year * 12 + s.Month <= toMonthOrd);
+
+        var senderServicePaid = await customerSettlements
+            .SumAsync(s => (decimal?)s.TotalAmountPaidToCompanyForCompanyService, cancellationToken) ?? 0m;
+        var codPaidToCustomers = await customerSettlements
+            .SumAsync(s => (decimal?)s.TotalAmountOfCollectedCodPaidByCompany, cancellationToken) ?? 0m;
+        var codCollectedForCustomers = await customerSettlements
+            .SumAsync(s => (decimal?)s.TotalCODCompanyCollectedForPackages, cancellationToken) ?? 0m;
+        var serviceOwedByCustomers = await customerSettlements
+            .SumAsync(s => (decimal?)s.TotalCompanyServicePriceOwedToCompany, cancellationToken) ?? 0m;
+
+        var netCashPosition = cashInFromCouriers + senderServicePaid - codPaidToCustomers - salaryPaidToCouriers;
+
         return new CompanyFinanceOverviewDto(
             From:                        request.From.ToString("yyyy-MM-dd"),
             To:                          request.To.ToString("yyyy-MM-dd"),
@@ -62,7 +95,15 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             ServiceInvoicedToSenders:    serviceRevenue - serviceCollectedFromRecipient,
             CourierSalary:               courierSalary,
             NetOperatingMargin:          serviceRevenue - courierSalary,
-            CodPassThrough:              codPassThrough
+            CodPassThrough:              codPassThrough,
+            CashInFromCouriers:          cashInFromCouriers,
+            SenderServicePaid:           senderServicePaid,
+            CodPaidToCustomers:          codPaidToCustomers,
+            SalaryPaidToCouriers:        salaryPaidToCouriers,
+            NetCashPosition:             netCashPosition,
+            OutstandingCodOwedToCustomers: codCollectedForCustomers - codPaidToCustomers,
+            OutstandingServiceReceivable:  serviceOwedByCustomers - senderServicePaid,
+            OutstandingSalaryOwed:         salaryEarned - salaryPaidToCouriers
         );
     }
 }

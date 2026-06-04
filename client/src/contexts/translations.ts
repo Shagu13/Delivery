@@ -1016,6 +1016,20 @@ const en = {
     finOvCodHint:             'Customer money collected and owed back — not company revenue.',
     finOvLoadFailed:          'Failed to load overview.',
 
+    // Cash position
+    finCashTitle:             'Cash position',
+    finCashAsOf:              'as of',
+    finCashInFromCouriers:    'Cash in from couriers',
+    finCashSenderServicePaid: 'Service paid by senders',
+    finCashCodPaidOut:        'COD paid to customers',
+    finCashSalaryPaid:        'Salary paid to couriers',
+    finCashOnHand:            'Net cash position',
+    finCashOnHandHint:        'Cash in − cash out across all settlements — net cash from operations.',
+    finCashOutTitle:          'Outstanding balances',
+    finCashCodOwed:           'COD owed to customers',
+    finCashServiceReceivable: 'Service receivable from senders',
+    finCashSalaryOwed:        'Salary owed to couriers',
+
     // Admin Finance — settlement scope tabs + courier section
     finTabCustomers:     'Customers',
     finTabCouriers:      'Couriers',
@@ -2063,6 +2077,20 @@ const ka: typeof en = {
     finOvNetHint:             'მომსახურების შემოსავალი − კურიერის ხელფასი. არ მოიცავს საოპერაციო ხარჯებს.',
     finOvCodHint:             'მომხმარებლის ფული, შეგროვებული და დასაბრუნებელი — არ არის კომპანიის შემოსავალი.',
     finOvLoadFailed:          'მიმოხილვის ჩატვირთვა ვერ მოხერხდა.',
+
+    // Cash position
+    finCashTitle:             'ნაღდი ფულის ბალანსი',
+    finCashAsOf:              'თარიღით',
+    finCashInFromCouriers:    'კურიერებისგან მიღებული ფული',
+    finCashSenderServicePaid: 'გამგზავნების გადახდილი მომსახურება',
+    finCashCodPaidOut:        'მომხმარებლებზე გადახდილი COD',
+    finCashSalaryPaid:        'კურიერებზე გადახდილი ხელფასი',
+    finCashOnHand:            'წმინდა ნაღდი ბალანსი',
+    finCashOnHandHint:        'შემოსული − გასული ყველა ანგარიშსწორებით — წმინდა ნაღდი ფული ოპერაციებიდან.',
+    finCashOutTitle:          'დაუფარავი ბალანსები',
+    finCashCodOwed:           'მომხმარებლების COD დავალიანება',
+    finCashServiceReceivable: 'გამგზავნებისგან მისაღები მომსახურება',
+    finCashSalaryOwed:        'კურიერების ხელფასის დავალიანება',
 
     // Admin Finance — settlement scope tabs + courier section
     finTabCustomers:     'მომხმარებლები',

@@ -83,7 +83,7 @@ export async function fetchCustomerSettlementPreview(
 ): Promise<CustomerSettlementPreview> {
     const res = await fetch(
         `/api/customersettlements/preview?customerId=${customerId}&year=${year}&month=${month}`,
-        { headers: authHeaders(token) },
+        { headers: authHeaders(token), cache: 'no-store' },
     );
     return handle<CustomerSettlementPreview>(res, 'Failed to load settlement preview');
 }
@@ -94,7 +94,7 @@ export async function fetchCustomerSettlements(
     const q = year ? `&year=${year}` : '';
     const res = await fetch(
         `/api/customersettlements?customerId=${customerId}${q}`,
-        { headers: authHeaders(token) },
+        { headers: authHeaders(token), cache: 'no-store' },
     );
     return handle<CustomerSettlement[]>(res, 'Failed to load settlements');
 }
