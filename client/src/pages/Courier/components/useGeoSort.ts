@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export type SortMode = 'district' | 'nearest';
 
@@ -9,6 +9,7 @@ export interface GeoSortState {
     coords: GeolocationCoordinates | null;
     geocodeCache: Map<string, [number, number] | null>;
     geocoding: boolean;
+    retryLocation: () => void;
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -51,16 +52,33 @@ export function useGeoSort(addresses: { address: string; district: string; city:
     const [geocodeCache, setGeocodeCache] = useState<Map<string, [number, number] | null>>(new Map(globalGeocodeCache));
     const [geocoding, setGeocoding] = useState(false);
     const geocodingRef = useRef(false);
+    const watchIdRef = useRef<number | null>(null);
 
-    // Get courier location once on mount
-    useEffect(() => {
-        if (!navigator.geolocation) return;
-        navigator.geolocation.getCurrentPosition(
-            pos => { setCoords(pos.coords); setLocState('ready'); setSortMode('nearest'); },
+    // Continuously track the courier's location so "nearest" sorting and routes
+    // always reflect where the courier currently is, not where they were on load.
+    // Exposed as retryLocation so a denied/failed permission can be re-requested.
+    const startWatch = useCallback(() => {
+        if (!navigator.geolocation) { setLocState('idle'); return; }
+        if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+        setLocState('locating');
+        let firstFix = true;
+        watchIdRef.current = navigator.geolocation.watchPosition(
+            pos => {
+                setCoords(pos.coords);
+                setLocState('ready');
+                // Auto-switch to nearest only on the first fix, so a courier who
+                // manually flips back to district isn't overridden on the next update.
+                if (firstFix) { setSortMode('nearest'); firstFix = false; }
+            },
             () => setLocState('denied'),
-            { timeout: 8000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
         );
     }, []);
+
+    useEffect(() => {
+        startWatch();
+        return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current); };
+    }, [startWatch]);
 
     // Geocode addresses when location is available and we switch to nearest mode
     useEffect(() => {
@@ -91,7 +109,7 @@ export function useGeoSort(addresses: { address: string; district: string; city:
         runSequential();
     }, [coords, addresses]);
 
-    return { sortMode, setSortMode, locState, coords, geocodeCache, geocoding };
+    return { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation: startWatch };
 }
 
 export function distanceToAddress(

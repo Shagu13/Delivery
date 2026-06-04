@@ -424,6 +424,8 @@ const en = {
   cdSortNearest:            '📍Nearest',
   cdLocating:               'Locating…',
   cdLocDenied:              'Location denied',
+  cdLocEnableHint:          'Enable location to sort by nearest',
+  cdLocRetry:               'Retry',
   cdGeocoding:              'Geocoding addresses…',
 
   // ── Create Group Order page
@@ -1471,6 +1473,8 @@ const ka: typeof en = {
   cdSortNearest:            '📍უახლოესი',
   cdLocating:               'მდებარეობის განსაზღვრა…',
   cdLocDenied:              'მდებარეობა უარყოფილია',
+  cdLocEnableHint:          'ჩართეთ მდებარეობა უახლოესით დასალაგებლად',
+  cdLocRetry:               'თავიდან ცდა',
   cdGeocoding:              'მისამართების დამუშავება…',
 
   // ── Create Group Order page

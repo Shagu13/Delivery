@@ -33,7 +33,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
         () => deliveries.map(o => ({ address: o.recipientAddress, district: o.recipientDistrict, city: o.recipientCity })),
         [deliveries]
     );
-    const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding } = useGeoSort(addresses);
+    const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation } = useGeoSort(addresses);
 
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
@@ -73,11 +73,21 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                 <h2 className="dashboard__title" style={{ margin: 0 }}>{t.cdDeliveriesTitle}</h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {locState === 'locating' && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t.cdLocating}</span>}
-                    {locState === 'denied'   && <span style={{ fontSize: '0.75rem', color: '#f97316' }}>{t.cdLocDenied}</span>}
+                    {locState === 'denied'   && (
+                        <span style={{ fontSize: '0.75rem', color: '#f97316', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {t.cdLocEnableHint}
+                            <button onClick={retryLocation}
+                                style={{ fontSize: '0.75rem', background: 'none', border: '1px solid #f97316', borderRadius: '6px', cursor: 'pointer', padding: '2px 8px', color: '#f97316' }}>
+                                {t.cdLocRetry}
+                            </button>
+                        </span>
+                    )}
                     {locState === 'ready' && geocoding && <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t.cdGeocoding}</span>}
                     <button
                         onClick={() => setSortMode(m => m === 'district' ? 'nearest' : 'district')}
-                        style={{ fontSize: '0.75rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: 'pointer', padding: '3px 8px', color: 'var(--color-text-muted)' }}>
+                        disabled={!coords}
+                        title={!coords ? t.cdLocEnableHint : undefined}
+                        style={{ fontSize: '0.75rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: coords ? 'pointer' : 'not-allowed', opacity: coords ? 1 : 0.5, padding: '3px 8px', color: 'var(--color-text-muted)' }}>
                         {sortMode === 'district' ? t.cdSortNearest : t.cdSortDistrict}
                     </button>
                     {expandedIds.size > 0 && (
@@ -241,6 +251,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                 stops={sortedDeliveries.filter(o => selectedIds.has(o.id)).map(o => ({ city: o.recipientCity, district: o.recipientDistrict, address: o.recipientAddress }))}
                 onClear={() => setSelectedIds(new Set())}
                 geocodeCache={geocodeCache}
+                coords={coords}
             />
         </div>
     );
