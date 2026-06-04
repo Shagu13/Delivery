@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markOrderDelivering, markOrderDelivered, postponeOrder, retryDelivery,
@@ -33,7 +33,15 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
         () => deliveries.map(o => ({ address: o.recipientAddress, district: o.recipientDistrict, city: o.recipientCity })),
         [deliveries]
     );
-    const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation } = useGeoSort(addresses);
+    const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation, refreshLocation } = useGeoSort(addresses);
+
+    // After a stop is completed the list re-fetches and re-sorts; grab a fresh
+    // fix at that moment so the new order and next route start from where the
+    // courier actually is now.
+    const handleAct = useCallback(async (id: string, fn: () => Promise<void>, msg: string) => {
+        await onAct(id, fn, msg);
+        refreshLocation();
+    }, [onAct, refreshLocation]);
 
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
@@ -90,6 +98,12 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                         style={{ fontSize: '0.75rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: coords ? 'pointer' : 'not-allowed', opacity: coords ? 1 : 0.5, padding: '3px 8px', color: 'var(--color-text-muted)' }}>
                         {sortMode === 'district' ? t.cdSortNearest : t.cdSortDistrict}
                     </button>
+                    {coords && sortMode === 'nearest' && (
+                        <button onClick={refreshLocation} title={t.cdLocRefresh} aria-label={t.cdLocRefresh}
+                            style={{ fontSize: '0.85rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: 'pointer', padding: '3px 7px', color: 'var(--color-text-muted)' }}>
+                            ↻
+                        </button>
+                    )}
                     {expandedIds.size > 0 && (
                         <button onClick={() => setExpandedIds(new Set())}
                             style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
@@ -203,14 +217,14 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                     <div className="courier-card__footer">
                                         {order.status === 'CourierAssignedToDeliver' && (
                                             <SwipeButton label={t.cdDeliverySwipeOnWay} variant="primary" disabled={isBusy}
-                                                onSwipe={() => onAct(order.id, () => markOrderDelivering(token, order.id), t.cdDeliveryToastOnWay)} />
+                                                onSwipe={() => handleAct(order.id, () => markOrderDelivering(token, order.id), t.cdDeliveryToastOnWay)} />
                                         )}
                                         {order.status === 'CourierDeliveringTheOrderToRecipient' && (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                 <SwipeButton label={t.cdDeliverySwipeDelivered} variant="success" disabled={isBusy}
                                                     onSwipe={() => {
                                                         if (mustCollect) { setCollectConfirmOrderId(order.id); }
-                                                        else { onAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); }
+                                                        else { handleAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); }
                                                     }} />
                                                 <button disabled={isBusy} onClick={() => setPostponingId(order.id)}
                                                     style={{ padding: '10px', borderRadius: '8px', border: '1px solid #f97316', background: 'transparent', color: '#f97316', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
@@ -220,26 +234,26 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         )}
                                         {order.status === 'DeliveryPostponed' && (
                                             <SwipeButton label={t.cdDeliverySwipeRetry} variant="primary" disabled={isBusy}
-                                                onSwipe={() => onAct(order.id, () => retryDelivery(token, order.id), t.cdDeliveryToastRetry)} />
+                                                onSwipe={() => handleAct(order.id, () => retryDelivery(token, order.id), t.cdDeliveryToastRetry)} />
                                         )}
                                         {order.status === 'CourierAssignedToPickUp' && order.orderType === 'Return' && (
                                             <SwipeButton label={t.cdDeliverySwipeReturnPickup} variant="primary" disabled={isBusy}
-                                                onSwipe={() => onAct(order.id, () => markReturnPickedUp(token, order.id), t.cdDeliveryToastReturnPickup)} />
+                                                onSwipe={() => handleAct(order.id, () => markReturnPickedUp(token, order.id), t.cdDeliveryToastReturnPickup)} />
                                         )}
                                         {order.status === 'PickedUpFromRecipient' && order.orderType === 'Return' && (
                                             <SwipeButton label={t.cdDeliverySwipeReturnWarehouse} variant="success" disabled={isBusy}
-                                                onSwipe={() => onAct(order.id, () => markReturnDeliveredWarehouse(token, order.id), t.cdDeliveryToastReturnWarehouse)} />
+                                                onSwipe={() => handleAct(order.id, () => markReturnDeliveredWarehouse(token, order.id), t.cdDeliveryToastReturnWarehouse)} />
                                         )}
                                     </div>
                                     {collectConfirmOrderId === order.id && (
                                         <CollectConfirmModal order={order} isBusy={isBusy}
                                             onCancel={() => setCollectConfirmOrderId(null)}
-                                            onConfirm={() => { setCollectConfirmOrderId(null); onAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); }} />
+                                            onConfirm={() => { setCollectConfirmOrderId(null); handleAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); }} />
                                     )}
                                     {postponingId === order.id && (
                                         <PostponeModal isBusy={isBusy}
                                             onCancel={() => setPostponingId(null)}
-                                            onConfirm={(reason) => { setPostponingId(null); onAct(order.id, () => postponeOrder(token, order.id, reason), t.cdDeliveryToastPostponed); }} />
+                                            onConfirm={(reason) => { setPostponingId(null); handleAct(order.id, () => postponeOrder(token, order.id, reason), t.cdDeliveryToastPostponed); }} />
                                     )}
                                 </>
                             )}

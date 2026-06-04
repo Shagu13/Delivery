@@ -10,6 +10,7 @@ export interface GeoSortState {
     geocodeCache: Map<string, [number, number] | null>;
     geocoding: boolean;
     retryLocation: () => void;
+    refreshLocation: () => void;
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -22,8 +23,36 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// One global in-memory cache shared across both panels for the page lifetime.
-const globalGeocodeCache = new Map<string, [number, number] | null>();
+// Geocoded coordinates are stable per address, so we persist successful lookups
+// to localStorage. On the next dashboard visit they're already cached, so the
+// list pre-sorts instantly instead of re-geocoding every address from scratch.
+const GEO_CACHE_KEY = 'delivery_geocode_cache_v1';
+
+function loadPersistedCache(): Map<string, [number, number] | null> {
+    try {
+        const raw = localStorage.getItem(GEO_CACHE_KEY);
+        if (!raw) return new Map();
+        const obj = JSON.parse(raw) as Record<string, [number, number]>;
+        return new Map(Object.entries(obj));
+    } catch {
+        return new Map();
+    }
+}
+
+// Persist only successful (non-null) results — a transient geocode failure must
+// not be cached forever; it should be retried on the next visit.
+function persistCache() {
+    try {
+        const obj: Record<string, [number, number]> = {};
+        for (const [k, v] of globalGeocodeCache) if (v) obj[k] = v;
+        localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(obj));
+    } catch {
+        /* storage unavailable / quota exceeded — keep the in-memory cache only */
+    }
+}
+
+// One global cache shared across both panels, seeded from localStorage.
+const globalGeocodeCache = loadPersistedCache();
 
 async function nominatimGeocode(address: string, district: string, city: string): Promise<[number, number] | null> {
     const query = `${address}, ${district}, ${city}, Georgia`;
@@ -36,6 +65,7 @@ async function nominatimGeocode(address: string, district: string, city: string)
         const data: { lat: string; lon: string }[] = await res.json();
         const result = data.length > 0 ? ([parseFloat(data[0].lat), parseFloat(data[0].lon)] as [number, number]) : null;
         globalGeocodeCache.set(key, result);
+        if (result) persistCache();
         return result;
     } catch {
         globalGeocodeCache.set(key, null);
@@ -80,6 +110,19 @@ export function useGeoSort(addresses: { address: string; district: string; city:
         return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current); };
     }, [startWatch]);
 
+    // Silent one-shot refresh: forces a fresh fix and updates coords without the
+    // "locating" flicker. Used after a courier finishes a stop so the re-sort and
+    // next route reflect exactly where they are now. A transient failure is
+    // ignored — the continuous watch keeps the last good fix and surfaces denials.
+    const refreshLocation = useCallback(() => {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(
+            pos => { setCoords(pos.coords); setLocState('ready'); },
+            () => { /* keep the last known fix */ },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }, []);
+
     // Geocode addresses when location is available and we switch to nearest mode
     useEffect(() => {
         if (!coords || addresses.length === 0) return;
@@ -109,7 +152,7 @@ export function useGeoSort(addresses: { address: string; district: string; city:
         runSequential();
     }, [coords, addresses]);
 
-    return { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation: startWatch };
+    return { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation: startWatch, refreshLocation };
 }
 
 export function distanceToAddress(

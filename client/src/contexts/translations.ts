@@ -426,6 +426,7 @@ const en = {
   cdLocDenied:              'Location denied',
   cdLocEnableHint:          'Enable location to sort by nearest',
   cdLocRetry:               'Retry',
+  cdLocRefresh:             'Refresh my location',
   cdGeocoding:              'Geocoding addresses…',
 
   // ── Create Group Order page
@@ -1475,6 +1476,7 @@ const ka: typeof en = {
   cdLocDenied:              'მდებარეობა უარყოფილია',
   cdLocEnableHint:          'ჩართეთ მდებარეობა უახლოესით დასალაგებლად',
   cdLocRetry:               'თავიდან ცდა',
+  cdLocRefresh:             'მდებარეობის განახლება',
   cdGeocoding:              'მისამართების დამუშავება…',
 
   // ── Create Group Order page

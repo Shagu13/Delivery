@@ -28,7 +28,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
         () => pickups.map(go => ({ address: go.pickUpAddress, district: go.pickUpDistrict, city: go.pickUpCity })),
         [pickups]
     );
-    const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation } = useGeoSort(addresses);
+    const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation, refreshLocation } = useGeoSort(addresses);
 
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
@@ -73,6 +73,12 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                         style={{ fontSize: '0.75rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: coords ? 'pointer' : 'not-allowed', opacity: coords ? 1 : 0.5, padding: '3px 8px', color: 'var(--color-text-muted)' }}>
                         {sortMode === 'district' ? t.cdSortNearest : t.cdSortDistrict}
                     </button>
+                    {coords && sortMode === 'nearest' && (
+                        <button onClick={refreshLocation} title={t.cdLocRefresh} aria-label={t.cdLocRefresh}
+                            style={{ fontSize: '0.85rem', background: 'none', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: 'pointer', padding: '3px 7px', color: 'var(--color-text-muted)' }}>
+                            ↻
+                        </button>
+                    )}
                     {expandedIds.size > 0 && (
                         <button onClick={() => setExpandedIds(new Set())}
                             style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
