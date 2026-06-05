@@ -29,6 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const signOut = useCallback(() => {
         localStorage.removeItem(STORAGE_KEY);
+        // Drop the HttpOnly SignalR hub-auth cookie (JS can't clear it itself).
+        fetch('/api/auth/hub-cookie', { method: 'DELETE' }).catch(() => { /* ignore */ });
         setUser(null);
     }, []);
 

@@ -41,18 +41,23 @@ public static class DependencyInjectionInfrastructure
                 };
 
                 // SignalR WebSocket/SSE connections can't send an Authorization
-                // header, so the client passes the JWT as ?access_token=... on the
-                // hub URL. Pull it from the query string for /hubs requests only.
+                // header. The client stores the JWT in an HttpOnly "hubToken" cookie
+                // (scoped to /hubs) which the browser attaches to the handshake, so
+                // the token stays out of the URL. We still accept the legacy
+                // ?access_token=... query as a fallback. Applies to /hubs only.
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = context =>
                     {
-                        var accessToken = context.Request.Query["access_token"];
                         var path = context.HttpContext.Request.Path;
-                        if (!string.IsNullOrEmpty(accessToken)
-                            && path.StartsWithSegments("/hubs"))
+                        if (path.StartsWithSegments("/hubs"))
                         {
-                            context.Token = accessToken;
+                            var fromCookie = context.Request.Cookies["hubToken"];
+                            var fromQuery  = context.Request.Query["access_token"];
+                            if (!string.IsNullOrEmpty(fromCookie))
+                                context.Token = fromCookie;
+                            else if (!string.IsNullOrEmpty(fromQuery))
+                                context.Token = fromQuery;
                         }
                         return Task.CompletedTask;
                     }

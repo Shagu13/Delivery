@@ -28,8 +28,11 @@ export function subscribePendingCounts(token: string, listener: Listener): () =>
     listener(latest);
 
     if (!connection) {
+        // No accessTokenFactory: that would append ?access_token=<jwt> to the hub
+        // URL. Instead we set an HttpOnly "hubToken" cookie (scoped to /hubs) and
+        // let the browser carry it on the handshake, keeping the token out of the URL.
         connection = new signalR.HubConnectionBuilder()
-            .withUrl('/hubs/notifications', { accessTokenFactory: () => token })
+            .withUrl('/hubs/notifications')
             .withAutomaticReconnect()
             .build();
 
@@ -38,9 +41,15 @@ export function subscribePendingCounts(token: string, listener: Listener): () =>
             listeners.forEach(l => l(counts));
         });
 
-        // Best-effort: if the socket can't open the badges just stay at their
-        // last known value rather than crashing the nav.
-        connection.start().catch(() => { /* ignore */ });
+        // Install the hub-auth cookie first (a normal fetch *can* send the Bearer
+        // header), then open the socket. Best-effort: if either step fails the
+        // badges just stay at their last known value rather than crashing the nav.
+        fetch('/api/auth/hub-cookie', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then(() => connection?.start())
+            .catch(() => { /* ignore */ });
     }
     refCount++;
 
