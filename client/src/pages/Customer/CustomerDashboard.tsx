@@ -13,11 +13,12 @@ import type { Customer, CustomerGroupOrder } from '../../api/customers';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
+import { CustomerFinancePage } from './CustomerFinancePage';
 import { CustomerStatisticsPage } from './CustomerStatisticsPage';
 import '../../styles/dashboard.css';
 
 
-type View = 'overview' | 'shipments' | 'statistics' | 'profile' | 'password' | 'calculator';
+type View = 'overview' | 'shipments' | 'finance' | 'statistics' | 'profile' | 'password' | 'calculator';
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
@@ -96,7 +97,8 @@ export function CustomerDashboard() {
           {([
             ['overview',    t.sidebarOverview,      overviewIcon],
             ['shipments',   t.custNavShipments,      shipmentsIcon],
-            ['statistics',  t.navFinance,            statisticsIcon],
+            ['finance',     t.navFinance,            financeIcon],
+            ['statistics',  t.navStatistics,         statisticsIcon],
             ['calculator',  t.custNavCalculator,     calcIcon],
             ['profile',     t.custNavProfile,        profileIcon],
             ['password',    t.custNavPassword,       lockIcon],
@@ -133,7 +135,8 @@ export function CustomerDashboard() {
           <span className="dashboard__topbar-title">
             {view === 'overview'    && t.sidebarOverview}
             {view === 'shipments'   && t.custNavShipments}
-            {view === 'statistics'  && t.navFinance}
+            {view === 'finance'     && t.navFinance}
+            {view === 'statistics'  && t.navStatistics}
             {view === 'calculator'  && t.custTopbarCalculator}
             {view === 'profile'     && t.custNavProfile}
             {view === 'password'    && t.custTopbarPassword}
@@ -166,6 +169,7 @@ export function CustomerDashboard() {
                 />
               )}
               {view === 'shipments'   && <ShipmentsView orders={orders} />}
+              {view === 'finance'     && <CustomerFinancePage />}
               {view === 'statistics'  && <CustomerStatisticsPage />}
               {view === 'calculator'  && token && <PriceCalculatorCard token={token} />}
               {view === 'profile'   && profile && token && (
@@ -639,6 +643,14 @@ const calcIcon = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
     <rect x="1.5" y="1.5" width="13" height="13" rx="2.5" stroke="currentColor" strokeWidth="1.4"/>
     <path d="M4.5 5h7M4.5 8h3.5M10 7v3M11.5 8.5H9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+
+const financeIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="1.5" y="3.5" width="13" height="9" rx="2" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M1.5 6.5h13" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M11 10h1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
   </svg>
 );
 

@@ -1,149 +1,180 @@
 import { useEffect, useState, useCallback } from 'react';
+import {
+    ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+    PieChart, Pie, Cell,
+} from 'recharts';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
-import { fetchMyCustomerSettlements } from '../../api/customerSettlements';
-import type { CustomerSettlement } from '../../api/customerSettlements';
+import { fetchMyCustomerStatistics } from '../../api/customerStatistics';
+import type { CustomerStatistics } from '../../api/customerStatistics';
 import '../../styles/dashboard.css';
 
-const gel = (n: number) => `₾${n.toFixed(2)}`;
-
-
-function FinRow({ label, value, tone = 'default' }: {
-    label: string; value: string; tone?: 'default' | 'owed' | 'paid' | 'out';
-}) {
-    const color =
-        tone === 'paid' ? '#059669' :
-        tone === 'out'  ? '#b45309' : 'var(--color-text)';
-    return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--color-border)', fontSize: '0.85rem' }}>
-            <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-            <span style={{ fontWeight: 700, color }}>{value}</span>
-        </div>
-    );
-}
-
-function MoneyBlock({ title, owedLabel, owed, paid, paidLabel, outstanding }: {
-    title: string; owedLabel: string; owed: number; paid: number; paidLabel?: string; outstanding: number;
-}) {
-    const { t } = useLanguage();
-    return (
-        <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 14px' }}>
-            <div style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 6 }}>{title}</div>
-            <FinRow label={owedLabel}              value={gel(owed)}        tone="owed" />
-            <FinRow label={paidLabel ?? t.statPaidSoFar} value={gel(paid)}  tone="paid" />
-            <FinRow label={t.statOutstanding}      value={gel(outstanding)} tone="out" />
-        </div>
-    );
-}
-
-function InvoiceCard({ item }: { item: CustomerSettlement }) {
-    const { t } = useLanguage();
-    return (
-        <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-text)' }}>
-                        {new Date(item.createdAt).toLocaleDateString()}
-                    </span>
-                    
-                </div>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>📦 {t.custPkg(item.numberOfPackages)}</span>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>✓ {t.statDelivered(item.totalNumberOfOrderDelivered)}</span>
-                </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-                <MoneyBlock
-                    title={t.statCodBlockTitle}
-                    owedLabel={t.statCollectedForPackages}
-                    owed={item.totalCODCompanyCollectedForPackages}
-                    paid={item.totalAmountOfCollectedCodPaidByCompany}
-                    outstanding={item.outstandingCodOwedToCustomer}
-                />
-                <MoneyBlock
-                    title={t.statServiceBlockTitle}
-                    owedLabel={t.statServicePriceOwed}
-                    owed={item.totalCompanyServicePriceOwedToCompany}
-                    paid={item.totalAmountPaidToCompanyForCompanyService}
-                    paidLabel={t.statServiceFeePaid}
-                    outstanding={item.outstandingServiceOwedToCompany}
-                />
-            </div>
-        </div>
-    );
-}
+// Outcome colours, shared by the bar, pie and summary cards.
+const C_DELIVERED  = '#059669';
+const C_INTRANSIT  = '#d97706';
+const C_CANCELLED  = '#dc2626';
 
 export function CustomerStatisticsPage() {
     const { token } = useAuth();
     const { t } = useLanguage();
-    const [date, setDate] = useState('');            // '' = all dates
-    const [items, setItems] = useState<CustomerSettlement[]>([]);
+    const [data, setData] = useState<CustomerStatistics | null>(null);
+    const [year, setYear] = useState<number | undefined>(undefined); // undefined = latest active year
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(() => {
         if (!token) return;
         setLoading(true); setError(null);
-        fetchMyCustomerSettlements(token, date || undefined)
-            .then(data => { setItems(data); setLoading(false); })
-            .catch(() => { setError(t.statLoadFailed); setLoading(false); });
-    }, [token, date, t.statLoadFailed]);
+        fetchMyCustomerStatistics(token, year)
+            .then(d => { setData(d); setLoading(false); })
+            .catch(() => { setError(t.statsLoadFailed); setLoading(false); });
+    }, [token, year, t.statsLoadFailed]);
 
     useEffect(() => { load(); }, [load]);
 
-    // Totals across the listed invoices
-    const codOutstanding     = items.reduce((s, i) => s + i.outstandingCodOwedToCustomer, 0);
-    const serviceOutstanding = items.reduce((s, i) => s + i.outstandingServiceOwedToCompany, 0);
-    const totalDelivered     = items.reduce((s, i) => s + i.totalNumberOfOrderDelivered, 0);
+    if (loading && !data) {
+        return <div className="dashboard__loader" style={{ padding: 40 }}>{t.statsLoading}</div>;
+    }
+    if (error) {
+        return (
+            <div className="dashboard__error">
+                {error} <button onClick={load}>{t.statRetry}</button>
+            </div>
+        );
+    }
+    if (!data) return null;
+
+    const hasActivity = data.totalPlaced > 0 || data.availableYears.length > 0;
+
+    // Stacked bars: one row per month, localized month label on the X axis.
+    const barData = data.monthly.map(m => ({
+        name: t.finMonths[m.month - 1],
+        [t.statsDelivered]: m.delivered,
+        [t.statsInTransit]: m.inTransit,
+        [t.statsCancelled]: m.cancelled,
+    }));
+
+    const pieData = [
+        { name: t.statsDelivered, value: data.totalDelivered, color: C_DELIVERED },
+        { name: t.statsInTransit, value: data.totalInTransit, color: C_INTRANSIT },
+        { name: t.statsCancelled, value: data.totalCancelled, color: C_CANCELLED },
+    ].filter(d => d.value > 0);
 
     return (
         <div className="dashboard__section">
-            <h2 className="dashboard__title">{t.statTitle}</h2>
-
-            {/* Date filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{t.statFilterByDate}</span>
-                <input
-                    type="date"
-                    value={date}
-                    onChange={e => setDate(e.target.value)}
-                    style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }}
-                />
-                {date && (
-                    <button className="btn-ghost" onClick={() => setDate('')} style={{ fontSize: '0.8rem' }}>{t.statAllDates}</button>
-                )}
-                <button className="btn-ghost" onClick={load} style={{ marginLeft: 4 }}>{t.statRefresh}</button>
+            {/* Header + year selector */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+                <h2 className="dashboard__title" style={{ margin: 0 }}>{t.navStatistics}</h2>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+                    {t.statsYearLabel}
+                    <select
+                        value={data.year}
+                        onChange={e => setYear(Number(e.target.value))}
+                        style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }}
+                    >
+                        {(data.availableYears.length > 0 ? data.availableYears : [data.year]).map(y => (
+                            <option key={y} value={y}>{y}</option>
+                        ))}
+                    </select>
+                </label>
             </div>
 
-            {loading ? (
-                <div className="dashboard__loader">{t.statLoading}</div>
-            ) : error ? (
-                <div className="dashboard__error">{error} <button onClick={load}>{t.statRetry}</button></div>
-            ) : items.length === 0 ? (
+            {!hasActivity ? (
                 <div className="dashboard__empty" style={{ marginTop: 40 }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📊</div>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{date ? t.statNoneForDay : t.statNoneAll}</div>
-                    <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                        {t.statNoRecordsHint}
-                    </div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.statsEmpty}</div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t.statsEmptyHint}</div>
                 </div>
             ) : (
                 <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+                    {/* Summary cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 20 }}>
                         {[
-                            { label: t.statSummaryDelivered,   value: totalDelivered.toString(), accent: false },
-                            { label: t.statSummaryCodOwed,     value: gel(codOutstanding),       accent: true },
-                            { label: t.statSummaryServiceOwed, value: gel(serviceOutstanding),   accent: false },
-                        ].map(({ label, value, accent }) => (
-                            <div key={label} style={{ background: accent ? 'var(--color-accent-dim)' : 'var(--color-bg-2)', border: `1px solid ${accent ? 'rgba(196,127,23,0.25)' : 'var(--color-border)'}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</div>
-                                <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
+                            { label: t.statsSummaryPlaced,    value: data.totalPlaced,    color: 'var(--color-text)' },
+                            { label: t.statsSummaryDelivered, value: data.totalDelivered, color: C_DELIVERED },
+                            { label: t.statsSummaryInTransit, value: data.totalInTransit, color: C_INTRANSIT },
+                            { label: t.statsSummaryCancelled, value: data.totalCancelled, color: C_CANCELLED },
+                        ].map(({ label, value, color }) => (
+                            <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '14px 12px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '1.4rem', fontWeight: 800, color }}>{value}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
                             </div>
                         ))}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {items.map(item => <InvoiceCard key={item.id} item={item} />)}
+
+                    {/* Monthly stacked bar chart */}
+                    <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '16px 12px 8px', marginBottom: 16 }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-subtle)', padding: '0 6px 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t.statsMonthlyTitle}
+                        </div>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={barData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-text-subtle)' }} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'var(--color-text-subtle)' }} />
+                                <Tooltip
+                                    contentStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: '0.8rem' }}
+                                    cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                                />
+                                <Legend wrapperStyle={{ fontSize: '0.78rem' }} />
+                                <Bar dataKey={t.statsDelivered} stackId="a" fill={C_DELIVERED} radius={[0, 0, 0, 0]} />
+                                <Bar dataKey={t.statsInTransit} stackId="a" fill={C_INTRANSIT} />
+                                <Bar dataKey={t.statsCancelled} stackId="a" fill={C_CANCELLED} radius={[3, 3, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+                        {/* Outcome breakdown pie */}
+                        <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '16px 12px' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-subtle)', padding: '0 6px 8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                {t.statsBreakdownTitle}
+                            </div>
+                            {pieData.length === 0 ? (
+                                <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.85rem', padding: 40 }}>{t.statsEmpty}</div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <PieChart>
+                                        <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={45} paddingAngle={2}>
+                                            {pieData.map(d => <Cell key={d.name} fill={d.color} />)}
+                                        </Pie>
+                                        <Tooltip contentStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: '0.8rem' }} />
+                                        <Legend wrapperStyle={{ fontSize: '0.78rem' }} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            )}
+                        </div>
+
+                        {/* Top recipients */}
+                        <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '16px 12px' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-subtle)', padding: '0 6px 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                {t.statsTopRecipientsTitle}
+                            </div>
+                            {data.topRecipients.length === 0 ? (
+                                <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.85rem', padding: 40 }}>{t.statsEmpty}</div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    {data.topRecipients.map((r, i) => (
+                                        <div key={r.phone} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px', borderBottom: i < data.topRecipients.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                                            <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)', fontSize: '0.72rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                {i + 1}
+                                            </span>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {r.name}
+                                                </div>
+                                                <div style={{ fontSize: '0.74rem', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {r.phone} · {r.city}, {r.district}, {r.address}
+                                                </div>
+                                            </div>
+                                            <span style={{ flexShrink: 0, fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-accent)' }}>
+                                                {t.statsOrdersCount(r.orderCount)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </>
             )}

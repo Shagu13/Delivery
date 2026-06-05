@@ -1262,6 +1262,8 @@ function AdminCouriers({
 }) {
   // Single global day for the whole list — defaults to today.
   const [day, setDay] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  // Which sub-view is showing: the day's assigned orders ('today') or the plain roster ('all').
+  const [view, setView] = useState<'today' | 'all'>('today');
   const [deliveries, setDeliveries] = useState<CourierDayDelivery[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1328,6 +1330,18 @@ function AdminCouriers({
     );
   }
 
+  if (view === 'all') {
+    return (
+      <AllCouriersList
+        couriers={couriers}
+        token={token}
+        onBack={() => setView('today')}
+        onEdit={onEdit}
+        onActiveChanged={onActiveChanged}
+      />
+    );
+  }
+
   return (
     <>
       {/* Global day navigator — controls every courier below */}
@@ -1349,6 +1363,9 @@ function AdminCouriers({
           {!isToday && (
             <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.75rem' }} onClick={() => setDay(today)}>Today</button>
           )}
+          <button className="go-action-btn" style={{ padding: '5px 13px', fontSize: '0.75rem' }} onClick={() => setView('all')}>
+            All Couriers ›
+          </button>
           <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>
             {rows.length} courier{rows.length !== 1 ? 's' : ''} · {totalDelivered} assigned
           </span>
@@ -1374,9 +1391,6 @@ function AdminCouriers({
                 key={r.courier.courierId}
                 courier={r.courier}
                 orders={r.orders}
-                token={token}
-                onEdit={onEdit}
-                onActiveChanged={onActiveChanged}
               />
             ))}
           </div>
@@ -1386,16 +1400,110 @@ function AdminCouriers({
   );
 }
 
-// ── Single expandable courier row ─────────────────────────────────────────────
-function CourierRow({ courier, orders, token, onEdit, onActiveChanged }: { courier: Courier; orders: CourierOrder[]; token: string; onEdit: (courier: Courier) => void; onActiveChanged: (courierId: string, isActive: boolean) => void; }) {
-  const [expanded,        setExpanded]        = useState(false);
-  const [rowToast,        setRowToast]        = useState<{ msg: string; err: boolean } | null>(null);
-  const [togglingActive,  setTogglingActive]  = useState(false);
+// ── Plain roster of every courier with management actions ─────────────────────
+function AllCouriersList({
+  couriers,
+  token,
+  onBack,
+  onEdit,
+  onActiveChanged,
+}: {
+  couriers: Courier[];
+  token: string;
+  onBack: () => void;
+  onEdit: (courier: Courier) => void;
+  onActiveChanged: (courierId: string, isActive: boolean) => void;
+}) {
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; err: boolean } | null>(null);
 
-  const showRowToast = (msg: string, err = false) => {
-    setRowToast({ msg, err });
-    setTimeout(() => setRowToast(null), 3500);
+  const showToast = (msg: string, err = false) => {
+    setToast({ msg, err });
+    setTimeout(() => setToast(null), 3500);
   };
+
+  const handleToggleActive = async (courier: Courier) => {
+    setTogglingId(courier.courierId);
+    try {
+      const isActive = courier.isDeleted; // toggling: if deleted -> activate, if active -> deactivate
+      await setCourierActiveStatus(courier.courierId, isActive, token);
+      onActiveChanged(courier.courierId, isActive);
+    } catch {
+      showToast('Failed to update courier status', true);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  return (
+    <div className="content-card">
+      <div className="content-card__header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.8rem' }} onClick={onBack}>
+          ‹ Working Today
+        </button>
+        <span className="content-card__title">All Couriers</span>
+        <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>
+          {couriers.length} courier{couriers.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {couriers.map(courier => (
+          <div
+            key={courier.courierId}
+            style={{ borderBottom: '1px solid var(--color-border)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isDeleted ? 0.6 : 1 }}
+          >
+            <div style={{ flex: 1 }}>
+              <div className="courier-name">
+                {courier.fullName}
+                {courier.isDeleted && (
+                  <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 100, padding: '1px 8px' }}>Deactivated</span>
+                )}
+              </div>
+              <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
+            </div>
+            <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
+              {courier.phoneNumber}
+            </span>
+            <span className={`status-badge ${!courier.isDeleted ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
+              {!courier.isDeleted ? 'Active' : 'Deleted'}
+            </span>
+            <button
+              className="go-action-btn go-action-btn--ghost"
+              style={{ padding: '5px 13px', fontSize: '0.75rem' }}
+              onClick={() => onEdit(courier)}
+            >
+              Edit
+            </button>
+            <button
+              className="go-action-btn"
+              style={{
+                padding: '5px 13px', fontSize: '0.75rem',
+                background: !courier.isDeleted ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)',
+                color: !courier.isDeleted ? '#ef4444' : '#10b981',
+                border: `1px solid ${!courier.isDeleted ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
+              }}
+              onClick={() => handleToggleActive(courier)}
+              disabled={togglingId === courier.courierId}
+            >
+              {togglingId === courier.courierId ? '…' : !courier.isDeleted ? 'Deactivate' : 'Activate'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {toast && (
+        <div style={{ padding: '8px 20px', fontSize: '0.78rem', color: toast.err ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+          {toast.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Single expandable courier row ─────────────────────────────────────────────
+function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrder[]; }) {
+  const [expanded, setExpanded] = useState(false);
 
   const salaryTotal = useMemo(
     () => orders.reduce((sum, o) => sum + (o.courierSalary ?? 0), 0),
@@ -1410,20 +1518,6 @@ function CourierRow({ courier, orders, token, onEdit, onActiveChanged }: { couri
     [orders],
   );
   const combinedTotal = serviceTotal + codTotal;
-
-  const handleToggleActive = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setTogglingActive(true);
-    try {
-      const isActive = courier.isDeleted; // toggling: if deleted -> activate, if active -> deactivate
-      await setCourierActiveStatus(courier.courierId, isActive, token);
-      onActiveChanged(courier.courierId, isActive);
-    } catch {
-      showRowToast('Failed to update courier status', true);
-    } finally {
-      setTogglingActive(false);
-    }
-  };
 
   return (
     <div style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -1469,37 +1563,8 @@ function CourierRow({ courier, orders, token, onEdit, onActiveChanged }: { couri
           <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
             {courier.phoneNumber}
           </span>
-          <span className={`status-badge ${!courier.isDeleted ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
-            {!courier.isDeleted ? 'Active' : 'Deleted'}
-          </span>
-          <button
-            className="go-action-btn go-action-btn--ghost"
-            style={{ padding: '5px 13px', fontSize: '0.75rem' }}
-            onClick={e => { e.stopPropagation(); onEdit(courier); }}
-          >
-            Edit
-          </button>
-          <button
-            className="go-action-btn"
-            style={{
-              padding: '5px 13px', fontSize: '0.75rem',
-              background: !courier.isDeleted ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)',
-              color: !courier.isDeleted ? '#ef4444' : '#10b981',
-              border: `1px solid ${!courier.isDeleted ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
-            }}
-            onClick={handleToggleActive}
-            disabled={togglingActive}
-          >
-            {togglingActive ? '…' : !courier.isDeleted ? 'Deactivate' : 'Activate'}
-          </button>
         </div>
       </div>
-
-      {rowToast && (
-        <div style={{ padding: '0 20px 8px', fontSize: '0.78rem', color: rowToast.err ? '#ef4444' : '#10b981', fontWeight: 600 }}>
-          {rowToast.msg}
-        </div>
-      )}
 
       {/* Deliveries for the selected day (read-only) */}
       {expanded && (
