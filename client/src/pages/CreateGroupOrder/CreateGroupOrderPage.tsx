@@ -483,8 +483,6 @@ export function CreateGroupOrderPage() {
             <main className="page__main">
                 <div className="page__intro">
                     <p className="page__eyebrow">{t.cgoEyebrow}</p>
-                    <h1 className="page__title">{t.cgoTitle}</h1>
-                    <p className="page__desc">{t.cgoDesc}</p>
                 </div>
 
                 <form className="order-form" onSubmit={handleSubmit} noValidate>
@@ -510,14 +508,6 @@ export function CreateGroupOrderPage() {
                     />
 
                     <section className="form-section">
-                        <div className="form-section__header">
-                            <span className="form-section__number">{t.cgoPackagesNum}</span>
-                            <div>
-                                <h2 className="form-section__title">{t.cgoPackagesTitle}</h2>
-                                <p className="form-section__desc">{t.cgoPackagesDesc(packages.length)}</p>
-                            </div>
-                        </div>
-
                         <div className="form-section__body">
                             {/* Excel Import */}
                             <div className="excel-import">
@@ -582,7 +572,7 @@ export function CreateGroupOrderPage() {
 
                             {/* ── Layout switcher ── */}
                             <div className="layout-switcher">
-                                <span className="layout-switcher__label">View:</span>
+                                <span className="layout-switcher__label">{t.cgoViewLabel}</span>
                                 <div className="layout-switcher__tabs">
                                     <button
                                         type="button"
@@ -594,7 +584,7 @@ export function CreateGroupOrderPage() {
                                             <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/>
                                             <path d="M5 1v14" stroke="currentColor" strokeWidth="1.3"/>
                                         </svg>
-                                        Sidebar
+                                        {t.cgoViewSidebar}
                                     </button>
                                     <button
                                         type="button"
@@ -607,7 +597,7 @@ export function CreateGroupOrderPage() {
                                             <rect x="1" y="7" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
                                             <rect x="1" y="12" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
                                         </svg>
-                                        Cards
+                                        {t.cgoViewCards}
                                     </button>
                                 </div>
                             </div>

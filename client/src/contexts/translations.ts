@@ -466,6 +466,15 @@ const en = {
   cgoImported:              (n: number): string => `${n} package${n !== 1 ? 's' : ''} imported`,
   cgoClearReset:            'Clear & reset',
   cgoAddPackage:            'Add Another Package',
+  // Layout switcher / sidebar
+  cgoViewLabel:             'View:',
+  cgoViewSidebar:           'Sidebar',
+  cgoViewCards:             'Cards',
+  cgoSidebarCount:          (n: number): string => `${n} package${n !== 1 ? 's' : ''}`,
+  cgoEmptyPackage:          'Empty package',
+  cgoMissingFields:         'missing required fields',
+  cgoReady:                 'ready',
+  cgoNeedsAttention:        'needs attention',
   // Package card
   cgoPackageLabel: 'Package',
   cgoNoRecipientYet: 'No recipient info yet — click to expand',
@@ -1559,6 +1568,15 @@ const ka: typeof en = {
   cgoImported:              (n: number): string => `${n} ამანათი შემოტანილია`,
   cgoClearReset:            'გასუფთავება და განახლება',
   cgoAddPackage:            'სხვა ამანათის დამატება',
+  // Layout switcher / sidebar
+  cgoViewLabel:             'ხედი:',
+  cgoViewSidebar:           'გვერდითა პანელი',
+  cgoViewCards:             'ბარათები',
+  cgoSidebarCount:          (n: number): string => `${n} ამანათი`,
+  cgoEmptyPackage:          'ცარიელი ამანათი',
+  cgoMissingFields:         'შესავსები ველები',
+  cgoReady:                 'მზადაა',
+  cgoNeedsAttention:        'საჭიროებს ყურადღებას',
   // Package card
   cgoPackageLabel: 'ამანათი',
   cgoNoRecipientYet: 'მიმღების ინფო არ არის — დააჭირეთ გასახსნელად',

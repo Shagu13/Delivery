@@ -189,6 +189,9 @@ export function PackageCard({
     onChange(index, 'companyServicePrice', 0);
     if (value === 'Return') {
       onChange(index, 'whoPaysForCompanyService', 'Sender');
+      // Return parcels are not COD — force the payment status to Paid and clear any collect amount
+      onChange(index, 'productPaymentStatus', 'Paid');
+      onChange(index, 'amountToCollectForPackage', 0);
       // Auto-fill deliver-back-to address from the customer's registered address
       if (senderAddress) {
         onChange(index, 'recipientCity',     senderAddress.city);
@@ -433,19 +436,21 @@ export function PackageCard({
             )}
 
             <div className="grid grid--2">
-              <div className="form-field">
-                <label className="form-field__label">
-                  {t.cgoPaymentStatus} <span className="form-field__required">*</span>
-                </label>
-                <select
-                  className="form-field__input"
-                  value={data.productPaymentStatus}
-                  onChange={e => handlePaymentStatusChange(e.target.value)}
-                >
-                  <option value="NotPaid">{t.cgoNotPaid}</option>
-                  <option value="Paid">{t.cgoPaid}</option>
-                </select>
-              </div>
+              {!isReturn && (
+                <div className="form-field">
+                  <label className="form-field__label">
+                    {t.cgoPaymentStatus} <span className="form-field__required">*</span>
+                  </label>
+                  <select
+                    className="form-field__input"
+                    value={data.productPaymentStatus}
+                    onChange={e => handlePaymentStatusChange(e.target.value)}
+                  >
+                    <option value="NotPaid">{t.cgoNotPaid}</option>
+                    <option value="Paid">{t.cgoPaid}</option>
+                  </select>
+                </div>
+              )}
 
               <div className="form-field">
                 <label className="form-field__label">

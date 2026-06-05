@@ -144,6 +144,9 @@ function PackageDetail({
     onChange(index, 'companyServicePrice', 0);
     if (type === 'Return') {
       onChange(index, 'whoPaysForCompanyService', 'Sender');
+      // Return parcels are not COD — force the payment status to Paid and clear any collect amount
+      onChange(index, 'productPaymentStatus', 'Paid');
+      onChange(index, 'amountToCollectForPackage', 0);
       if (senderAddress) {
         onChange(index, 'recipientCity',     senderAddress.city);
         onChange(index, 'recipientDistrict', senderAddress.district);
@@ -187,14 +190,14 @@ function PackageDetail({
       {/* Detail header */}
       <div className="psl-detail__header">
         <div className="psl-detail__title">
-          <span className="psl-detail__pkg-label">Package {String(index + 1).padStart(2, '0')}</span>
+          <span className="psl-detail__pkg-label">{t.cgoPackageLabel} {String(index + 1).padStart(2, '0')}</span>
           {pkg.orderType !== 'Send' && (
             <span className="psl-type-chip" style={{ background: typeStyle.bg, color: typeStyle.color, border: `1px solid ${typeStyle.border}` }}>
               {pkg.orderType}
             </span>
           )}
-          {status === 'ok'    && <span className="psl-status-tag psl-status-tag--ok">✓ ready</span>}
-          {status === 'error' && <span className="psl-status-tag psl-status-tag--err">needs attention</span>}
+          {status === 'ok'    && <span className="psl-status-tag psl-status-tag--ok">✓ {t.cgoReady}</span>}
+          {status === 'error' && <span className="psl-status-tag psl-status-tag--err">{t.cgoNeedsAttention}</span>}
         </div>
         <div className="psl-detail__nav">
           <button type="button" className="psl-nav-btn" disabled={!hasPrev} onClick={onPrev} title="Previous (←)">
@@ -207,7 +210,7 @@ function PackageDetail({
           {canRemove && (
             <button type="button" className="psl-remove-btn" onClick={() => onRemove(index)}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-              Remove
+              {t.cgoRemove}
             </button>
           )}
         </div>
@@ -360,13 +363,15 @@ function PackageDetail({
           )}
 
           <div className="psl-grid psl-grid--2">
-            <div className="form-field">
-              <label className="form-field__label">{t.cgoPaymentStatus} <span className="form-field__required">*</span></label>
-              <select className="form-field__input" value={pkg.productPaymentStatus} onChange={e => handlePaymentStatusChange(e.target.value)}>
-                <option value="NotPaid">{t.cgoNotPaid}</option>
-                <option value="Paid">{t.cgoPaid}</option>
-              </select>
-            </div>
+            {!isReturn && (
+              <div className="form-field">
+                <label className="form-field__label">{t.cgoPaymentStatus} <span className="form-field__required">*</span></label>
+                <select className="form-field__input" value={pkg.productPaymentStatus} onChange={e => handlePaymentStatusChange(e.target.value)}>
+                  <option value="NotPaid">{t.cgoNotPaid}</option>
+                  <option value="Paid">{t.cgoPaid}</option>
+                </select>
+              </div>
+            )}
             <div className="form-field">
               <label className="form-field__label">{t.cgoWhoPays} <span className="form-field__required">*</span></label>
               <select className="form-field__input" value={pkg.whoPaysForCompanyService} onChange={e => onChange(index, 'whoPaysForCompanyService', e.target.value)}>
@@ -471,7 +476,7 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
       {/* ── Sidebar ── */}
       <div className="psl-sidebar" ref={sidebarRef}>
         <div className="psl-sidebar__header">
-          <span className="psl-sidebar__count">{packages.length} packages</span>
+          <span className="psl-sidebar__count">{t.cgoSidebarCount(packages.length)}</span>
           <div className="psl-sidebar__stats">
             {readyCount > 0 && <span className="psl-mini-pill psl-mini-pill--ok">{readyCount} ✓</span>}
             {errorCount > 0 && <span className="psl-mini-pill psl-mini-pill--err">{errorCount} !</span>}
@@ -499,10 +504,10 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
                 </div>
                 <div className="psl-list-item__info">
                   <span className="psl-list-item__name">
-                    {summary || <span style={{ color: 'var(--color-text-subtle)', fontStyle: 'italic' }}>Empty package</span>}
+                    {summary || <span style={{ color: 'var(--color-text-subtle)', fontStyle: 'italic' }}>{t.cgoEmptyPackage}</span>}
                   </span>
                   {status === 'error' && (
-                    <span className="psl-list-item__err-hint">missing required fields</span>
+                    <span className="psl-list-item__err-hint">{t.cgoMissingFields}</span>
                   )}
                   {pkg.orderType !== 'Send' && (
                     <span className="psl-list-item__type-chip" style={{
