@@ -172,7 +172,8 @@ export function CreateGroupOrderPage() {
     const [pickupModalOpen, setPickupModalOpen] = useState(false);
 
     // ── Layout switcher ────────────────────────────────────────────────────────
-    const [layout, setLayout] = useState<PackageLayout>('cards');
+    // Sidebar (left list of packages, right detail panel) is the default view.
+    const [layout, setLayout] = useState<PackageLayout>('sidebar');
 
     // ── Weight price tiers ─────────────────────────────────────────────────────
     const [weightTiers, setWeightTiers] = useState<WeightPriceTier[]>([]);
@@ -585,9 +586,21 @@ export function CreateGroupOrderPage() {
                                 <div className="layout-switcher__tabs">
                                     <button
                                         type="button"
+                                        className={`layout-tab${layout === 'sidebar' ? ' layout-tab--active' : ''}`}
+                                        onClick={() => setLayout('sidebar')}
+                                        title="Sidebar navigator view (default)"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                            <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+                                            <path d="M5 1v14" stroke="currentColor" strokeWidth="1.3"/>
+                                        </svg>
+                                        Sidebar
+                                    </button>
+                                    <button
+                                        type="button"
                                         className={`layout-tab${layout === 'cards' ? ' layout-tab--active' : ''}`}
                                         onClick={() => setLayout('cards')}
-                                        title="Accordion cards (default)"
+                                        title="Accordion cards view"
                                     >
                                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                             <rect x="1" y="2" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
@@ -595,18 +608,6 @@ export function CreateGroupOrderPage() {
                                             <rect x="1" y="12" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
                                         </svg>
                                         Cards
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`layout-tab${layout === 'sidebar' ? ' layout-tab--active' : ''}`}
-                                        onClick={() => setLayout('sidebar')}
-                                        title="Sidebar navigator view"
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                            <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/>
-                                            <path d="M5 1v14" stroke="currentColor" strokeWidth="1.3"/>
-                                        </svg>
-                                        Sidebar
                                     </button>
                                 </div>
                             </div>
