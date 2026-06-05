@@ -43,6 +43,19 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
             ? request.CompanyServicePrice - request.CourierSalary.Value
             : null;
 
+        // For an already-delivered last-mile order, the physical cash the courier
+        // collected is derived from the (now edited) service price / package COD.
+        // Re-derive it so the courier settlement's cash totals stay correct.
+        // Mirrors the cash formula in MarkOrderDeliveredCommandHandler:
+        //   Recipient pays fee → package COD (if any) + service fee.
+        //   Sender pays fee    → package COD only (service fee invoiced separately).
+        if (order.Status == OrderStatus.DeliveredToRecipient)
+        {
+            order.AmountOfCashCollected = order.WhoPaysForCompanyService == ServicePayer.Recipient
+                ? (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice
+                : order.AmountToCollectForPackage;
+        }
+
         // ── Order type & return pickup ────────────────────────────────────────
         order.OrderType = request.OrderType;
 
@@ -86,5 +99,17 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // ── Keep settlements in sync with the edited financials ───────────────
+        // A delivered last-mile order feeds the customer monthly settlement (COD +
+        // sender-paid service) and the courier daily settlement (cash, salary,
+        // revenue). Refresh both so the admin Finance page reconciles.
+        if (order.DeliveredAt.HasValue)
+            await CustomerSettlements.CustomerSettlementService.UpsertAsync(_context, order, cancellationToken);
+
+        var settlementDate = order.DeliveredAt ?? order.DeliveredToWarehouseAt;
+        if (order.CourierId.HasValue && settlementDate.HasValue)
+            await Settlements.CourierSettlementService.RecomputeForDayAsync(
+                _context, order.CourierId.Value, settlementDate.Value, cancellationToken);
     }
 }

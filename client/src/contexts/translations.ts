@@ -2079,17 +2079,17 @@ const ka: typeof en = {
     finOvLoadFailed:          'მიმოხილვის ჩატვირთვა ვერ მოხერხდა.',
 
     // Cash position
-    finCashTitle:             'ნაღდი ფულის ბალანსი',
+    finCashTitle:             'ნაღდი თანხის ბალანსი',
     finCashAsOf:              'თარიღით',
-    finCashInFromCouriers:    'კურიერებისგან მიღებული ფული',
-    finCashSenderServicePaid: 'გამგზავნების გადახდილი მომსახურება',
-    finCashCodPaidOut:        'მომხმარებლებზე გადახდილი COD',
+    finCashInFromCouriers:    'კურიერებისგან მიღებული თანხა',
+    finCashSenderServicePaid: 'გამგზავნების გადახდილი საკურიერო',
+    finCashCodPaidOut:        'გამგზავნზე გადახდილი COD',
     finCashSalaryPaid:        'კურიერებზე გადახდილი ხელფასი',
-    finCashOnHand:            'წმინდა ნაღდი ბალანსი',
-    finCashOnHandHint:        'შემოსული − გასული ყველა ანგარიშსწორებით — წმინდა ნაღდი ფული ოპერაციებიდან.',
-    finCashOutTitle:          'დაუფარავი ბალანსები',
+    finCashOnHand:            'ბალანსი',
+    finCashOnHandHint:        'ანგარიშსწორების მიმოხილვა',
+    finCashOutTitle:          'დასაფარი ბალანსები',
     finCashCodOwed:           'მომხმარებლების COD დავალიანება',
-    finCashServiceReceivable: 'გამგზავნებისგან მისაღები მომსახურება',
+    finCashServiceReceivable: 'გამგზავნებისგან მისაღები საკურიერო',
     finCashSalaryOwed:        'კურიერების ხელფასის დავალიანება',
 
     // Admin Finance — settlement scope tabs + courier section

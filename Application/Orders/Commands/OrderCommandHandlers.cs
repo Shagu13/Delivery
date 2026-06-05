@@ -71,6 +71,7 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             ?? throw new NotFoundException("Courier", request.CourierId);
 
         order.CourierId = courier.Id;
+        order.AssignedToCourierAt = DateTime.UtcNow;
         order.Status = OrderStatus.CourierAssignedToDeliver;
         await _context.SaveChangesAsync(cancellationToken);
 

@@ -39,9 +39,13 @@ export interface CourierOrder {
     recipientAddress: string;
     status: string;
     companyServicePrice: number;
+    amountToCollectForPackage: number | null;
     courierSalary: number | null;
     companyRevenue: number | null;
+    orderType: string;
+    assignedToCourierAt: string | null;
     deliveredAt: string | null;
+    deliveredToWarehouseAt: string | null;
     createdAt: string;
 }
 
@@ -97,13 +101,24 @@ export async function fetchCourierOrders(courierId: string, token: string): Prom
     return res.json();
 }
 
-export async function setCourierSalary(orderId: string, salary: number, token: string): Promise<void> {
-    const res = await fetch(`/api/orders/${orderId}/courier-salary`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ salary }),
+/// A delivery within a day window, tagged with the courier who delivered it.
+export interface CourierDayDelivery extends CourierOrder {
+    courierId: string;
+}
+
+/// Fetches every order assigned to a courier within [from, to) — delivered or not.
+/// `from`/`to` are the UTC bounds of the admin's chosen local calendar day.
+export async function fetchAssignedForRange(
+    from: Date,
+    to: Date,
+    token: string,
+): Promise<CourierDayDelivery[]> {
+    const qs = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+    const res = await fetch(`/api/couriers/assigned?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) throw new Error('Failed to set courier salary');
+    if (!res.ok) throw new Error('Failed to fetch assigned orders');
+    return res.json();
 }
 
 export interface UpdateCourierRequest {

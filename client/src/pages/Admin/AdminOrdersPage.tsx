@@ -908,7 +908,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                   <tr key={order.id}
                     className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}${!selectable ? ' aop-tr--disabled' : ''}`}
                     onClick={() => selectable && toggleOne(order.id)}
-                    style={!selectable ? { opacity: 0.45, cursor: 'default' } : undefined}
+                    style={!selectable ? { cursor: 'default' } : undefined}
                   >
                     <td className="aop-td aop-td--check" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" className="aop-checkbox" checked={isChecked}
@@ -1226,6 +1226,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-tr { transition: background var(--transition); }
         .aop-tr:hover { background: var(--color-bg-3); }
         .aop-tr--selected { background: rgba(196,127,23,0.07) !important; }
+        /* Dim only the data cells of non-selectable (e.g. delivered) rows — keep the
+           View/Edit actions cell fully bright so it stays usable. */
+        .aop-tr--disabled .aop-td:not(.aop-td--actions) { opacity: 0.45; }
         .aop-tr:last-child .aop-td { border-bottom: none; }
         .aop-sender-biz { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
         .aop-sender-name { font-size: 0.75rem; color: var(--color-text-subtle); margin-top: 1px; }

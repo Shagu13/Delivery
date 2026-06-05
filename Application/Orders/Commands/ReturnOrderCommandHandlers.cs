@@ -27,6 +27,7 @@ public sealed class AssignCourierToReturnOrderCommandHandler
             ?? throw new NotFoundException("Courier", request.CourierId);
 
         order.CourierId = courier.Id;
+        order.AssignedToCourierAt = DateTime.UtcNow;
         order.Status    = OrderStatus.CourierAssignedToPickUp;
 
         await _context.SaveChangesAsync(ct);

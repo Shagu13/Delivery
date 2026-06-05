@@ -538,6 +538,9 @@ namespace Persistence.Migrations
                     b.Property<decimal?>("AmountToCollectForPackage")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime?>("AssignedToCourierAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal?>("CompanyRevenue")
                         .HasColumnType("decimal(18,2)");
 

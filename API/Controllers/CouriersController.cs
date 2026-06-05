@@ -132,11 +132,63 @@ public sealed class CouriersController : BaseController
                 companyServicePrice     = o.CompanyServicePrice,
                 courierSalary           = o.CourierSalary,
                 companyRevenue          = o.CompanyRevenue,
+                orderType               = o.OrderType.ToString(),
                 deliveredAt             = o.DeliveredAt,
+                deliveredToWarehouseAt  = o.DeliveredToWarehouseAt,
                 createdAt               = o.CreatedAt,
             })
             .ToListAsync(ct);
 
         return Ok(orders);
     }
+
+    // ── GET /api/couriers/assigned?from=ISO&to=ISO  (Admin) ───────────────────
+    /// <summary>
+    /// Returns every order assigned to a courier within [from, to) — regardless of
+    /// whether it has been delivered yet — each tagged with its courierId. The
+    /// caller (admin UI) passes the UTC bounds of a local calendar day and groups
+    /// the result by courier to show what each courier was assigned that day.
+    /// Dated by AssignedToCourierAt (the moment Order.CourierId was set).
+    /// </summary>
+    [HttpGet("assigned")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAssignedForRange(
+        [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)
+    {
+        var fromUtc = from.ToUniversalTime();
+        var toUtc   = to.ToUniversalTime();
+
+        var orders = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CourierId != null
+                     && o.AssignedToCourierAt >= fromUtc
+                     && o.AssignedToCourierAt <  toUtc)
+            .OrderByDescending(o => o.AssignedToCourierAt)
+            .Select(o => new
+            {
+                courierId               = o.CourierId,
+                id                      = o.Id,
+                trackingNumber          = o.TrackingNumber,
+                recipientFirstName      = o.RecipientFirstName,
+                recipientLastName       = o.RecipientLastName,
+                recipientPhone          = o.RecipientPhone,
+                recipientCity           = o.RecipientCity,
+                recipientDistrict       = o.RecipientDistrict,
+                recipientAddress        = o.RecipientAddress,
+                status                  = o.Status.ToString(),
+                companyServicePrice     = o.CompanyServicePrice,
+                amountToCollectForPackage = o.AmountToCollectForPackage,
+                courierSalary           = o.CourierSalary,
+                companyRevenue          = o.CompanyRevenue,
+                orderType               = o.OrderType.ToString(),
+                assignedToCourierAt     = o.AssignedToCourierAt,
+                deliveredAt             = o.DeliveredAt,
+                deliveredToWarehouseAt  = o.DeliveredToWarehouseAt,
+                createdAt               = o.CreatedAt,
+            })
+            .ToListAsync(ct);
+
+        return Ok(orders);
+    }
+
 }

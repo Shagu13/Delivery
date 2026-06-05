@@ -3,10 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
-import type { CreateCourierResponse, Courier, CourierOrder } from '../../api/couriers';
+import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery } from '../../api/couriers';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
-import { fetchCouriers, fetchCourierOrders, setCourierSalary, setCourierActiveStatus } from '../../api/couriers';
+import { fetchCouriers, fetchAssignedForRange, setCourierActiveStatus } from '../../api/couriers';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import AdminCustomersPage from './AdminCustomersPage';
 import AdminCitiesPage from './AdminCitiesPage';
@@ -1272,6 +1272,51 @@ function AdminCouriers({
   onEdit: (courier: Courier) => void;
   onActiveChanged: (courierId: string, isActive: boolean) => void;
 }) {
+  // Single global day for the whole list — defaults to today.
+  const [day, setDay] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  const [deliveries, setDeliveries] = useState<CourierDayDelivery[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const isToday = isSameDay(day, today);
+  const shiftDay = (delta: number) =>
+    setDay(d => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; });
+
+  // Fetch the day's assigned orders across all couriers whenever the day changes.
+  useEffect(() => {
+    let cancelled = false;
+    const dayStart = new Date(day);
+    const dayEnd = new Date(day); dayEnd.setDate(dayEnd.getDate() + 1);
+    setLoading(true);
+    setError(null);
+    fetchAssignedForRange(dayStart, dayEnd, token)
+      .then(d => { if (!cancelled) setDeliveries(d); })
+      .catch(() => { if (!cancelled) setError('Failed to load assigned orders'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [day, token]);
+
+  const courierById = useMemo(() => new Map(couriers.map(c => [c.courierId, c])), [couriers]);
+
+  // Group the day's deliveries by courier, keeping only couriers we can resolve,
+  // sorted by who delivered the most that day.
+  const rows = useMemo(() => {
+    const map = new Map<string, CourierDayDelivery[]>();
+    for (const d of deliveries) {
+      const arr = map.get(d.courierId);
+      if (arr) arr.push(d); else map.set(d.courierId, [d]);
+    }
+    return [...map.entries()]
+      .map(([courierId, orders]) => ({ courier: courierById.get(courierId), orders }))
+      .filter((r): r is { courier: Courier; orders: CourierDayDelivery[] } => !!r.courier)
+      .sort((a, b) => b.orders.length - a.orders.length);
+  }, [deliveries, courierById]);
+
+  const totalDelivered = deliveries.length;
+
   if (couriers.length === 0) {
     return (
       <div className="content-card">
@@ -1294,31 +1339,68 @@ function AdminCouriers({
       </div>
     );
   }
+
   return (
-    <div className="content-card">
-      <div className="content-card__header">
-        <span className="content-card__title">All Couriers</span>
-        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
-          {couriers.length} account{couriers.length !== 1 ? 's' : ''}
-        </span>
+    <>
+      {/* Global day navigator — controls every courier below */}
+      <div className="content-card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-subtle)' }}>
+            Assigned on
+          </span>
+          <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.85rem', lineHeight: 1 }} onClick={() => shiftDay(-1)} title="Previous day">‹</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 210, justifyContent: 'center' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)' }}>
+              {day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
+            {isToday && (
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 100, padding: '1px 8px' }}>Today</span>
+            )}
+          </div>
+          <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.85rem', lineHeight: 1, opacity: isToday ? 0.4 : 1 }} onClick={() => !isToday && shiftDay(1)} disabled={isToday} title="Next day">›</button>
+          {!isToday && (
+            <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.75rem' }} onClick={() => setDay(today)}>Today</button>
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>
+            {rows.length} courier{rows.length !== 1 ? 's' : ''} · {totalDelivered} assigned
+          </span>
+        </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {couriers.map(c => (
-          <CourierRow key={c.courierId} courier={c} token={token} onEdit={onEdit} onActiveChanged={onActiveChanged} />
-        ))}
+
+      <div className="content-card">
+        <div className="content-card__header">
+          <span className="content-card__title">Couriers — Assigned Orders</span>
+        </div>
+        {loading ? (
+          <div className="go-loading"><div className="go-spinner" />Loading assigned orders…</div>
+        ) : error ? (
+          <div style={{ padding: '24px 20px', textAlign: 'center', color: '#ef4444', fontSize: '0.875rem' }}>{error}</div>
+        ) : rows.length === 0 ? (
+          <div style={{ padding: '28px 20px', textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem' }}>
+            No orders assigned on this day.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {rows.map(r => (
+              <CourierRow
+                key={r.courier.courierId}
+                courier={r.courier}
+                orders={r.orders}
+                token={token}
+                onEdit={onEdit}
+                onActiveChanged={onActiveChanged}
+              />
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </>
   );
 }
 
 // ── Single expandable courier row ─────────────────────────────────────────────
-function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Courier; token: string; onEdit: (courier: Courier) => void; onActiveChanged: (courierId: string, isActive: boolean) => void; }) {
+function CourierRow({ courier, orders, token, onEdit, onActiveChanged }: { courier: Courier; orders: CourierOrder[]; token: string; onEdit: (courier: Courier) => void; onActiveChanged: (courierId: string, isActive: boolean) => void; }) {
   const [expanded,        setExpanded]        = useState(false);
-  const [orders,          setOrders]          = useState<CourierOrder[]>([]);
-  const [loading,         setLoading]         = useState(false);
-  const [selected,        setSelected]        = useState<Set<string>>(new Set());
-  const [bulkSalary,      setBulkSalary]      = useState('');
-  const [saving,          setSaving]          = useState(false);
   const [rowToast,        setRowToast]        = useState<{ msg: string; err: boolean } | null>(null);
   const [togglingActive,  setTogglingActive]  = useState(false);
 
@@ -1327,53 +1409,19 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
     setTimeout(() => setRowToast(null), 3500);
   };
 
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchCourierOrders(courier.courierId, token);
-      setOrders(data);
-    } catch {
-      showRowToast('Failed to load orders', true);
-    } finally {
-      setLoading(false);
-    }
-  }, [courier.courierId, token]);
-
-  const handleToggle = () => {
-    if (!expanded && orders.length === 0) void loadOrders();
-    setExpanded(v => !v);
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    if (selected.size === orders.length) setSelected(new Set());
-    else setSelected(new Set(orders.map(o => o.id)));
-  };
-
-  const handleBulkSave = async () => {
-    const salary = parseFloat(bulkSalary);
-    if (isNaN(salary) || salary < 0) { showRowToast('Enter a valid salary amount', true); return; }
-    if (selected.size === 0) { showRowToast('Select at least one order', true); return; }
-    setSaving(true);
-    try {
-      await Promise.all([...selected].map(id => setCourierSalary(id, salary, token)));
-      await loadOrders();
-      setSelected(new Set());
-      setBulkSalary('');
-      showRowToast(`Salary set for ${selected.size} order${selected.size !== 1 ? 's' : ''}`);
-    } catch {
-      showRowToast('Failed to save salary', true);
-    } finally {
-      setSaving(false);
-    }
-  };
+  const salaryTotal = useMemo(
+    () => orders.reduce((sum, o) => sum + (o.courierSalary ?? 0), 0),
+    [orders],
+  );
+  const serviceTotal = useMemo(
+    () => orders.reduce((sum, o) => sum + o.companyServicePrice, 0),
+    [orders],
+  );
+  const codTotal = useMemo(
+    () => orders.reduce((sum, o) => sum + (o.amountToCollectForPackage ?? 0), 0),
+    [orders],
+  );
+  const combinedTotal = serviceTotal + codTotal;
 
   const handleToggleActive = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1394,7 +1442,7 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
       {/* Header row */}
       <div
         className="go-row-header"
-        onClick={handleToggle}
+        onClick={() => setExpanded(v => !v)}
         style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isDeleted ? 0.6 : 1 }}
       >
         <svg
@@ -1413,6 +1461,23 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
           <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', border: '1px solid rgba(196,127,23,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+              {orders.length} assigned
+            </span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-subtle)', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+              Salary ₾{salaryTotal.toFixed(2)}
+            </span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-subtle)', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+              Service ₾{serviceTotal.toFixed(2)}
+            </span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-subtle)', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+              COD ₾{codTotal.toFixed(2)}
+            </span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+              Total ₾{combinedTotal.toFixed(2)}
+            </span>
+          </div>
           <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
             {courier.phoneNumber}
           </span>
@@ -1442,117 +1507,64 @@ function CourierRow({ courier, token, onEdit, onActiveChanged }: { courier: Cour
         </div>
       </div>
 
-      {/* Orders panel */}
+      {rowToast && (
+        <div style={{ padding: '0 20px 8px', fontSize: '0.78rem', color: rowToast.err ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+          {rowToast.msg}
+        </div>
+      )}
+
+      {/* Deliveries for the selected day (read-only) */}
       {expanded && (
         <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-3)', animation: 'expand-in 0.15s ease both' }}>
-          {loading && (
-            <div className="go-loading"><div className="go-spinner" />Loading orders…</div>
-          )}
-          {!loading && orders.length === 0 && (
-            <div style={{ padding: '24px 20px', textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem' }}>
-              No orders assigned to this courier.
-            </div>
-          )}
-          {!loading && orders.length > 0 && (
-            <>
-              {/* Bulk salary bar */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  {selected.size > 0 ? `${selected.size} selected` : 'Select orders to set salary'}
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Courier salary"
-                  value={bulkSalary}
-                  onChange={e => setBulkSalary(e.target.value)}
-                  style={{
-                    background: 'var(--color-bg)', border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
-                    fontSize: '0.825rem', padding: '6px 10px', width: 140, outline: 'none',
-                  }}
-                  disabled={selected.size === 0 || saving}
-                />
-                <button
-                  className="go-action-btn go-action-btn--assign"
-                  onClick={handleBulkSave}
-                  disabled={selected.size === 0 || saving || bulkSalary === ''}
-                >
-                  {saving ? 'Saving…' : `Set Salary (${selected.size})`}
-                </button>
-                {rowToast && (
-                  <span style={{ fontSize: '0.78rem', color: rowToast.err ? '#ef4444' : '#10b981', fontWeight: 600 }}>
-                    {rowToast.msg}
-                  </span>
-                )}
-              </div>
-
-              {/* Orders table */}
-              <div style={{ overflowX: 'auto' }}>
-                <table className="go-orders-table" style={{ minWidth: 700 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 36 }}>
-                        <input
-                          type="checkbox"
-                          checked={selected.size === orders.length}
-                          onChange={toggleAll}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      </th>
-                      <th>Tracking №</th>
-                      <th>Recipient</th>
-                      <th>City / District</th>
-                      <th>Status</th>
-                      <th>Service Price</th>
-                      <th>Courier Salary</th>
-                      <th>Revenue</th>
-                      <th>Delivered</th>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="go-orders-table" style={{ minWidth: 700 }}>
+              <thead>
+                <tr>
+                  <th>Tracking №</th>
+                  <th>Recipient</th>
+                  <th>City / District</th>
+                  <th>Status</th>
+                  <th>Service Price</th>
+                  <th>Courier Salary</th>
+                  <th>Revenue</th>
+                  <th>Delivered</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map(o => {
+                  const deliveredIso = o.deliveredAt ?? o.deliveredToWarehouseAt;
+                  return (
+                    <tr key={o.id}>
+                      <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontFamily: 'Courier New, monospace' }}>{o.recipientPhone}</div>
+                      </td>
+                      <td>
+                        <div>{o.recipientCity}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
+                      </td>
+                      <td><StatusBadge status={o.status} /></td>
+                      <td style={{ fontWeight: 600 }}>₾{o.companyServicePrice.toFixed(2)}</td>
+                      <td>
+                        {o.courierSalary != null
+                          ? <span style={{ color: '#f97316', fontWeight: 600 }}>₾{o.courierSalary.toFixed(2)}</span>
+                          : <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>}
+                      </td>
+                      <td>
+                        {o.companyRevenue != null
+                          ? <span style={{ color: o.companyRevenue >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>₾{o.companyRevenue.toFixed(2)}</span>
+                          : <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>}
+                      </td>
+                      <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
+                        {deliveredIso ? new Date(deliveredIso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map(o => (
-                      <tr key={o.id} style={{ background: selected.has(o.id) ? 'var(--color-accent-dim)' : undefined }}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selected.has(o.id)}
-                            onChange={() => toggleSelect(o.id)}
-                            style={{ cursor: 'pointer' }}
-                          />
-                        </td>
-                        <td><span className="tn-badge">{o.trackingNumber}</span></td>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontFamily: 'Courier New, monospace' }}>{o.recipientPhone}</div>
-                        </td>
-                        <td>
-                          <div>{o.recipientCity}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
-                        </td>
-                        <td><StatusBadge status={o.status} /></td>
-                        <td style={{ fontWeight: 600 }}>₾{o.companyServicePrice.toFixed(2)}</td>
-                        <td>
-                          {o.courierSalary != null
-                            ? <span style={{ color: '#f97316', fontWeight: 600 }}>₾{o.courierSalary.toFixed(2)}</span>
-                            : <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>}
-                        </td>
-                        <td>
-                          {o.companyRevenue != null
-                            ? <span style={{ color: o.companyRevenue >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>₾{o.companyRevenue.toFixed(2)}</span>
-                            : <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>}
-                        </td>
-                        <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
-                          {o.deliveredAt ? new Date(o.deliveredAt).toLocaleDateString('en-GB') : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

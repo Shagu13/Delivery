@@ -89,6 +89,13 @@ public class Order
 
     // ── Timestamps ───────────────────────────────────────────────────────────
     public DateTime  CreatedAt                { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// When a courier was assigned to this order (last-mile delivery for Send/
+    /// Exchange, or pickup for a Return). Set the moment Order.CourierId is first
+    /// populated; used to list a courier's orders by the day they were assigned.
+    /// </summary>
+    public DateTime? AssignedToCourierAt      { get; set; }
     public DateTime? PickedUpFromWarehouseAt  { get; set; }
     public DateTime? PickedUpFromRecipientAt  { get; set; }
     public DateTime? DeliveredToWarehouseAt   { get; set; }
