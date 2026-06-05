@@ -1,12 +1,19 @@
 // ── Types (mirror Application.CustomerSettlements.DTOs) ─────────────────────────
 
-/** A stored monthly customer settlement row. Outstanding balances are derived server-side. */
+/** A per-batch customer invoice (one GroupOrder batch or one standalone Return). */
 export interface CustomerSettlement {
     id: string;
     customerId: string;
     customerBusinessName: string;
-    year: number;
-    month: number;
+
+    /** Set for a Send/Exchange batch; null for a standalone Return. */
+    groupOrderId: string | null;
+    /** Set for a standalone Return; null for a batch. */
+    orderId: string | null;
+    isReturn: boolean;
+    numberOfPackages: number;
+    /** Batch / order status (enum name, e.g. "DeliveredToRecipient"). */
+    status: string;
 
     totalNumberOfOrdersPlaced: number;
     totalNumberOfOrderDelivered: number;
@@ -23,33 +30,14 @@ export interface CustomerSettlement {
     amountPaidToCompanyForCompanyService: number;
     outstandingServiceOwedToCompany: number;
 
-    createdAt: string;          // ISO-8601
-    updatedAt: string | null;   // ISO-8601 or null
-}
-
-/** Admin preview: live figures from current orders + the saved row (if any). */
-export interface CustomerSettlementPreview {
-    customerId: string;
-    customerBusinessName: string;
-    year: number;
-    month: number;
-    ordersPlaced: number;
-    ordersDelivered: number;
-    codCollectedForPackages: number;
-    companyServicePriceOwed: number;
-    existingSettlement: CustomerSettlement | null;
-}
-
-export interface PeriodRequest {
-    customerId: string;
-    year: number;
-    month: number;
+    /** Batch placement date (ISO-8601). */
+    createdAt: string;
+    updatedAt: string | null;
 }
 
 export interface RecordPaymentRequest {
-    customerId: string;
-    year: number;
-    month: number;
+    /** The batch invoice to record the payment against. */
+    settlementId: string;
     /** COD the company pays the customer (omit if not paying COD this time). */
     codPaidByCompany?: number;
     /** Service fee the customer pays the company (omit if not paying service this time). */
@@ -78,43 +66,16 @@ const jsonHeaders = (token: string) => ({ 'Content-Type': 'application/json', ..
 
 // ── Admin API ─────────────────────────────────────────────────────────────────
 
-export async function fetchCustomerSettlementPreview(
-    customerId: string, year: number, month: number, token: string,
-): Promise<CustomerSettlementPreview> {
-    const res = await fetch(
-        `/api/customersettlements/preview?customerId=${customerId}&year=${year}&month=${month}`,
-        { headers: authHeaders(token), cache: 'no-store' },
-    );
-    return handle<CustomerSettlementPreview>(res, 'Failed to load settlement preview');
-}
-
+/** A customer's batch invoices, newest first. `date` filters to batches placed on that day ("YYYY-MM-DD"). */
 export async function fetchCustomerSettlements(
-    customerId: string, token: string, year?: number,
+    customerId: string, token: string, date?: string,
 ): Promise<CustomerSettlement[]> {
-    const q = year ? `&year=${year}` : '';
+    const q = date ? `&date=${date}` : '';
     const res = await fetch(
         `/api/customersettlements?customerId=${customerId}${q}`,
         { headers: authHeaders(token), cache: 'no-store' },
     );
-    return handle<CustomerSettlement[]>(res, 'Failed to load settlements');
-}
-
-export async function createCustomerSettlement(
-    data: PeriodRequest, token: string,
-): Promise<{ settlementId: string }> {
-    const res = await fetch('/api/customersettlements', {
-        method: 'POST', headers: jsonHeaders(token), body: JSON.stringify(data),
-    });
-    return handle<{ settlementId: string }>(res, 'Failed to create settlement');
-}
-
-export async function recomputeCustomerSettlement(
-    data: PeriodRequest, token: string,
-): Promise<{ settlementId: string }> {
-    const res = await fetch('/api/customersettlements', {
-        method: 'PUT', headers: jsonHeaders(token), body: JSON.stringify(data),
-    });
-    return handle<{ settlementId: string }>(res, 'Failed to recompute settlement');
+    return handle<CustomerSettlement[]>(res, 'Failed to load invoices');
 }
 
 export async function recordCustomerSettlementPayment(
@@ -128,10 +89,11 @@ export async function recordCustomerSettlementPayment(
 
 // ── Customer API (read-only) ────────────────────────────────────────────────────
 
+/** The authenticated customer's own batch invoices. `date` filters to batches placed on that day ("YYYY-MM-DD"). */
 export async function fetchMyCustomerSettlements(
-    token: string, year?: number,
+    token: string, date?: string,
 ): Promise<CustomerSettlement[]> {
-    const q = year ? `?year=${year}` : '';
+    const q = date ? `?date=${date}` : '';
     const res = await fetch(`/api/customersettlements/my${q}`, { headers: authHeaders(token) });
     return handle<CustomerSettlement[]>(res, 'Failed to load your finance records');
 }

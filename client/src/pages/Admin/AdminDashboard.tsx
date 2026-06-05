@@ -20,7 +20,7 @@ import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
-import { fetchReturnExchangeOrders, getPendingReturnExchangeCount } from '../../api/returnExchange';
+import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 
 // Terminal order statuses — these orders are hidden from the active Group Orders page
@@ -66,21 +66,9 @@ export function AdminDashboard() {
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [returnExchangeCount, setReturnExchangeCount] = useState(0);
 
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const orders = await fetchReturnExchangeOrders(token);
-        if (!cancelled) setReturnExchangeCount(getPendingReturnExchangeCount(orders));
-      } catch { /* ignore */ }
-    };
-    void load();
-    const interval = setInterval(() => void load(), 30_000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [token]);
+  // Live return/exchange badge count (SignalR) — shared with the staff nav.
+  const { returnExchange: returnExchangeCount } = useAdminPendingCounts(token ?? null, true);
 
   useEffect(() => {
     if (!token) return;

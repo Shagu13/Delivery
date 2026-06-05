@@ -3,14 +3,11 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import {
-    fetchCustomerSettlementPreview,
     fetchCustomerSettlements,
-    createCustomerSettlement,
-    recomputeCustomerSettlement,
     recordCustomerSettlementPayment,
     CustomerSettlementApiError,
 } from '../../api/customerSettlements';
-import type { CustomerSettlement, CustomerSettlementPreview } from '../../api/customerSettlements';
+import type { CustomerSettlement } from '../../api/customerSettlements';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
@@ -269,241 +266,82 @@ function SignedRow({ label, value, sign }: { label: string; value: number; sign:
     );
 }
 
-// ── Main page ────────────────────────────────────────────────────────────────────
+// ── Customer batch invoices — list + per-batch record payment ─────────────────────
 
-export default function AdminFinancePage({ token }: { token: string }) {
+function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () => void }) {
     const { t } = useLanguage();
-    const now = new Date();
-    const [tab, setTab] = useState<'customers' | 'couriers' | 'history'>('customers');
     const [customer, setCustomer] = useState<AdminCustomer | null>(null);
-    const [year, setYear] = useState(now.getFullYear());
-    const [month, setMonth] = useState(now.getMonth() + 1);
-
-    const [preview, setPreview] = useState<CustomerSettlementPreview | null>(null);
-    const [history, setHistory] = useState<CustomerSettlement[]>([]);
+    const [date, setDate] = useState('');                 // '' = all dates
+    const [invoices, setInvoices] = useState<CustomerSettlement[]>([]);
     const [loading, setLoading] = useState(false);
-    const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
 
-    const [codInput, setCodInput] = useState('');
-    const [serviceInput, setServiceInput] = useState('');
+    const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3000); };
 
-    // Bumped after any settlement action to force the company cash-position card to reload.
-    const [overviewRefresh, setOverviewRefresh] = useState(0);
-
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
-
-    const loadPreview = useCallback(() => {
-        if (!customer) return;
+    const load = useCallback(() => {
+        if (!customer) { setInvoices([]); return; }
         setLoading(true); setError(null);
-        Promise.all([
-            fetchCustomerSettlementPreview(customer.id, year, month, token),
-            fetchCustomerSettlements(customer.id, token),
-        ])
-            .then(([p, h]) => { setPreview(p); setHistory(h); })
-            .catch((e) => setError(e instanceof CustomerSettlementApiError ? e.message : t.finErrLoad))
+        fetchCustomerSettlements(customer.id, token, date || undefined)
+            .then(setInvoices)
+            .catch(e => setError(e instanceof CustomerSettlementApiError ? e.message : t.finErrLoad))
             .finally(() => setLoading(false));
-    }, [customer, year, month, token, t.finErrLoad]);
+    }, [customer, date, token, t.finErrLoad]);
 
-    useEffect(() => { loadPreview(); }, [loadPreview]);
-
-    const goMonth = (delta: number) => {
-        let m = month + delta, y = year;
-        if (m > 12) { m = 1; y++; }
-        if (m < 1) { m = 12; y--; }
-        setMonth(m); setYear(y);
-    };
-
-    const existing = preview?.existingSettlement ?? null;
-    const isFuture = year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth() + 1);
-    const period = `${t.finMonths[month - 1]} ${year}`;
-
-    const runAction = async (fn: () => Promise<unknown>, successMsg: string) => {
-        setBusy(true); setError(null);
-        try {
-            await fn();
-            showToast(successMsg);
-            loadPreview();
-            setOverviewRefresh(k => k + 1);
-        } catch (e) {
-            setError(e instanceof CustomerSettlementApiError ? e.message : t.finErrAction);
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const handleCreate = () => customer && runAction(
-        () => createCustomerSettlement({ customerId: customer.id, year, month }, token),
-        t.finToastCreated,
-    );
-
-    const handleRecompute = () => customer && runAction(
-        () => recomputeCustomerSettlement({ customerId: customer.id, year, month }, token),
-        t.finToastRecomputed,
-    );
-
-    const handleRecordPayment = () => {
-        if (!customer) return;
-        const cod = codInput.trim() ? Number(codInput) : undefined;
-        const service = serviceInput.trim() ? Number(serviceInput) : undefined;
-        if (cod === undefined && service === undefined) { setError(t.finErrEnterAmount); return; }
-        if ((cod !== undefined && (isNaN(cod) || cod <= 0)) || (service !== undefined && (isNaN(service) || service <= 0))) {
-            setError(t.finErrPositive); return;
-        }
-        runAction(
-            () => recordCustomerSettlementPayment(
-                { customerId: customer.id, year, month, codPaidByCompany: cod, servicePaidToCompany: service }, token),
-            t.finToastPaymentRecorded,
-        ).then(() => { setCodInput(''); setServiceInput(''); });
-    };
+    useEffect(() => { load(); }, [load]);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Company overview */}
-            <CompanyOverviewCard token={token} refreshSignal={overviewRefresh} />
-
-            {/* Tab bar — no wrapping card */}
-            <div className="go-seg" style={{ display: 'inline-flex', alignSelf: 'flex-start' }}>
-                <button className={`go-seg__btn ${tab === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('customers')}>{t.finTabCustomers}</button>
-                <button className={`go-seg__btn ${tab === 'couriers'  ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('couriers')}>{t.finTabCouriers}</button>
-                <button className={`go-seg__btn ${tab === 'history'   ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('history')}>{t.finTabHistory}</button>
+            {/* Toolbar: customer picker + date filter */}
+            <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <CustomerPicker
+                        token={token}
+                        selected={customer}
+                        onSelect={setCustomer}
+                        onClear={() => { setCustomer(null); setInvoices([]); setError(null); }}
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finFilterPlaced}</span>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
+                        {date && (
+                            <button onClick={() => setDate('')} title={t.finAllDates}
+                                style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)', width: 28, height: 28, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
+                        )}
+                    </div>
+                </div>
             </div>
 
-            {tab === 'couriers' && <CourierSettlementsSection token={token} />}
-            {tab === 'history'  && <AdminFinanceHistoryTab token={token} />}
+            {error && (
+                <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 'var(--radius-sm)', color: '#ef4444', fontSize: '0.82rem' }}>
+                    {error}
+                </div>
+            )}
 
-            {tab === 'customers' && (
-                <>
-                    {/* Toolbar: customer picker + period nav in one row */}
-                    <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5 }}>
-                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <CustomerPicker
-                                token={token}
-                                selected={customer}
-                                onSelect={setCustomer}
-                                onClear={() => { setCustomer(null); setPreview(null); setHistory([]); setError(null); }}
-                            />
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
-                                <button onClick={() => goMonth(-1)} style={navBtnStyle}>‹</button>
-                                <span style={{ fontWeight: 700, minWidth: 126, textAlign: 'center', fontSize: '0.875rem', color: 'var(--color-text)', userSelect: 'none' }}>{period}</span>
-                                <button onClick={() => goMonth(1)} disabled={isFuture} style={{ ...navBtnStyle, opacity: isFuture ? 0.35 : 1 }}>›</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {error && (
-                        <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 'var(--radius-sm)', color: '#ef4444', fontSize: '0.82rem' }}>
-                            {error}
-                        </div>
-                    )}
-
-                    {!customer ? (
-                        <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                            {t.finSelectPrompt}
-                        </div>
-                    ) : loading ? (
-                        <div className="content-card" style={{ padding: 40, textAlign: 'center' }}>
-                            <div className="go-spinner" style={{ margin: '0 auto' }} />
-                        </div>
-                    ) : preview && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
-                            {/* Live figures */}
-                            <div className="content-card" style={{ padding: 16 }}>
-                                <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 10 }}>
-                                    {t.finLiveFigures(period)}
-                                </div>
-                                <Row label={t.finOrdersPlaced}     value={String(preview.ordersPlaced)} />
-                                <Row label={t.finOrdersDelivered}  value={String(preview.ordersDelivered)} />
-                                <Row label={t.finCodCollected}     value={gel(preview.codCollectedForPackages)} />
-                                <Row label={t.finServicePriceOwed} value={gel(preview.companyServicePriceOwed)} strong />
-                                <div style={{ marginTop: 14 }}>
-                                    {existing ? (
-                                        <button className="btn-primary" onClick={handleRecompute} disabled={busy} style={{ width: '100%' }}>
-                                            {busy ? t.finWorking : t.finRecompute}
-                                        </button>
-                                    ) : (
-                                        <button className="btn-primary" onClick={handleCreate} disabled={busy || isFuture} style={{ width: '100%' }}>
-                                            {busy ? t.finWorking : t.finCreate}
-                                        </button>
-                                    )}
-                                    {!existing && (
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 6 }}>
-                                            {t.finNoSaved}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Saved settlement: balances + record payment */}
-                            {existing ? (
-                                <div className="content-card" style={{ padding: 16 }}>
-                                    <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 10 }}>
-                                        {t.finSavedBalances}
-                                    </div>
-
-                                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 2 }}>{t.finCodDir}</div>
-                                    <Row label={t.finCollected}   value={gel(existing.totalCODCompanyCollectedForPackages)} />
-                                    <Row label={t.finPaid}        value={gel(existing.totalAmountOfCollectedCodPaidByCompany)} tone="paid" />
-                                    <Row label={t.finOutstanding} value={gel(existing.outstandingCodOwedToCustomer)} tone={outstandingTone(existing.outstandingCodOwedToCustomer)} strong />
-
-                                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', margin: '10px 0 2px' }}>{t.finServiceDir}</div>
-                                    <Row label={t.finOwed}        value={gel(existing.totalCompanyServicePriceOwedToCompany)} />
-                                    <Row label={t.finPaid}        value={gel(existing.totalAmountPaidToCompanyForCompanyService)} tone="paid" />
-                                    <Row label={t.finOutstanding} value={gel(existing.outstandingServiceOwedToCompany)} tone={outstandingTone(existing.outstandingServiceOwedToCompany)} strong />
-
-                                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
-                                        <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 8 }}>{t.finRecordPayment}</div>
-                                        <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 4 }}>{t.finCodPaidLabel}</label>
-                                        <input type="number" min="0" step="0.01" value={codInput} onChange={e => setCodInput(e.target.value)} placeholder="0.00" style={inputStyle} />
-                                        <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '8px 0 4px' }}>{t.finServicePaidLabel}</label>
-                                        <input type="number" min="0" step="0.01" value={serviceInput} onChange={e => setServiceInput(e.target.value)} placeholder="0.00" style={inputStyle} />
-                                        <button className="btn-primary" onClick={handleRecordPayment} disabled={busy} style={{ width: '100%', marginTop: 10 }}>
-                                            {busy ? t.finWorking : t.finRecordPayment}
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="content-card" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
-                                    {t.finCreateFirst}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* History */}
-                    {customer && history.length > 0 && (
-                        <div className="content-card">
-                            <div className="content-card__header">
-                                <span className="content-card__title">{t.finHistoryTitle(customer.businessName)}</span>
-                            </div>
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: 720 }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                            {[t.finThMonth, t.finThPlaced, t.finThDelivered, t.finThCodOwed, t.finThCodPaid, t.finThServiceOwed, t.finThServicePaid].map(h => (
-                                                <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)' }}>{h}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {history.map(s => (
-                                            <tr key={s.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                                <td style={{ padding: '10px 14px', fontWeight: 600 }}>{t.finMonths[s.month - 1]} {s.year}</td>
-                                                <td style={{ padding: '10px 14px' }}>{s.totalNumberOfOrdersPlaced}</td>
-                                                <td style={{ padding: '10px 14px' }}>{s.totalNumberOfOrderDelivered}</td>
-                                                <td style={{ padding: '10px 14px' }}>{gel(s.totalCODCompanyCollectedForPackages)}</td>
-                                                <td style={{ padding: '10px 14px', color: '#059669' }}>{gel(s.totalAmountOfCollectedCodPaidByCompany)}</td>
-                                                <td style={{ padding: '10px 14px' }}>{gel(s.totalCompanyServicePriceOwedToCompany)}</td>
-                                                <td style={{ padding: '10px 14px', color: '#059669' }}>{gel(s.totalAmountPaidToCompanyForCompanyService)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                </>
+            {!customer ? (
+                <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                    {t.finSelectPrompt}
+                </div>
+            ) : loading ? (
+                <div className="content-card" style={{ padding: 40, textAlign: 'center' }}>
+                    <div className="go-spinner" style={{ margin: '0 auto' }} />
+                </div>
+            ) : invoices.length === 0 ? (
+                <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+                    {t.finNoInvoices}
+                </div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: 12 }}>
+                    {invoices.map(inv => (
+                        <InvoiceCard
+                            key={inv.id}
+                            inv={inv}
+                            token={token}
+                            onError={setError}
+                            onPaid={() => { showToast(t.finToastPaymentRecorded); load(); onPaid(); }}
+                        />
+                    ))}
+                </div>
             )}
 
             {toast && (
@@ -519,13 +357,103 @@ export default function AdminFinancePage({ token }: { token: string }) {
     );
 }
 
-const navBtnStyle: React.CSSProperties = {
-    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)',
-    width: 30, height: 30, cursor: 'pointer', fontSize: '1.1rem',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    transition: 'background var(--transition)',
-};
+function InvoiceCard({ inv, token, onPaid, onError }: {
+    inv: CustomerSettlement;
+    token: string;
+    onPaid: () => void;
+    onError: (msg: string) => void;
+}) {
+    const { t } = useLanguage();
+    const [cod, setCod] = useState('');
+    const [svc, setSvc] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    const record = async () => {
+        const codN = cod.trim() ? Number(cod) : undefined;
+        const svcN = svc.trim() ? Number(svc) : undefined;
+        if (codN === undefined && svcN === undefined) { onError(t.finErrEnterAmount); return; }
+        if ((codN !== undefined && (isNaN(codN) || codN <= 0)) || (svcN !== undefined && (isNaN(svcN) || svcN <= 0))) {
+            onError(t.finErrPositive); return;
+        }
+        setBusy(true);
+        try {
+            await recordCustomerSettlementPayment(
+                { settlementId: inv.id, codPaidByCompany: codN, servicePaidToCompany: svcN }, token);
+            setCod(''); setSvc('');
+            onPaid();
+        } catch (e) {
+            onError(e instanceof CustomerSettlementApiError ? e.message : t.finErrAction);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="content-card" style={{ padding: 16 }}>
+            {/* Header: date, kind, packages */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--color-text)' }}>{new Date(inv.createdAt).toLocaleDateString()}</span>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 7px', borderRadius: 100, background: inv.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: inv.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>
+                        {inv.isReturn ? t.statReturnBadge : t.statBatchBadge}
+                    </span>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.custPkg(inv.numberOfPackages)}</span>
+            </div>
+
+            {/* COD — company → customer */}
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 2 }}>{t.finCodDir}</div>
+            <Row label={t.finCollected}   value={gel(inv.totalCODCompanyCollectedForPackages)} />
+            <Row label={t.finPaid}        value={gel(inv.totalAmountOfCollectedCodPaidByCompany)} tone="paid" />
+            <Row label={t.finOutstanding} value={gel(inv.outstandingCodOwedToCustomer)} tone={outstandingTone(inv.outstandingCodOwedToCustomer)} strong />
+
+            {/* Service — customer → company */}
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', margin: '10px 0 2px' }}>{t.finServiceDir}</div>
+            <Row label={t.finOwed}        value={gel(inv.totalCompanyServicePriceOwedToCompany)} />
+            <Row label={t.finPaid}        value={gel(inv.totalAmountPaidToCompanyForCompanyService)} tone="paid" />
+            <Row label={t.finOutstanding} value={gel(inv.outstandingServiceOwedToCompany)} tone={outstandingTone(inv.outstandingServiceOwedToCompany)} strong />
+
+            {/* Record payment */}
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 8 }}>{t.finRecordPayment}</div>
+                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 4 }}>{t.finCodPaidLabel}</label>
+                <input type="number" min="0" step="0.01" value={cod} onChange={e => setCod(e.target.value)} placeholder="0.00" style={inputStyle} />
+                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '8px 0 4px' }}>{t.finServicePaidLabel}</label>
+                <input type="number" min="0" step="0.01" value={svc} onChange={e => setSvc(e.target.value)} placeholder="0.00" style={inputStyle} />
+                <button className="btn-primary" onClick={record} disabled={busy} style={{ width: '100%', marginTop: 10 }}>
+                    {busy ? t.finWorking : t.finRecordPayment}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────────
+
+export default function AdminFinancePage({ token }: { token: string }) {
+    const { t } = useLanguage();
+    const [tab, setTab] = useState<'customers' | 'couriers' | 'history'>('customers');
+    // Bumped after a payment so the company cash-position card reloads without a refresh.
+    const [overviewRefresh, setOverviewRefresh] = useState(0);
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Company overview */}
+            <CompanyOverviewCard token={token} refreshSignal={overviewRefresh} />
+
+            {/* Tab bar — no wrapping card */}
+            <div className="go-seg" style={{ display: 'inline-flex', alignSelf: 'flex-start' }}>
+                <button className={`go-seg__btn ${tab === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('customers')}>{t.finTabCustomers}</button>
+                <button className={`go-seg__btn ${tab === 'couriers'  ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('couriers')}>{t.finTabCouriers}</button>
+                <button className={`go-seg__btn ${tab === 'history'   ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('history')}>{t.finTabHistory}</button>
+            </div>
+
+            {tab === 'customers' && <CustomerInvoicesSection token={token} onPaid={() => setOverviewRefresh(k => k + 1)} />}
+            {tab === 'couriers'  && <CourierSettlementsSection token={token} />}
+            {tab === 'history'   && <AdminFinanceHistoryTab token={token} />}
+        </div>
+    );
+}
 
 const inputStyle: React.CSSProperties = {
     width: '100%', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',

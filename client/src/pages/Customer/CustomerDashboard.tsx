@@ -96,7 +96,7 @@ export function CustomerDashboard() {
           {([
             ['overview',    t.sidebarOverview,      overviewIcon],
             ['shipments',   t.custNavShipments,      shipmentsIcon],
-            ['statistics',  t.navStatistics,         statisticsIcon],
+            ['statistics',  t.navFinance,            statisticsIcon],
             ['calculator',  t.custNavCalculator,     calcIcon],
             ['profile',     t.custNavProfile,        profileIcon],
             ['password',    t.custNavPassword,       lockIcon],
@@ -133,7 +133,7 @@ export function CustomerDashboard() {
           <span className="dashboard__topbar-title">
             {view === 'overview'    && t.sidebarOverview}
             {view === 'shipments'   && t.custNavShipments}
-            {view === 'statistics'  && t.navStatistics}
+            {view === 'statistics'  && t.navFinance}
             {view === 'calculator'  && t.custTopbarCalculator}
             {view === 'profile'     && t.custNavProfile}
             {view === 'password'    && t.custTopbarPassword}

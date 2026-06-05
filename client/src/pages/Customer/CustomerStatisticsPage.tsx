@@ -7,11 +7,11 @@ import '../../styles/dashboard.css';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
+
 function FinRow({ label, value, tone = 'default' }: {
     label: string; value: string; tone?: 'default' | 'owed' | 'paid' | 'out';
 }) {
     const color =
-        tone === 'owed' ? 'var(--color-text)' :
         tone === 'paid' ? '#059669' :
         tone === 'out'  ? '#b45309' : 'var(--color-text)';
     return (
@@ -22,30 +22,33 @@ function FinRow({ label, value, tone = 'default' }: {
     );
 }
 
-function MoneyBlock({ title, owedLabel, owed, paid, outstanding }: {
-    title: string; owedLabel: string; owed: number; paid: number; outstanding: number;
+function MoneyBlock({ title, owedLabel, owed, paid, paidLabel, outstanding }: {
+    title: string; owedLabel: string; owed: number; paid: number; paidLabel?: string; outstanding: number;
 }) {
     const { t } = useLanguage();
     return (
         <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 6 }}>{title}</div>
-            <FinRow label={owedLabel}          value={gel(owed)}        tone="owed" />
-            <FinRow label={t.statPaidSoFar}    value={gel(paid)}        tone="paid" />
-            <FinRow label={t.statOutstanding}  value={gel(outstanding)} tone="out" />
+            <FinRow label={owedLabel}              value={gel(owed)}        tone="owed" />
+            <FinRow label={paidLabel ?? t.statPaidSoFar} value={gel(paid)}  tone="paid" />
+            <FinRow label={t.statOutstanding}      value={gel(outstanding)} tone="out" />
         </div>
     );
 }
 
-function SettlementCard({ item }: { item: CustomerSettlement }) {
+function InvoiceCard({ item }: { item: CustomerSettlement }) {
     const { t } = useLanguage();
     return (
         <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--color-text)' }}>
-                    {t.finMonths[item.month - 1]} {item.year}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-text)' }}>
+                        {new Date(item.createdAt).toLocaleDateString()}
+                    </span>
+                    
+                </div>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>📦 {t.statPlaced(item.totalNumberOfOrdersPlaced)}</span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>📦 {t.custPkg(item.numberOfPackages)}</span>
                     <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>✓ {t.statDelivered(item.totalNumberOfOrderDelivered)}</span>
                 </div>
             </div>
@@ -63,6 +66,7 @@ function SettlementCard({ item }: { item: CustomerSettlement }) {
                     owedLabel={t.statServicePriceOwed}
                     owed={item.totalCompanyServicePriceOwedToCompany}
                     paid={item.totalAmountPaidToCompanyForCompanyService}
+                    paidLabel={t.statServiceFeePaid}
                     outstanding={item.outstandingServiceOwedToCompany}
                 />
             </div>
@@ -73,8 +77,7 @@ function SettlementCard({ item }: { item: CustomerSettlement }) {
 export function CustomerStatisticsPage() {
     const { token } = useAuth();
     const { t } = useLanguage();
-    const now = new Date();
-    const [year, setYear] = useState(now.getFullYear());
+    const [date, setDate] = useState('');            // '' = all dates
     const [items, setItems] = useState<CustomerSettlement[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -82,14 +85,14 @@ export function CustomerStatisticsPage() {
     const load = useCallback(() => {
         if (!token) return;
         setLoading(true); setError(null);
-        fetchMyCustomerSettlements(token, year)
+        fetchMyCustomerSettlements(token, date || undefined)
             .then(data => { setItems(data); setLoading(false); })
             .catch(() => { setError(t.statLoadFailed); setLoading(false); });
-    }, [token, year, t.statLoadFailed]);
+    }, [token, date, t.statLoadFailed]);
 
-    useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect
+    useEffect(() => { load(); }, [load]);
 
-    // Year-level totals across the listed months
+    // Totals across the listed invoices
     const codOutstanding     = items.reduce((s, i) => s + i.outstandingCodOwedToCustomer, 0);
     const serviceOutstanding = items.reduce((s, i) => s + i.outstandingServiceOwedToCompany, 0);
     const totalDelivered     = items.reduce((s, i) => s + i.totalNumberOfOrderDelivered, 0);
@@ -98,11 +101,18 @@ export function CustomerStatisticsPage() {
         <div className="dashboard__section">
             <h2 className="dashboard__title">{t.statTitle}</h2>
 
-            {/* Year picker */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                <button className="btn-ghost" onClick={() => setYear(y => y - 1)}>‹</button>
-                <span style={{ fontWeight: 700, fontSize: '0.95rem', minWidth: 70, textAlign: 'center' }}>{year}</span>
-                <button className="btn-ghost" onClick={() => setYear(y => y + 1)} disabled={year >= now.getFullYear()}>›</button>
+            {/* Date filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{t.statFilterByDate}</span>
+                <input
+                    type="date"
+                    value={date}
+                    onChange={e => setDate(e.target.value)}
+                    style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }}
+                />
+                {date && (
+                    <button className="btn-ghost" onClick={() => setDate('')} style={{ fontSize: '0.8rem' }}>{t.statAllDates}</button>
+                )}
                 <button className="btn-ghost" onClick={load} style={{ marginLeft: 4 }}>{t.statRefresh}</button>
             </div>
 
@@ -113,7 +123,7 @@ export function CustomerStatisticsPage() {
             ) : items.length === 0 ? (
                 <div className="dashboard__empty" style={{ marginTop: 40 }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📊</div>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.statNoRecords(year)}</div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{date ? t.statNoneForDay : t.statNoneAll}</div>
                     <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
                         {t.statNoRecordsHint}
                     </div>
@@ -133,7 +143,7 @@ export function CustomerStatisticsPage() {
                         ))}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {items.map(item => <SettlementCard key={item.id} item={item} />)}
+                        {items.map(item => <InvoiceCard key={item.id} item={item} />)}
                     </div>
                 </>
             )}

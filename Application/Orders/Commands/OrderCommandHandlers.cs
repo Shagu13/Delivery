@@ -205,7 +205,7 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         order.PostponeReason = null;
         await _context.SaveChangesAsync(cancellationToken);
 
-        await CustomerSettlements.CustomerSettlementService.UpsertAsync(_context, order, cancellationToken);
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
 
         // Auto-close the parent GroupOrder when all packages are done
         // (standalone Return orders have no GroupOrderId — skip)
@@ -277,6 +277,10 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
 
         order.Status = OrderStatus.CancelledByAdmin;
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Drop the cancelled order from its batch invoice (or soft-delete a standalone
+        // Return invoice).
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
 
         // Auto-close the parent GroupOrder when all packages are done
         // (standalone Return orders have no GroupOrderId — skip)
@@ -365,6 +369,9 @@ public sealed class SetOrderCompanyServicePriceCommandHandler : IRequestHandler<
             order.CompanyRevenue = order.CompanyServicePrice - order.CourierSalary.Value;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Service price feeds "service owed by customer" on the batch invoice.
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
     }
 }
 
@@ -438,7 +445,7 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
         order.PostponeReason = null;
         await _context.SaveChangesAsync(cancellationToken);
 
-        await CustomerSettlements.CustomerSettlementService.UpsertAsync(_context, order, cancellationToken);
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
 
         if (order.GroupOrderId.HasValue)
             await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
@@ -474,6 +481,9 @@ public sealed class AdminMarkReturnDeliveredToWarehouseCommandHandler
         order.Status                = OrderStatus.DeliveredReturnOrderToWarehouse;
         order.DeliveredToWarehouseAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Refresh the standalone Return invoice (delivered count).
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
     }
 }
 

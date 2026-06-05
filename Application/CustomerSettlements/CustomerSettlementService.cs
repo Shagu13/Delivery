@@ -7,136 +7,183 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.CustomerSettlements;
 
 /// <summary>
-/// Shared computation + mapping for customer monthly settlements, so the create,
-/// recompute and preview handlers stay in lock-step.
+/// Shared computation + mapping for per-batch customer invoices, so the create,
+/// recompute and read paths stay in lock-step. One invoice row exists per
+/// GroupOrder (Send/Exchange batch) or per standalone Return order; figures are
+/// derived from the batch's active (non-cancelled) orders.
 /// </summary>
 internal static class CustomerSettlementService
 {
-    /// <summary>The four order-derived figures for a customer in a given month.</summary>
-    public readonly record struct MonthlyFigures(
+    private static readonly OrderStatus[] CancelledStatuses =
+    {
+        OrderStatus.CancelledByAdmin,
+        OrderStatus.CancelledBySender,
+        OrderStatus.OrderNotAccepted,
+    };
+
+    private static readonly OrderStatus[] DeliveredStatuses =
+    {
+        OrderStatus.DeliveredToRecipient,
+        OrderStatus.ExchangeCompleted,
+        OrderStatus.DeliveredReturnOrderToWarehouse,
+        OrderStatus.ReturnedToSender,
+    };
+
+    /// <summary>The four order-derived figures for a batch.</summary>
+    public readonly record struct Figures(
         int OrdersPlaced,
         int OrdersDelivered,
         decimal CodCollectedForPackages,
         decimal CompanyServicePriceOwed);
 
-    /// <summary>UTC [start, end) bounds for the given calendar month.</summary>
-    public static (DateTime Start, DateTime End) MonthBounds(int year, int month)
-    {
-        var start = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
-        return (start, start.AddMonths(1));
-    }
-
     /// <summary>
-    /// Computes orders placed/delivered, COD collected and service owed for the
-    /// customer's orders in the month. Customer ownership spans both paths:
-    /// Send/Exchange via GroupOrder.CustomerId, standalone Return via Order.CustomerId.
-    /// COD and service are summed over Send/Exchange orders delivered in the month;
-    /// service is only owed when the sender (customer) pays the fee.
+    /// Computes counts + money figures over the batch's <b>active</b> (non-cancelled)
+    /// orders: COD = Σ AmountToCollectForPackage (company owes the customer); service
+    /// owed = Σ CompanyServicePrice where the sender pays the fee (customer owes company).
     /// </summary>
-    public static async Task<MonthlyFigures> ComputeAsync(
-        IAppDbContext context,
-        Guid customerId,
-        int year,
-        int month,
-        CancellationToken ct)
+    private static Figures ComputeFigures(IReadOnlyCollection<Order> orders)
     {
-        var (monthStart, monthEnd) = MonthBounds(year, month);
+        var active = orders.Where(o => !CancelledStatuses.Contains(o.Status)).ToList();
 
-        var ordersPlaced = await context.Orders
-            .CountAsync(o => (o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId)
-                          && o.CreatedAt >= monthStart
-                          && o.CreatedAt <  monthEnd,
-                        ct);
-
-        var delivered = await context.Orders
-            .AsNoTracking()
-            .Where(o => (o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId)
-                     && (o.Status == OrderStatus.DeliveredToRecipient || o.Status == OrderStatus.ExchangeCompleted)
-                     && o.DeliveredAt >= monthStart
-                     && o.DeliveredAt <  monthEnd)
-            .Select(o => new
-            {
-                o.AmountToCollectForPackage,
-                o.CompanyServicePrice,
-                o.WhoPaysForCompanyService,
-            })
-            .ToListAsync(ct);
-
-        var cod = delivered.Sum(o => o.AmountToCollectForPackage ?? 0m);
-        var service = delivered
+        int delivered = active.Count(o => DeliveredStatuses.Contains(o.Status));
+        decimal cod = active.Sum(o => o.AmountToCollectForPackage ?? 0m);
+        decimal service = active
             .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender)
             .Sum(o => o.CompanyServicePrice);
 
-        return new MonthlyFigures(ordersPlaced, delivered.Count, cod, service);
+        return new Figures(active.Count, delivered, cod, service);
     }
 
     /// <summary>
-    /// Creates or updates the customer's settlement for the month of the delivered order.
-    /// Resolves the customer via GroupOrder.CustomerId (Send/Exchange) or Order.CustomerId (Return).
+    /// Dispatches to the batch or standalone-return upsert based on the order's link.
+    /// Used by the delivery / edit / cancel handlers to keep the invoice in sync.
     /// </summary>
-    public static async Task UpsertAsync(IAppDbContext context, Order order, CancellationToken ct)
+    public static async Task UpsertForOrderAsync(IAppDbContext context, Order order, CancellationToken ct)
     {
-        Guid customerId;
         if (order.GroupOrderId.HasValue)
-        {
-            var groupCustomerId = await context.GroupOrders
-                .Where(g => g.Id == order.GroupOrderId.Value)
-                .Select(g => (Guid?)g.CustomerId)
-                .FirstOrDefaultAsync(ct);
-            if (groupCustomerId == null) return;
-            customerId = groupCustomerId.Value;
-        }
-        else if (order.CustomerId.HasValue)
-        {
-            customerId = order.CustomerId.Value;
-        }
-        else return;
+            await UpsertForGroupOrderAsync(context, order.GroupOrderId.Value, ct);
+        else
+            await UpsertForReturnOrderAsync(context, order, ct);
+    }
 
-        var deliveredAt = order.DeliveredAt!.Value;
-        int year  = deliveredAt.Year;
-        int month = deliveredAt.Month;
+    /// <summary>
+    /// Creates or recomputes the invoice for a Send/Exchange batch. No-op when the
+    /// batch has no customer or no orders. Soft-deletes (DateDeleted) when no active
+    /// orders remain (whole batch cancelled); revives otherwise.
+    /// </summary>
+    public static async Task UpsertForGroupOrderAsync(IAppDbContext context, Guid groupOrderId, CancellationToken ct)
+    {
+        var group = await context.GroupOrders
+            .Include(g => g.Orders)
+            .FirstOrDefaultAsync(g => g.Id == groupOrderId, ct);
 
-        var figures = await ComputeAsync(context, customerId, year, month, ct);
+        if (group is null || group.CustomerId is null || group.Orders.Count == 0) return;
 
+        var figures  = ComputeFigures(group.Orders.ToList());
         var existing = await context.CustomerSettlements
-            .FirstOrDefaultAsync(s => s.CustomerId == customerId
-                                   && s.Year  == year
-                                   && s.Month == month, ct);
+            .FirstOrDefaultAsync(s => s.GroupOrderId == groupOrderId, ct);
 
-        if (existing == null)
+        if (existing is null)
         {
             context.CustomerSettlements.Add(new CustomerSettlement
             {
-                CustomerId                            = customerId,
-                Year                                  = year,
-                Month                                 = month,
+                GroupOrderId                          = groupOrderId,
+                CustomerId                            = group.CustomerId.Value,
+                CreatedAt                             = group.CreatedAt,
                 TotalNumberOfOrdersPlaced             = figures.OrdersPlaced,
                 TotalNumberOfOrderDelivered           = figures.OrdersDelivered,
                 TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages,
                 TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed,
-                CreatedAt                             = DateTime.UtcNow,
+                DateDeleted                           = figures.OrdersPlaced == 0 ? DateTime.UtcNow : null,
             });
         }
         else
         {
-            existing.TotalNumberOfOrdersPlaced             = figures.OrdersPlaced;
-            existing.TotalNumberOfOrderDelivered           = figures.OrdersDelivered;
-            existing.TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages;
-            existing.TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed;
-            existing.UpdatedAt                             = DateTime.UtcNow;
+            ApplyFigures(existing, figures);
         }
 
         await context.SaveChangesAsync(ct);
     }
 
-    /// <summary>Maps a stored settlement row to its DTO, deriving outstanding balances.</summary>
-    public static CustomerSettlementDto ToDto(CustomerSettlement s, string businessName) =>
-        new(
+    /// <summary>
+    /// Creates or recomputes the invoice for a standalone Return order. Only acts when
+    /// the sender (customer) pays the service fee — that is the only money the customer
+    /// owes for a return. Recipient-paid or cancelled returns hold no invoice; an
+    /// existing one is soft-deleted.
+    /// </summary>
+    public static async Task UpsertForReturnOrderAsync(IAppDbContext context, Order order, CancellationToken ct)
+    {
+        if (order.CustomerId is null) return;
+
+        var existing = await context.CustomerSettlements
+            .FirstOrDefaultAsync(s => s.OrderId == order.Id, ct);
+
+        bool eligible = order.WhoPaysForCompanyService == ServicePayer.Sender
+                     && !CancelledStatuses.Contains(order.Status);
+
+        if (!eligible)
+        {
+            if (existing is { DateDeleted: null })
+            {
+                existing.DateDeleted = DateTime.UtcNow;
+                existing.UpdatedAt   = DateTime.UtcNow;
+                await context.SaveChangesAsync(ct);
+            }
+            return;
+        }
+
+        var figures = ComputeFigures(new[] { order });
+
+        if (existing is null)
+        {
+            context.CustomerSettlements.Add(new CustomerSettlement
+            {
+                OrderId                               = order.Id,
+                CustomerId                            = order.CustomerId.Value,
+                CreatedAt                             = order.CreatedAt,
+                TotalNumberOfOrdersPlaced             = figures.OrdersPlaced,
+                TotalNumberOfOrderDelivered           = figures.OrdersDelivered,
+                TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages,
+                TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed,
+            });
+        }
+        else
+        {
+            ApplyFigures(existing, figures);
+        }
+
+        await context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Refreshes the order-derived figures on an existing row, reviving/soft-deleting by active count. Payments untouched.</summary>
+    private static void ApplyFigures(CustomerSettlement existing, Figures figures)
+    {
+        existing.TotalNumberOfOrdersPlaced             = figures.OrdersPlaced;
+        existing.TotalNumberOfOrderDelivered           = figures.OrdersDelivered;
+        existing.TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages;
+        existing.TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed;
+        existing.UpdatedAt                             = DateTime.UtcNow;
+        existing.DateDeleted                           = figures.OrdersPlaced == 0
+            ? existing.DateDeleted ?? DateTime.UtcNow
+            : null;
+    }
+
+    /// <summary>Maps a stored invoice row (with GroupOrder/Order included) to its DTO, deriving outstanding balances.</summary>
+    public static CustomerSettlementDto ToDto(CustomerSettlement s, string customerBusinessName)
+    {
+        bool   isReturn = s.OrderId.HasValue;
+        int    packages = s.GroupOrder?.NumberOfPackages ?? 1;
+        string status   = (s.GroupOrder?.Status ?? s.Order?.Status)?.ToString() ?? string.Empty;
+
+        return new CustomerSettlementDto(
             Id:                                        s.Id,
             CustomerId:                                s.CustomerId,
-            CustomerBusinessName:                      businessName,
-            Year:                                      s.Year,
-            Month:                                     s.Month,
+            CustomerBusinessName:                      customerBusinessName,
+            GroupOrderId:                              s.GroupOrderId,
+            OrderId:                                   s.OrderId,
+            IsReturn:                                  isReturn,
+            NumberOfPackages:                          packages,
+            Status:                                    status,
             TotalNumberOfOrdersPlaced:                 s.TotalNumberOfOrdersPlaced,
             TotalNumberOfOrderDelivered:               s.TotalNumberOfOrderDelivered,
             TotalCODCompanyCollectedForPackages:       s.TotalCODCompanyCollectedForPackages,
@@ -150,4 +197,5 @@ internal static class CustomerSettlementService
             CreatedAt:                                 s.CreatedAt.ToString("o"),
             UpdatedAt:                                 s.UpdatedAt?.ToString("o")
         );
+    }
 }

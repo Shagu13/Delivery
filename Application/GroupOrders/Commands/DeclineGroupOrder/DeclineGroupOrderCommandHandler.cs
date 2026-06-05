@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.CustomerSettlements;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -28,5 +29,8 @@ public sealed class DeclineGroupOrderCommandHandler : IRequestHandler<DeclineGro
             order.Status = OrderStatus.OrderNotAccepted;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Declined batch → no active orders → recompute soft-deletes the invoice.
+        await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
     }
 }

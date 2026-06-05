@@ -179,10 +179,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
         {
             e.HasKey(s => s.Id);
             e.HasIndex(s => s.CustomerId);
-            // One settlement per customer per month.
-            e.HasIndex(s => new { s.CustomerId, s.Year, s.Month }).IsUnique();
+            // One invoice per batch (GroupOrder) or per standalone Return order.
+            e.HasIndex(s => s.GroupOrderId);
+            e.HasIndex(s => s.OrderId);
+            e.HasIndex(s => s.DateDeleted);
             e.HasOne(s => s.Customer).WithMany(c => c.CustomerSettlements)
              .HasForeignKey(s => s.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.GroupOrder).WithMany()
+             .HasForeignKey(s => s.GroupOrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(s => s.Order).WithMany()
+             .HasForeignKey(s => s.OrderId).OnDelete(DeleteBehavior.Restrict);
             e.Property(s => s.TotalCODCompanyCollectedForPackages).HasColumnType("decimal(18,2)");
             e.Property(s => s.TotalCompanyServicePriceOwedToCompany).HasColumnType("decimal(18,2)");
             e.Property(s => s.TotalAmountOfCollectedCodPaidByCompany).HasColumnType("decimal(18,2)");

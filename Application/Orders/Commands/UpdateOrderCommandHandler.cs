@@ -101,11 +101,10 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         await _context.SaveChangesAsync(cancellationToken);
 
         // ── Keep settlements in sync with the edited financials ───────────────
-        // A delivered last-mile order feeds the customer monthly settlement (COD +
-        // sender-paid service) and the courier daily settlement (cash, salary,
-        // revenue). Refresh both so the admin Finance page reconciles.
-        if (order.DeliveredAt.HasValue)
-            await CustomerSettlements.CustomerSettlementService.UpsertAsync(_context, order, cancellationToken);
+        // The edited COD / sender-paid service / status feed the customer's per-batch
+        // invoice; a delivered order also feeds the courier daily settlement (cash,
+        // salary, revenue). Refresh both so the admin Finance page reconciles.
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
 
         var settlementDate = order.DeliveredAt ?? order.DeliveredToWarehouseAt;
         if (order.CourierId.HasValue && settlementDate.HasValue)

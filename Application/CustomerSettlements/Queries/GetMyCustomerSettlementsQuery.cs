@@ -7,12 +7,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.CustomerSettlements.Queries;
 
 /// <summary>
-/// Customer-facing (read-only): the authenticated customer's own monthly
-/// settlements, newest first. Optionally filtered to a single year.
+/// Customer-facing (read-only): the authenticated customer's own per-batch invoices,
+/// newest first. Optionally filtered to the batches placed on a single day.
 /// </summary>
 public sealed record GetMyCustomerSettlementsQuery(
-    string CustomerUserId,
-    int?   Year
+    string    CustomerUserId,
+    DateOnly? Date
 ) : IRequest<IReadOnlyList<CustomerSettlementDto>>;
 
 public sealed class GetMyCustomerSettlementsQueryHandler
@@ -30,11 +30,8 @@ public sealed class GetMyCustomerSettlementsQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CustomerUserId, cancellationToken)
             ?? throw new NotFoundException("Customer", request.CustomerUserId);
 
-        var settlements = await _context.CustomerSettlements
-            .AsNoTracking()
-            .Where(s => s.CustomerId == customer.Id
-                     && (request.Year == null || s.Year == request.Year))
-            .OrderByDescending(s => s.Year).ThenByDescending(s => s.Month)
+        var settlements = await CustomerSettlementQueries
+            .ForCustomer(_context, customer.Id, request.Date)
             .ToListAsync(cancellationToken);
 
         return settlements

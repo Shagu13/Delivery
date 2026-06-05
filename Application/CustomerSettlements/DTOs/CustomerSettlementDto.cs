@@ -1,15 +1,21 @@
 namespace Application.CustomerSettlements.DTOs;
 
 /// <summary>
-/// A stored monthly customer settlement row. Used by the admin Finance page and
-/// the customer's read-only Statistics page. Outstanding balances are derived.
+/// A per-batch customer invoice row (one GroupOrder batch or one standalone Return).
+/// Used by the admin Finance page and the customer's read-only Finance page.
+/// Outstanding balances are derived (owed − paid).
 /// </summary>
 public sealed record CustomerSettlementDto(
     Guid    Id,
     Guid    CustomerId,
     string  CustomerBusinessName,
-    int     Year,
-    int     Month,
+
+    // ── Batch link — exactly one is set ──────────────────────────────────────
+    Guid?   GroupOrderId,
+    Guid?   OrderId,
+    bool    IsReturn,
+    int     NumberOfPackages,
+    string  Status,
 
     int     TotalNumberOfOrdersPlaced,
     int     TotalNumberOfOrderDelivered,
@@ -28,6 +34,7 @@ public sealed record CustomerSettlementDto(
     /// <summary>Service fees still owed by the customer: owed − paid.</summary>
     decimal OutstandingServiceOwedToCompany,
 
+    /// <summary>Batch placement date (ISO-8601).</summary>
     string  CreatedAt,
     string? UpdatedAt
 );

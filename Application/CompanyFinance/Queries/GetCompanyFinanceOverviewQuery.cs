@@ -68,12 +68,11 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         var salaryEarned = await courierSettlements
             .SumAsync(c => (decimal?)c.TotalCourierSalary, cancellationToken) ?? 0m;
 
-        // Customer side: bucketed by calendar month; include up to To's month whole.
-        int toMonthOrd = request.To.Year * 12 + request.To.Month;
-
+        // Customer side: per-batch invoices dated by CreatedAt (batch placement) up to
+        // To; excludes soft-deleted (cancelled) batches. Mirrors the courier side above.
         var customerSettlements = _context.CustomerSettlements
             .AsNoTracking()
-            .Where(s => s.Year * 12 + s.Month <= toMonthOrd);
+            .Where(s => s.CreatedAt < toDt && s.DateDeleted == null);
 
         var senderServicePaid = await customerSettlements
             .SumAsync(s => (decimal?)s.TotalAmountPaidToCompanyForCompanyService, cancellationToken) ?? 0m;

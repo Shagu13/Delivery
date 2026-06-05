@@ -349,8 +349,14 @@ namespace Persistence.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("Month")
-                        .HasColumnType("int");
+                    b.Property<DateTime?>("DateDeleted")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("GroupOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("TotalAmountOfCollectedCodPaidByCompany")
                         .HasColumnType("decimal(18,2)");
@@ -373,15 +379,15 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("Year")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
 
-                    b.HasIndex("CustomerId", "Year", "Month")
-                        .IsUnique();
+                    b.HasIndex("DateDeleted");
+
+                    b.HasIndex("GroupOrderId");
+
+                    b.HasIndex("OrderId");
 
                     b.ToTable("CustomerSettlements");
                 });
@@ -1019,7 +1025,21 @@ namespace Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Domain.GroupOrder", "GroupOrder")
+                        .WithMany()
+                        .HasForeignKey("GroupOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Domain.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Customer");
+
+                    b.Navigation("GroupOrder");
+
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("Domain.District", b =>

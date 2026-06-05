@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.CustomerSettlements;
 using Application.GroupOrders.DTOs;
 using Domain;
 using Domain.Enums;
@@ -174,6 +175,16 @@ public sealed class CreateGroupOrderCommandHandler
             _context.GroupOrders.Add(groupOrder);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // ── Create per-batch customer invoices ────────────────────────────────
+        // Send/Exchange batch → one invoice (when placed by a logged-in customer).
+        // Each standalone Return → its own invoice, but only when the sender pays the
+        // service fee (handled inside the service).
+        if (groupOrder.Orders.Count > 0 && groupOrder.CustomerId.HasValue)
+            await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
+
+        foreach (var ret in standaloneReturns)
+            await CustomerSettlementService.UpsertForReturnOrderAsync(_context, ret, cancellationToken);
 
         // ── Notify admin via SMS ──────────────────────────────────────────────
         if (groupOrder.Orders.Count > 0)

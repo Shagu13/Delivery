@@ -39,6 +39,24 @@ public static class DependencyInjectionInfrastructure
                         Encoding.UTF8.GetBytes(jwtSettings.Secret)),
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
+
+                // SignalR WebSocket/SSE connections can't send an Authorization
+                // header, so the client passes the JWT as ?access_token=... on the
+                // hub URL. Pull it from the query string for /hubs requests only.
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+                        if (!string.IsNullOrEmpty(accessToken)
+                            && path.StartsWithSegments("/hubs"))
+                        {
+                            context.Token = accessToken;
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
             });
 
         services.AddAuthorization();

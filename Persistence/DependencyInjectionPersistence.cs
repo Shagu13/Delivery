@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Persistence.Interceptors;
 using Persistence.Services;
 
 namespace Persistence;
@@ -14,13 +15,18 @@ public static class DependencyInjectionPersistence
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(
-                configuration.GetConnectionString("DefaultConnection"),
-                sql => sql
-                    .MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)
-                    .EnableRetryOnFailure(maxRetryCount: 3)
-                    .CommandTimeout(30)));
+        // Pushes admin badge counts over SignalR after relevant saves (replaces polling).
+        services.AddScoped<PendingCountsChangeInterceptor>();
+
+        services.AddDbContext<AppDbContext>((sp, options) =>
+            options
+                .UseSqlServer(
+                    configuration.GetConnectionString("DefaultConnection"),
+                    sql => sql
+                        .MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)
+                        .EnableRetryOnFailure(maxRetryCount: 3)
+                        .CommandTimeout(30))
+                .AddInterceptors(sp.GetRequiredService<PendingCountsChangeInterceptor>()));
 
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<ITrackingNumberGenerator, TrackingNumberGenerator>();

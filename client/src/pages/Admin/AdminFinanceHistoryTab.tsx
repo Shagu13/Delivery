@@ -193,7 +193,8 @@ function CustomerLedger({ token }: { token: string }) {
                         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
                             <thead>
                                 <tr>
-                                    <TH>{t.finThMonth}</TH>
+                                    <TH>{t.finHisThDate}</TH>
+                                    <TH>{t.finHisThPackages}</TH>
                                     <TH>{t.finThDelivered}</TH>
                                     <TH>{t.finHisThCodOwed}</TH>
                                     <TH>{t.finHisThCodPaid}</TH>
@@ -209,7 +210,8 @@ function CustomerLedger({ token }: { token: string }) {
                                     const svcOut = r.outstandingServiceOwedToCompany;
                                     return (
                                         <tr key={r.id}>
-                                            <TD bold>{t.finMonths[r.month - 1]} {r.year}</TD>
+                                            <TD bold>{new Date(r.createdAt).toLocaleDateString()}</TD>
+                                            <TD>{r.numberOfPackages}</TD>
                                             <TD>{r.totalNumberOfOrderDelivered}</TD>
                                             <TD>{gel(r.totalCODCompanyCollectedForPackages)}</TD>
                                             <TD color="#059669">{gel(r.totalAmountOfCollectedCodPaidByCompany)}</TD>

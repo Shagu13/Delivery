@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.CustomerSettlements;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -33,5 +34,8 @@ public sealed class CancelGroupOrderCommandHandler : IRequestHandler<CancelGroup
             order.Status = OrderStatus.CancelledBySender;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // No active orders remain → the batch invoice is soft-deleted by recompute.
+        await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
     }
 }

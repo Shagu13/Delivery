@@ -7,12 +7,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.CustomerSettlements.Queries;
 
 /// <summary>
-/// Admin: all saved monthly settlements for a customer, newest first.
-/// Optionally filtered to a single year.
+/// Admin: a customer's per-batch invoices, newest first. Optionally filtered to the
+/// batches placed on a single day.
 /// </summary>
 public sealed record GetCustomerSettlementsQuery(
-    Guid CustomerId,
-    int? Year
+    Guid      CustomerId,
+    DateOnly? Date
 ) : IRequest<IReadOnlyList<CustomerSettlementDto>>;
 
 public sealed class GetCustomerSettlementsQueryHandler
@@ -30,15 +30,35 @@ public sealed class GetCustomerSettlementsQueryHandler
             .FirstOrDefaultAsync(c => c.Id == request.CustomerId, cancellationToken)
             ?? throw new NotFoundException("Customer", request.CustomerId);
 
-        var settlements = await _context.CustomerSettlements
-            .AsNoTracking()
-            .Where(s => s.CustomerId == request.CustomerId
-                     && (request.Year == null || s.Year == request.Year))
-            .OrderByDescending(s => s.Year).ThenByDescending(s => s.Month)
+        var settlements = await CustomerSettlementQueries
+            .ForCustomer(_context, request.CustomerId, request.Date)
             .ToListAsync(cancellationToken);
 
         return settlements
             .Select(s => CustomerSettlementService.ToDto(s, customer.BusinessName))
             .ToList();
+    }
+}
+
+/// <summary>Shared query shaping for per-batch invoice reads.</summary>
+internal static class CustomerSettlementQueries
+{
+    public static IQueryable<Domain.CustomerSettlement> ForCustomer(
+        IAppDbContext context, Guid customerId, DateOnly? date)
+    {
+        var query = context.CustomerSettlements
+            .AsNoTracking()
+            .Include(s => s.GroupOrder)
+            .Include(s => s.Order)
+            .Where(s => s.CustomerId == customerId && s.DateDeleted == null);
+
+        if (date is DateOnly d)
+        {
+            var start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var end   = start.AddDays(1);
+            query = query.Where(s => s.CreatedAt >= start && s.CreatedAt < end);
+        }
+
+        return query.OrderByDescending(s => s.CreatedAt);
     }
 }

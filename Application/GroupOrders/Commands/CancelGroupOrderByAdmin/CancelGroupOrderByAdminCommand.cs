@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.CustomerSettlements;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -39,5 +40,9 @@ public sealed class CancelGroupOrderByAdminCommandHandler
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Recompute the batch invoice (keeps any delivered orders; soft-deletes if
+        // none remain active).
+        await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
     }
 }

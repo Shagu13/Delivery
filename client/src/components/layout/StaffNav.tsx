@@ -1,54 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
-import { fetchGroupOrders } from '../../api/adminGroupOrders';
-import { fetchReturnExchangeOrders, getPendingReturnExchangeCount } from '../../api/returnExchange';
+import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { LanguageToggle } from '../ui/LanguageToggle';
-
-function usePendingCount(token: string | null, isAdmin: boolean) {
-    const [count, setCount] = useState<number | null>(null);
-
-    useEffect(() => {
-        if (!isAdmin || !token) return;
-        let cancelled = false;
-        const load = async () => {
-            try {
-                const orders = await fetchGroupOrders(token);
-                if (!cancelled) setCount(orders.filter(o => o.status === 'Pending').length);
-            } catch { /* silently ignore */ }
-        };
-        void load();
-        const interval = setInterval(() => void load(), 30_000);
-        return () => { cancelled = true; clearInterval(interval); };
-    }, [token, isAdmin]);
-
-    return count;
-}
-
-function useReturnExchangeCount(token: string | null, isAdmin: boolean) {
-    const [count, setCount] = useState<number | null>(null);
-    useEffect(() => {
-        if (!isAdmin || !token) return;
-        let cancelled = false;
-        const load = async () => {
-            try {
-                const orders = await fetchReturnExchangeOrders(token);
-                if (!cancelled) setCount(getPendingReturnExchangeCount(orders));
-            } catch { /* ignore */ }
-        };
-        void load();
-        const interval = setInterval(() => void load(), 30_000);
-        return () => { cancelled = true; clearInterval(interval); };
-    }, [token, isAdmin]);
-    return count;
-}
 
 export function StaffNav() {
     const { user, token } = useAuth();
     const navigate = useNavigate();
     const isAdmin = user?.role === 'Admin';
-    const pendingCount = usePendingCount(token ?? null, isAdmin);
-    const returnExchangeCount = useReturnExchangeCount(token ?? null, isAdmin);
+    const { pendingGroupOrders: pendingCount, returnExchange: returnExchangeCount } =
+        useAdminPendingCounts(token ?? null, isAdmin);
 
     return (
         <header className="nav">
@@ -66,7 +26,7 @@ export function StaffNav() {
                         <button
                             className="nav__pending-btn"
                             onClick={() => navigate('/admin?tab=orders&status=Pending')}
-                            aria-label={`Pending group orders${pendingCount !== null ? `: ${pendingCount}` : ''}`}
+                            aria-label={`Pending group orders: ${pendingCount}`}
                             title="View pending group orders"
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -74,14 +34,14 @@ export function StaffNav() {
                                 <polyline points="3.29 7 12 12 20.71 7" />
                                 <line x1="12" y1="22" x2="12" y2="12" />
                             </svg>
-                            {pendingCount !== null && pendingCount > 0 && (
+                            {pendingCount > 0 && (
                                 <span className="nav__pending-badge">
                                     {pendingCount > 99 ? '99+' : pendingCount}
                                 </span>
                             )}
                         </button>
                     )}
-                    {isAdmin && returnExchangeCount !== null && returnExchangeCount > 0 && (
+                    {isAdmin && returnExchangeCount > 0 && (
                         <button
                             className="nav__pending-btn"
                             onClick={() => navigate('/admin?view=returnExchange')}

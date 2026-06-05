@@ -6,16 +6,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.CustomerSettlements.Commands;
 
 /// <summary>
-/// Records a payment against an existing customer settlement. Either or both
-/// directions may be supplied in one call:
+/// Records a payment against a single batch invoice. Either or both directions may
+/// be supplied in one call:
 ///   • <paramref name="CodPaidByCompany"/>    — COD the company pays the customer.
 ///   • <paramref name="ServicePaidToCompany"/> — service fee the customer pays the company.
 /// Each supplied amount is stored in its plain field and added to its running total.
 /// </summary>
 public sealed record RecordCustomerSettlementPaymentCommand(
-    Guid     CustomerId,
-    int      Year,
-    int      Month,
+    Guid     SettlementId,
     decimal? CodPaidByCompany,
     decimal? ServicePaidToCompany
 ) : IRequest<Guid>;
@@ -31,13 +29,10 @@ public sealed class RecordCustomerSettlementPaymentCommandHandler
         CancellationToken cancellationToken)
     {
         var settlement = await _context.CustomerSettlements
-            .FirstOrDefaultAsync(s => s.CustomerId == request.CustomerId
-                                   && s.Year == request.Year
-                                   && s.Month == request.Month,
+            .FirstOrDefaultAsync(s => s.Id == request.SettlementId
+                                   && s.DateDeleted == null,
                                  cancellationToken)
-            ?? throw new NotFoundException(
-                "CustomerSettlement",
-                $"customer {request.CustomerId} for {request.Year}-{request.Month:D2}");
+            ?? throw new NotFoundException("CustomerSettlement", request.SettlementId);
 
         if (request.CodPaidByCompany is decimal cod)
         {

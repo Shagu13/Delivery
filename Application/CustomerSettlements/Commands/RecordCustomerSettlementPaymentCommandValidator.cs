@@ -7,8 +7,8 @@ public sealed class RecordCustomerSettlementPaymentCommandValidator
 {
     public RecordCustomerSettlementPaymentCommandValidator()
     {
-        RuleFor(x => x.CustomerId)
-            .NotEmpty().WithMessage("CustomerId is required.");
+        RuleFor(x => x.SettlementId)
+            .NotEmpty().WithMessage("SettlementId is required.");
 
         // At least one payment direction must be supplied.
         RuleFor(x => x)

@@ -1,10 +1,14 @@
 using API.Middleware;
+using API.Realtime;
 using Application;
+using Application.Common.Interfaces;
 using Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Persistence;
 using Serilog;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,8 +64,17 @@ try
         {
             // Enums as strings throughout the API (e.g. "Pending" not 0)
             o.JsonSerializerOptions.Converters.Add(
-                new System.Text.Json.Serialization.JsonStringEnumConverter());
+                new JsonStringEnumConverter());
         });
+
+    // ── SignalR (real-time admin badge counts) ───────────────────────────────
+    builder.Services.AddSignalR()
+        .AddJsonProtocol(o =>
+        {
+            o.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+            o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        });
+    builder.Services.AddSingleton<IPendingCountsNotifier, PendingCountsNotifier>();
 
     // ── Swagger ──────────────────────────────────────────────────────────────
     builder.Services.AddEndpointsApiExplorer();
@@ -158,6 +171,7 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
+    app.MapHub<NotificationsHub>("/hubs/notifications");
     app.MapFallbackToFile("index.html");
 
     Log.Information("Delivery App API started successfully.");

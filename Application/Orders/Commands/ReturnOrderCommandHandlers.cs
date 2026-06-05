@@ -97,6 +97,8 @@ public sealed class MarkReturnDeliveredToWarehouseCommandHandler
         order.DeliveredToWarehouseAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(ct);
+
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, ct);
     }
 }
 
@@ -120,5 +122,7 @@ public sealed class MarkReturnedToSenderCommandHandler
         order.DeliveredAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(ct);
+
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, ct);
     }
 }
