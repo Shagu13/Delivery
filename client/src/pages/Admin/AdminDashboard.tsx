@@ -21,6 +21,7 @@ import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
 import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
+import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 
 // Terminal order statuses — these orders are hidden from the active Group Orders page
@@ -804,6 +805,12 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     }, 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [search, load]);
+
+  // Live refresh: when any order is placed/changed, refetch silently (keep current
+  // search term, no spinner) so new customer orders appear without a manual refresh.
+  const searchRef = useRef(search);
+  searchRef.current = search;
+  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(searchRef.current); });
 
   useEffect(() => {
     fetchCouriers(token ?? '').then(setCouriers).catch(() => {});

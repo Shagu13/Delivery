@@ -11,6 +11,7 @@ import { PickupsPanel } from './components/PickupsPanel';
 import { DeliveriesPanel } from './components/DeliveriesPanel';
 import { CourierHistoryPage } from './CourierHistoryPage';
 import { CourierSettlementsPage } from './CourierSettlementsPage';
+import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 
 // ── Media query hook ───────────────────────────────────────────────────────────
 function useIsMobile(breakpoint = 768) {
@@ -65,6 +66,13 @@ export function CourierDashboard() {
 
     useEffect(() => { loadPickups(); }, [loadPickups]);
     useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
+
+    // Live refresh: when the admin assigns (or reassigns) a pickup/delivery to this
+    // courier, refetch both lists silently so the new order appears without a refresh.
+    useOrdersChangedSignal(token ?? null, 'courierOrdersChanged', () => {
+        void loadPickups(true);
+        void loadDeliveries(true);
+    });
 
     async function act(id: string, fn: () => Promise<void>, msg: string) {
         setBusyId(id);

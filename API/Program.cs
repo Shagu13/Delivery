@@ -75,6 +75,7 @@ try
             o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
     builder.Services.AddSingleton<IPendingCountsNotifier, PendingCountsNotifier>();
+    builder.Services.AddSingleton<IRealtimeNotifier, RealtimeNotifier>();
 
     // ── Swagger ──────────────────────────────────────────────────────────────
     builder.Services.AddEndpointsApiExplorer();

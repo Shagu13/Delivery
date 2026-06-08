@@ -17,6 +17,8 @@ public static class DependencyInjectionPersistence
     {
         // Pushes admin badge counts over SignalR after relevant saves (replaces polling).
         services.AddScoped<PendingCountsChangeInterceptor>();
+        // Pushes "refetch" pings to admin + courier dashboards after order/assignment saves.
+        services.AddScoped<RealtimeDashboardInterceptor>();
 
         services.AddDbContext<AppDbContext>((sp, options) =>
             options
@@ -26,7 +28,9 @@ public static class DependencyInjectionPersistence
                         .MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)
                         .EnableRetryOnFailure(maxRetryCount: 3)
                         .CommandTimeout(30))
-                .AddInterceptors(sp.GetRequiredService<PendingCountsChangeInterceptor>()));
+                .AddInterceptors(
+                    sp.GetRequiredService<PendingCountsChangeInterceptor>(),
+                    sp.GetRequiredService<RealtimeDashboardInterceptor>()));
 
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<ITrackingNumberGenerator, TrackingNumberGenerator>();

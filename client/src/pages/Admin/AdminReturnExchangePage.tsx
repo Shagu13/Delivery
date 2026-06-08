@@ -8,6 +8,7 @@ import {
 } from '../../api/returnExchange';
 import { setCourierSalary } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
+import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -384,6 +385,10 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
     }, [token]);
 
     useEffect(() => { void load(); }, [load]);
+
+    // Live refresh: a new return/exchange placed by a customer (or a status/assignment
+    // change) pushes 'adminOrdersChanged' — refetch silently so it appears immediately.
+    useOrdersChangedSignal(token, 'adminOrdersChanged', () => { void load(true); });
 
     const filtered = orders.filter(o => {
         if (typeFilter !== 'All' && o.orderType !== typeFilter) return false;
