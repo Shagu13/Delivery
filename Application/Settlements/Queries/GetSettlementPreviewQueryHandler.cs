@@ -34,13 +34,19 @@ public sealed class GetSettlementPreviewQueryHandler
             .FirstOrDefaultAsync(cancellationToken);
 
         // ── Delivered orders for the day ──────────────────────────────────────
+        // Keyed on the courier's physical delivery event so an order stays counted
+        // for the day it was delivered even after the admin advances it to its final
+        // terminal status: Send/Exchange → ExchangeCompleted (still dated by DeliveredAt),
+        // Return → ReturnedToSender (still dated by DeliveredToWarehouseAt).
         var orders = await _context.Orders
             .AsNoTracking()
             .Where(o => o.CourierId == request.CourierId
-                     && ((o.Status == OrderStatus.DeliveredToRecipient
+                     && (((o.Status == OrderStatus.DeliveredToRecipient
+                           || o.Status == OrderStatus.ExchangeCompleted)
                           && o.DeliveredAt >= dayStart
                           && o.DeliveredAt <= dayEnd)
-                       || (o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                       || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                            || o.Status == OrderStatus.ReturnedToSender)
                           && o.DeliveredToWarehouseAt >= dayStart
                           && o.DeliveredToWarehouseAt <= dayEnd)))
             .OrderBy(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt)

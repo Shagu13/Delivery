@@ -196,7 +196,6 @@ function PackageDetail({
               {pkg.orderType}
             </span>
           )}
-          {status === 'ok'    && <span className="psl-status-tag psl-status-tag--ok">✓ {t.cgoReady}</span>}
           {status === 'error' && <span className="psl-status-tag psl-status-tag--err">{t.cgoNeedsAttention}</span>}
         </div>
         <div className="psl-detail__nav">

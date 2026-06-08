@@ -45,6 +45,32 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Order-type chip — only rendered for Return / Exchange (Send is the default, no chip).
+function TypeBadge({ type }: { type: string }) {
+  const { t } = useLanguage();
+  const map: Record<string, [string, string, string]> = {
+    Return:   [t.cgoOrderTypeReturn,   'rgba(139,92,246,0.12)', '#8b5cf6'],
+    Exchange: [t.cgoOrderTypeExchange, 'rgba(14,165,233,0.12)', '#0ea5e9'],
+  };
+  const entry = map[type];
+  if (!entry) return null;
+  const [label, bg, color] = entry;
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 8px', borderRadius: 100,
+      fontSize: '0.68rem', fontWeight: 700, background: bg, color,
+    }}>
+      {label}
+    </span>
+  );
+}
+
+// Distinct Return/Exchange types present in a group, for card-level chips.
+function specialTypes(go: CustomerGroupOrder): string[] {
+  return Array.from(new Set(go.orders.map(o => o.orderType)))
+    .filter(tp => tp === 'Return' || tp === 'Exchange');
+}
+
 // ── Main dashboard ─────────────────────────────────────────────────────────────
 
 export function CustomerDashboard() {
@@ -283,6 +309,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                onClick={() => setExpanded(expanded === go.id ? null : go.id)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
               <StatusBadge status={go.status} />
+              {specialTypes(go).map(tp => <TypeBadge key={tp} type={tp} />)}
               <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)' }}>
                 {go.senderBusinessName}
               </span>
@@ -322,7 +349,10 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                     <tr key={o.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                       <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: '0.8rem',
                         color: 'var(--color-accent)', fontWeight: 600 }}>
-                        {o.trackingNumber}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {o.trackingNumber}
+                          <TypeBadge type={o.orderType} />
+                        </div>
                       </td>
                       <td style={{ padding: '10px 16px' }}>
                         <div style={{ fontWeight: 500 }}>{o.recipientFirstName} {o.recipientLastName}</div>
@@ -382,7 +412,12 @@ function GroupOrderTable({ orders }: { orders: CustomerGroupOrder[] }) {
       <tbody>
         {orders.map(go => (
           <tr key={go.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-            <td style={{ padding: '12px 20px', fontWeight: 500 }}>{go.senderBusinessName}</td>
+            <td style={{ padding: '12px 20px', fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {go.senderBusinessName}
+                {specialTypes(go).map(tp => <TypeBadge key={tp} type={tp} />)}
+              </div>
+            </td>
             <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)' }}>{go.numberOfPackages}</td>
             <td style={{ padding: '12px 20px', color: 'var(--color-text-subtle)' }}>{cityName(go.pickUpCity, go.pickUpCityGeo)}</td>
             <td style={{ padding: '12px 20px' }}><StatusBadge status={go.status} /></td>

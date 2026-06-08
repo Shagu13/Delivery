@@ -37,6 +37,10 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     CancelledByAdmin:                { short: 'Cancelled',        description: 'Order was cancelled by the Company.' },
     AllDelivered:                    { short: 'All Delivered',    description: 'All packages in this group have been delivered or cancelled.' },
 
+    // ── Return flow (standalone Return orders) ────────────────────────────────
+    PickedUpFromRecipient:           { short: 'Picked Up',        description: 'Courier has collected the return parcel from the recipient.' },
+    DeliveredReturnOrderToWarehouse: { short: 'At Warehouse',     description: 'Return parcel has arrived at the warehouse.' },
+
     // ── Return & Exchange terminals ───────────────────────────────────────────
     ReturnedToSender:                { short: 'Returned',         description: 'Parcel has been returned to the sender.' },
     ExchangeCompleted:               { short: 'Exchanged',        description: 'Exchange parcel has been delivered to the recipient.' },
@@ -65,6 +69,10 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     // ── Admin override ────────────────────────────────────────────────────────
     CancelledByAdmin:                { short: 'გაუქმებულია',      description: 'კომპანიამ შეკვეთა გააუქმა.' },
     AllDelivered:                    { short: 'ჩაბარდა სრულად',  description: 'ამ ჯგუფის ყველა ამანათი ჩაბარდა ან გაუქმდა.' },
+
+    // ── Return flow (standalone Return orders) ────────────────────────────────
+    PickedUpFromRecipient:           { short: 'აღებულია',         description: 'კურიერმა აიღო დასაბრუნებელი ამანათი მიმღებისგან.' },
+    DeliveredReturnOrderToWarehouse: { short: 'საწყობშია',        description: 'დასაბრუნებელი ამანათი საწყობშია' },
 
     // ── Return & Exchange terminals ───────────────────────────────────────────
     ReturnedToSender:                { short: 'დაბრუნდა',         description: 'ამანათი გამგზავნს დაუბრუნდა.' },

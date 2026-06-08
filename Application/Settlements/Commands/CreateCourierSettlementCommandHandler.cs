@@ -39,12 +39,18 @@ public sealed class CreateCourierSettlementCommandHandler
                 $"A settlement for courier {request.CourierId} on {request.Date:yyyy-MM-dd} already exists.");
 
         // ── 3. Load all delivered orders for the day ──────────────────────────
+        // Send/Exchange dated by DeliveredAt (status DeliveredToRecipient or the
+        // admin-set ExchangeCompleted); Return dated by DeliveredToWarehouseAt
+        // (status DeliveredReturnOrderToWarehouse or the admin-set ReturnedToSender),
+        // so finalized orders stay in the courier's settlement for their delivery day.
         var orders = await _context.Orders
             .Where(o => o.CourierId == request.CourierId
-                     && ((o.Status == OrderStatus.DeliveredToRecipient
+                     && (((o.Status == OrderStatus.DeliveredToRecipient
+                           || o.Status == OrderStatus.ExchangeCompleted)
                           && o.DeliveredAt >= dayStart
                           && o.DeliveredAt <= dayEnd)
-                       || (o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                       || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                            || o.Status == OrderStatus.ReturnedToSender)
                           && o.DeliveredToWarehouseAt >= dayStart
                           && o.DeliveredToWarehouseAt <= dayEnd)))
             .ToListAsync(cancellationToken);

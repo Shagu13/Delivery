@@ -93,8 +93,18 @@ public sealed class MarkReturnDeliveredToWarehouseCommandHandler
         if (order.Status != OrderStatus.PickedUpFromRecipient)
             throw new ConflictException($"Expected PickedUpFromRecipient. Current: {order.Status}.");
 
-        order.Status                = OrderStatus.DeliveredReturnOrderToWarehouse;
+        order.Status                 = OrderStatus.DeliveredReturnOrderToWarehouse;
         order.DeliveredToWarehouseAt = DateTime.UtcNow;
+
+        // Recipient-paid return: the courier collected the company service fee in cash
+        // from the recipient. Record it so it flows into the courier's cash settlement
+        // and the company cash position. (Returns carry no product COD, but the
+        // AmountToCollectForPackage fallback keeps the formula identical to deliveries.)
+        if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
+        {
+            order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice;
+            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+        }
 
         await _context.SaveChangesAsync(ct);
 

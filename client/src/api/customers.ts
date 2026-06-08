@@ -60,6 +60,7 @@ export interface CustomerOrder {
   recipientPhone: string; recipientCity: string; recipientCityGeo?: string;
   recipientDistrict: string; recipientDistrictGeo?: string; recipientAddress: string;
   description: string | null; status: string;
+  orderType: 'Send' | 'Return' | 'Exchange';
   isPaid: boolean; createdAt: string;
   companyServicePrice?: number;
 }

@@ -31,11 +31,15 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
 
         // Delivered orders for the range — same definition as CourierSettlement:
         // last-mile deliveries (DeliveredAt) and return drop-offs (DeliveredToWarehouseAt).
+        // Includes the admin-set final terminal statuses (ExchangeCompleted, ReturnedToSender)
+        // so finalized Exchange/Return orders stay counted, dated by the courier's delivery event.
         var delivered = _context.Orders
             .AsNoTracking()
-            .Where(o => (o.Status == OrderStatus.DeliveredToRecipient
+            .Where(o => ((o.Status == OrderStatus.DeliveredToRecipient
+                          || o.Status == OrderStatus.ExchangeCompleted)
                          && o.DeliveredAt >= fromDt && o.DeliveredAt < toDt)
-                     || (o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                     || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                          || o.Status == OrderStatus.ReturnedToSender)
                          && o.DeliveredToWarehouseAt >= fromDt && o.DeliveredToWarehouseAt < toDt));
 
         var ordersDelivered = await delivered.CountAsync(cancellationToken);

@@ -41,10 +41,12 @@ internal static class CourierSettlementService
 
         var orders = await context.Orders
             .Where(o => o.CourierId == courierId
-                     && ((o.Status == OrderStatus.DeliveredToRecipient
+                     && (((o.Status == OrderStatus.DeliveredToRecipient
+                           || o.Status == OrderStatus.ExchangeCompleted)
                           && o.DeliveredAt >= dayStart
                           && o.DeliveredAt <= dayEnd)
-                       || (o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                       || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
+                            || o.Status == OrderStatus.ReturnedToSender)
                           && o.DeliveredToWarehouseAt >= dayStart
                           && o.DeliveredToWarehouseAt <= dayEnd)))
             .ToListAsync(ct);

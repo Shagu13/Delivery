@@ -478,8 +478,17 @@ public sealed class AdminMarkReturnDeliveredToWarehouseCommandHandler
         if (terminalStatuses.Contains(order.Status))
             throw new ConflictException($"Order is already in a terminal status: {order.Status}.");
 
-        order.Status                = OrderStatus.DeliveredReturnOrderToWarehouse;
+        order.Status                 = OrderStatus.DeliveredReturnOrderToWarehouse;
         order.DeliveredToWarehouseAt = DateTime.UtcNow;
+
+        // Recipient-paid return: the courier collected the company service fee in cash.
+        // Mirror MarkReturnDeliveredToWarehouse so the cash position reconciles.
+        if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
+        {
+            order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice;
+            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         // Refresh the standalone Return invoice (delivered count).

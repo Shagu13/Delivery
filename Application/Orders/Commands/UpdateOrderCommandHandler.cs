@@ -43,13 +43,19 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
             ? request.CompanyServicePrice - request.CourierSalary.Value
             : null;
 
-        // For an already-delivered last-mile order, the physical cash the courier
-        // collected is derived from the (now edited) service price / package COD.
-        // Re-derive it so the courier settlement's cash totals stay correct.
-        // Mirrors the cash formula in MarkOrderDeliveredCommandHandler:
+        // For an already-delivered order, the physical cash the courier collected is
+        // derived from the (now edited) service price / package COD. Re-derive it so the
+        // courier settlement's cash totals stay correct. Covers Send/Exchange deliveries
+        // (DeliveredToRecipient, ExchangeCompleted) and return drop-offs
+        // (DeliveredReturnOrderToWarehouse, ReturnedToSender). Mirrors the cash formula in
+        // the delivery handlers:
         //   Recipient pays fee → package COD (if any) + service fee.
-        //   Sender pays fee    → package COD only (service fee invoiced separately).
-        if (order.Status == OrderStatus.DeliveredToRecipient)
+        //   Sender pays fee    → package COD only (returns carry none → no cash).
+        var isDelivered = order.Status is OrderStatus.DeliveredToRecipient
+                                       or OrderStatus.ExchangeCompleted
+                                       or OrderStatus.DeliveredReturnOrderToWarehouse
+                                       or OrderStatus.ReturnedToSender;
+        if (isDelivered)
         {
             order.AmountOfCashCollected = order.WhoPaysForCompanyService == ServicePayer.Recipient
                 ? (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice
@@ -106,7 +112,12 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         // salary, revenue). Refresh both so the admin Finance page reconciles.
         await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
 
-        var settlementDate = order.DeliveredAt ?? order.DeliveredToWarehouseAt;
+        // Return orders are attributed to the courier's warehouse drop-off day; for
+        // those, DeliveredAt is the admin's ReturnedToSender timestamp and must not
+        // drive the recompute. Send/Exchange use DeliveredAt (the courier delivery).
+        var settlementDate = order.OrderType == OrderType.Return
+            ? order.DeliveredToWarehouseAt ?? order.DeliveredAt
+            : order.DeliveredAt ?? order.DeliveredToWarehouseAt;
         if (order.CourierId.HasValue && settlementDate.HasValue)
             await Settlements.CourierSettlementService.RecomputeForDayAsync(
                 _context, order.CourierId.Value, settlementDate.Value, cancellationToken);
