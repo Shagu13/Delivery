@@ -107,7 +107,8 @@ export function SettlementModal({
     if (!open) return null;
 
     const hasIncomplete = (preview?.incompleteOrderTrackingNumbers ?? []).length > 0;
-    const paidExceedsSalary = !!preview && paidValid && paidNum > preview.totalCourierSalary;
+    const paidExceedsSalary = !!preview && paidValid &&
+        (preview.existingAmountCourierWasPaid ?? 0) + paidNum > preview.totalCourierSalary;
     // When the salary is larger than the cash the courier is holding, the company
     // must pay the courier the difference out of pocket. Zero when the courier
     // held enough cash to cover their own salary.

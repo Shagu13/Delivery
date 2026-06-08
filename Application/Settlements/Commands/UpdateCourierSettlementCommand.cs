@@ -110,9 +110,10 @@ public sealed class UpdateCourierSettlementCommandHandler
                           && o.PostponedAt <= dayEnd,
                         cancellationToken);
 
+        // Accumulate: add this payment on top of what was already recorded.
         var amountCourierWasPaid = request.PayCourierFully
             ? totalCourierSalary
-            : (request.PartialAmountPaid ?? 0m);
+            : (settlement.AmountCourierWasPaid + (request.PartialAmountPaid ?? 0m));
 
         // ── 6. Patch settlement record ────────────────────────────────────────
         settlement.TotalOrdersPickedUp           = totalOrdersPickedUp;
