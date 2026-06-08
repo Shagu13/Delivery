@@ -318,7 +318,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const load = useCallback(async (params: {
     city?: string; district?: string; search?: string;
-    courierId?: string; unpriced?: boolean; page?: number;
+    courierId?: string; unpriced?: boolean; assigned?: boolean; page?: number;
   }) => {
     setLoading(true);
     setError(null);
@@ -769,14 +769,13 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '28px 32px', maxWidth: 420, width: '90%', textAlign: 'center', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
             <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚠️</div>
-            <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 8, color: 'var(--color-text)' }}>Orders missing courier salary</div>
+            <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 8, color: 'var(--color-text)' }}>{t.aopSalaryWarnTitle}</div>
             <div style={{ fontSize: '0.88rem', color: 'var(--color-text-subtle)', marginBottom: 24, lineHeight: 1.5 }}>
-              {missingSalaryOrders.length} of your selected order{missingSalaryOrders.length !== 1 ? 's have' : ' has'} no courier salary set. You can fill them in now or proceed anyway.
+              {t.aopSalaryWarnBody(missingSalaryOrders.length)}
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setShowSalaryWarning(false)} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Cancel</button>
-              <button onClick={() => { setShowSalaryWarning(false); void doAssign(); }} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 } as React.CSSProperties}>Proceed Anyway</button>
-              <button onClick={() => { setShowSalaryWarning(false); setShowSalaryModal(true); }} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Fill in Salaries</button>
+              <button onClick={() => setShowSalaryWarning(false)} style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>{t.cancel}</button>
+              <button onClick={() => { setShowSalaryWarning(false); setShowSalaryModal(true); }} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>{t.aopFillSalaries}</button>
             </div>
           </div>
         </div>,
@@ -791,8 +790,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 740, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>Set Courier Salary</div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{missingSalaryOrders.length} order{missingSalaryOrders.length !== 1 ? 's' : ''} missing salary</div>
+                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>{t.aopSetSalary}</div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.aopMissingSalaryCount(missingSalaryOrders.length)}</div>
                 </div>
                 <button onClick={() => setShowSalaryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>

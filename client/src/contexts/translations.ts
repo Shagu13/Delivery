@@ -215,6 +215,10 @@ const en = {
   aopNSelected:        (n: number) => `${n} selected`,
   aopSetSvcPrice:      '🏷 Set Service Price',
   aopSetSalary:        '💰 Set Courier Salary',
+  aopSalaryWarnTitle:  'Orders missing courier salary',
+  aopSalaryWarnBody:   (n: number) => `${n} of your selected order${n !== 1 ? 's have' : ' has'} no courier salary set. Fill them in before assigning.`,
+  aopFillSalaries:     'Fill in Salaries',
+  aopMissingSalaryCount: (n: number) => `${n} order${n !== 1 ? 's' : ''} missing salary`,
   aopDeselectAll:      'Deselect all',
   aopSelectAll:        'Select all',
   aopBulkLabelPrice:   '🏷 Service Price',
@@ -376,6 +380,25 @@ const en = {
   goSentToCity:            (city: string) => `Sent to ${city}.`,
   goCourierAssigned:       (ok: number) => `Courier assigned to ${ok} order${ok !== 1 ? 's' : ''}.`,
   goCourierAssignedFail:   (ok: number, fail: number) => `${ok} assigned, ${fail} failed.`,
+
+  // ── Courier management ────────────────────────────────────────────────────
+  courierActivate:          'Activate',
+  courierDeactivate:        'Deactivate',
+  courierDeactivatedBadge:  'Deactivated',
+  courierStatusActive:      'Active',
+  courierStatusDeleted:     'Deleted',
+  courierToggleFailed:      'Failed to update courier status',
+  courierConfirmActivate:   (name: string) => `Activate "${name}"?`,
+  courierConfirmDeactivate: (name: string) => `Deactivate "${name}"?`,
+
+  // ── Courier row — Working Today view ──────────────────────────────────────
+  crwAssigned:        (n: number) => `${n} assigned`,
+  crwSalaryBadge:     'Salary',
+  crwServiceBadge:    'Service',
+  crwTotalBadge:      'Total',
+  crwThSvcPrice:      'Service Price',
+  crwThCourierSalary: 'Courier Salary',
+  crwThDelivered:     'Delivered',
 
   // ── Overview stats ────────────────────────────────────────────────────────
   overviewTotalOrders:      'Total Orders',
@@ -1341,6 +1364,10 @@ const ka: typeof en = {
   aopNSelected:        (n: number) => `${n} მონიშნული`,
   aopSetSvcPrice:      '🏷 საკურიერო',
   aopSetSalary:        '💰 კურიერის ხელფასი',
+  aopSalaryWarnTitle:  'შეკვეთები კურიერის ხელფასის გარეშე',
+  aopSalaryWarnBody:   (n: number) => `${n} შეკვეთას კურიერის ხელფასი არ აქვს. გასაგზავნად ჯერ შეავსეთ.`,
+  aopFillSalaries:     'ხელფასების შევსება',
+  aopMissingSalaryCount: (n: number) => `${n} შეკვეთა ხელფასის გარეშე`,
   aopDeselectAll:      'ფილტრის გასუფთავება',
   aopSelectAll:        'ყველაფრის მონიშვნა',
   aopBulkLabelPrice:   '🏷 საკურიერო',
@@ -1502,6 +1529,25 @@ const ka: typeof en = {
   goSentToCity:            (city: string) => `${city}-ში გაგზავნილია.`,
   goCourierAssigned:       (ok: number) => `კურიერი მინიჭებულია ${ok} შეკვეთაზე.`,
   goCourierAssignedFail:   (ok: number, fail: number) => `${ok} მინიჭდა, ${fail} ვერ მოხერხდა.`,
+
+  // ── Courier management ────────────────────────────────────────────────────
+  courierActivate:          'გააქტიურება',
+  courierDeactivate:        'გათიშვა',
+  courierDeactivatedBadge:  'გათიშული',
+  courierStatusActive:      'აქტიური',
+  courierStatusDeleted:     'წაშლილი',
+  courierToggleFailed:      'სტატუსის განახლება ვერ მოხერხდა',
+  courierConfirmActivate:   (name: string) => `"${name}" გააქტიურება?`,
+  courierConfirmDeactivate: (name: string) => `"${name}" გათიშვა?`,
+
+  // ── Courier row — Working Today view ──────────────────────────────────────
+  crwAssigned:        (n: number) => `${n} მინიჭებული`,
+  crwSalaryBadge:     'ხელფასი',
+  crwServiceBadge:    'საკურიერო',
+  crwTotalBadge:      'ჯამი',
+  crwThSvcPrice:      'საკურიერო',
+  crwThCourierSalary: 'კურიერის ხელფასი',
+  crwThDelivered:     'მიტანილი',
 
   // ── Overview stats ────────────────────────────────────────────────────────
   overviewTotalOrders:      'სულ შეკვეთები',

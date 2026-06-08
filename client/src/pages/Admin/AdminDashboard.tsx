@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
@@ -809,7 +810,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   // Live refresh: when any order is placed/changed, refetch silently (keep current
   // search term, no spinner) so new customer orders appear without a manual refresh.
   const searchRef = useRef(search);
-  searchRef.current = search;
+  useEffect(() => { searchRef.current = search; });
   useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(searchRef.current); });
 
   useEffect(() => {
@@ -1421,8 +1422,10 @@ function AllCouriersList({
   onEdit: (courier: Courier) => void;
   onActiveChanged: (courierId: string, isActive: boolean) => void;
 }) {
+  const { t } = useLanguage();
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; err: boolean } | null>(null);
+  const [confirmCourier, setConfirmCourier] = useState<Courier | null>(null);
 
   const showToast = (msg: string, err = false) => {
     setToast({ msg, err });
@@ -1436,7 +1439,7 @@ function AllCouriersList({
       await setCourierActiveStatus(courier.courierId, isActive, token);
       onActiveChanged(courier.courierId, isActive);
     } catch {
-      showToast('Failed to update courier status', true);
+      showToast(t.courierToggleFailed, true);
     } finally {
       setTogglingId(null);
     }
@@ -1464,7 +1467,7 @@ function AllCouriersList({
               <div className="courier-name">
                 {courier.fullName}
                 {courier.isDeleted && (
-                  <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 100, padding: '1px 8px' }}>Deactivated</span>
+                  <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 100, padding: '1px 8px' }}>{t.courierDeactivatedBadge}</span>
                 )}
               </div>
               <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
@@ -1473,7 +1476,7 @@ function AllCouriersList({
               {courier.phoneNumber}
             </span>
             <span className={`status-badge ${!courier.isDeleted ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
-              {!courier.isDeleted ? 'Active' : 'Deleted'}
+              {!courier.isDeleted ? t.courierStatusActive : t.courierStatusDeleted}
             </span>
             <button
               className="go-action-btn go-action-btn--ghost"
@@ -1490,10 +1493,10 @@ function AllCouriersList({
                 color: !courier.isDeleted ? '#ef4444' : '#10b981',
                 border: `1px solid ${!courier.isDeleted ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
               }}
-              onClick={() => handleToggleActive(courier)}
+              onClick={() => setConfirmCourier(courier)}
               disabled={togglingId === courier.courierId}
             >
-              {togglingId === courier.courierId ? '…' : !courier.isDeleted ? 'Deactivate' : 'Activate'}
+              {togglingId === courier.courierId ? '…' : !courier.isDeleted ? t.courierDeactivate : t.courierActivate}
             </button>
           </div>
         ))}
@@ -1504,6 +1507,31 @@ function AllCouriersList({
           {toast.msg}
         </div>
       )}
+      {confirmCourier && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '28px 32px', maxWidth: 380, width: '90%', textAlign: 'center', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
+            <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 24, color: 'var(--color-text)' }}>
+              {confirmCourier.isDeleted ? t.courierConfirmActivate(confirmCourier.fullName) : t.courierConfirmDeactivate(confirmCourier.fullName)}
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button
+                onClick={() => setConfirmCourier(null)}
+                style={{ padding: '8px 20px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}
+              >
+                {t.cancel}
+              </button>
+              <button
+                onClick={() => handleToggleActive(confirmCourier)}
+                disabled={togglingId === confirmCourier.courierId}
+                style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: confirmCourier.isDeleted ? '#10b981' : '#ef4444', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}
+              >
+                {confirmCourier.isDeleted ? t.courierActivate : t.courierDeactivate}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -1511,6 +1539,7 @@ function AllCouriersList({
 // ── Single expandable courier row ─────────────────────────────────────────────
 function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrder[]; }) {
   const [expanded, setExpanded] = useState(false);
+  const { t } = useLanguage();
 
   const salaryTotal = useMemo(
     () => orders.reduce((sum, o) => sum + (o.courierSalary ?? 0), 0),
@@ -1544,7 +1573,7 @@ function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrde
           <div className="courier-name">
             {courier.fullName}
             {courier.isDeleted && (
-              <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 100, padding: '1px 8px' }}>Deactivated</span>
+              <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 100, padding: '1px 8px' }}>{t.courierDeactivatedBadge}</span>
             )}
           </div>
           <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
@@ -1552,19 +1581,19 @@ function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrde
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', border: '1px solid rgba(196,127,23,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
-              {orders.length} assigned
+              {t.crwAssigned(orders.length)}
             </span>
             <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-subtle)', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
-              Salary ₾{salaryTotal.toFixed(2)}
+              {t.crwSalaryBadge} ₾{salaryTotal.toFixed(2)}
             </span>
             <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-subtle)', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
-              Service ₾{serviceTotal.toFixed(2)}
+              {t.crwServiceBadge} ₾{serviceTotal.toFixed(2)}
             </span>
             <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-subtle)', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
               COD ₾{codTotal.toFixed(2)}
             </span>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
-              Total ₾{combinedTotal.toFixed(2)}
+              {t.crwTotalBadge} ₾{combinedTotal.toFixed(2)}
             </span>
           </div>
           <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
@@ -1580,14 +1609,14 @@ function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrde
             <table className="go-orders-table" style={{ minWidth: 700 }}>
               <thead>
                 <tr>
-                  <th>Tracking №</th>
-                  <th>Recipient</th>
-                  <th>City / District</th>
-                  <th>Status</th>
-                  <th>Service Price</th>
-                  <th>Courier Salary</th>
-                  <th>Revenue</th>
-                  <th>Delivered</th>
+                  <th>{t.aopThTracking}</th>
+                  <th>{t.aopThRecipient}</th>
+                  <th>{t.aopThCityDistrict}</th>
+                  <th>{t.aopThStatus}</th>
+                  <th>{t.crwThSvcPrice}</th>
+                  <th>{t.crwThCourierSalary}</th>
+                  <th>{t.aopThRevenue}</th>
+                  <th>{t.crwThDelivered}</th>
                 </tr>
               </thead>
               <tbody>
