@@ -20,8 +20,17 @@ public sealed class AssignCourierToGroupOrderCommandHandler
             .FirstOrDefaultAsync(go => go.Id == request.GroupOrderId, cancellationToken)
             ?? throw new NotFoundException("GroupOrder", request.GroupOrderId);
 
-        if (groupOrder.Status != OrderStatus.AcceptedGroupOrder)
-            throw new ConflictException($"A courier can only be assigned to an AcceptedGroupOrder. Current status: {groupOrder.Status}.");
+        // Allow the initial assignment (AcceptedGroupOrder) and re-assignment while the
+        // pickup is still pending (CourierAssignedToPickUp) — so an admin can hand the
+        // pickup to a different courier before it has been collected.
+        var validStatuses = new[]
+        {
+            OrderStatus.AcceptedGroupOrder,
+            OrderStatus.CourierAssignedToPickUp,
+        };
+
+        if (!validStatuses.Contains(groupOrder.Status))
+            throw new ConflictException($"A courier can only be (re)assigned while the group order is awaiting pickup. Current status: {groupOrder.Status}.");
 
         var courier = await _context.Couriers
             .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)

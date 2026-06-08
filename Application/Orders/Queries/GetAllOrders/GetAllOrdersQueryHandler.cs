@@ -23,6 +23,7 @@ public sealed class GetAllOrdersQueryHandler
         var query = _context.Orders
             .Include(o => o.GroupOrder)
             .Include(o => o.Customer)
+            .Include(o => o.Courier)
             .AsNoTracking();
 
         // ── City filter ──────────────────────────────────────────────────────
@@ -36,6 +37,13 @@ public sealed class GetAllOrdersQueryHandler
         // ── Courier filter ───────────────────────────────────────────────────
         if (request.CourierId.HasValue)
             query = query.Where(o => o.CourierId == request.CourierId.Value);
+
+        // ── Assigned / unassigned filter (Packages page tabs) ────────────────
+        // No courier on the order → "Pending Assign"; a courier set → "Assigned".
+        if (request.Assigned == true)
+            query = query.Where(o => o.CourierId != null);
+        else if (request.Assigned == false)
+            query = query.Where(o => o.CourierId == null);
 
         // ── OrderType filter ─────────────────────────────────────────────────
         if (!string.IsNullOrWhiteSpace(request.OrderType) &&
@@ -134,6 +142,7 @@ public sealed class GetAllOrdersQueryHandler
                 CourierSalary:            o.CourierSalary,
                 CompanyRevenue:           o.CompanyRevenue,
                 CourierId:                o.CourierId,
+                CourierFullName:          o.Courier == null ? null : $"{o.Courier.FirstName} {o.Courier.LastName}".Trim(),
                 CreatedAt:                o.CreatedAt,
                 DeliveredAt:              o.DeliveredAt
             ))

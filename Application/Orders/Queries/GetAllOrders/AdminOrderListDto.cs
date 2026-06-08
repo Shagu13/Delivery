@@ -36,6 +36,7 @@ public sealed record AdminOrderListDto(
     decimal? CompanyRevenue,
     // Courier assignment
     Guid?    CourierId,
+    string?  CourierFullName,   // assigned courier's first + last name, null when unassigned
     // Dates
     DateTime CreatedAt,
     DateTime? DeliveredAt

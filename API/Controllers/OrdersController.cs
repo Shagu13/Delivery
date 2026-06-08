@@ -29,12 +29,13 @@ public sealed class OrdersController : BaseController
         [FromQuery] bool    unpriced   = false,
         [FromQuery] bool    postponed  = false,
         [FromQuery] bool    activeOnly = false,
+        [FromQuery] bool?   assigned   = null,
         [FromQuery] int     page       = 1,
         [FromQuery] int     pageSize   = 50,
         CancellationToken ct = default)
     {
         var result = await Sender.Send(
-            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize), ct);
+            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned), ct);
         return Ok(result);
     }
 

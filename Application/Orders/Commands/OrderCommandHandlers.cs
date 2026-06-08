@@ -58,13 +58,17 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         var validStatuses = new[]
         {
             OrderStatus.AdminAcceptedOrderInWareHouse,
-            OrderStatus.OrderIsOnItsWayToRecipientsCity
+            OrderStatus.OrderIsOnItsWayToRecipientsCity,
+            // Already assigned but not yet picked up by the courier — allow the admin to
+            // re-assign it to a different courier.
+            OrderStatus.CourierAssignedToDeliver,
         };
 
         if (!validStatuses.Contains(order.Status))
             throw new ConflictException(
                 $"Cannot assign courier from status {order.Status}. " +
-                "Expected AdminAcceptedOrderInWareHouse or OrderIsOnItsWayToRecipientsCity.");
+                "Expected AdminAcceptedOrderInWareHouse, OrderIsOnItsWayToRecipientsCity, " +
+                "or CourierAssignedToDeliver (re-assignment).");
 
         var courier = await _context.Couriers
             .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)

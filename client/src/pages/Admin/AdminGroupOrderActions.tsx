@@ -85,12 +85,13 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 </>
             )}
 
-            {/* Step 1b: Set pickup date (after accepting) */}
-            {status === 'AcceptedGroupOrder' && !showCourierPicker && !showPickupDate && (
+            {/* Step 1b: Assign courier / set pickup date. Shown while awaiting pickup —
+                AcceptedGroupOrder (first assignment) and CourierAssignedToPickUp (re-assign). */}
+            {(status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && !showCourierPicker && !showPickupDate && (
                 <>
                     <button className="go-action-btn go-action-btn--assign" disabled={busy}
                         onClick={() => setShowCourierPicker(true)}>
-                        {t.goAssignCourierBtn}
+                        {status === 'CourierAssignedToPickUp' ? t.goReassignCourierBtn : t.goAssignCourierBtn}
                     </button>
                     <button className="go-action-btn go-action-btn--ghost" disabled={busy}
                         onClick={() => setShowPickupDate(true)}>
@@ -100,7 +101,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
             )}
 
             {/* Courier picker */}
-            {status === 'AcceptedGroupOrder' && showCourierPicker && (
+            {(status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && showCourierPicker && (
                 <div className="go-courier-picker" onClick={e => e.stopPropagation()}>
                     <select className="go-select go-select--inline" value={selectedCourierId}
                         onChange={e => setSelectedCourierId(e.target.value)}>

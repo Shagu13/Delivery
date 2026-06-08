@@ -42,6 +42,7 @@ export interface AdminOrderItem {
   returnPickupDistrict: string | null;
   returnPickupAddress: string | null;
   courierId: string | null;
+  courierFullName: string | null;
   createdAt: string;
   deliveredAt: string | null;
 }
@@ -60,7 +61,7 @@ async function fetchAllOrders(
   token: string,
   params: {
     city?: string; district?: string; search?: string;
-    courierId?: string; unpriced?: boolean;
+    courierId?: string; unpriced?: boolean; assigned?: boolean;
     page?: number; pageSize?: number;
   }
 ): Promise<PagedResult> {
@@ -70,6 +71,7 @@ async function fetchAllOrders(
   if (params.search)     qs.set('search',    params.search);
   if (params.courierId)  qs.set('courierId', params.courierId);
   if (params.unpriced)   qs.set('unpriced',  'true');
+  if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
   if (params.page)       qs.set('page',      String(params.page));
   if (params.pageSize)   qs.set('pageSize',  String(params.pageSize));
   const res = await fetch(`/api/orders?${qs}`, {
@@ -88,6 +90,17 @@ async function fetchUnpricedCount(token: string, courierId?: string): Promise<nu
   if (!res.ok) return 0;
   const data: PagedResult = await res.json();
   return data.totalCount;
+}
+
+// Orders that can be (re)assigned to a courier from the Packages page: warehouse-ready
+// and en-route-to-city Send/Exchange, an already-assigned delivery (re-assignment to a
+// different courier), and Return orders still awaiting / in pickup assignment. Used by
+// the select-all set, each row's checkbox, and the bulk-assign action so they stay in sync.
+function isAssignable(o: AdminOrderItem): boolean {
+  return o.status === 'AdminAcceptedOrderInWareHouse'
+      || o.status === 'OrderIsOnItsWayToRecipientsCity'
+      || o.status === 'CourierAssignedToDeliver'
+      || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -253,6 +266,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState<string | null>(null);
   const [search,          setSearch]          = useState('');
+  // Packages view tab: 'pending' = orders with no courier yet, 'assigned' = courier set.
+  const [assignTab,       setAssignTab]       = useState<'pending' | 'assigned'>('pending');
   const [filterCity,      setFilterCity]      = useState('');
   const [filterDistrict,  setFilterDistrict]  = useState('');
   const [filterCourier,   setFilterCourier]   = useState<Courier | null>(null);
@@ -283,7 +298,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [salarySaving,      setSalarySaving]      = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false });
+  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false });
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
@@ -325,6 +340,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       search,
       courierId: filterCourier?.courierId ?? '',
       unpriced:  filterUnpriced,
+      assigned:  assignTab === 'assigned',
     };
 
     const filterChanged =
@@ -332,7 +348,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       prev.district  !== next.district  ||
       prev.search    !== next.search    ||
       prev.courierId !== next.courierId ||
-      prev.unpriced  !== next.unpriced;
+      prev.unpriced  !== next.unpriced  ||
+      prev.assigned  !== next.assigned;
 
     filterRef.current = next;
 
@@ -350,13 +367,14 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         search:    search         || undefined,
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
+        assigned:  assignTab === 'assigned',
         page:      targetPage,
       });
     }, delay);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, page, load]);
+  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, page, load]);
 
   const cities = useMemo(() => {
     if (!data) return [];
@@ -373,13 +391,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const orders = data?.items ?? [];
 
   const selectableOrders = useMemo(() =>
-    bulkMode === 'assign'
-      ? orders.filter(o =>
-          o.status === 'AdminAcceptedOrderInWareHouse' ||
-          o.status === 'OrderIsOnItsWayToRecipientsCity' ||
-          (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'))
-        )
-      : orders,
+    bulkMode === 'assign' ? orders.filter(isAssignable) : orders,
   [orders, bulkMode]);
 
   const allSelected  = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id));
@@ -416,7 +428,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       setBulkSalary('');
       setSelected(new Set());
       await Promise.all([
-        load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page }),
+        load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page }),
         refreshUnpricedCount(),
       ]);
     } catch (e) {
@@ -451,13 +463,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const doAssign = async () => {
     setBulkAssigning(true);
-    const eligibleStatuses = new Set(['AdminAcceptedOrderInWareHouse', 'OrderIsOnItsWayToRecipientsCity']);
     const ids = [...selected].filter(id => {
       const o = orders.find(x => x.id === id);
-      return o && (
-        eligibleStatuses.has(o.status) ||
-        (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'))
-      );
+      return !!o && isAssignable(o);
     });
     let ok = 0; let fail = 0;
     await Promise.all(ids.map(async id => {
@@ -475,7 +483,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setBulkAssigning(false);
     // keep selection so user can immediately do Set Prices
     setBulkCourierId('');
-    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page };
+    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
     await Promise.all([load(reloadParams), refreshUnpricedCount()]);
     showToast(fail === 0 ? `Assigned courier to ${ok} order${ok !== 1 ? 's' : ''}.`
                          : `Assigned ${ok}, failed ${fail}.`, fail > 0 ? 'err' : 'ok');
@@ -490,7 +498,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setSalarySaving(true);
     try {
       await Promise.all(toSave.map(id => setCourierSalary(token, id, parseFloat(salaryDrafts[id]))));
-      const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page };
+      const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
       await Promise.all([load(reloadParams), refreshUnpricedCount()]);
     } catch { /* best-effort */ }
     setSalarySaving(false);
@@ -508,6 +516,22 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   return (
     <div className="aop-root">
+
+      {/* Pending Assign / Assigned tabs */}
+      <div className="go-seg" style={{ alignSelf: 'flex-start', marginBottom: 12 }}>
+        <button
+          className={`go-seg__btn${assignTab === 'pending' ? ' go-seg__btn--active' : ''}`}
+          onClick={() => setAssignTab('pending')}
+        >
+          {t.aopTabPendingAssign}
+        </button>
+        <button
+          className={`go-seg__btn${assignTab === 'assigned' ? ' go-seg__btn--active' : ''}`}
+          onClick={() => setAssignTab('assigned')}
+        >
+          {t.aopTabAssigned}
+        </button>
+      </div>
 
       {/* Toolbar */}
       <div className="aop-toolbar">
@@ -901,9 +925,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 const statusMeta      = getStatusMeta(order.status, lang);
                 const missingPrice    = order.companyServicePrice === 0;
                 const missingSalary   = order.courierSalary == null || order.courierSalary === 0;
-                const canAssign       = order.status === 'AdminAcceptedOrderInWareHouse' || order.status === 'OrderIsOnItsWayToRecipientsCity'
-                  || (order.orderType === 'Return' && (order.status === 'Pending' || order.status === 'CourierAssignedToPickUp'));
-                const selectable      = bulkMode === 'assign' ? canAssign : true;
+                const selectable      = bulkMode === 'assign' ? isAssignable(order) : true;
                 return (
                   <tr key={order.id}
                     className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}${!selectable ? ' aop-tr--disabled' : ''}`}
@@ -943,6 +965,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       >
                         {statusMeta.short}
                       </span>
+                      {order.courierFullName && (
+                        <div className="aop-courier-name" title={order.courierFullName}>
+                          {order.courierFullName}
+                        </div>
+                      )}
                     </td>
                     <td className="aop-td aop-td--num">
                       {missingPrice
@@ -1228,7 +1255,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-tr--selected { background: rgba(196,127,23,0.07) !important; }
         /* Dim only the data cells of non-selectable (e.g. delivered) rows — keep the
            View/Edit actions cell fully bright so it stays usable. */
-        .aop-tr--disabled .aop-td:not(.aop-td--actions) { opacity: 0.45; }
+        .aop-tr--disabled .aop-td:not(.aop-td--actions) { opacity: 0.7; }
+        .aop-courier-name { margin-top: 3px; font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 3px; max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .aop-courier-name::before { content: '→'; color: var(--color-text-subtle); }
         .aop-tr:last-child .aop-td { border-bottom: none; }
         .aop-sender-biz { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
         .aop-sender-name { font-size: 0.75rem; color: var(--color-text-subtle); margin-top: 1px; }

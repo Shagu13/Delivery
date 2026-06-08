@@ -92,10 +92,12 @@ export function ViewOrderModal({ order, open, onClose }: Props) {
                 <div className="modal__body vom-body">
 
                     <Section title="Order Info">
-                        <Row label="Status"       value={<span className="status-badge" style={{ background: bg, color }}>{statusMeta.short}</span>} />
-                        <Row label="Type"         value={order.orderType} />
-                        <Row label="Created"      value={formatDate(order.createdAt)} />
-                        <Row label="Delivered"    value={formatDate(order.deliveredAt)} />
+                        <Row label="Type"      value={order.orderType} />
+                        <Row label="Courier"   value={order.courierFullName
+                            ? <span className="vom-courier">{order.courierFullName}</span>
+                            : <span className="vom-unassigned">Unassigned</span>} />
+                        <Row label="Created"   value={formatDate(order.createdAt)} />
+                        <Row label="Delivered" value={formatDate(order.deliveredAt)} />
                         {order.isFragile && <Row label="Fragile" value="⚠ Yes" />}
                         {order.description && <Row label="Description" value={order.description} />}
                     </Section>
@@ -154,14 +156,19 @@ export function ViewOrderModal({ order, open, onClose }: Props) {
                 @keyframes modal-fade-in { from{opacity:0} to{opacity:1} }
                 @keyframes modal-slide-up { from{opacity:0;transform:translate(-50%,calc(-50% + 12px))} to{opacity:1;transform:translate(-50%,-50%)} }
 
-                .vom-modal { width:min(520px,calc(100vw - 32px)); }
-                .vom-body { gap: 16px; }
+                .vom-modal { width:min(760px,calc(100vw - 32px)); }
+                /* Two-column grid so all sections fit on one screen without scrolling.
+                   align-items:start keeps shorter sections from stretching. */
+                .vom-body { display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start; }
                 .vom-section { border:1px solid var(--color-border);border-radius:var(--radius-sm);overflow:hidden; }
-                .vom-section-title { font-size:0.65rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-text-subtle);padding:8px 14px;background:var(--color-bg-3);border-bottom:1px solid var(--color-border); }
-                .vom-row { display:flex;align-items:baseline;gap:8px;padding:7px 14px;border-bottom:1px solid var(--color-border); }
+                .vom-section-title { font-size:0.62rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-text-subtle);padding:6px 12px;background:var(--color-bg-3);border-bottom:1px solid var(--color-border); }
+                .vom-row { display:flex;align-items:baseline;gap:8px;padding:5px 12px;border-bottom:1px solid var(--color-border); }
                 .vom-row:last-child { border-bottom:none; }
-                .vom-label { font-size:0.72rem;font-weight:700;color:var(--color-text-subtle);min-width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em; }
-                .vom-value { font-size:0.85rem;color:var(--color-text);font-weight:500;word-break:break-word; }
+                .vom-label { font-size:0.68rem;font-weight:700;color:var(--color-text-subtle);min-width:86px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.03em; }
+                .vom-value { font-size:0.82rem;color:var(--color-text);font-weight:500;word-break:break-word; }
+                .vom-courier { font-weight:700;color:var(--color-accent); }
+                .vom-unassigned { font-weight:600;color:var(--color-text-subtle);font-style:italic; }
+                @media (max-width:600px) { .vom-body { grid-template-columns:1fr; } }
             `}</style>
         </>,
         document.body
