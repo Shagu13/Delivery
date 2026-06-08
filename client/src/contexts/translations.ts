@@ -1016,6 +1016,8 @@ const en = {
     statNoneAll:            'No invoices yet.',
     statReturnBadge:        'Return',
     statBatchBadge:         'Batch',
+    statDownloadInvoice:    'Download Invoice',
+    statDownloading:        'Downloading…',
 
     // Admin Finance page
     finSearchCustomer:   'Search customer by name / business…',
@@ -2138,6 +2140,8 @@ const ka: typeof en = {
     statNoneAll:            'ინვოისები ჯერ არ არის.',
     statReturnBadge:        'დაბრუნება',
     statBatchBadge:         'პარტია',
+    statDownloadInvoice:    'ინვოისის გადმოტვირთვა',
+    statDownloading:        'გადმოტვირთვა…',
 
     // Admin Finance page
     finSearchCustomer:   'მოძებნეთ მომხმარებელი სახელით / ბიზნესით…',

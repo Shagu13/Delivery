@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
-import { fetchMyCustomerSettlements } from '../../api/customerSettlements';
+import { fetchMyCustomerSettlements, downloadSettlementInvoice } from '../../api/customerSettlements';
 import type { CustomerSettlement } from '../../api/customerSettlements';
 import '../../styles/dashboard.css';
 
@@ -40,8 +40,19 @@ function MoneyBlock({ title, owedLabel, owed, paid, paidLabel, outstanding }: {
     );
 }
 
-function InvoiceCard({ item }: { item: CustomerSettlement }) {
+function InvoiceCard({ item, token }: { item: CustomerSettlement; token: string }) {
     const { t } = useLanguage();
+    const [downloading, setDownloading] = useState(false);
+
+    const handleDownload = async () => {
+        setDownloading(true);
+        try {
+            await downloadSettlementInvoice(item.id, token);
+        } finally {
+            setDownloading(false);
+        }
+    };
+
     return (
         <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
@@ -49,11 +60,21 @@ function InvoiceCard({ item }: { item: CustomerSettlement }) {
                     <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-text)' }}>
                         {new Date(item.createdAt).toLocaleDateString()}
                     </span>
-                    
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: item.isReturn ? 'rgba(185,28,28,0.1)' : 'rgba(30,64,175,0.1)', color: item.isReturn ? '#b91c1c' : '#1e40af' }}>
+                        {item.isReturn ? t.statReturnBadge : t.statBatchBadge}
+                    </span>
                 </div>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>📦 {t.custPkg(item.numberOfPackages)}</span>
                     <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>✓ {t.statDelivered(item.totalNumberOfOrderDelivered)}</span>
+                    <button
+                        className="btn-ghost"
+                        onClick={handleDownload}
+                        disabled={downloading}
+                        style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5 }}
+                    >
+                        ⬇ {downloading ? t.statDownloading : t.statDownloadInvoice}
+                    </button>
                 </div>
             </div>
 
@@ -169,7 +190,7 @@ export function CustomerFinancePage() {
                         ))}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {items.map(item => <InvoiceCard key={item.id} item={item} />)}
+                        {items.map(item => <InvoiceCard key={item.id} item={item} token={token!} />)}
                     </div>
                 </>
             )}

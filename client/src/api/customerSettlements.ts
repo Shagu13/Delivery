@@ -97,3 +97,26 @@ export async function fetchMyCustomerSettlements(
     const res = await fetch(`/api/customersettlements/my${q}`, { headers: authHeaders(token) });
     return handle<CustomerSettlement[]>(res, 'Failed to load your finance records');
 }
+
+/** Download the Excel invoice for a single settlement. Triggers a browser file save. */
+export async function downloadSettlementInvoice(
+    settlementId: string, token: string,
+): Promise<void> {
+    const res = await fetch(`/api/customersettlements/${settlementId}/invoice`, {
+        headers: authHeaders(token),
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new CustomerSettlementApiError(res.status, body?.title ?? `Download failed (${res.status})`);
+    }
+    const blob        = await res.blob();
+    const url         = URL.createObjectURL(blob);
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match       = /filename[^;=\n]*=(['"]?)([^;"'\n]*)\1/.exec(disposition);
+    const filename    = match?.[2]?.trim() || 'Dilo-Invoice.xlsx';
+    const anchor      = document.createElement('a');
+    anchor.href       = url;
+    anchor.download   = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+}
