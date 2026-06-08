@@ -9,7 +9,7 @@ import { SettlementModal } from './SettlementModal';
  * Pick a courier, then open the settlement manager (create/update for a date).
  * Reuses the existing SettlementModal so the courier settlement logic is unchanged.
  */
-export function CourierSettlementsSection({ token }: { token: string }) {
+export function CourierSettlementsSection({ token, onSettled }: { token: string; onSettled?: () => void }) {
     const { t } = useLanguage();
     const [couriers, setCouriers] = useState<Courier[]>([]);
     const [selectedId, setSelectedId] = useState('');
@@ -56,6 +56,7 @@ export function CourierSettlementsSection({ token }: { token: string }) {
                     onCreated={() => {
                         setToast(t.finCourierSavedToast(selected.fullName));
                         setTimeout(() => setToast(null), 4000);
+                        onSettled?.();
                     }}
                     courierId={selected.courierId}
                     courierFullName={selected.fullName}

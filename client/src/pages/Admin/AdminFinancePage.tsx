@@ -449,7 +449,7 @@ export default function AdminFinancePage({ token }: { token: string }) {
             </div>
 
             {tab === 'customers' && <CustomerInvoicesSection token={token} onPaid={() => setOverviewRefresh(k => k + 1)} />}
-            {tab === 'couriers'  && <CourierSettlementsSection token={token} />}
+            {tab === 'couriers'  && <CourierSettlementsSection token={token} onSettled={() => setOverviewRefresh(k => k + 1)} />}
             {tab === 'history'   && <AdminFinanceHistoryTab token={token} />}
         </div>
     );
