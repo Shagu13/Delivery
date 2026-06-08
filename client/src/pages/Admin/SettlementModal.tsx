@@ -7,6 +7,7 @@ import {
     SettlementApiError,
 } from '../../api/settlements';
 import type { SettlementPreview } from '../../api/settlements';
+import { useLanguage } from '../../contexts/useLanguage';
 
 interface Props {
     open: boolean;
@@ -21,6 +22,12 @@ function todayIso(): string {
     return new Date().toISOString().slice(0, 10);
 }
 
+function stepDay(iso: string, delta: number): string {
+    const d = new Date(iso);
+    d.setDate(d.getDate() + delta);
+    return d.toISOString().slice(0, 10);
+}
+
 function fmt(n: number) { return `₾${n.toFixed(2)}`; }
 
 export function SettlementModal({
@@ -31,6 +38,7 @@ export function SettlementModal({
     courierFullName,
     token,
 }: Props) {
+    const { t } = useLanguage();
     const [date,          setDate]          = useState(todayIso());
     const [preview,       setPreview]       = useState<SettlementPreview | null>(null);
     const [loading,       setLoading]       = useState(false);
@@ -118,10 +126,10 @@ export function SettlementModal({
                 {/* ── Header ─────────────────────────────────────────────── */}
                 <div className="modal__header">
                     <div>
-                        <p className="modal__eyebrow">Daily Settlement</p>
+                        <p className="modal__eyebrow">{t.stlmEyebrow}</p>
                         <h2 className="modal__title" id="settlement-title">{courierFullName}</h2>
                     </div>
-                    <button className="modal__close" onClick={onClose} aria-label="Close">
+                    <button className="modal__close" onClick={onClose} aria-label={t.close}>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                             <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                         </svg>
@@ -131,14 +139,37 @@ export function SettlementModal({
                 <div className="modal__body">
                     {/* ── Date picker ──────────────────────────────────────── */}
                     <fieldset className="modal__fieldset">
-                        <legend className="modal__legend">Settlement Date</legend>
-                        <input
-                            type="date"
-                            value={date}
-                            max={todayIso()}
-                            onChange={e => handleDateChange(e.target.value)}
-                            className="settlement-date-input"
-                        />
+                        <legend className="modal__legend">{t.stlmDateLegend}</legend>
+                        <div className="stl-date-nav">
+                            <button
+                                type="button"
+                                className="stl-date-arrow"
+                                onClick={() => handleDateChange(stepDay(date, -1))}
+                                aria-label="Previous day"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                    <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </button>
+                            <input
+                                type="date"
+                                value={date}
+                                max={todayIso()}
+                                onChange={e => handleDateChange(e.target.value)}
+                                className="settlement-date-input"
+                            />
+                            <button
+                                type="button"
+                                className="stl-date-arrow"
+                                onClick={() => handleDateChange(stepDay(date, 1))}
+                                disabled={date >= todayIso()}
+                                aria-label="Next day"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                    <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </button>
+                        </div>
                     </fieldset>
 
                     {/* ── Error banner ─────────────────────────────────────── */}
@@ -152,18 +183,6 @@ export function SettlementModal({
                         </div>
                     )}
 
-                    {/* ── Already-exists notice ─────────────────────────────── */}
-                    {alreadyExists && !loading && (
-                        <div className="modal__global-error" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#d97706' }} role="alert">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                <path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-                                <path d="M8 6v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                            </svg>
-                            A settlement already exists for this date. Saving will recalculate
-                            its totals and update the recorded courier payment to the amount below.
-                        </div>
-                    )}
-
                     {/* ── Incomplete orders warning ─────────────────────────── */}
                     {hasIncomplete && (
                         <div className="settlement-warning" role="alert">
@@ -172,8 +191,8 @@ export function SettlementModal({
                                 <path d="M8 6v4M8 11.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                             </svg>
                             <div>
-                                <strong>Missing financial data on {preview!.incompleteOrderTrackingNumbers.length} order{preview!.incompleteOrderTrackingNumbers.length !== 1 ? 's' : ''}:</strong>
-                                {' '}{preview!.incompleteOrderTrackingNumbers.join(', ')}. Set CourierSalary, CompanyServicePrice and CompanyRevenue before saving.
+                                <strong>{t.stlmWarning(preview!.incompleteOrderTrackingNumbers.length)}</strong>
+                                {' '}{preview!.incompleteOrderTrackingNumbers.join(', ')}. {t.stlmWarningHint}
                             </div>
                         </div>
                     )}
@@ -181,7 +200,7 @@ export function SettlementModal({
                     {loading && (
                         <div className="go-loading">
                             <div className="go-spinner" />
-                            Loading data for {date}…
+                            {t.stlmLoadingDate(date)}
                         </div>
                     )}
 
@@ -190,36 +209,33 @@ export function SettlementModal({
                             {/* ── Order counts ─────────────────────────────── */}
                             <div className="stl-counts">
                                 <div className="stl-count-card">
-                                    <span className="stl-count-label">Packages Picked Up</span>
+                                    <span className="stl-count-label">{t.stlmPickedUp}</span>
                                     <span className="stl-count-value">{preview.totalOrdersPickedUp}</span>
                                 </div>
                                 <div className="stl-count-card">
-                                    <span className="stl-count-label">Orders Delivered</span>
+                                    <span className="stl-count-label">{t.stlmDelivered}</span>
                                     <span className="stl-count-value">{preview.totalOrdersDelivered}</span>
                                 </div>
                             </div>
 
                             {/* ── Cash breakdown ───────────────────────────── */}
                             <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Cash Breakdown</legend>
+                                <legend className="modal__legend">{t.stlmCashBreakdown}</legend>
                                 <div className="stl-cash-breakdown">
-                                    {/* Row 1: COD — pure parcel money only (AmountToCollectForPackage) */}
                                     <div className="stl-cash-row">
                                         <div className="stl-cash-label">
                                             <span className="stl-cash-dot stl-cash-dot--cod" />
-                                            <span>COD — Cash collected for parcels</span>
+                                            <span>{t.stlmCodLabel}</span>
                                         </div>
                                         <span className="stl-cash-amount">{fmt(preview.totalCodOnlyAmount)}</span>
                                     </div>
-                                    {/* Row 2: Service fees collected in cash from recipients */}
                                     <div className="stl-cash-row">
                                         <div className="stl-cash-label">
                                             <span className="stl-cash-dot stl-cash-dot--svc" />
-                                            <span>Service fees collected from recipients</span>
+                                            <span>{t.stlmSvcFeeLabel}</span>
                                         </div>
                                         <span className="stl-cash-amount">{fmt(preview.totalServiceFeesCollectedFromRecipients)}</span>
                                     </div>
-                                    {/* Divider + total */}
                                     <div className="stl-cash-divider" />
                                     <div className="stl-cash-row stl-cash-row--total">
                                         <div className="stl-cash-label">
@@ -227,7 +243,7 @@ export function SettlementModal({
                                                 <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
                                                 <path d="M5 8h6M8 5v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                                             </svg>
-                                            <span>Total cash courier holds</span>
+                                            <span>{t.stlmTotalCash}</span>
                                         </div>
                                         <span className="stl-cash-amount stl-cash-amount--total">{fmt(preview.totalCashCourierHolds)}</span>
                                     </div>
@@ -236,37 +252,37 @@ export function SettlementModal({
 
                             {/* ── Financial summary ─────────────────────────── */}
                             <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Financial Summary</legend>
+                                <legend className="modal__legend">{t.stlmFinancialSummary}</legend>
                                 <div className="stl-fin-rows">
                                     <div className="stl-fin-row">
                                         <span className="stl-fin-label">
-                                            Total Service Revenue
-                                            <span className="stl-fin-hint">All CompanyServicePrice (sender + recipient)</span>
+                                            {t.stlmTotalSvcRevenue}
+                                            <span className="stl-fin-hint">{t.stlmTotalSvcHint}</span>
                                         </span>
                                         <span className="stl-fin-value">{fmt(preview.totalCompanyServiceRevenue)}</span>
                                     </div>
                                     <div className="stl-fin-row">
-                                        <span className="stl-fin-label">Courier Salary</span>
+                                        <span className="stl-fin-label">{t.stlmCourierSalary}</span>
                                         <span className="stl-fin-value stl-fin-value--salary">{fmt(preview.totalCourierSalary)}</span>
                                     </div>
                                     <div className="stl-fin-divider" />
                                     <div className="stl-fin-row">
-                                        <span className="stl-fin-label">Company Net Income</span>
+                                        <span className="stl-fin-label">{t.stlmNetIncome}</span>
                                         <span className="stl-fin-value stl-fin-value--income">{fmt(preview.totalCompanyNetIncome)}</span>
                                     </div>
                                     {preview.totalCourierTransferToCompany >= 0 ? (
                                         <div className="stl-fin-row">
                                             <span className="stl-fin-label">
-                                                Courier Transfer to Company
-                                                <span className="stl-fin-hint">Cash held − salary</span>
+                                                {t.stlmCourierToCompany}
+                                                <span className="stl-fin-hint">{t.stlmCourierToCompanyHint}</span>
                                             </span>
                                             <span className="stl-fin-value stl-fin-value--transfer">{fmt(preview.totalCourierTransferToCompany)}</span>
                                         </div>
                                     ) : (
                                         <div className="stl-fin-row">
                                             <span className="stl-fin-label">
-                                                Company Pays Courier
-                                                <span className="stl-fin-hint">Salary exceeds cash held — company owes the difference</span>
+                                                {t.stlmCompanyToCourier}
+                                                <span className="stl-fin-hint">{t.stlmCompanyToCourierHint}</span>
                                             </span>
                                             <span className="stl-fin-value" style={{ color: '#6366f1' }}>{fmt(Math.abs(preview.totalCourierTransferToCompany))}</span>
                                         </div>
@@ -276,28 +292,28 @@ export function SettlementModal({
 
                             {/* ── Courier payment ──────────────────────────── */}
                             <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Courier Payment</legend>
+                                <legend className="modal__legend">{t.stlmCourierPayment}</legend>
                                 <div className="stl-fin-rows">
                                     <div className="stl-fin-row">
                                         <span className="stl-fin-label">
-                                            Courier Salary (earned)
-                                            <span className="stl-fin-hint">Total salary earned this day</span>
+                                            {t.stlmSalaryEarned}
+                                            <span className="stl-fin-hint">{t.stlmSalaryEarnedHint}</span>
                                         </span>
                                         <span className="stl-fin-value stl-fin-value--salary">{fmt(preview.totalCourierSalary)}</span>
                                     </div>
                                     <div className="stl-fin-row">
                                         <span className="stl-fin-label">
-                                            Cash courier holds
-                                            <span className="stl-fin-hint">Collected from recipients — counts toward salary</span>
+                                            {t.stlmCashHeld}
+                                            <span className="stl-fin-hint">{t.stlmCashHeldHint}</span>
                                         </span>
                                         <span className="stl-fin-value">{fmt(preview.totalCashCourierHolds)}</span>
                                     </div>
                                     {cashShortfall > 0 ? (
                                         <div className="stl-fin-row">
                                             <span className="stl-fin-label">
-                                                Missing — company pays courier
+                                                {t.stlmShortfall}
                                                 <span className="stl-fin-hint">
-                                                    Salary exceeds cash held: {fmt(preview.totalCourierSalary)} − {fmt(preview.totalCashCourierHolds)}
+                                                    {t.stlmShortfallHint(fmt(preview.totalCourierSalary), fmt(preview.totalCashCourierHolds))}
                                                 </span>
                                             </span>
                                             <span className="stl-fin-value" style={{ color: '#6366f1', fontWeight: 700 }}>{fmt(cashShortfall)}</span>
@@ -305,8 +321,8 @@ export function SettlementModal({
                                     ) : (
                                         <div className="stl-fin-row">
                                             <span className="stl-fin-label">
-                                                Covered from collected cash
-                                                <span className="stl-fin-hint">Courier keeps salary from cash; nothing owed by company</span>
+                                                {t.stlmCoveredByCash}
+                                                <span className="stl-fin-hint">{t.stlmCoveredByCashHint}</span>
                                             </span>
                                             <span className="stl-fin-value stl-fin-value--income">{fmt(preview.totalCourierSalary)}</span>
                                         </div>
@@ -314,8 +330,8 @@ export function SettlementModal({
                                     <div className="stl-fin-divider" />
                                     <div className="stl-pay-input-row">
                                         <label htmlFor="stl-amount-paid" className="stl-fin-label">
-                                            Amount paid to courier
-                                            <span className="stl-fin-hint">How much you are paying the courier for this settlement</span>
+                                            {t.stlmAmountPaid}
+                                            <span className="stl-fin-hint">{t.stlmAmountPaidHint}</span>
                                         </label>
                                         <div className="stl-pay-input-wrap" data-invalid={!paidValid}>
                                             <span className="stl-pay-currency">₾</span>
@@ -333,11 +349,11 @@ export function SettlementModal({
                                         </div>
                                     </div>
                                     {!paidValid && (
-                                        <div className="stl-pay-note stl-pay-note--err">Enter a valid non-negative amount.</div>
+                                        <div className="stl-pay-note stl-pay-note--err">{t.stlmErrInvalidAmount}</div>
                                     )}
                                     {paidExceedsSalary && (
                                         <div className="stl-pay-note stl-pay-note--warn">
-                                            Amount exceeds the salary earned ({fmt(preview.totalCourierSalary)}).
+                                            {t.stlmWarnExceedsSalary(fmt(preview.totalCourierSalary))}
                                         </div>
                                     )}
                                 </div>
@@ -347,20 +363,20 @@ export function SettlementModal({
                             {preview.orders.length > 0 && (
                                 <fieldset className="modal__fieldset">
                                     <legend className="modal__legend">
-                                        Delivered Orders ({preview.orders.length})
+                                        {t.stlmDeliveredOrders(preview.orders.length)}
                                     </legend>
                                     <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
                                         <table className="go-orders-table settlement-orders-table">
                                             <thead>
                                                 <tr>
-                                                    <th>Tracking №</th>
-                                                    <th>Recipient</th>
-                                                    <th>City</th>
-                                                    <th>Payer</th>
-                                                    <th style={{ textAlign: 'right' }}>Svc ₾</th>
-                                                    <th style={{ textAlign: 'right' }}>Salary ₾</th>
-                                                    <th style={{ textAlign: 'right' }}>Revenue ₾</th>
-                                                    <th style={{ textAlign: 'right' }}>COD ₾</th>
+                                                    <th>{t.stlmThTracking}</th>
+                                                    <th>{t.stlmThRecipient}</th>
+                                                    <th>{t.stlmThCity}</th>
+                                                    <th>{t.stlmThPayer}</th>
+                                                    <th style={{ textAlign: 'right' }}>{t.stlmThSvc}</th>
+                                                    <th style={{ textAlign: 'right' }}>{t.stlmThSalary}</th>
+                                                    <th style={{ textAlign: 'right' }}>{t.stlmThRevenue}</th>
+                                                    <th style={{ textAlign: 'right' }}>{t.stlmThCod}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -381,7 +397,7 @@ export function SettlementModal({
                                                             <td style={{ color: 'var(--color-text-subtle)', fontSize: '0.8rem' }}>{o.recipientCity}</td>
                                                             <td>
                                                                 <span className={`stl-payer-badge stl-payer-badge--${o.whoPaysForCompanyService.toLowerCase()}`}>
-                                                                    {o.whoPaysForCompanyService === 'Recipient' ? 'Rcpt' : 'Sndr'}
+                                                                    {o.whoPaysForCompanyService === 'Recipient' ? t.stlmRcpt : t.stlmSndr}
                                                                 </span>
                                                             </td>
                                                             <td style={{ textAlign: 'right', fontWeight: 600 }}>
@@ -409,7 +425,7 @@ export function SettlementModal({
 
                             {preview.orders.length === 0 && (
                                 <p style={{ textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem', padding: '8px 0' }}>
-                                    No delivered orders found for {date}.
+                                    {t.stlmNoOrders(date)}
                                 </p>
                             )}
                         </>
@@ -424,7 +440,7 @@ export function SettlementModal({
                         onClick={onClose}
                         disabled={saving}
                     >
-                        Cancel
+                        {t.cancel}
                     </button>
                     <button
                         type="button"
@@ -432,19 +448,19 @@ export function SettlementModal({
                         onClick={handleSave}
                         disabled={saving || loading || !preview || hasIncomplete || !paidValid}
                         title={
-                            hasIncomplete ? 'Fix incomplete orders before saving'
-                            : !paidValid ? 'Enter a valid amount paid to the courier'
+                            hasIncomplete ? t.stlmFixHint
+                            : !paidValid ? t.stlmErrAmountTitle
                             : undefined
                         }
                     >
                         {saving ? (
-                            <><span className="btn__spinner" />{alreadyExists ? 'Updating…' : 'Saving…'}</>
+                            <><span className="btn__spinner" />{alreadyExists ? t.stlmUpdating : t.stlmSaving}</>
                         ) : (
                             <>
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                     <path d="M3 8l4 4 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
-                                {alreadyExists ? 'Update Settlement' : 'Save Settlement'}
+                                {alreadyExists ? t.stlmUpdateBtn : t.stlmSaveBtn}
                             </>
                         )}
                     </button>
@@ -478,6 +494,10 @@ export function SettlementModal({
                 @keyframes spin { to{transform:rotate(360deg)} }
 
                 .settlement-modal { width:min(820px,calc(100vw - 32px)); }
+                .stl-date-nav { display:flex;align-items:center;gap:6px; }
+                .stl-date-arrow { display:flex;align-items:center;justify-content:center;width:30px;height:34px;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-muted);transition:background var(--transition),color var(--transition),border-color var(--transition);flex-shrink:0; }
+                .stl-date-arrow:hover:not(:disabled) { background:var(--color-border);color:var(--color-text); }
+                .stl-date-arrow:disabled { opacity:0.35;cursor:not-allowed; }
                 .settlement-date-input { background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-size:0.875rem;padding:8px 12px;outline:none;font-family:var(--font-body);transition:border-color var(--transition); }
                 .settlement-date-input:focus { border-color:var(--color-accent); }
                 .settlement-warning { display:flex;align-items:flex-start;gap:10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:var(--radius-sm);color:#d97706;font-size:0.825rem;padding:10px 14px;line-height:1.5; }
