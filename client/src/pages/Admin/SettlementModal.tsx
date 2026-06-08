@@ -56,13 +56,10 @@ export function SettlementModal({
             const data = await fetchSettlementPreview(courierId, d, token);
             setPreview(data);
             setAlreadyExists(!!data.existingSettlementId);
-            // Pre-fill the payment with the previously recorded amount on update,
-            // or the full earned salary on a fresh settlement.
-            const defaultPaid =
-                data.existingSettlementId != null && data.existingAmountCourierWasPaid != null
-                    ? data.existingAmountCourierWasPaid
-                    : data.totalCourierSalary;
-            setAmountPaid(defaultPaid.toFixed(2));
+            // Pre-fill the input with the remaining outstanding balance (salary − already paid).
+            const alreadyPaid = data.existingAmountCourierWasPaid ?? 0;
+            const outstanding = Math.max(0, data.totalCourierSalary - alreadyPaid);
+            setAmountPaid(outstanding.toFixed(2));
         } catch (err) {
             setError(err instanceof SettlementApiError ? err.message : 'Failed to load preview.');
         } finally {
@@ -324,7 +321,7 @@ export function SettlementModal({
                                                 {t.stlmCoveredByCash}
                                                 <span className="stl-fin-hint">{t.stlmCoveredByCashHint}</span>
                                             </span>
-                                            <span className="stl-fin-value stl-fin-value--income">{fmt(preview.totalCourierSalary)}</span>
+                                            <span className="stl-fin-value stl-fin-value--income">{fmt(preview.existingAmountCourierWasPaid ?? 0)}</span>
                                         </div>
                                     )}
                                     <div className="stl-fin-divider" />
