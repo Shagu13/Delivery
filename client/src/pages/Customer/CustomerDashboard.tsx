@@ -72,6 +72,15 @@ function specialTypes(go: CustomerGroupOrder): string[] {
     .filter(tp => tp === 'Return' || tp === 'Exchange');
 }
 
+// Terminal "cancelled" statuses (mirrors the customer statistics page).
+const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
+
+// How many individual packages in a group are cancelled — surfaced as a card
+// chip so a single cancelled item isn't hidden until the group is expanded.
+function cancelledCount(go: CustomerGroupOrder): number {
+  return go.orders.filter(o => CANCELLED_STATUSES.has(o.status)).length;
+}
+
 // ── Main dashboard ─────────────────────────────────────────────────────────────
 
 export function CustomerDashboard() {
@@ -377,6 +386,17 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
               <StatusBadge status={go.status} />
               {specialTypes(go).map(tp => <TypeBadge key={tp} type={tp} />)}
+              {/* Whole-group cancellation already shows via StatusBadge; this flags
+                  the case where only some packages in an active group are cancelled. */}
+              {!CANCELLED_STATUSES.has(go.status) && cancelledCount(go) > 0 && (
+                <span style={{
+                  display: 'inline-block', padding: '2px 8px', borderRadius: 100,
+                  fontSize: '0.68rem', fontWeight: 700,
+                  background: 'rgba(239,68,68,0.12)', color: '#ef4444',
+                }}>
+                  {t.custCancelledCount(cancelledCount(go))}
+                </span>
+              )}
               <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)' }}>
                 {go.senderBusinessName}
               </span>

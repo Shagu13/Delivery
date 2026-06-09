@@ -13,7 +13,12 @@ public sealed class CancelGroupOrderByAdminCommandHandler
     : IRequestHandler<CancelGroupOrderByAdminCommand>
 {
     private readonly IAppDbContext _context;
-    public CancelGroupOrderByAdminCommandHandler(IAppDbContext context) => _context = context;
+    private readonly IRealtimeNotifier _notifier;
+    public CancelGroupOrderByAdminCommandHandler(IAppDbContext context, IRealtimeNotifier notifier)
+    {
+        _context = context;
+        _notifier = notifier;
+    }
 
     public async Task Handle(CancelGroupOrderByAdminCommand request, CancellationToken cancellationToken)
     {
@@ -28,6 +33,10 @@ public sealed class CancelGroupOrderByAdminCommandHandler
         // Cancel the group order itself
         groupOrder.Status = OrderStatus.CancelledByAdmin;
 
+        // Couriers whose active lists must drop these orders once cancelled.
+        var affectedCourierIds = new HashSet<Guid>();
+        if (groupOrder.CourierId is Guid groupCourier) affectedCourierIds.Add(groupCourier);
+
         // Also cancel all child orders that haven't been delivered yet
         foreach (var order in groupOrder.Orders)
         {
@@ -35,6 +44,7 @@ public sealed class CancelGroupOrderByAdminCommandHandler
                 order.Status != OrderStatus.CancelledByAdmin &&
                 order.Status != OrderStatus.CancelledBySender)
             {
+                if (order.CourierId is Guid orderCourier) affectedCourierIds.Add(orderCourier);
                 order.Status = OrderStatus.CancelledByAdmin;
             }
         }
@@ -44,5 +54,10 @@ public sealed class CancelGroupOrderByAdminCommandHandler
         // Recompute the batch invoice (keeps any delivered orders; soft-deletes if
         // none remain active).
         await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
+
+        // Live-refresh every affected courier's dashboard and the admins.
+        foreach (var courierId in affectedCourierIds)
+            _notifier.NotifyCourierOrdersChanged(courierId);
+        _notifier.NotifyAdminsOrdersChanged();
     }
 }

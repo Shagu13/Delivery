@@ -36,15 +36,18 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
 {
     private readonly IAppDbContext _context;
     private readonly IRecipientNotificationSmsService _recipientSms;
+    private readonly IRealtimeNotifier _notifier;
     private readonly ILogger<AssignCourierToOrderCommandHandler> _logger;
 
     public AssignCourierToOrderCommandHandler(
         IAppDbContext context,
         IRecipientNotificationSmsService recipientSms,
+        IRealtimeNotifier notifier,
         ILogger<AssignCourierToOrderCommandHandler> logger)
     {
         _context = context;
         _recipientSms = recipientSms;
+        _notifier = notifier;
         _logger = logger;
     }
 
@@ -74,10 +77,21 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)
             ?? throw new NotFoundException("Courier", request.CourierId);
 
+        // Capture the prior assignee so a re-assignment can drop the order from
+        // their active deliveries live.
+        var previousCourierId = order.CourierId;
+
         order.CourierId = courier.Id;
         order.AssignedToCourierAt = DateTime.UtcNow;
         order.Status = OrderStatus.CourierAssignedToDeliver;
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Live-refresh dashboards: the newly assigned courier (order appears),
+        // the previous courier on a re-assignment (order leaves), and admins.
+        _notifier.NotifyCourierOrdersChanged(courier.Id);
+        if (previousCourierId is Guid prev && prev != courier.Id)
+            _notifier.NotifyCourierOrdersChanged(prev);
+        _notifier.NotifyAdminsOrdersChanged();
 
         // ── Notify recipient via SMS ──────────────────────────────────────────
         // Fire-and-forget inside a try/catch so SMS failure never rolls back the assignment.
@@ -264,7 +278,12 @@ public sealed class RetryDeliveryCommandHandler : IRequestHandler<RetryDeliveryC
 public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrderByAdminCommand>
 {
     private readonly IAppDbContext _context;
-    public CancelOrderByAdminCommandHandler(IAppDbContext context) => _context = context;
+    private readonly IRealtimeNotifier _notifier;
+    public CancelOrderByAdminCommandHandler(IAppDbContext context, IRealtimeNotifier notifier)
+    {
+        _context = context;
+        _notifier = notifier;
+    }
 
     public async Task Handle(CancelOrderByAdminCommand request, CancellationToken cancellationToken)
     {
@@ -279,6 +298,9 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
         if (order.Status == OrderStatus.CancelledByAdmin)
             throw new ConflictException("Order is already cancelled.");
 
+        // Remember who had it so their open dashboard can drop it live.
+        var assignedCourierId = order.CourierId;
+
         order.Status = OrderStatus.CancelledByAdmin;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -290,6 +312,12 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
         // (standalone Return orders have no GroupOrderId — skip)
         if (order.GroupOrderId.HasValue)
             await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
+
+        // Live-refresh dashboards: the assigned courier (so the cancelled order
+        // leaves their active deliveries) and admins.
+        if (assignedCourierId is Guid courierId)
+            _notifier.NotifyCourierOrdersChanged(courierId);
+        _notifier.NotifyAdminsOrdersChanged();
     }
 }
 

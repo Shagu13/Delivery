@@ -20,7 +20,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using System.Text.RegularExpressions;
 
 namespace API.Controllers;
 
@@ -346,6 +345,11 @@ public sealed class GroupOrdersController : BaseController
 
             wsData.Cell(1, excelCol).Value = city.CityName;
 
+            // Name the district range by the city's position in the list, not its
+            // text. The dependent dropdown maps the selected city → this name via
+            // MATCH (see below), so it works for any script (Georgian / Latin) and
+            // sidesteps Excel's restrictions on characters in defined names.
+            var rangeName = $"DIST_{col + 1}";
             var districts = city.Districts.Count > 0 ? city.Districts : null;
 
             if (districts is null)
@@ -354,7 +358,6 @@ public sealed class GroupOrdersController : BaseController
                     ? city.CityNameGeo!
                     : city.CityName;
                 wsData.Cell(2, excelCol).Value = fallbackDisplay;
-                var rangeName = SanitizeRangeName(city.CityName);
                 var singleRange = wsData.Range(1, excelCol, 2, excelCol);
                 singleRange.AsTable("T_" + rangeName);
                 workbook.DefinedNames.Add(rangeName, wsData.Range(2, excelCol, 2, excelCol));
@@ -369,7 +372,6 @@ public sealed class GroupOrdersController : BaseController
                     wsData.Cell(row + 2, excelCol).Value = distDisplay;
                 }
 
-                var rangeName = SanitizeRangeName(city.CityName);
                 var distTableRange = wsData.Range(1, excelCol, districts.Count + 1, excelCol);
                 distTableRange.AsTable("T_" + rangeName);
                 workbook.DefinedNames.Add(rangeName, wsData.Range(2, excelCol, districts.Count + 1, excelCol));
@@ -468,7 +470,9 @@ public sealed class GroupOrdersController : BaseController
         for (int row = 2; row <= 500; row++)
         {
             var distVal = ws.Cell(row, 5).CreateDataValidation();
-            distVal.List($"INDIRECT(SUBSTITUTE(D{row},\" \",\"_\"))", true);
+            // Map the selected city (D{row}) to its district range by position:
+            // MATCH finds the city's index in CityList, giving the DIST_<n> name.
+            distVal.List($"INDIRECT(\"DIST_\"&MATCH(D{row},CityList,0))", true);
             distVal.ShowErrorMessage = true;
             distVal.ErrorTitle = isGeo ? "არასწორი რაიონი" : "Invalid District";
             distVal.ErrorMessage = isGeo
@@ -532,17 +536,6 @@ public sealed class GroupOrdersController : BaseController
         return File(ms.ToArray(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             fileName);
-    }
-
-    /// <summary>
-    /// Converts a city name into a valid Excel named range identifier.
-    /// Replaces any non-alphanumeric character with '_' and prepends '_' if it starts with a digit.
-    /// </summary>
-    private static string SanitizeRangeName(string name)
-    {
-        var s = Regex.Replace(name, @"[^A-Za-z0-9_]", "_");
-        if (char.IsDigit(s[0])) s = "_" + s;
-        return s;
     }
 
     [HttpPost("parse-excel")]
