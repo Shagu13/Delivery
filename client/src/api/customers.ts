@@ -61,7 +61,7 @@ export interface CustomerOrder {
   recipientDistrict: string; recipientDistrictGeo?: string; recipientAddress: string;
   description: string | null; status: string;
   orderType: 'Send' | 'Return' | 'Exchange';
-  isPaid: boolean; createdAt: string;
+  productPaymentStatus: 'NotPaid' | 'Paid'; createdAt: string;
   companyServicePrice?: number;
   amountToCollectForPackage?: number | null;
 }

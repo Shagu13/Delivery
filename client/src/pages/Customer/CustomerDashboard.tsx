@@ -436,10 +436,10 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                       <td style={{ padding: '10px 16px' }}>
                         <span style={{
                           padding: '2px 8px', borderRadius: 100, fontSize: '0.72rem', fontWeight: 700,
-                          background: o.isPaid ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                          color: o.isPaid ? '#10b981' : '#ef4444',
+                          background: o.productPaymentStatus === 'Paid' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                          color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444',
                         }}>
-                          {o.isPaid ? t.custPaid : t.custUnpaid}
+                          {o.productPaymentStatus === 'Paid' ? t.custPaid : t.custUnpaid}
                         </span>
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text)', fontSize: '0.82rem', fontWeight: 600 }}>
