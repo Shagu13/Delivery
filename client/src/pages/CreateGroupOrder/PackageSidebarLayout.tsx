@@ -282,6 +282,7 @@ function PackageDetail({
           <div className="psl-grid psl-grid--2">
             <FormField
               label={t.cgoRecipientFirstName}
+              required
               value={pkg.recipientFirstName}
               onChange={e => onChange(index, 'recipientFirstName', e.target.value)}
               error={fe('recipientFirstName')}
@@ -290,6 +291,7 @@ function PackageDetail({
             />
             <FormField
               label={t.cgoRecipientLastName}
+              required
               value={pkg.recipientLastName}
               onChange={e => onChange(index, 'recipientLastName', e.target.value)}
               error={fe('recipientLastName')}

@@ -2,6 +2,41 @@
    HOME PAGE  —  DILO redesign  (split hero + arc illustration)
    ═══════════════════════════════════════════════════════════════ */
 
+/* App-update control (force PWA refresh) */
+.home__update-row {
+    display: flex;
+    justify-content: center;
+    padding: 28px 16px calc(28px + env(safe-area-inset-bottom));
+}
+
+.update-app-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    background: var(--color-bg-2);
+    border: 1px solid var(--color-border);
+    border-radius: 100px;
+    color: var(--color-text-muted);
+    font-family: var(--font-body, inherit);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color var(--transition), border-color var(--transition), background var(--transition);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.update-app-btn:hover:not(:disabled) {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+    background: var(--color-accent-dim, var(--color-bg-3));
+}
+
+.update-app-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
 .home {
     min-height: 100vh;
     background-color: var(--color-bg);

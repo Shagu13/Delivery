@@ -38,6 +38,10 @@ export default defineConfig({
                 globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}'],
                 // Some bundled chunks (fonts, charts) are large — raise the precache cap.
                 maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+                // A new build's worker activates and claims open pages immediately;
+                // src/pwa-auto-update.ts then reloads the page so users see it.
+                skipWaiting: true,
+                clientsClaim: true,
             },
         }),
     ],

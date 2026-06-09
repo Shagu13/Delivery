@@ -430,6 +430,35 @@ body {
     padding: 14px 18px;
 }
 
+/* Validation summary listing every missing required field, grouped by
+   sender / order — visible regardless of which package card is open. */
+.global-error--summary {
+    display: block;
+    margin-bottom: 20px;
+}
+
+.global-error__title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+}
+
+.global-error__list {
+    margin: 8px 0 0;
+    padding-left: 26px;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.global-error__list li {
+    margin-top: 4px;
+}
+
+.global-error__list strong {
+    font-weight: 700;
+}
+
 /* ── Form Footer ─────────────────────────────────────────────────────────────── */
 .form-footer {
     display: flex;

@@ -344,6 +344,7 @@ export function PackageCard({
             <div className="grid grid--2">
               <FormField
                 label={t.cgoRecipientFirstName}
+                required
                 value={data.recipientFirstName}
                 onChange={e => onChange(index, 'recipientFirstName', e.target.value)}
                 error={fieldError('recipientFirstName')}
@@ -352,6 +353,7 @@ export function PackageCard({
               />
               <FormField
                 label={t.cgoRecipientLastName}
+                required
                 value={data.recipientLastName}
                 onChange={e => onChange(index, 'recipientLastName', e.target.value)}
                 error={fieldError('recipientLastName')}

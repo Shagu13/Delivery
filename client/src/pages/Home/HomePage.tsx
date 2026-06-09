@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { trackParcel, type TrackOrderResult } from '../../services/tracking';
+import { UpdateAppButton } from '../../components/UpdateAppButton';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
 import './home.css';
@@ -341,6 +342,12 @@ export function HomePage() {
                     </div>
                 </div>
             )}
+
+            {/* App-update control — lets installed-PWA users drop the cached
+                build and pull the latest version. */}
+            <div className="home__update-row">
+                <UpdateAppButton />
+            </div>
         </div>
     );
 }

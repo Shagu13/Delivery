@@ -104,6 +104,8 @@ function validate(
         const p = (field: string, val: string, errMsg: string) => {
             if (!val.trim()) errors[`orders[${i}].${field}`] = errMsg;
         };
+        p('recipientFirstName', pkg.recipientFirstName, t.cgoErrRecipientFirstName);
+        p('recipientLastName',  pkg.recipientLastName,  t.cgoErrRecipientLastName);
         p('recipientPhone',   pkg.recipientPhone,   t.cgoErrPhone);
         p('recipientAddress', pkg.recipientAddress, t.cgoErrAddress);
 
@@ -129,9 +131,12 @@ function validate(
             if (!pkg.amountToCollectForPackage || pkg.amountToCollectForPackage <= 0) {
                 errors[`orders[${i}].amountToCollectForPackage`] = t.cgoErrParcelPrice;
             }
-            if (!pkg.companyServicePrice || pkg.companyServicePrice <= 0) {
-                errors[`orders[${i}].companyServicePrice`] = t.cgoErrServiceFee;
-            }
+        }
+
+        // Every order incurs a courier service fee (auto-filled from the
+        // recipient / return-pickup district). Required for all payment types.
+        if (!pkg.companyServicePrice || pkg.companyServicePrice <= 0) {
+            errors[`orders[${i}].companyServicePrice`] = t.cgoErrServiceFee;
         }
 
         if (pkg.orderType === 'Return') {
@@ -481,6 +486,26 @@ export function CreateGroupOrderPage() {
         );
     }
 
+    // Group the current validation errors into a summary the customer can read
+    // at a glance — sender problems, and for multi-order submissions each
+    // order's missing fields listed under "Order N". The messages are already
+    // localised (stored in the errors map), so this works in both languages.
+    const senderErrorMsgs: string[] = [];
+    const orderErrorMsgs = new Map<number, string[]>();
+    Object.entries(errors).forEach(([key, msg]) => {
+        if (!msg) return;
+        const m = key.match(/^orders\[(\d+)\]\./);
+        if (m) {
+            const idx  = Number(m[1]);
+            const list = orderErrorMsgs.get(idx) ?? [];
+            if (!list.includes(msg)) list.push(msg);
+            orderErrorMsgs.set(idx, list);
+        } else if (!senderErrorMsgs.includes(msg)) {
+            senderErrorMsgs.push(msg);
+        }
+    });
+    const hasValidationSummary = senderErrorMsgs.length > 0 || orderErrorMsgs.size > 0;
+
     return (
         <div className="page">
             <main className="page__main">
@@ -489,6 +514,29 @@ export function CreateGroupOrderPage() {
                 </div>
 
                 <form className="order-form" onSubmit={handleSubmit} noValidate>
+                    {hasValidationSummary && (
+                        <div className="global-error global-error--summary" role="alert">
+                            <div className="global-error__title">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+                                    <path d="M8 5v4M8 11v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                </svg>
+                                {t.cgoFixErrorsTitle}
+                            </div>
+                            <ul className="global-error__list">
+                                {senderErrorMsgs.length > 0 && (
+                                    <li>
+                                        <strong>{t.cgoSenderLabel}:</strong> {senderErrorMsgs.join(' ')}
+                                    </li>
+                                )}
+                                {[...orderErrorMsgs.entries()].sort((a, b) => a[0] - b[0]).map(([idx, msgs]) => (
+                                    <li key={idx}>
+                                        <strong>{t.cgoOrderLabel(idx + 1)}:</strong> {msgs.join(' ')}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                     <SenderSection
                         data={sender}
                         errors={errors}
