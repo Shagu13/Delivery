@@ -86,6 +86,8 @@ export interface CourierSettlementItem {
     totalCompanyServiceRevenue: number;
     /** Courier's own salary earned that day. */
     totalCourierSalary: number;
+    /** How much of the salary the courier has actually been paid so far. */
+    amountCourierWasPaid: number;
     /** Amount the courier must hand over to the company (cash − salary). */
     totalCourierTransferToCompany: number;
     isTheDayClosed: boolean;

@@ -28,15 +28,19 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
     const { t } = useLanguage();
     const [expanded, setExpanded] = useState(false);
     const isDone = item.isTheDayClosed;
+    // Payment status is derived from salary owed vs. what was actually paid.
+    // remaining == 0 → fully paid; remaining > 0 → still owed to the courier.
+    const remainingSalary = item.totalCourierSalary - item.amountCourierWasPaid;
+    const isPaid = remainingSalary <= 0;
     return (
         <div className="settle-card">
             <button onClick={() => setExpanded(e => !e)} className={`settle-card__head${expanded ? ' settle-card__head--open' : ''}`}>
                 <div className="settle-card__head-main">
                     <div className="settle-card__title-row">
                         <span className="settle-card__date">{fmtDate(item.date)}</span>
-                        {isDone
-                            ? <span className="settle-badge settle-badge--closed">{t.cdSettClosed}</span>
-                            : <span className="settle-badge settle-badge--pending">{t.cdSettPending}</span>
+                        {isPaid
+                            ? <span className="settle-badge settle-badge--closed">{t.cdSettPaid}</span>
+                            : <span className="settle-badge settle-badge--pending">{t.cdSettPendingAmount(remainingSalary)}</span>
                         }
                     </div>
                     <div className="settle-card__meta">
@@ -64,6 +68,8 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
                     <FinRow label={t.cdSettCashCollected} value={`₾${item.totalAmountOfCashCollected.toFixed(2)}`} />
                     <FinRow label={t.cdSettTotalFees}     value={`₾${item.totalCompanyServiceRevenue.toFixed(2)}`} />
                     <FinRow label={t.cdSettYourSalary}    value={`₾${item.totalCourierSalary.toFixed(2)}`} highlight />
+                    <FinRow label={t.cdSettAmountPaid}    value={`₾${item.amountCourierWasPaid.toFixed(2)}`} />
+                    {!isPaid && <FinRow label={t.cdSettRemaining} value={`₾${remainingSalary.toFixed(2)}`} />}
                     {item.totalAmountOfCashCollected > 0 && item.totalCourierTransferToCompany >= 0 && (
                         <div className={`settle-transfer ${isDone ? 'settle-transfer--done' : 'settle-transfer--pending'}`}>
                             <div className="settle-transfer__label">{isDone ? t.cdSettTransferDone : t.cdSettTransferPending}</div>
