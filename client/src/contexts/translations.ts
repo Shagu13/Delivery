@@ -220,6 +220,7 @@ const en = {
   aopSalaryWarnTitle:  'Orders missing courier salary',
   aopSalaryWarnBody:   (n: number) => `${n} of your selected order${n !== 1 ? 's have' : ' has'} no courier salary set. Fill them in before assigning.`,
   aopFillSalaries:     'Fill in Salaries',
+  aopProceedAnyway:    'Proceed anyway',
   aopMissingSalaryCount: (n: number) => `${n} order${n !== 1 ? 's' : ''} missing salary`,
   aopDeselectAll:      'Deselect all',
   aopSelectAll:        'Select all',
@@ -977,6 +978,7 @@ const en = {
   custThAddress:             'Address',
   custThStatus:              'Status',
   custThPaid:                'Paid',
+  custThCod:                 'COD',
   custThServiceFee:          'Service Fee',
   custPaid:                  'Paid',
   custUnpaid:                'Unpaid',
@@ -1045,6 +1047,8 @@ const en = {
     pillReturnedToSender: 'Returned',
     pillExchangeCompleted: 'Exchanged',
 
+    navReturnExchange: 'Returns & Exchanges',
+
     // ── Finance / Statistics (CustomerSettlement) ─────────────────────────────
     navFinance:    'Finance',
     navStatistics: 'Statistics',
@@ -1078,8 +1082,8 @@ const en = {
     statNoRecords:          (year: number) => `No finance records for ${year}`,
     statNoRecordsHint:      'Invoices appear automatically when you place a batch order.',
     statSummaryDelivered:   'Delivered',
-    statSummaryCodOwed:     'COD owed to you',
-    statSummaryServiceOwed: 'Service you owe',
+    statSummaryCodOwed:     'COD',
+    statSummaryServiceOwed: 'Service',
     statPlaced:             (n: number) => `${n} placed`,
     statDelivered:          (n: number) => `${n} delivered`,
     statCodBlockTitle:      'COD ',
@@ -1427,6 +1431,7 @@ const ka: typeof en = {
   aopSalaryWarnTitle:  'შეკვეთები კურიერის ხელფასის გარეშე',
   aopSalaryWarnBody:   (n: number) => `${n} შეკვეთას კურიერის ხელფასი არ აქვს. გასაგზავნად ჯერ შეავსეთ.`,
   aopFillSalaries:     'ხელფასების შევსება',
+  aopProceedAnyway:    'მაინც გაგრძელება',
   aopMissingSalaryCount: (n: number) => `${n} შეკვეთა ხელფასის გარეშე`,
   aopDeselectAll:      'ფილტრის გასუფთავება',
   aopSelectAll:        'ყველაფრის მონიშვნა',
@@ -2184,6 +2189,7 @@ const ka: typeof en = {
   custThAddress:             'მისამართი',
   custThStatus:              'სტატუსი',
   custThPaid:                'გადახდა',
+  custThCod:                 'COD',
   custThServiceFee:          'სერვისის საფასური',
   custPaid:                  'გადახდილია',
   custUnpaid:                'გადასახდელია',
@@ -2250,6 +2256,8 @@ const ka: typeof en = {
     pillReturnedToSender: 'დაბრუნდა',
     pillExchangeCompleted: 'გაცვლა შედგა',
 
+    navReturnExchange: 'დაბრუნება და გაცვლა',
+
     // ── Finance / Statistics (CustomerSettlement) ─────────────────────────────
     navFinance:    'ფინანსები',
     navStatistics: 'სტატისტიკა',
@@ -2283,8 +2291,8 @@ const ka: typeof en = {
     statNoRecords:          (year: number) => `ფინანსური ჩანაწერები არ მოიძებნა ${year} წლისთვის`,
     statNoRecordsHint:      'ინვოისები ავტომატურად გამოჩნდება, როცა პარტიას განათავსებთ.',
     statSummaryDelivered:   'მიტანილი',
-    statSummaryCodOwed:     'თქვენთვის გადასახდელი COD',
-    statSummaryServiceOwed: 'თქვენი დავალიანება მომსახურებაზე',
+    statSummaryCodOwed:     'COD',
+    statSummaryServiceOwed: 'საკურიერო',
     statPlaced:             (n: number) => `${n} განთავსებული`,
     statDelivered:          (n: number) => `${n} მიტანილი`,
     statCodBlockTitle:      'COD',

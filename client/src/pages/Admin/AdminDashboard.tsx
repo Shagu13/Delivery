@@ -202,14 +202,14 @@ export function AdminDashboard() {
           <button
             className={`sidebar__link ${activeView === 'returnExchange' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('returnExchange')}
-            title="Returns & Exchanges"
+            title={t.navReturnExchange}
             style={{ position: 'relative' }}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M2 8a6 6 0 1 0 6-6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               <path d="M2 4v4h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span className="sidebar__link-text">Returns &amp; Exchanges</span>
+            <span className="sidebar__link-text">{t.navReturnExchange}</span>
             {returnExchangeCount > 0 && (
               <span className="sidebar__badge" style={{ background: '#ef4444', color: '#fff', marginLeft: 'auto' }}>
                 {returnExchangeCount > 99 ? '99+' : returnExchangeCount}
@@ -257,7 +257,7 @@ export function AdminDashboard() {
             {activeView === 'cities' && t.topbarCities}
             {activeView === 'weightTiers' && t.topbarWeightTiers}
             {activeView === 'history' && t.topbarHistory}
-            {activeView === 'returnExchange' && 'Returns & Exchanges'}
+            {activeView === 'returnExchange' && t.navReturnExchange}
             {activeView === 'finance' && t.navFinance}
           </span>
           {activeView === 'couriers' && (

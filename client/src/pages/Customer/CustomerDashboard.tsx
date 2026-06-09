@@ -401,7 +401,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    {[t.custThTracking, t.custThRecipient, t.custThCity, t.custThAddress, t.custThStatus, t.custThPaid, t.custThServiceFee].map(h => (
+                    {[t.custThTracking, t.custThRecipient, t.custThCity, t.custThAddress, t.custThStatus, t.custThPaid, t.custThCod, t.custThServiceFee].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600,
                         fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
                         color: 'var(--color-text-subtle)' }}>
@@ -441,6 +441,9 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                         }}>
                           {o.isPaid ? t.custPaid : t.custUnpaid}
                         </span>
+                      </td>
+                      <td style={{ padding: '10px 16px', color: 'var(--color-text)', fontSize: '0.82rem', fontWeight: 600 }}>
+                        {o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : '—'}
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
                         {o.companyServicePrice != null ? `₾${o.companyServicePrice.toFixed(2)}` : '—'}

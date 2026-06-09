@@ -63,6 +63,7 @@ export interface CustomerOrder {
   orderType: 'Send' | 'Return' | 'Exchange';
   isPaid: boolean; createdAt: string;
   companyServicePrice?: number;
+  amountToCollectForPackage?: number | null;
 }
 
 export interface CustomerGroupOrder {

@@ -44,6 +44,15 @@ public sealed class RecordCustomerSettlementPaymentCommandHandler
         {
             settlement.AmountPaidToCompanyForCompanyService       = service;
             settlement.TotalAmountPaidToCompanyForCompanyService += service;
+
+            // Reflect the new balance to the batch's sender-pays orders: fully paid
+            // (outstanding <= 0) → Paid, otherwise Unpaid. Partial payments are not
+            // attributed to individual orders — the remainder stays on the settlement.
+            var batchOrders = settlement.GroupOrderId is Guid groupId
+                ? await _context.Orders.Where(o => o.GroupOrderId == groupId).ToListAsync(cancellationToken)
+                : await _context.Orders.Where(o => o.Id == settlement.OrderId).ToListAsync(cancellationToken);
+
+            CustomerSettlementService.ApplyServicePaymentStatus(settlement, batchOrders);
         }
 
         settlement.UpdatedAt = DateTime.UtcNow;

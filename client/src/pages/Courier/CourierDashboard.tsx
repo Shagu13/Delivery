@@ -12,6 +12,7 @@ import { DeliveriesPanel } from './components/DeliveriesPanel';
 import { CourierHistoryPage } from './CourierHistoryPage';
 import { CourierSettlementsPage } from './CourierSettlementsPage';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
+import { useRefreshOnResume } from '../../hooks/useRefreshOnResume';
 
 // ── Media query hook ───────────────────────────────────────────────────────────
 function useIsMobile(breakpoint = 768) {
@@ -70,6 +71,14 @@ export function CourierDashboard() {
     // Live refresh: when the admin assigns (or reassigns) a pickup/delivery to this
     // courier, refetch both lists silently so the new order appears without a refresh.
     useOrdersChangedSignal(token ?? null, 'courierOrdersChanged', () => {
+        void loadPickups(true);
+        void loadDeliveries(true);
+    });
+
+    // Refresh on resume: when the courier returns to the app after backgrounding it
+    // (warm resume — SignalR pings fired while away are not replayed), silently
+    // refetch both lists so they're never looking at stale data.
+    useRefreshOnResume(() => {
         void loadPickups(true);
         void loadDeliveries(true);
     });

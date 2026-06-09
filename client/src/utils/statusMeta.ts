@@ -51,19 +51,19 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     Pending:                         { short: 'მოლოდინში',        description: 'შეკვეთა განხილვის მოლოდინშია.' },
     AcceptedGroupOrder:              { short: 'მიღებულია',        description: 'კომპანიამ შეკვეთა მიიღო.' },
     OrderNotAccepted:                { short: 'არ მიღებულა',      description: 'შეკვეთა ოპერატორმა არ მიიღო.' },
-    CourierAssignedToPickUp:         { short: 'კურიერი დაინიშნა', description: 'კურიერი დაინიშნა თქვენი ამანათის აყვანისთვის.' },
-    CourierOnTheWayToPickUp:         { short: 'მოდის',            description: 'კურიერი მიემართება თქვენს მისამართზე.' },
-    CourierDeliveringToWarehouse:    { short: 'საწყობისკენ',      description: 'კურიერი ამანათს საწყობში მიაქვს.' },
-    DeliveredToWarehouse:            { short: 'საწყობშია',        description: 'ამანათი საწყობს მიაღწია.' },
-    AdminAcceptedOrderInWareHouse:   { short: 'საწყობში',         description: 'ამანათი შემოწმებულია — მზადაა გასაგზავნად.' },
+    CourierAssignedToPickUp:         { short: 'კურიერი დაინიშნა', description: 'კურიერი დაინიშნა თქვენი ამანათის ასაღებად.' },
+    CourierOnTheWayToPickUp:         { short: 'მოდის',            description: 'კურიერი მოემართება თქვენს მისამართზე.' },
+    CourierDeliveringToWarehouse:    { short: 'საწყობისკენ',      description: 'კურიერს ამანათი საწყობში მიაქვს.' },
+    DeliveredToWarehouse:            { short: 'საწყობშია',        description: 'კურიერმა ამანათი საწყობში მიიტანა.' },
+    AdminAcceptedOrderInWareHouse:   { short: 'საწყობში',         description: 'ამანათი მზადაა გასაგზავნად.' },
     CancelledBySender:               { short: 'გაუქმებულია',      description: 'შეკვეთა გამგზავნმა გააუქმა.' },
 
     // ── Order (last-mile) flow ────────────────────────────────────────────────
     AcceptedOrder:                          { short: 'მიღებულია',        description: 'კომპანიამ შეკვეთა მიიღო.' },
-    OrderIsOnItsWayToRecipientsCity:        { short: 'გზაშია',           description: 'ამანათი მიმღების ქალაქისკენ მიდის.' },
-    CourierAssignedToDeliver:               { short: 'კურიერი დაინიშნა', description: 'კურიერი დაინიშნა მიტანისთვის.' },
+    OrderIsOnItsWayToRecipientsCity:        { short: 'გზაშია',           description: 'ამანათი მიმღების ქალაქისკენ გაიგზავნა.' },
+    CourierAssignedToDeliver:               { short: 'კურიერი დაინიშნა', description: 'კურიერი დაინიშნა ამანათის მისატანად.' },
     CourierDeliveringTheOrderToRecipient:   { short: 'მიტანის პროცესში', description: 'კურიერმა მიიღო ამანათი და მალე ჩაგბარდებათ.' },
-    DeliveryPostponed:                      { short: 'გადადებულია',       description: 'მიტანა ვერ შედგა — კურიერი ხელახლა სცდება.' },
+    DeliveryPostponed:                      { short: 'გადადებულია',       description: 'მიტანა ვერ მოხდა — კურიერი ხელახლა შეეცდება.' },
     DeliveredToRecipient:                   { short: 'ჩაბარდა',           description: 'ამანათი წარმატებით ჩაბარდა მიმღებს.' },
 
     // ── Admin override ────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
 
     // ── Return & Exchange terminals ───────────────────────────────────────────
     ReturnedToSender:                { short: 'დაბრუნდა',         description: 'ამანათი გამგზავნს დაუბრუნდა.' },
-    ExchangeCompleted:               { short: 'გაცვლა შედგა',     description: 'სათადარიგო ამანათი მიმღებს ჩაბარდა.' },
+    ExchangeCompleted:               { short: 'გაცვლა შედგა',     description: 'გაცვლილი ამანათი მიმღებს ჩაბარდა.' },
   },
 };
 
