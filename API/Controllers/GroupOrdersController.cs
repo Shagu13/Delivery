@@ -378,6 +378,23 @@ public sealed class GroupOrdersController : BaseController
             }
         }
 
+        // ── Payer option lists (for the "who pays" dependent dropdown) ────────
+        // PayerBoth = Sender + Recipient (used when the parcel is paid);
+        // PayerRecipient = Recipient only (used when the parcel is Not Paid).
+        string senderLabel    = isGeo ? "გამგზავნი" : "Sender";
+        string recipientLabel = isGeo ? "მიმღები"   : "Recipient";
+        int payerBothCol      = cities.Count + 3;
+        int payerRecipientCol = cities.Count + 4;
+
+        wsData.Cell(1, payerBothCol).Value = "PayerBoth";
+        wsData.Cell(2, payerBothCol).Value = senderLabel;
+        wsData.Cell(3, payerBothCol).Value = recipientLabel;
+        workbook.DefinedNames.Add("PayerBoth", wsData.Range(2, payerBothCol, 3, payerBothCol));
+
+        wsData.Cell(1, payerRecipientCol).Value = "PayerRecipient";
+        wsData.Cell(2, payerRecipientCol).Value = recipientLabel;
+        workbook.DefinedNames.Add("PayerRecipient", wsData.Range(2, payerRecipientCol, 2, payerRecipientCol));
+
         // ── Orders sheet ──────────────────────────────────────────────────────
         var ws = workbook.Worksheets.Add("Orders");
 
@@ -434,7 +451,7 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 6).Value = "პეკინის გამზ. 42";
             ws.Cell(2, 7).Value = "მტვრევადი – ფრთხილად";
             ws.Cell(2, 8).Value = "გადასახდელი";
-            ws.Cell(2, 9).Value = "გამგზავნი";
+            ws.Cell(2, 9).Value = "მიმღები";
             ws.Cell(2, 10).Value = "არა";
             ws.Cell(2, 11).Value = 45.00;
             ws.Cell(2, 12).Value = "";
@@ -449,16 +466,26 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 6).Value = "Pekini Ave 42";
             ws.Cell(2, 7).Value = "Fragile – handle with care";
             ws.Cell(2, 8).Value = "Not Paid";
-            ws.Cell(2, 9).Value = "Sender";
+            ws.Cell(2, 9).Value = "Recipient";
             ws.Cell(2, 10).Value = "No";
             ws.Cell(2, 11).Value = 45.00;
             ws.Cell(2, 12).Value = "";
         }
 
+        // The row-2 example is a placeholder. Grey/italic it via CONDITIONAL
+        // formatting that only applies while the cell still holds the sample text,
+        // so the moment the user types their own value the cell reverts to the
+        // normal black style and their data is clearly visible (a static grey
+        // style would otherwise stick and make real entries look faint).
+        var placeholderColor = XLColor.FromArgb(0xA8, 0xA1, 0x9A);
         foreach (var cell in ws.Row(2).CellsUsed())
         {
-            cell.Style.Font.Italic = true;
-            cell.Style.Font.FontColor = XLColor.FromArgb(0xA8, 0xA1, 0x9A);
+            var sample = cell.GetString();
+            if (string.IsNullOrEmpty(sample)) continue;
+
+            var whenSample = cell.AddConditionalFormat().WhenEquals(sample);
+            whenSample.Font.Italic = true;
+            whenSample.Font.FontColor = placeholderColor;
         }
 
         // ── City dropdown (D2:D500) ───────────────────────────────────────────
@@ -480,9 +507,8 @@ public sealed class GroupOrdersController : BaseController
                 : "Please select a city first, then choose a district.";
         }
 
-        // ── Static dropdowns (H, I, J) ────────────────────────────────────────
+        // ── Static dropdowns (H, J) ───────────────────────────────────────────
         string paymentOptions = isGeo ? "\"გადახდილი,გადასახდელი\"" : "\"Paid,Not Paid\"";
-        string payerOptions = isGeo ? "\"გამგზავნი,მიმღები\"" : "\"Sender,Recipient\"";
         string fragileOptions = isGeo ? "\"კი,არა\"" : "\"Yes,No\"";
 
         var paymentVal = ws.Range("H2:H500").CreateDataValidation();
@@ -491,11 +517,22 @@ public sealed class GroupOrdersController : BaseController
         paymentVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
         paymentVal.ErrorMessage = isGeo ? "აირჩიეთ: გადახდილი ან გადასახდელი" : "Choose Paid or Not Paid";
 
-        var payerVal = ws.Range("I2:I500").CreateDataValidation();
-        payerVal.List(payerOptions, true);
-        payerVal.ShowErrorMessage = true;
-        payerVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
-        payerVal.ErrorMessage = isGeo ? "აირჩიეთ: გამგზავნი ან მიმღები" : "Choose Sender or Recipient";
+        // ── "Who pays" dependent dropdown (I2:I500) ───────────────────────────
+        // When the payment status (H) is "Not Paid", the recipient always pays
+        // the courier fee, so the dropdown collapses to Recipient only. For paid
+        // parcels both options are offered. (The importer also forces Recipient
+        // on Not Paid rows, so the value is guaranteed even if left blank.)
+        string notPaidLiteral = isGeo ? "გადასახდელი" : "Not Paid";
+        for (int row = 2; row <= 500; row++)
+        {
+            var payerVal = ws.Cell(row, 9).CreateDataValidation();
+            payerVal.List($"IF(H{row}=\"{notPaidLiteral}\",PayerRecipient,PayerBoth)", true);
+            payerVal.ShowErrorMessage = true;
+            payerVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
+            payerVal.ErrorMessage = isGeo
+                ? "გადასახდელ ამანათზე იხდის მიმღები."
+                : "For Not Paid parcels the recipient pays.";
+        }
 
         var fragileVal = ws.Range("J2:J500").CreateDataValidation();
         fragileVal.List(fragileOptions, true);
@@ -648,11 +685,16 @@ public sealed class GroupOrdersController : BaseController
                     ? PaymentStatus.Paid
                     : PaymentStatus.NotPaid;
 
+            // Unpaid (COD) parcels: the recipient always pays the courier fee, so
+            // the payer is forced to Recipient regardless of the sheet value
+            // (matches the web order form). Only paid parcels honour the column.
             var payer =
-                payerRaw.Equals("Recipient", StringComparison.OrdinalIgnoreCase) ||
-                payerRaw.Equals("მიმღები", StringComparison.Ordinal)
+                paymentStatus == PaymentStatus.NotPaid
                     ? ServicePayer.Recipient
-                    : ServicePayer.Sender;
+                    : payerRaw.Equals("Recipient", StringComparison.OrdinalIgnoreCase) ||
+                      payerRaw.Equals("მიმღები", StringComparison.Ordinal)
+                        ? ServicePayer.Recipient
+                        : ServicePayer.Sender;
 
             var isFragile =
                 fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
