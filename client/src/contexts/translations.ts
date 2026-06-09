@@ -557,6 +557,8 @@ const en = {
   cgoServiceFeeHintRecipient: 'Collected from recipient by courier.',
   cgoServiceFeeHintSender:  'Paid by you (sender).',
   cgoServiceFeePlaceholder: 'Auto-filled on district select',
+  cgoTotalPrice:            'Total to Collect (₾)',
+  cgoTotalPriceHint:        'Parcel price + company service fee — collected from recipient.',
   cgoFragile:               'Fragile — contains glass or easily breakable items',
   // Validation messages
   cgoErrFirstName:          'First name is required.',
@@ -1780,6 +1782,8 @@ const ka: typeof en = {
   cgoServiceFeeHintRecipient: 'კურიერი მიმღებისგან აიღებს საკურიეროს.',
   cgoServiceFeeHintSender:  'თქვენ (გამგზავნი) იხდით.',
   cgoServiceFeePlaceholder: 'ავტომატურად შეივსება ქალაქის, რაიონის ან სოფლის არჩევისას',
+  cgoTotalPrice:            'ჯამში ასაღები (₾)',
+  cgoTotalPriceHint:        'ამანათის ფასი + საკურიერო მომსახურება — მიმღებისგან ასაღები.',
   cgoFragile:               'მტვრევადი — შეიცავს მინას ან ადვილად დაშლადს',
   // Validation messages
   cgoErrFirstName:          'სახელი სავალდებულოა.',

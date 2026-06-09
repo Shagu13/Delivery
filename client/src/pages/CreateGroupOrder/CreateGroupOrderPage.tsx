@@ -404,6 +404,9 @@ export function CreateGroupOrderPage() {
                 orders: packages.map(p => ({
                     ...p,
                     description: p.description?.trim() || undefined,
+                    // Unpaid (COD) parcels: the recipient always pays the courier
+                    // fee, so the chooser is hidden — pin the value to Recipient.
+                    whoPaysForCompanyService: p.productPaymentStatus === 'NotPaid' ? 'Recipient' : p.whoPaysForCompanyService,
                     amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
                     companyServicePrice: p.companyServicePrice ?? undefined,
                     weightPriceTierId: p.weightPriceTierId || undefined,

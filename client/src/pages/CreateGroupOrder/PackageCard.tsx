@@ -452,22 +452,29 @@ export function PackageCard({
                 </div>
               )}
 
-              <div className="form-field">
-                <label className="form-field__label">
-                  {t.cgoWhoPays} <span className="form-field__required">*</span>
-                </label>
-                <select
-                  className="form-field__input"
-                  value={data.whoPaysForCompanyService}
-                  onChange={e => handleServicePayerChange(e.target.value)}
-                >
-                  <option value="Sender">{t.cgoSender}</option>
-                  <option value="Recipient">{t.cgoRecipientPayer}</option>
-                </select>
-              </div>
+              {/* Who pays the courier fee is only a choice when the parcel is
+                  already paid. For unpaid (COD) parcels the recipient always
+                  pays it at delivery, so the field is hidden and forced to
+                  Recipient (see handlePaymentStatusChange). */}
+              {!showCollectAmount && (
+                <div className="form-field">
+                  <label className="form-field__label">
+                    {t.cgoWhoPays} <span className="form-field__required">*</span>
+                  </label>
+                  <select
+                    className="form-field__input"
+                    value={data.whoPaysForCompanyService}
+                    onChange={e => handleServicePayerChange(e.target.value)}
+                  >
+                    <option value="Sender">{t.cgoSender}</option>
+                    <option value="Recipient">{t.cgoRecipientPayer}</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             {showCollectAmount ? (
+              <>
               <div className="grid grid--2">
                 <div className="form-field">
                   <label className="form-field__label">
@@ -513,6 +520,21 @@ export function PackageCard({
                   )}
                 </div>
               </div>
+
+              <div className="form-field">
+                <label className="form-field__label">{t.cgoTotalPrice}</label>
+                <input
+                  type="number"
+                  readOnly
+                  className="form-field__input"
+                  style={{ background: 'var(--color-bg-subtle, #f5f5f5)', cursor: 'default', color: 'var(--color-text)', fontWeight: 700 }}
+                  value={((data.amountToCollectForPackage ?? 0) + (data.companyServicePrice ?? 0)).toFixed(2)}
+                />
+                <p className="form-field__hint" style={{ marginTop: 4, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                  {t.cgoTotalPriceHint}
+                </p>
+              </div>
+              </>
             ) : (
               <div className="form-field">
                 <label className="form-field__label">{t.cgoServiceFee}</label>

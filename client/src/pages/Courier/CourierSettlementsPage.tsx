@@ -66,7 +66,6 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
                         ))}
                     </div>
                     <FinRow label={t.cdSettCashCollected} value={`₾${item.totalAmountOfCashCollected.toFixed(2)}`} />
-                    <FinRow label={t.cdSettTotalFees}     value={`₾${item.totalCompanyServiceRevenue.toFixed(2)}`} />
                     <FinRow label={t.cdSettYourSalary}    value={`₾${item.totalCourierSalary.toFixed(2)}`} highlight />
                     <FinRow label={t.cdSettAmountPaid}    value={`₾${item.amountCourierWasPaid.toFixed(2)}`} />
                     {!isPaid && <FinRow label={t.cdSettRemaining} value={`₾${remainingSalary.toFixed(2)}`} />}

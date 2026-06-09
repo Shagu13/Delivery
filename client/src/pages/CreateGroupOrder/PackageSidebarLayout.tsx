@@ -371,13 +371,18 @@ function PackageDetail({
                 </select>
               </div>
             )}
-            <div className="form-field">
-              <label className="form-field__label">{t.cgoWhoPays} <span className="form-field__required">*</span></label>
-              <select className="form-field__input" value={pkg.whoPaysForCompanyService} onChange={e => onChange(index, 'whoPaysForCompanyService', e.target.value)}>
-                <option value="Sender">{t.cgoSender}</option>
-                <option value="Recipient">{t.cgoRecipientPayer}</option>
-              </select>
-            </div>
+            {/* Hidden for unpaid (COD) parcels — the recipient always pays the
+                courier fee at delivery, forced to Recipient in
+                handlePaymentStatusChange. Only a choice when already paid. */}
+            {!showCOD && (
+              <div className="form-field">
+                <label className="form-field__label">{t.cgoWhoPays} <span className="form-field__required">*</span></label>
+                <select className="form-field__input" value={pkg.whoPaysForCompanyService} onChange={e => onChange(index, 'whoPaysForCompanyService', e.target.value)}>
+                  <option value="Sender">{t.cgoSender}</option>
+                  <option value="Recipient">{t.cgoRecipientPayer}</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {showCOD && (
@@ -405,6 +410,18 @@ function PackageDetail({
                 <p className="form-field__hint">{pkg.whoPaysForCompanyService === 'Recipient' ? t.cgoServiceFeeHintRecipient : t.cgoServiceFeeHintSender}</p>
                 {fe('companyServicePrice') && <p className="form-field__error">{fe('companyServicePrice')}</p>}
               </div>
+            </div>
+          )}
+
+          {showCOD && (
+            <div className="form-field">
+              <label className="form-field__label">{t.cgoTotalPrice}</label>
+              <input
+                type="number" readOnly className="form-field__input"
+                style={{ background: 'var(--color-bg-3)', cursor: 'default', color: 'var(--color-text)', fontWeight: 700 }}
+                value={((pkg.amountToCollectForPackage ?? 0) + (pkg.companyServicePrice ?? 0)).toFixed(2)}
+              />
+              <p className="form-field__hint">{t.cgoTotalPriceHint}</p>
             </div>
           )}
 

@@ -126,7 +126,7 @@ export function CustomerDashboard() {
           </svg>
           Delivery
         </div>
-        <span className="sidebar__role-badge">{t.custRoleBadge}</span>
+        <span className="sidebar__role-badge">{profile?.businessName ?? t.custRoleBadge}</span>
 
         <div className="sidebar__divider" />
         <p className="sidebar__section-label">{t.custMyAccount}</p>
@@ -170,7 +170,7 @@ export function CustomerDashboard() {
               <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
             </svg>
             <span className="cust-mobile-topbar__brand">Delivery</span>
-            <span className="cust-role-badge-sm">{t.custRoleBadge}</span>
+            <span className="cust-role-badge-sm">{profile?.businessName ?? t.custRoleBadge}</span>
           </div>
           <button
             className="cust-hamburger"
