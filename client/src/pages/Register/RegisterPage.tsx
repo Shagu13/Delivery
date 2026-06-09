@@ -61,7 +61,14 @@ export function RegisterPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       e.email = t.errEmailInvalid;
     }
-    if (form.password.length < 8)    e.password        = t.errPasswordShort;
+    // Mirror ASP.NET Identity's password policy so unmet rules surface here as
+    // clear warnings instead of an opaque server error: min 8, an uppercase,
+    // a lowercase, and a digit.
+    if (!form.password)                        e.password = t.errPasswordRequired;
+    else if (form.password.length < 8)         e.password = t.errPasswordShort;
+    else if (!/[A-Z]/.test(form.password))     e.password = t.errPasswordUppercase;
+    else if (!/[a-z]/.test(form.password))     e.password = t.errPasswordLowercase;
+    else if (!/[0-9]/.test(form.password))     e.password = t.errPasswordNumber;
     if (!form.confirmPassword)        e.confirmPassword  = t.errConfirmPasswordRequired;
     else if (form.password !== form.confirmPassword) e.confirmPassword = t.errPasswordMismatch;
     setErrors(e);
@@ -104,6 +111,9 @@ export function RegisterPage() {
     }
   };
 
+  // Every unmet validation, in form order, for an at-a-glance summary banner.
+  const errorMessages = (Object.values(errors).filter(Boolean) as string[]);
+
   return (
     <div className="register-page">
       <div className="register-card">
@@ -125,6 +135,21 @@ export function RegisterPage() {
                 <path d="M8 5v4M8 11v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
               {apiError}
+            </div>
+          )}
+
+          {errorMessages.length > 0 && (
+            <div className="register-form__error register-form__error--summary" role="alert">
+              <div className="register-form__error-title">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M8 5v4M8 11v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                {t.errFixTitle}
+              </div>
+              <ul className="register-form__error-list">
+                {errorMessages.map((m, i) => <li key={i}>{m}</li>)}
+              </ul>
             </div>
           )}
 

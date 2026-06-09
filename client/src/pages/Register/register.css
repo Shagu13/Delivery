@@ -66,6 +66,28 @@
   padding: 11px 14px;
 }
 
+/* Summary banner listing every unmet validation at once. */
+.register-form__error--summary {
+  display: block;
+}
+
+.register-form__error-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 700;
+}
+
+.register-form__error-list {
+  margin: 7px 0 0;
+  padding-left: 26px;
+  line-height: 1.5;
+}
+
+.register-form__error-list li {
+  margin-top: 3px;
+}
+
 .register-form__section-label {
   font-size: 0.72rem;
   font-weight: 700;
