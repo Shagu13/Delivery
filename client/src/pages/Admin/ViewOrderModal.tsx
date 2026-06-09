@@ -31,7 +31,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function ViewOrderModal({ order, open, onClose }: Props) {
-    const { lang } = useLanguage();
+    const { lang, t } = useLanguage();
 
     useEffect(() => {
         if (!open) return;
@@ -52,10 +52,14 @@ export function ViewOrderModal({ order, open, onClose }: Props) {
         return new Date(iso).toLocaleString();
     };
 
+    const orderTypeLabel = order.orderType === 'Return'   ? t.aopOrderTypeReturn
+                         : order.orderType === 'Exchange' ? t.aopOrderTypeExchange
+                         : t.aopOrderTypeSend;
+
     const revenue = order.companyRevenue != null
         ? `₾${order.companyRevenue.toFixed(2)}`
         : (order.companyServicePrice && order.courierSalary != null)
-            ? `₾${(order.companyServicePrice - order.courierSalary).toFixed(2)} (calculated)`
+            ? `₾${(order.companyServicePrice - order.courierSalary).toFixed(2)} ${t.vomCalculated}`
             : null;
 
     return createPortal(
@@ -91,55 +95,55 @@ export function ViewOrderModal({ order, open, onClose }: Props) {
                 {/* Body */}
                 <div className="modal__body vom-body">
 
-                    <Section title="Order Info">
-                        <Row label="Type"      value={order.orderType} />
-                        <Row label="Courier"   value={order.courierFullName
+                    <Section title={t.vomSecOrderInfo}>
+                        <Row label={t.vomLblType}      value={orderTypeLabel} />
+                        <Row label={t.vomLblCourier}   value={order.courierFullName
                             ? <span className="vom-courier">{order.courierFullName}</span>
-                            : <span className="vom-unassigned">Unassigned</span>} />
-                        <Row label="Created"   value={formatDate(order.createdAt)} />
-                        <Row label="Delivered" value={formatDate(order.deliveredAt)} />
-                        {order.isFragile && <Row label="Fragile" value="⚠ Yes" />}
-                        {order.description && <Row label="Description" value={order.description} />}
+                            : <span className="vom-unassigned">{t.vomUnassigned}</span>} />
+                        <Row label={t.vomLblCreated}   value={formatDate(order.createdAt)} />
+                        <Row label={t.vomLblDelivered} value={formatDate(order.deliveredAt)} />
+                        {order.isFragile && <Row label={t.vomLblFragile} value={t.vomFragileYes} />}
+                        {order.description && <Row label={t.vomLblDescription} value={order.description} />}
                     </Section>
 
-                    <Section title="Sender">
-                        <Row label="Business"  value={order.senderBusinessName} />
-                        <Row label="Name"      value={`${order.senderFirstName} ${order.senderLastName}`.trim()} />
-                        <Row label="Phone"     value={order.senderPhone} />
+                    <Section title={t.vomSecSender}>
+                        <Row label={t.vomLblBusiness}  value={order.senderBusinessName} />
+                        <Row label={t.vomLblName}      value={`${order.senderFirstName} ${order.senderLastName}`.trim()} />
+                        <Row label={t.vomLblPhone}     value={order.senderPhone} />
                     </Section>
 
-                    <Section title="Recipient">
-                        <Row label="Name"     value={`${order.recipientFirstName} ${order.recipientLastName}`.trim()} />
-                        <Row label="Phone"    value={order.recipientPhone} />
-                        <Row label="City"     value={city} />
-                        <Row label="District" value={district} />
-                        <Row label="Address"  value={order.recipientAddress} />
+                    <Section title={t.vomSecRecipient}>
+                        <Row label={t.vomLblName}     value={`${order.recipientFirstName} ${order.recipientLastName}`.trim()} />
+                        <Row label={t.vomLblPhone}    value={order.recipientPhone} />
+                        <Row label={t.vomLblCity}     value={city} />
+                        <Row label={t.vomLblDistrict} value={district} />
+                        <Row label={t.vomLblAddress}  value={order.recipientAddress} />
                     </Section>
 
                     {order.orderType === 'Return' && (order.returnPickupCity || order.returnPickupAddress) && (
-                        <Section title="Return Pickup Address">
-                            <Row label="City"     value={order.returnPickupCity} />
-                            <Row label="District" value={order.returnPickupDistrict} />
-                            <Row label="Address"  value={order.returnPickupAddress} />
+                        <Section title={t.vomSecReturnPickup}>
+                            <Row label={t.vomLblCity}     value={order.returnPickupCity} />
+                            <Row label={t.vomLblDistrict} value={order.returnPickupDistrict} />
+                            <Row label={t.vomLblAddress}  value={order.returnPickupAddress} />
                         </Section>
                     )}
 
-                    <Section title="Financials">
-                        <Row label="Service Payer"   value={order.whoPaysForCompanyService} />
-                        <Row label="Payment Status"  value={order.productPaymentStatus} />
+                    <Section title={t.vomSecFinancials}>
+                        <Row label={t.vomLblServicePayer}   value={order.whoPaysForCompanyService} />
+                        <Row label={t.vomLblPaymentStatus}  value={order.productPaymentStatus} />
                         {order.amountToCollectForPackage != null && (
-                            <Row label="COD Amount" value={`₾${order.amountToCollectForPackage.toFixed(2)}`} />
+                            <Row label={t.vomLblCodAmount} value={`₾${order.amountToCollectForPackage.toFixed(2)}`} />
                         )}
-                        <Row label="Service Price"  value={order.companyServicePrice > 0 ? `₾${order.companyServicePrice.toFixed(2)}` : '—'} />
-                        <Row label="Courier Salary" value={order.courierSalary != null ? `₾${order.courierSalary.toFixed(2)}` : '—'} />
-                        <Row label="Revenue"        value={revenue} />
+                        <Row label={t.vomLblServicePrice}  value={order.companyServicePrice > 0 ? `₾${order.companyServicePrice.toFixed(2)}` : '—'} />
+                        <Row label={t.vomLblSalary}        value={order.courierSalary != null ? `₾${order.courierSalary.toFixed(2)}` : '—'} />
+                        <Row label={t.vomLblRevenue}       value={revenue} />
                     </Section>
 
                 </div>
 
                 {/* Footer */}
                 <div className="modal__footer" style={{ padding: '14px 24px' }}>
-                    <button className="modal__btn-cancel" onClick={onClose}>Close</button>
+                    <button className="modal__btn-cancel" onClick={onClose}>{t.vomClose}</button>
                 </div>
             </div>
 

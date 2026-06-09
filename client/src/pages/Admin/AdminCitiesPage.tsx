@@ -98,7 +98,9 @@ export default function AdminCitiesPage({ token }: Props) {
   }, []);
 
   const filteredCities = cities.filter(c =>
-    cityLabel(c).toLowerCase().includes(citySearch.toLowerCase())
+    cityLabel(c).toLowerCase().includes(citySearch.toLowerCase()) ||
+    c.cityName.toLowerCase().includes(citySearch.toLowerCase()) ||
+    (c.cityNameGeo ?? '').toLowerCase().includes(citySearch.toLowerCase())
   );
 
   async function selectCity(city: City) {

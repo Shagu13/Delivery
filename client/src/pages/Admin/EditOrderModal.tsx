@@ -4,6 +4,7 @@ import { updateOrder, adminMarkOrderDelivered, adminMarkReturnAtWarehouse, assig
 import type { AdminOrderItem } from './AdminOrdersPage';
 import type { Courier } from '../../api/couriers';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { useLanguage } from '../../contexts/useLanguage';
 
 interface Props {
     order: AdminOrderItem | null;
@@ -16,19 +17,6 @@ interface Props {
     couriers?: Courier[];
     onActioned?: () => void;
 }
-
-const ORDER_TYPE_OPTIONS = [
-    { value: 'Send',     label: 'Send',     color: 'var(--color-text-subtle)' },
-    { value: 'Return',   label: 'Return',   color: '#ef4444' },
-    { value: 'Exchange', label: 'Exchange', color: '#3b82f6' },
-] as const;
-
-const STATUS_OVERRIDE_OPTIONS = [
-    { value: '',                  label: '— no change —' },
-    { value: 'ReturnedToSender',  label: '↩ Returned to Sender' },
-    { value: 'ExchangeCompleted', label: '✓ Exchange Completed' },
-    { value: 'CancelledByAdmin',  label: '✗ Cancel (Admin)' },
-];
 
 export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDelivered, canMarkWarehouse, couriers = [], onActioned }: Props) {
     // ── Form state ────────────────────────────────────────────────────────────
@@ -56,6 +44,21 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
     const [saving,     setSaving]     = useState(false);
     const [error,      setError]      = useState<string | null>(null);
     const [activeTab,  setActiveTab]  = useState<'delivery' | 'financials' | 'type'>('delivery');
+
+    const { t } = useLanguage();
+
+    const ORDER_TYPE_OPTIONS = [
+        { value: 'Send',     label: t.cgoOrderTypeSend,     color: 'var(--color-text-subtle)' },
+        { value: 'Return',   label: t.cgoOrderTypeReturn,   color: '#ef4444' },
+        { value: 'Exchange', label: t.cgoOrderTypeExchange, color: '#3b82f6' },
+    ];
+
+    const STATUS_OVERRIDE_OPTIONS = [
+        { value: '',                  label: t.eomStatusNoChange },
+        { value: 'ReturnedToSender',  label: t.eomStatusReturnedToSender },
+        { value: 'ExchangeCompleted', label: t.eomStatusExchangeCompleted },
+        { value: 'CancelledByAdmin',  label: t.eomStatusCancelledAdmin },
+    ];
 
     // ── Status action state ───────────────────────────────────────────────────
     const [actionConfirm,   setActionConfirm]   = useState<'delivered' | 'warehouse' | null>(null);
@@ -168,7 +171,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                 {/* Header */}
                 <div className="modal__header">
                     <div>
-                        <p className="modal__eyebrow">Edit Order</p>
+                        <p className="modal__eyebrow">{t.eomEyebrow}</p>
                         <h2 className="modal__title" id="edit-order-title">
                             <span className="tn-badge" style={{ fontSize: '0.85rem', marginRight: 8 }}>{order.trackingNumber}</span>
                             {(order.orderType && order.orderType !== 'Send') && (
@@ -199,20 +202,20 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                             <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
                             <path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                         </svg>
-                        Recipient &amp; Package
+                        {t.eomTabDelivery}
                     </button>
                     <button className={`eom-tab${activeTab === 'type' ? ' eom-tab--active' : ''}`} onClick={() => setActiveTab('type')}>
                         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                             <path d="M2 8h12M8 2l4 6-4 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
-                        Type &amp; Status
+                        {t.eomTabType}
                     </button>
                     <button className={`eom-tab${activeTab === 'financials' ? ' eom-tab--active' : ''}`} onClick={() => setActiveTab('financials')}>
                         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                             <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
                             <path d="M8 5v6M6 7h3.5a1.5 1.5 0 010 3H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                         </svg>
-                        Financials
+                        {t.eomTabFinancials}
                     </button>
                 </div>
 
@@ -231,19 +234,19 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                     {/* ── Delivery tab ───────────────────────────────────────── */}
                     {activeTab === 'delivery' && (
                         <fieldset className="modal__fieldset">
-                            <legend className="modal__legend">Recipient</legend>
+                            <legend className="modal__legend">{t.eomLegendRecipient}</legend>
                             <div className="eom-grid">
-                                <Field label="First Name" required>
+                                <Field label={t.eomFirstName} required>
                                     <input className="eom-input" value={firstName} onChange={e => setFirstName(e.target.value)} />
                                 </Field>
-                                <Field label="Last Name" required>
+                                <Field label={t.eomLastName} required>
                                     <input className="eom-input" value={lastName} onChange={e => setLastName(e.target.value)} />
                                 </Field>
-                                <Field label="Phone" required className="eom-col-2">
+                                <Field label={t.eomPhone} required className="eom-col-2">
                                     <input className="eom-input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
                                 </Field>
 
-                                <Field label="Delivery City / District" required className="eom-col-2">
+                                <Field label={t.eomDeliveryCity} required className="eom-col-2">
                                     <CityDistrictPicker
                                         cityValue={city}
                                         districtValue={district}
@@ -252,36 +255,36 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         onDistrictSelect={() => {}}
                                     />
                                 </Field>
-                                <Field label="Street Address" required className="eom-col-2">
+                                <Field label={t.streetAddress} required className="eom-col-2">
                                     <input className="eom-input" value={address} onChange={e => setAddress(e.target.value)} />
                                 </Field>
-                                <Field label="Description" className="eom-col-2">
+                                <Field label={t.eomDescription} className="eom-col-2">
                                     <input className="eom-input" value={description} onChange={e => setDescription(e.target.value)} />
                                 </Field>
-                                <Field label="Payment Status" required>
+                                <Field label={t.eomPayStatus} required>
                                     <select className="eom-input" value={payStatus} onChange={e => setPayStatus(e.target.value)}>
-                                        <option value="NotPaid">Not Paid</option>
-                                        <option value="Paid">Paid</option>
+                                        <option value="NotPaid">{t.eomUnpaid}</option>
+                                        <option value="Paid">{t.eomPaid}</option>
                                     </select>
                                 </Field>
-                                <Field label="Service Payer" required>
+                                <Field label={t.eomServicePayer} required>
                                     <select className="eom-input" value={payer} onChange={e => setPayer(e.target.value)}>
-                                        <option value="Sender">Sender</option>
-                                        <option value="Recipient">Recipient</option>
+                                        <option value="Sender">{t.eomPayerSender}</option>
+                                        <option value="Recipient">{t.eomPayerRecipient}</option>
                                     </select>
                                 </Field>
                                 {payStatus === 'NotPaid' && (
-                                    <Field label="COD Amount (₾)" className="eom-col-2">
+                                    <Field label={t.eomCodAmount} className="eom-col-2">
                                         <div className="eom-currency-wrap">
                                             <span className="eom-currency">₾</span>
                                             <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={codAmount} onChange={e => setCodAmount(e.target.value)} placeholder="0.00" />
                                         </div>
                                     </Field>
                                 )}
-                                <Field label="Fragile" className="eom-col-2">
+                                <Field label={t.eomFragile} className="eom-col-2">
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                                         <input type="checkbox" checked={isFragile} onChange={e => setIsFragile(e.target.checked)} />
-                                        <span style={{ fontSize: '0.875rem' }}>⚠ Contains fragile items</span>
+                                        <span style={{ fontSize: '0.875rem' }}>{t.eomFragileContains}</span>
                                     </label>
                                 </Field>
                             </div>
@@ -292,7 +295,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                     {activeTab === 'type' && (
                         <>
                             <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Order Type</legend>
+                                <legend className="modal__legend">{t.eomLegendOrderType}</legend>
                                 <div className="eom-type-row">
                                     {ORDER_TYPE_OPTIONS.map(opt => (
                                         <button
@@ -307,18 +310,18 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                     ))}
                                 </div>
                                 <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: 10, lineHeight: 1.5 }}>
-                                    {orderType === 'Return'   && 'Return: courier collects parcel from recipient and brings to warehouse. Fill in the pickup address below.'}
-                                    {orderType === 'Exchange' && 'Exchange: replacement parcel delivered to recipient. Operationally same as Send.'}
-                                    {orderType === 'Send'     && 'Standard delivery from warehouse to recipient.'}
+                                    {orderType === 'Return'   && t.eomOrderTypeReturnDesc}
+                                    {orderType === 'Exchange' && t.eomOrderTypeExchangeDesc}
+                                    {orderType === 'Send'     && t.eomOrderTypeSendDesc}
                                 </p>
                             </fieldset>
 
                             {/* Return pickup address */}
                             {isReturn && (
                                 <fieldset className="modal__fieldset" style={{ borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.03)' }}>
-                                    <legend className="modal__legend" style={{ color: '#ef4444' }}>Return Pickup Address</legend>
+                                    <legend className="modal__legend" style={{ color: '#ef4444' }}>{t.eomLegendReturnPickup}</legend>
                                     <div className="eom-grid">
-                                        <Field label="City / District" required className="eom-col-2">
+                                        <Field label={t.eomReturnCityDistrict} required className="eom-col-2">
                                             <CityDistrictPicker
                                                 cityValue={returnCity}
                                                 districtValue={returnDistrict}
@@ -327,12 +330,12 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                                 onDistrictSelect={() => {}}
                                             />
                                         </Field>
-                                        <Field label="Street Address" required className="eom-col-2">
+                                        <Field label={t.streetAddress} required className="eom-col-2">
                                             <input
                                                 className="eom-input"
                                                 value={returnAddress}
                                                 onChange={e => setReturnAddress(e.target.value)}
-                                                placeholder="Address where courier collects the parcel"
+                                                placeholder={t.eomReturnAddressPh}
                                             />
                                         </Field>
                                     </div>
@@ -341,9 +344,9 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
 
                             {/* Status override */}
                             <fieldset className="modal__fieldset">
-                                <legend className="modal__legend">Set Terminal Status</legend>
+                                <legend className="modal__legend">{t.eomLegendTerminalStatus}</legend>
                                 <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                                    Use this to mark a Return or Exchange as complete. Leave blank to keep the current status.
+                                    {t.eomTerminalStatusHint}
                                 </p>
                                 <div className="eom-type-row">
                                     {STATUS_OVERRIDE_OPTIONS.map(opt => (
@@ -364,15 +367,15 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                     {/* ── Financials tab ─────────────────────────────────── */}
                     {activeTab === 'financials' && (
                         <fieldset className="modal__fieldset">
-                            <legend className="modal__legend">Financial Fields</legend>
+                            <legend className="modal__legend">{t.eomLegendFinancials}</legend>
                             <div className="eom-grid">
-                                <Field label="Company Service Price (₾)" required>
+                                <Field label={t.eomSvcPrice} required>
                                     <div className="eom-currency-wrap">
                                         <span className="eom-currency">₾</span>
                                         <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={svcPrice} onChange={e => setSvcPrice(e.target.value)} />
                                     </div>
                                 </Field>
-                                <Field label="Courier Salary (₾)">
+                                <Field label={t.eomCourierSalary}>
                                     <div className="eom-currency-wrap">
                                         <span className="eom-currency">₾</span>
                                         <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={salary} onChange={e => setSalary(e.target.value)} placeholder="0.00" />
@@ -380,11 +383,11 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                 </Field>
                                 {svcPrice && salary && (
                                     <div className="eom-col-2 eom-revenue-preview">
-                                        <span>Company Revenue = </span>
+                                        <span>{t.eomRevenuePreview}</span>
                                         <strong style={{ color: (parseFloat(svcPrice) - parseFloat(salary)) >= 0 ? '#10b981' : '#ef4444' }}>
                                             ₾{(parseFloat(svcPrice || '0') - parseFloat(salary || '0')).toFixed(2)}
                                         </strong>
-                                        <span className="eom-hint"> (auto-calculated on save)</span>
+                                        <span className="eom-hint">{t.eomRevenueHint}</span>
                                     </div>
                                 )}
                             </div>
@@ -402,7 +405,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                         {actionConfirm ? (
                             <div className="eom-action-confirm">
                                 <span className="eom-action-confirm__label">
-                                    {actionConfirm === 'delivered' ? 'Confirm mark as delivered?' : 'Confirm mark as at warehouse?'}
+                                    {actionConfirm === 'delivered' ? t.eomConfirmDelivered : t.eomConfirmWarehouse}
                                 </span>
 
                                 {/* Optional courier assignment for unassigned delivered orders */}
@@ -412,7 +415,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         value={actionCourierId}
                                         onChange={e => setActionCourierId(e.target.value)}
                                     >
-                                        <option value="">Skip — no courier</option>
+                                        <option value="">{t.eomSkipNoCourier}</option>
                                         {couriers.map(c => (
                                             <option key={c.courierId} value={c.courierId}>
                                                 {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
@@ -425,7 +428,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                 {needsSalary && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#ef4444', whiteSpace: 'nowrap' }}>
-                                            Salary *
+                                            {t.eomSalaryRequired}
                                         </span>
                                         <div className="eom-currency-wrap" style={{ width: 100 }}>
                                             <span className="eom-currency">₾</span>
@@ -448,23 +451,23 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         disabled={actionBusy}
                                         onClick={() => { setActionConfirm(null); setActionCourierId(''); setActionSalary(''); setActionError(null); }}
                                     >
-                                        Cancel
+                                        {t.cancel}
                                     </button>
                                     <button
                                         type="button"
                                         className={`eom-action-btn${actionConfirm === 'delivered' ? ' eom-action-btn--delivered' : ' eom-action-btn--warehouse'}`}
                                         disabled={actionBusy || !canConfirm}
-                                        title={!canConfirm ? 'Enter courier salary to proceed' : undefined}
+                                        title={!canConfirm ? t.eomSalaryHint : undefined}
                                         onClick={() => void handleAction()}
                                     >
-                                        {actionBusy ? '…' : 'Confirm'}
+                                        {actionBusy ? '…' : t.goConfirm}
                                     </button>
                                 </div>
                             </div>
                         ) : (
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                 <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-subtle)', marginRight: 4 }}>
-                                    Mark as:
+                                    {t.eomMarkAsLabel}
                                 </span>
                                 {canMarkDelivered && (
                                     <button
@@ -472,7 +475,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         className="eom-action-btn eom-action-btn--delivered"
                                         onClick={() => setActionConfirm('delivered')}
                                     >
-                                        ✓ Delivered to Recipient
+                                        {t.eomMarkDelivered}
                                     </button>
                                 )}
                                 {canMarkWarehouse && (
@@ -481,7 +484,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         className="eom-action-btn eom-action-btn--warehouse"
                                         onClick={() => setActionConfirm('warehouse')}
                                     >
-                                        ✓ Delivered to Warehouse
+                                        {t.eomMarkWarehouse}
                                     </button>
                                 )}
                             </div>
@@ -491,13 +494,13 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
 
                 {/* Footer */}
                 <div className="modal__footer" style={{ padding: '16px 24px' }}>
-                    <button type="button" className="modal__btn-cancel" onClick={onClose} disabled={saving}>Cancel</button>
+                    <button type="button" className="modal__btn-cancel" onClick={onClose} disabled={saving}>{t.cancel}</button>
                     <button type="button" className="modal__btn-submit" onClick={handleSave} disabled={saving}>
-                        {saving ? <><span className="btn__spinner" />Saving…</> : <>
+                        {saving ? <><span className="btn__spinner" />{t.eomSaving}</> : <>
                             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                 <path d="M3 8l4 4 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
-                            Save Changes
+                            {t.eomSaveChanges}
                         </>}
                     </button>
                 </div>

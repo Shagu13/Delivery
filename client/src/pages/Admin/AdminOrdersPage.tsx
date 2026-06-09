@@ -277,6 +277,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
 
+  const [showTracking,  setShowTracking]  = useState(true);
+  const [showPrices,    setShowPrices]    = useState(true);
+
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkPrice,     setBulkPrice]     = useState('');
   const [bulkSalary,    setBulkSalary]    = useState('');
@@ -517,20 +520,31 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   return (
     <div className="aop-root">
 
-      {/* Pending Assign / Assigned tabs */}
-      <div className="go-seg" style={{ alignSelf: 'flex-start', marginBottom: 12 }}>
-        <button
-          className={`go-seg__btn${assignTab === 'pending' ? ' go-seg__btn--active' : ''}`}
-          onClick={() => setAssignTab('pending')}
-        >
-          {t.aopTabPendingAssign}
-        </button>
-        <button
-          className={`go-seg__btn${assignTab === 'assigned' ? ' go-seg__btn--active' : ''}`}
-          onClick={() => setAssignTab('assigned')}
-        >
-          {t.aopTabAssigned}
-        </button>
+      {/* Pending Assign / Assigned tabs + column toggles */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, alignSelf: 'flex-start', marginBottom: 12, flexWrap: 'wrap' }}>
+        <div className="go-seg">
+          <button
+            className={`go-seg__btn${assignTab === 'pending' ? ' go-seg__btn--active' : ''}`}
+            onClick={() => setAssignTab('pending')}
+          >
+            {t.aopTabPendingAssign}
+          </button>
+          <button
+            className={`go-seg__btn${assignTab === 'assigned' ? ' go-seg__btn--active' : ''}`}
+            onClick={() => setAssignTab('assigned')}
+          >
+            {t.aopTabAssigned}
+          </button>
+        </div>
+
+        <label className="aop-col-toggle">
+          <input type="checkbox" checked={showTracking} onChange={e => setShowTracking(e.target.checked)} />
+          {t.aopShowTracking}
+        </label>
+        <label className="aop-col-toggle">
+          <input type="checkbox" checked={showPrices} onChange={e => setShowPrices(e.target.checked)} />
+          {t.aopShowPrices}
+        </label>
       </div>
 
       {/* Toolbar */}
@@ -903,16 +917,15 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                     title={allSelected ? t.aopDeselectAll : t.aopSelectAll}
                   />
                 </th>
-                <th className="aop-th">{t.aopThTracking}</th>
+                {showTracking && <th className="aop-th">{t.aopThTracking}</th>}
                 <th className="aop-th">{t.aopThSender}</th>
                 <th className="aop-th">{t.aopThRecipient}</th>
                 <th className="aop-th">{t.aopThPhone}</th>
                 <th className="aop-th">{t.aopThCityDistrict}</th>
-              {/*  <th className="aop-th">{t.aopThDescription}</th>*/}
                 <th className="aop-th">{t.aopThStatus}</th>
-                <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>
-                <th className="aop-th aop-th--num">{t.aopThSalary}</th>
-                <th className="aop-th aop-th--num">{t.aopThRevenue}</th>
+                {showPrices && <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>}
+                {showPrices && <th className="aop-th aop-th--num">{t.aopThSalary}</th>}
+                {showPrices && <th className="aop-th aop-th--num">{t.aopThRevenue}</th>}
                 <th className="aop-th">{t.aopThPaid}</th>
                 <th className="aop-th">Actions</th>
               </tr>
@@ -936,9 +949,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                         disabled={!selectable}
                         onChange={() => selectable && toggleOne(order.id)}/>
                     </td>
-                    <td className="aop-td">
-                      <span className="tn-badge">{order.trackingNumber}</span>
-                    </td>
+                    {showTracking && (
+                      <td className="aop-td">
+                        <span className="tn-badge">{order.trackingNumber}</span>
+                      </td>
+                    )}
                     <td className="aop-td">
                       <div className="aop-sender-biz">{order.senderBusinessName}</div>
                       <div className="aop-sender-name">{order.senderFirstName} {order.senderLastName}</div>
@@ -952,10 +967,6 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       <div className="aop-city">{lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity}</div>
                       <div className="aop-district">{lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict}</div>
                     </td>
-                    {/*<td className="aop-td aop-td--desc">*/}
-                    {/*  {order.isFragile && <span className="aop-fragile">{t.aopFragile}</span>}*/}
-                    {/*  {order.description && order.description !== 'Fragile – handle with care' && <span>{order.description}</span>}*/}
-                    {/*</td>*/}
                     <td className="aop-td">
                       <span
                         className="status-badge"
@@ -970,24 +981,30 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                         </div>
                       )}
                     </td>
-                    <td className="aop-td aop-td--num">
-                      {missingPrice
-                        ? <span className="aop-missing">{t.aopNotSet}</span>
-                        : <span className="aop-price">₾{order.companyServicePrice.toFixed(2)}</span>
-                      }
-                    </td>
-                    <td className="aop-td aop-td--num">
-                      {missingSalary
-                        ? <span className="aop-missing">{t.aopNotSet}</span>
-                        : <span className="aop-price">₾{order.courierSalary!.toFixed(2)}</span>
-                      }
-                    </td>
-                    <td className="aop-td aop-td--num">
-                      {order.companyRevenue != null
-                        ? <span className="aop-price">₾{order.companyRevenue.toFixed(2)}</span>
-                        : <span className="aop-price aop-price--empty">—</span>
-                      }
-                    </td>
+                    {showPrices && (
+                      <td className="aop-td aop-td--num">
+                        {missingPrice
+                          ? <span className="aop-missing">{t.aopNotSet}</span>
+                          : <span className="aop-price">₾{order.companyServicePrice.toFixed(2)}</span>
+                        }
+                      </td>
+                    )}
+                    {showPrices && (
+                      <td className="aop-td aop-td--num">
+                        {missingSalary
+                          ? <span className="aop-missing">{t.aopNotSet}</span>
+                          : <span className="aop-price">₾{order.courierSalary!.toFixed(2)}</span>
+                        }
+                      </td>
+                    )}
+                    {showPrices && (
+                      <td className="aop-td aop-td--num">
+                        {order.companyRevenue != null
+                          ? <span className="aop-price">₾{order.companyRevenue.toFixed(2)}</span>
+                          : <span className="aop-price aop-price--empty">—</span>
+                        }
+                      </td>
+                    )}
                     <td className="aop-td">
                       {order.productPaymentStatus === 'Paid'
                         ? <span className="aop-paid">{t.aopPaid}</span>
@@ -1077,6 +1094,18 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
       <style>{`
         .aop-root { display: flex; flex-direction: column; min-height: 0; }
+
+        /* ── Column toggles ── */
+        .aop-col-toggle {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 0.78rem; font-weight: 600; color: var(--color-text-subtle);
+          cursor: pointer; user-select: none; white-space: nowrap;
+          padding: 6px 10px; border-radius: var(--radius-sm);
+          border: 1px solid var(--color-border); background: var(--color-bg-3);
+          transition: all var(--transition);
+        }
+        .aop-col-toggle:hover { color: var(--color-text); border-color: var(--color-text-subtle); }
+        .aop-col-toggle input[type="checkbox"] { width: 13px; height: 13px; cursor: pointer; accent-color: var(--color-accent); margin: 0; }
 
         /* ── Toolbar ── */
         .aop-toolbar {
