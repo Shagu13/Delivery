@@ -170,18 +170,15 @@ export function CustomerDashboard() {
             <span className="cust-mobile-topbar__brand">Delivery</span>
             <span className="cust-role-badge-sm">{t.custRoleBadge}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div className="sidebar__avatar">{initials}</div>
-            <button
-              className="cust-hamburger"
-              onClick={() => setMobileMenuOpen(true)}
-              aria-label="Open navigation"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
+          <button
+            className="cust-hamburger"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open navigation"
+          >
+            <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
+              <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
 
         {/* ── Mobile menu bottom sheet ── */}
