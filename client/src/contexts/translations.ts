@@ -19,6 +19,12 @@ const en = {
   backToHome:         '← Back to home',
   createAccount:      'Create account',
 
+  // ── PWA install ───────────────────────────────────────────────────────────
+  installApp:         'Install Dilo app',
+  installAppShort:    'Install app',
+  installIosHint:     'To install: tap the Share button, then “Add to Home Screen”.',
+  installIosTitle:    'Add Dilo to your home screen',
+
   // ── Field labels ──────────────────────────────────────────────────────────
   firstName:          'First name',
   lastName:           'Last name',
@@ -1222,6 +1228,12 @@ const ka: typeof en = {
   or:                 'ან',
   backToHome:         '← მთავარ გვერდზე',
   createAccount:      'ანგარიშის შექმნა',
+
+  // ── PWA install ───────────────────────────────────────────────────────────
+  installApp:         'Dilo აპლიკაციის დაყენება',
+  installAppShort:    'აპლიკაციის დაყენება',
+  installIosHint:     'დასაყენებლად: დააჭირეთ „გაზიარების“ ღილაკს და აირჩიეთ „Add to Home Screen“.',
+  installIosTitle:    'დაამატეთ Dilo მთავარ ეკრანზე',
 
   // ── Field labels ──────────────────────────────────────────────────────────
   firstName:          'სახელი',

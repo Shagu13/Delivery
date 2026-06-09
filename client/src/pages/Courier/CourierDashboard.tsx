@@ -12,6 +12,7 @@ import { DeliveriesPanel } from './components/DeliveriesPanel';
 import { CourierHistoryPage } from './CourierHistoryPage';
 import { CourierSettlementsPage } from './CourierSettlementsPage';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
+import { InstallButton } from '../../components/ui/InstallButton';
 
 // ── Media query hook ───────────────────────────────────────────────────────────
 function useIsMobile(breakpoint = 768) {
@@ -110,6 +111,7 @@ export function CourierDashboard() {
                 </header>
                 <main className="mobile-content">
                     {toast && <div className="dashboard__toast">{toast}</div>}
+                    <InstallButton />
                     <div className="mobile-tabs">
                         <button className={`mobile-tab${view === 'pickups'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('pickups')}>{t.cdTabPickups}</button>
                         <button className={`mobile-tab${view === 'deliveries'  ? ' mobile-tab--active' : ''}`} onClick={() => setView('deliveries')}>{t.cdTabDeliveries}</button>
@@ -162,6 +164,7 @@ export function CourierDashboard() {
             </aside>
             <main className="dashboard__main">
                 {toast && <div className="dashboard__toast">{toast}</div>}
+                <InstallButton />
                 {view === 'pickups'     && <PickupsPanel    {...pickupProps} />}
                 {view === 'deliveries'  && <DeliveriesPanel {...deliveryProps} />}
                 {view === 'history'     && <CourierHistoryPage />}
