@@ -35,6 +35,19 @@ export interface CustomerSettlement {
     updatedAt: string | null;
 }
 
+/** A customer's aggregated outstanding balance across all their batch invoices. */
+export interface CustomerOutstanding {
+    customerId: string;
+    businessName: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string;
+    /** Company owes the customer: collected COD not yet paid back. */
+    outstandingCodOwedToCustomer: number;
+    /** Customer owes the company: sender-paid service fees not yet paid. */
+    outstandingServiceOwedToCompany: number;
+}
+
 export interface RecordPaymentRequest {
     /** The batch invoice to record the payment against. */
     settlementId: string;
@@ -76,6 +89,14 @@ export async function fetchCustomerSettlements(
         { headers: authHeaders(token), cache: 'no-store' },
     );
     return handle<CustomerSettlement[]>(res, 'Failed to load invoices');
+}
+
+/** All customers that currently owe, or are owed, money — for the finance overview. */
+export async function fetchCustomersWithOutstanding(token: string): Promise<CustomerOutstanding[]> {
+    const res = await fetch('/api/customersettlements/outstanding', {
+        headers: authHeaders(token), cache: 'no-store',
+    });
+    return handle<CustomerOutstanding[]>(res, 'Failed to load outstanding balances');
 }
 
 export async function recordCustomerSettlementPayment(

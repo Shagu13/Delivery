@@ -23,6 +23,16 @@ public sealed class CustomerSettlementsController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/customersettlements/outstanding  (Admin) — all customers owing/owed ──
+    [HttpGet("outstanding")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<CustomerOutstandingDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOutstanding(CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCustomersWithOutstandingBalancesQuery(), ct);
+        return Ok(result);
+    }
+
     // ── GET /api/customersettlements/my  (Customer) — read-only ───────────────
     [HttpGet("my")]
     [Authorize(Roles = "Customer")]

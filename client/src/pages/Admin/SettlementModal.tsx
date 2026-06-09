@@ -115,6 +115,13 @@ export function SettlementModal({
     const cashShortfall = preview
         ? Math.max(0, preview.totalCourierSalary - preview.totalCashCourierHolds)
         : 0;
+    // "Transfer to company" tracks what the admin actually pays the courier: the
+    // cash the courier holds minus the amount paid out to them. Recomputes live as
+    // the admin edits the amount-paid input. Negative ⇒ the company owes the courier.
+    const effectivePaid = paidValid ? paidNum : 0;
+    const liveTransferToCompany = preview
+        ? preview.totalCashCourierHolds - effectivePaid
+        : 0;
 
     return createPortal(
         <>
@@ -268,13 +275,13 @@ export function SettlementModal({
                                         <span className="stl-fin-label">{t.stlmNetIncome}</span>
                                         <span className="stl-fin-value stl-fin-value--income">{fmt(preview.totalCompanyNetIncome)}</span>
                                     </div>
-                                    {preview.totalCourierTransferToCompany >= 0 ? (
+                                    {liveTransferToCompany >= 0 ? (
                                         <div className="stl-fin-row">
                                             <span className="stl-fin-label">
                                                 {t.stlmCourierToCompany}
                                                 <span className="stl-fin-hint">{t.stlmCourierToCompanyHint}</span>
                                             </span>
-                                            <span className="stl-fin-value stl-fin-value--transfer">{fmt(preview.totalCourierTransferToCompany)}</span>
+                                            <span className="stl-fin-value stl-fin-value--transfer">{fmt(liveTransferToCompany)}</span>
                                         </div>
                                     ) : (
                                         <div className="stl-fin-row">
@@ -282,7 +289,7 @@ export function SettlementModal({
                                                 {t.stlmCompanyToCourier}
                                                 <span className="stl-fin-hint">{t.stlmCompanyToCourierHint}</span>
                                             </span>
-                                            <span className="stl-fin-value" style={{ color: '#6366f1' }}>{fmt(Math.abs(preview.totalCourierTransferToCompany))}</span>
+                                            <span className="stl-fin-value" style={{ color: '#6366f1' }}>{fmt(Math.abs(liveTransferToCompany))}</span>
                                         </div>
                                     )}
                                 </div>

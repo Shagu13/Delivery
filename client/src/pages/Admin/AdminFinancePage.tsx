@@ -12,6 +12,7 @@ import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/c
 import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
 import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
+import { OutstandingBalancesModal } from './OutstandingBalancesModal';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -435,22 +436,36 @@ export default function AdminFinancePage({ token }: { token: string }) {
     const [tab, setTab] = useState<'customers' | 'couriers' | 'history'>('customers');
     // Bumped after a payment so the company cash-position card reloads without a refresh.
     const [overviewRefresh, setOverviewRefresh] = useState(0);
+    const [showOutstanding, setShowOutstanding] = useState(false);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {/* Company overview */}
             <CompanyOverviewCard token={token} refreshSignal={overviewRefresh} />
 
-            {/* Tab bar — no wrapping card */}
-            <div className="go-seg" style={{ display: 'inline-flex', alignSelf: 'flex-start' }}>
-                <button className={`go-seg__btn ${tab === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('customers')}>{t.finTabCustomers}</button>
-                <button className={`go-seg__btn ${tab === 'couriers'  ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('couriers')}>{t.finTabCouriers}</button>
-                <button className={`go-seg__btn ${tab === 'history'   ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('history')}>{t.finTabHistory}</button>
+            {/* Tab bar + outstanding-balances launcher */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div className="go-seg" style={{ display: 'inline-flex' }}>
+                    <button className={`go-seg__btn ${tab === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('customers')}>{t.finTabCustomers}</button>
+                    <button className={`go-seg__btn ${tab === 'couriers'  ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('couriers')}>{t.finTabCouriers}</button>
+                    <button className={`go-seg__btn ${tab === 'history'   ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('history')}>{t.finTabHistory}</button>
+                </div>
+                <button className="btn-primary" onClick={() => setShowOutstanding(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+                        <path d="M8 4.5v4l2.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {t.finOutBtn}
+                </button>
             </div>
 
             {tab === 'customers' && <CustomerInvoicesSection token={token} onPaid={() => setOverviewRefresh(k => k + 1)} />}
             {tab === 'couriers'  && <CourierSettlementsSection token={token} onSettled={() => setOverviewRefresh(k => k + 1)} />}
             {tab === 'history'   && <AdminFinanceHistoryTab token={token} />}
+
+            {showOutstanding && (
+                <OutstandingBalancesModal token={token} onClose={() => setShowOutstanding(false)} />
+            )}
         </div>
     );
 }
