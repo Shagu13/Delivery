@@ -11,6 +11,7 @@ import { PickupsPanel } from './components/PickupsPanel';
 import { DeliveriesPanel } from './components/DeliveriesPanel';
 import { CourierHistoryPage } from './CourierHistoryPage';
 import { CourierSettlementsPage } from './CourierSettlementsPage';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { useRefreshOnResume } from '../../hooks/useRefreshOnResume';
 
@@ -112,6 +113,7 @@ export function CourierDashboard() {
                         </div>
                     </div>
                     <div className="mobile-topbar__right">
+                        <LanguageToggle />
                         <div className="mobile-topbar__avatar">{initials}</div>
                         <span className="mobile-topbar__name">{fullName}</span>
                         <button className="mobile-topbar__signout" onClick={handleSignOut} title={t.signOut}>⎋</button>
@@ -161,6 +163,7 @@ export function CourierDashboard() {
                             <div className="sidebar__user-handle">{t.cdRoleCourier}</div>
                         </div>
                     </div>
+                    <div style={{ marginBottom: 8 }}><LanguageToggle /></div>
                     <button className="sidebar__logout" onClick={handleSignOut}>
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                             <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

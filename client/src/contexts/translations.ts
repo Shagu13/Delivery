@@ -952,6 +952,7 @@ const en = {
 
   // ── Customer Dashboard ────────────────────────────────────────────────────
   custRoleBadge:             'Customer',
+  custMenu:                  'Menu',
   custMyAccount:             'My Account',
   custNavShipments:          'My Shipments',
   custNavProfile:            'Edit Profile',
@@ -2174,6 +2175,7 @@ const ka: typeof en = {
 
   // ── Customer Dashboard ────────────────────────────────────────────────────
   custRoleBadge:             'მომხმარებელი',
+  custMenu:                  'მენიუ',
   custMyAccount:             'ჩემი ანგარიში',
   custNavShipments:          'ჩემი გზავნილები',
   custNavProfile:            'პროფილის რედაქტირება',

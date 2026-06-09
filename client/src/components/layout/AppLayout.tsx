@@ -9,6 +9,12 @@ import './layout.css';
 // /send is intentionally NOT here — logged-in customers are allowed there.
 const REDIRECT_IF_AUTHED = ['/', '/login', '/register'];
 
+// Routes whose page renders its own self-contained shell (own logo + sidebar /
+// mobile top bar). StaffNav would stack a second navbar with a duplicate
+// "Delivery" logo on top of them, so it is suppressed here. Admin has no shell
+// of its own and relies on StaffNav, so it is intentionally not listed.
+const SELF_SHELLED_PREFIXES = ['/customer', '/courier'];
+
 interface AppLayoutProps {
     children: React.ReactNode;
 }
@@ -31,9 +37,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         navigate(dest, { replace: true });
     }, [isAuthenticated, user, location.pathname, navigate]);
 
+    const hideStaffNav = SELF_SHELLED_PREFIXES.some(p => location.pathname.startsWith(p));
+
     return (
         <div className="app-layout">
-            {user ? <StaffNav /> : <PublicNav />}
+            {!user ? <PublicNav /> : hideStaffNav ? null : <StaffNav />}
             <main className="app-layout__main">
                 {children}
             </main>

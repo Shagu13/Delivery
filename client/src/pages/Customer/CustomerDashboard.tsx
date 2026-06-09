@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import {
   getMyProfile, getMyOrders,
   updateMyProfile, changePassword,
@@ -152,6 +153,7 @@ export function CustomerDashboard() {
               <div className="sidebar__user-handle">{profile?.email ?? user?.username}</div>
             </div>
           </div>
+          <div style={{ marginBottom: 8 }}><LanguageToggle /></div>
           <button className="sidebar__logout" onClick={handleSignOut}>
             {logoutIcon} {t.signOut}
           </button>
@@ -175,9 +177,10 @@ export function CustomerDashboard() {
             onClick={() => setMobileMenuOpen(true)}
             aria-label="Open navigation"
           >
-            <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
+            {t.custMenu}
           </button>
         </div>
 
@@ -213,6 +216,7 @@ export function CustomerDashboard() {
                 ))}
               </nav>
               <div className="cust-menu-sheet__footer">
+                <div style={{ marginBottom: 10 }}><LanguageToggle /></div>
                 <button className="sidebar__logout" onClick={handleSignOut}>
                   {logoutIcon} {t.signOut}
                 </button>
