@@ -420,11 +420,28 @@
   }
 
   .dashboard__content {
-    padding: 20px;
+    padding: 16px;
   }
 
   .stat-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .cust-mobile-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--color-bg-2);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-shrink: 0;
+  }
+
+  .dashboard__topbar {
+    padding: 12px 16px;
   }
 }
 
@@ -438,6 +455,128 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ── Customer Mobile Topbar ── */
+.cust-mobile-topbar {
+  display: none;
+}
+
+.cust-mobile-topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text);
+}
+
+.cust-mobile-topbar__brand {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.cust-role-badge-sm {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+  border: 1px solid rgba(196, 127, 23, 0.2);
+  border-radius: 100px;
+  padding: 2px 8px;
+}
+
+.cust-hamburger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 9px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cust-hamburger:hover {
+  background: var(--color-bg-3);
+  color: var(--color-text);
+}
+
+/* ── Customer Mobile Menu (bottom sheet) ── */
+@keyframes cust-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.cust-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+}
+
+.cust-menu-sheet {
+  width: 100%;
+  background: var(--color-bg-2);
+  border-radius: 20px 20px 0 0;
+  max-height: 85dvh;
+  display: flex;
+  flex-direction: column;
+  animation: cust-slide-up 0.22s ease both;
+}
+
+.cust-menu-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.cust-menu-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-bg-3);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+
+.cust-menu-close:hover {
+  background: var(--color-border);
+}
+
+.cust-menu-sheet__nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.cust-menu-sheet__nav .sidebar__link {
+  padding: 12px 16px;
+  font-size: 0.9rem;
+}
+
+.cust-menu-sheet__footer {
+  padding: 8px 8px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 /* Courier Dashboard Cards */
@@ -1182,4 +1321,36 @@
 /* Small phones: collapse the multi-column grids to single column */
 @media (max-width: 360px) {
     .settle-summary { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Customer dashboard mobile card tweaks ── */
+@media (max-width: 480px) {
+  .content-card__header {
+    padding: 12px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .stat-grid {
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 14px 16px;
+  }
+
+  .stat-card__value {
+    font-size: 1.6rem;
+  }
+
+  /* Shipments: allow header row to wrap on narrow screens */
+  .cust-shipment-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Profile form: stack 2-col grids */
+  .profile-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
 }

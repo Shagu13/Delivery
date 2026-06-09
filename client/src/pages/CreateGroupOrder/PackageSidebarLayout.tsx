@@ -439,6 +439,7 @@ function PackageDetail({
 export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, districtLookup = {}, onChange, onRemove, onAdd }: Props) {
   const { t } = useLanguage();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [listCollapsed, setListCollapsed] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   // Keep activeIndex in bounds when packages shrink
@@ -467,18 +468,39 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
     setActiveIndex(i => Math.min(i, packages.length - 2));
   };
 
+  const handleAdd = () => {
+    onAdd();
+    setActiveIndex(packages.length);
+    setListCollapsed(false);
+  };
+
   const readyCount = packages.filter((p, i) => pkgStatus(p, errors, i) === 'ok').length;
   const errorCount = packages.filter((p, i) => pkgStatus(p, errors, i) === 'error').length;
 
   return (
     <div className="psl-root">
       {/* ── Sidebar ── */}
-      <div className="psl-sidebar" ref={sidebarRef}>
+      <div className={`psl-sidebar${listCollapsed ? ' psl-sidebar--collapsed' : ''}`} ref={sidebarRef}>
         <div className="psl-sidebar__header">
           <span className="psl-sidebar__count">{t.cgoSidebarCount(packages.length)}</span>
-          <div className="psl-sidebar__stats">
-            {readyCount > 0 && <span className="psl-mini-pill psl-mini-pill--ok">{readyCount} ✓</span>}
-            {errorCount > 0 && <span className="psl-mini-pill psl-mini-pill--err">{errorCount} !</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="psl-sidebar__stats">
+              {readyCount > 0 && <span className="psl-mini-pill psl-mini-pill--ok">{readyCount} ✓</span>}
+              {errorCount > 0 && <span className="psl-mini-pill psl-mini-pill--err">{errorCount} !</span>}
+            </div>
+            <button
+              type="button"
+              className="psl-sidebar__toggle"
+              onClick={() => setListCollapsed(c => !c)}
+              aria-label={listCollapsed ? 'Expand package list' : 'Collapse package list'}
+            >
+              <svg
+                width="14" height="14" viewBox="0 0 16 16" fill="none"
+                style={{ transform: listCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}
+              >
+                <path d="M3 6l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -529,7 +551,7 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
 
         {packages.length < 100 && (
           <div className="psl-sidebar__footer">
-            <button type="button" className="psl-add-btn" onClick={() => { onAdd(); setActiveIndex(packages.length); }}>
+            <button type="button" className="psl-add-btn" onClick={handleAdd}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                 <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
               </svg>
@@ -706,6 +728,71 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
         .psl-hint--blue { color: #3b82f6; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.2); }
         .psl-grid { display: grid; gap: 10px; }
         .psl-grid--2 { grid-template-columns: 1fr 1fr; }
+
+        /* ── Mobile collapse toggle (hidden on desktop) ── */
+        .psl-sidebar__toggle {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border: none;
+          background: none;
+          cursor: pointer;
+          color: var(--color-text-muted);
+          border-radius: var(--radius-sm);
+          transition: color var(--transition), background var(--transition);
+          flex-shrink: 0;
+          padding: 0;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .psl-sidebar__toggle:hover { color: var(--color-text); background: var(--color-bg); }
+
+        @media (max-width: 640px) {
+          .psl-root {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto auto;
+            min-height: 0;
+            overflow: visible;
+          }
+          .psl-sidebar {
+            border-right: none;
+            border-bottom: 1px solid var(--color-border);
+          }
+          .psl-sidebar__list {
+            max-height: 220px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: max-height 0.25s ease, opacity 0.2s ease;
+          }
+          .psl-sidebar--collapsed .psl-sidebar__list {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+          }
+          .psl-sidebar--collapsed .psl-sidebar__footer {
+            display: none;
+          }
+          .psl-sidebar__toggle {
+            display: flex;
+          }
+          .psl-detail {
+            overflow: visible;
+          }
+          .psl-detail__body {
+            flex: none;
+            overflow-y: visible;
+            padding: 12px;
+            gap: 16px;
+          }
+          .psl-detail__header {
+            padding: 10px 12px;
+            flex-wrap: wrap;
+          }
+          .psl-grid--2 {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
     </div>
   );

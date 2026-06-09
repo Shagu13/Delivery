@@ -78,6 +78,7 @@ export function CustomerDashboard() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [view, setView] = useState<View>('overview');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // shared state fetched once
   const [profile,  setProfile]  = useState<Customer | null>(null);
@@ -103,6 +104,16 @@ export function CustomerDashboard() {
   const delivered      = orders.filter(g => g.status === 'Delivered').length;
   const active         = orders.filter(g => !['Delivered','Cancelled'].includes(g.status)).length;
 
+  const navItems: [View, string, React.ReactNode][] = [
+    ['overview',   t.sidebarOverview,    overviewIcon],
+    ['shipments',  t.custNavShipments,   shipmentsIcon],
+    ['finance',    t.navFinance,         financeIcon],
+    ['statistics', t.navStatistics,      statisticsIcon],
+    ['calculator', t.custNavCalculator,  calcIcon],
+    ['profile',    t.custNavProfile,     profileIcon],
+    ['password',   t.custNavPassword,    lockIcon],
+  ];
+
   return (
     <div className="dashboard">
       {/* ── Sidebar ── */}
@@ -120,15 +131,7 @@ export function CustomerDashboard() {
         <p className="sidebar__section-label">{t.custMyAccount}</p>
 
         <nav className="sidebar__nav">
-          {([
-            ['overview',    t.sidebarOverview,      overviewIcon],
-            ['shipments',   t.custNavShipments,      shipmentsIcon],
-            ['finance',     t.navFinance,            financeIcon],
-            ['statistics',  t.navStatistics,         statisticsIcon],
-            ['calculator',  t.custNavCalculator,     calcIcon],
-            ['profile',     t.custNavProfile,        profileIcon],
-            ['password',    t.custNavPassword,       lockIcon],
-          ] as [View, string, React.ReactNode][]).map(([v, label, icon]) => (
+          {navItems.map(([v, label, icon]) => (
             <button
               key={v}
               className={`sidebar__link ${view === v ? 'sidebar__link--active' : ''}`}
@@ -139,7 +142,7 @@ export function CustomerDashboard() {
           ))}
         </nav>
 
-          <div className="sidebar__footer">
+        <div className="sidebar__footer">
           <div className="sidebar__user">
             <div className="sidebar__avatar">{initials}</div>
             <div className="sidebar__user-info">
@@ -157,6 +160,69 @@ export function CustomerDashboard() {
 
       {/* ── Main ── */}
       <div className="dashboard__body">
+        {/* ── Mobile topbar (hidden on desktop) ── */}
+        <div className="cust-mobile-topbar">
+          <div className="cust-mobile-topbar__left">
+            <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="6" fill="currentColor" />
+              <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span className="cust-mobile-topbar__brand">Delivery</span>
+            <span className="cust-role-badge-sm">{t.custRoleBadge}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="sidebar__avatar">{initials}</div>
+            <button
+              className="cust-hamburger"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open navigation"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* ── Mobile menu bottom sheet ── */}
+        {mobileMenuOpen && (
+          <div className="cust-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+            <div className="cust-menu-sheet" onClick={e => e.stopPropagation()}>
+              <div className="cust-menu-sheet__header">
+                <div className="sidebar__user" style={{ padding: 0 }}>
+                  <div className="sidebar__avatar">{initials}</div>
+                  <div className="sidebar__user-info">
+                    <div className="sidebar__user-name">
+                      {profile?.firstName ?? user?.firstName} {profile?.lastName ?? user?.lastName}
+                    </div>
+                    <div className="sidebar__user-handle">{profile?.email ?? user?.username}</div>
+                  </div>
+                </div>
+                <button className="cust-menu-close" onClick={() => setMobileMenuOpen(false)}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <nav className="cust-menu-sheet__nav">
+                {navItems.map(([v, label, icon]) => (
+                  <button
+                    key={v}
+                    className={`sidebar__link ${view === v ? 'sidebar__link--active' : ''}`}
+                    onClick={() => { setView(v); setMobileMenuOpen(false); }}
+                  >
+                    {icon}{label}
+                  </button>
+                ))}
+              </nav>
+              <div className="cust-menu-sheet__footer">
+                <button className="sidebar__logout" onClick={handleSignOut}>
+                  {logoutIcon} {t.signOut}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="dashboard__topbar">
           <span className="dashboard__topbar-title">
             {view === 'overview'    && t.sidebarOverview}
@@ -526,12 +592,12 @@ function EditProfileView({
           textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 12 }}>
           {t.custPersonalInfo}
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+        <div className="profile-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
           <FormField label={t.firstName}  value={form.firstName}  onChange={set('firstName')}  error={errors.firstName} />
           <FormField label={t.lastName}   value={form.lastName}   onChange={set('lastName')}   error={errors.lastName} />
         </div>
         <FormField label={t.businessName} value={form.businessName} onChange={set('businessName')} error={errors.businessName} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+        <div className="profile-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
           <FormField label={t.custIdNumberOpt} value={form.idNumber}    onChange={set('idNumber')}    error={errors.idNumber} />
           <FormField label={t.phoneNumber}     value={form.phoneNumber} onChange={set('phoneNumber')} error={errors.phoneNumber} />
         </div>
