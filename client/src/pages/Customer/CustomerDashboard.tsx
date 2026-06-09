@@ -401,7 +401,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    {[t.custThTracking, t.custThRecipient, t.custThCity, t.custThAddress, t.custThStatus, t.custThPaid, t.custThCod, t.custThServiceFee].map(h => (
+                    {[t.custThTracking, t.custThRecipient, t.custThCity, t.custThAddress, t.custThStatus, t.custThCod, t.custThServiceFee].map(h => (
                       <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600,
                         fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
                         color: 'var(--color-text-subtle)' }}>
@@ -432,15 +432,6 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                       </td>
                       <td style={{ padding: '10px 16px' }}>
                         <StatusBadge status={o.status} />
-                      </td>
-                      <td style={{ padding: '10px 16px' }}>
-                        <span style={{
-                          padding: '2px 8px', borderRadius: 100, fontSize: '0.72rem', fontWeight: 700,
-                          background: o.productPaymentStatus === 'Paid' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                          color: o.productPaymentStatus === 'Paid' ? '#10b981' : '#ef4444',
-                        }}>
-                          {o.productPaymentStatus === 'Paid' ? t.custPaid : t.custUnpaid}
-                        </span>
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text)', fontSize: '0.82rem', fontWeight: 600 }}>
                         {o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : '—'}
