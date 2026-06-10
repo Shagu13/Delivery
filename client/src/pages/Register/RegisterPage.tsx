@@ -40,6 +40,14 @@ export function RegisterPage() {
     setApiError(null);
   };
 
+  // ID number: digits only, capped at 11.
+  const setIdNumber = (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = ev.target.value.replace(/\D/g, '').slice(0, 11);
+    setForm(f => ({ ...f, idNumber: digits }));
+    setErrors(prev => ({ ...prev, idNumber: undefined }));
+    setApiError(null);
+  };
+
   const setDirect = (field: 'city' | 'district') => (value: string) => {
     setForm(f => ({ ...f, [field]: value }));
     setErrors(prev => ({ ...prev, [field]: undefined }));
@@ -51,6 +59,8 @@ export function RegisterPage() {
     if (!form.firstName.trim())    e.firstName    = t.errFirstNameRequired;
     if (!form.lastName.trim())     e.lastName     = t.errLastNameRequired;
     if (!form.businessName.trim()) e.businessName = t.errBusinessNameRequired;
+    if (!form.idNumber.trim())          e.idNumber = t.errIdRequired;
+    else if (form.idNumber.length !== 11) e.idNumber = t.errIdLength;
     if (!form.phoneNumber.trim())  e.phoneNumber  = t.errPhoneRequired;
     else if (form.phoneNumber.trim().length !== 9) e.phoneNumber = t.errPhoneLength;
     if (!form.city.trim())         e.city         = t.errCityRequired;
@@ -167,7 +177,7 @@ export function RegisterPage() {
             placeholder={t.phBusinessName}
           />
           <div className="register-form__row">
-            <FormField label={t.idNumber}    value={form.idNumber}    onChange={set('idNumber')}    error={errors.idNumber}    placeholder={t.phIdNumber} />
+            <FormField label={t.idNumber}    required value={form.idNumber}    onChange={setIdNumber}        error={errors.idNumber}    placeholder={t.phIdNumberRequired} inputMode="numeric" maxLength={11} />
                     <FormField label={t.phoneNumber} value={form.phoneNumber} onChange={set('phoneNumber')} error={errors.phoneNumber} placeholder={t.phPhone} maxLength={9} />
           </div>
 

@@ -245,6 +245,37 @@ body {
     line-height: 1.55;
 }
 
+/* ── Password field with reveal toggle ── */
+.form-field__password {
+    position: relative;
+    display: flex;
+}
+
+.form-field__input--password {
+    padding-right: 44px;
+}
+
+.form-field__reveal {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-subtle);
+    cursor: pointer;
+    transition: color var(--transition);
+}
+
+    .form-field__reveal:hover {
+        color: var(--color-text);
+    }
+
 .form-field--error .form-field__input {
     border-color: var(--color-error);
 }

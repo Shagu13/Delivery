@@ -16,8 +16,8 @@ const diloServices: FaqItem[] = [
             ka: 'რა სერვისები გაქვთ?',
         },
         a: {
-            en: 'Dilo is a courier company providing door-to-door delivery for small and large parcels throughout Georgia. Our services include COD (cash on delivery) for online stores, real-time parcel tracking, and more.',
-            ka: 'დილო საკურიერო კომპანიაა. ჩვენი მომსახურება მოიცავს მცირე და დიდი ამანათების კარიდან კარამდე მიწოდებას მთელი საქართველოს მასშტაბით. ჩვენს სერვისებში შედის COD (კურიერთან გადახდის) მომსახურება ონლაინ მაღაზიებისთვის, ამანათის გადაადგილების ციფრულად კონტროლის შესაძლებლობა და სხვა მრავალი სერვისი.',
+            en: 'Dilo is a courier company providing from entrance hall to entrance hall delivery for small and large parcels throughout Georgia. Our services include COD (cash on delivery) for online stores, real-time parcel tracking, and more.',
+            ka: 'დილო საკურიერო კომპანიაა. ჩვენი მომსახურება მოიცავს მცირე და დიდი ამანათების სადარბაზოდან სადარბაზომდე მიწოდებას მთელი საქართველოს მასშტაბით. ჩვენს სერვისებში შედის COD (კურიერთან გადახდის) მომსახურება ონლაინ მაღაზიებისთვის, ამანათის გადაადგილების ციფრულად კონტროლის შესაძლებლობა და სხვა მრავალი სერვისი.',
         },
     },
     {
@@ -66,8 +66,8 @@ const diloServices: FaqItem[] = [
             ka: 'როგორ დავაფიქსირო პრობლემა?',
         },
         a: {
-            en: 'You can report any issues via the "Messages" section in your personal account, or by contacting our support team directly.',
-            ka: 'პრობლემის დაფიქსირება შეგიძლიათ პირად კაბინეტში შეტყობინების გვერდიდან, ასევე შეგიძლიათ დაუკავშირდეთ ჩვენს მხარდაჭერის სამსახურს.',
+            en: 'You can report any issues by contacting our support team directly.',
+            ka: 'პრობლემის დაფიქსირება შეგიძლიათ ჩვენი მხარდაჭერის სამსახურთან.',
         },
     },
     {
@@ -82,22 +82,12 @@ const diloServices: FaqItem[] = [
     },
     {
         q: {
-            en: 'When can the recipient pay the courier directly?',
-            ka: 'რა შემთხვევაში შეიძლება მიმღებმა გადაიხადოს კურიერთან?',
-        },
-        a: {
-            en: 'The recipient can pay the courier directly if you are registered on our platform and have the COD (Cash on Delivery) service enabled. Contact our support team to activate this feature for your account.',
-            ka: 'მიმღების მიერ ნივთის ღირებულების კურიერთან გადახდა შესაძლებელია, თუ ხართ ჩვენი პლატფორმის მომხმარებელი და გაქვთ COD სერვისი გააქტიურებული. ამ ფუნქციის გასააქტიურებლად მიმართეთ ჩვენს მხარდაჭერის სამსახურს.',
-        },
-    },
-    {
-        q: {
             en: 'Do you offer pick-up and drop-off to apartments?',
             ka: 'ბინაზე ატანა-ჩამოტანის სერვისი გაქვთ?',
         },
         a: {
-            en: 'We provide door-to-door parcel delivery. For lighter items, the courier can deliver directly to the apartment floor. For larger items, delivery is made to the building entrance. Please ensure the recipient arranges any required access (e.g. barrier or door access) in advance.',
-            ka: 'გვაქვს ამანათის კარიდან კარამდე მიწოდების სერვისი. მსუბუქი ნივთის შემთხვევაში კურიერი სართულზე აიტანს, ხოლო დიდი ტვირთის შემთხვევაში — მხოლოდ სადარბაზომდე. მნიშვნელოვანია, ადრესატი წინასწარ დაეხმაროს შლაგბაუმის ან სადარბაზოს კარის გაღებაში.',
+            en: 'We provide parcel delivery to entrance hall. delivery is made to the building entrance. Please ensure the recipient arranges any required access (e.g. barrier or door access) in advance.',
+            ka: 'გვაქვს ამანათის მიწოდება მხოლოდ სადარბაზომდე. მნიშვნელოვანია, ადრესატი წინასწარ დაეხმაროს შლაგბაუმის ან სადარბაზოს კარის გაღებაში.',
         },
     },
 ];

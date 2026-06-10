@@ -75,6 +75,7 @@ const en = {
   errUsernameRequired:     'Username is required.',
   errUsernameChars:        'Only letters, digits, _ . - allowed.',
   errIdRequired:           'ID number is required.',
+  errIdLength:             'ID number must be 11 digits.',
 
   // ── Nav ───────────────────────────────────────────────────────────────────
   navHome:             'Home',
@@ -1305,8 +1306,8 @@ const ka: typeof en = {
   errEmailRequired:        'ელ.ფოსტა სავალდებულოა.',
   errEmailInvalid:         'შეიყვანეთ სწორი ელ.ფოსტის მისამართი.',
   errPasswordShort:        'პაროლი მინიმუმ 8 სიმბოლო უნდა იყოს.',
-  errPasswordUppercase:    'პაროლი უნდა შეიცავდეს დიდ ასოს.',
-  errPasswordLowercase:    'პაროლი უნდა შეიცავდეს პატარა ასოს.',
+  errPasswordUppercase:    'პაროლი უნდა შეიცავდეს ლათინურ დიდ ასობგერას.',
+  errPasswordLowercase:    'პაროლი უნდა შეიცავდეს ლათინურ პატარა ასობგერას.',
   errPasswordNumber:       'პაროლი უნდა შეიცავდეს ციფრს.',
   errPasswordRequired:     'პაროლი სავალდებულოა.',
   errConfirmPasswordRequired: 'გაიმეორეთ პაროლი.',
@@ -1315,6 +1316,7 @@ const ka: typeof en = {
   errUsernameRequired:     'მომხმარებლის სახელი სავალდებულოა.',
   errUsernameChars:        'მხოლოდ ასოები, ციფრები, _ . - დასაშვებია.',
   errIdRequired:           'პირადი ნომერი სავალდებულოა.',
+  errIdLength:             'პირადი ნომერი უნდა შეიცავდეს 11 ციფრს.',
 
   // ── Nav ───────────────────────────────────────────────────────────────────
   navHome:             'მთავარი',
@@ -2264,7 +2266,7 @@ const ka: typeof en = {
   custChangePwdFailed:       'პაროლის შეცვლა ვერ მოხერხდა.',
   custErrCurrentPwdRequired: 'მიმდინარე პაროლი სავალდებულოა.',
   custErrNewPwdShort:        'მინიმუმ 8 სიმბოლო.',
-  custErrNewPwdUppercase:    'უნდა შეიცავდეს ლათინურ დიდ ასოს.',
+  custErrNewPwdUppercase:    'უნდა შეიცავდეს ლათინურ დიდ ასობგერას.',
   custErrNewPwdNumber:       'უნდა შეიცავდეს ციფრს.',
   custNavPayments:           'გადახდები',
 
