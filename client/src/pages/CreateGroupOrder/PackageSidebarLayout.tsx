@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { FormField } from '../../components/ui/FormField';
+import { AddressAutocomplete } from '../../features/addressAutocomplete';
 import type { District } from '../../api/cities';
 import type { WeightPriceTier } from '../../api/weightPriceTiers';
 import { tierLabel } from '../../api/weightPriceTiers';
@@ -106,7 +107,7 @@ function PackageDetail({
   index, pkg, errors, canRemove, customerPricing, weightTiers,
   senderAddress, districtLookup, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
 }: DetailProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const fe = (f: string) => errors[`orders[${index}].${f}`];
   const isReturn   = pkg.orderType === 'Return';
   const isExchange = pkg.orderType === 'Exchange';
@@ -265,13 +266,14 @@ function PackageDetail({
               cityError={fe('returnPickupCity')}
               districtError={fe('returnPickupDistrict')}
             />
-            <FormField
+            <AddressAutocomplete
               label={t.cgoStreetAddress} required
               value={pkg.returnPickupAddress ?? ''}
-              onChange={e => onChange(index, 'returnPickupAddress', e.target.value)}
+              onValueChange={v => onChange(index, 'returnPickupAddress', v)}
               error={fe('returnPickupAddress')}
               placeholder={t.cgoStreetPlaceholder}
               maxLength={250}
+              lang={lang}
             />
           </div>
         )}
@@ -323,13 +325,14 @@ function PackageDetail({
             cityError={fe('recipientCity')}
             districtError={fe('recipientDistrict')}
           />
-          <FormField
+          <AddressAutocomplete
             label={t.cgoStreetAddress} required
             value={pkg.recipientAddress}
-            onChange={e => onChange(index, 'recipientAddress', e.target.value)}
+            onValueChange={v => onChange(index, 'recipientAddress', v)}
             error={fe('recipientAddress')}
             placeholder={t.cgoStreetPlaceholder}
             maxLength={250}
+            lang={lang}
           />
           <FormField
             as="textarea" label={t.cgoPackageDescription}
