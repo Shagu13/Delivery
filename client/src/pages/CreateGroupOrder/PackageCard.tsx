@@ -25,7 +25,7 @@ interface PackageCardProps {
   senderAddress?: { city: string; district: string; address: string } | null;
   /** Flat lookup of all districts by name (EN + Geo) — used to rehydrate district on weight tier change after layout switch */
   districtLookup?: Record<string, District>;
-  onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
+  onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
 }
 
@@ -188,6 +188,9 @@ export function PackageCard({
     setSelectedDistrict(null);
     setSelectedReturnDistrict(null);
     onChange(index, 'companyServicePrice', 0);
+    // Drop any geocoded coordinates — the operative address changes with the type.
+    onChange(index, 'latitude', null);
+    onChange(index, 'longitude', null);
     if (value === 'Return') {
       onChange(index, 'whoPaysForCompanyService', 'Sender');
       // Return parcels are not COD — force the payment status to Paid and clear any collect amount
@@ -321,6 +324,7 @@ export function PackageCard({
                 required
                 value={data.returnPickupAddress ?? ''}
                 onValueChange={v => onChange(index, 'returnPickupAddress', v)}
+                onCoordinatesChange={c => { onChange(index, 'latitude', c ? c.lat : null); onChange(index, 'longitude', c ? c.lon : null); }}
                 error={fieldError('returnPickupAddress')}
                 placeholder={t.cgoStreetPlaceholder}
                 maxLength={250}
@@ -396,6 +400,7 @@ export function PackageCard({
               required
               value={data.recipientAddress}
               onValueChange={v => onChange(index, 'recipientAddress', v)}
+              onCoordinatesChange={c => { onChange(index, 'latitude', c ? c.lat : null); onChange(index, 'longitude', c ? c.lon : null); }}
               error={fieldError('recipientAddress')}
               placeholder={t.cgoStreetPlaceholder}
               maxLength={250}

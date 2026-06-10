@@ -73,6 +73,8 @@ const EMPTY_PACKAGE: OrderItemRequest = {
     returnPickupDistrict:         undefined,
     amountToCollectForPackage:    undefined,
     weightPriceTierId:            undefined,
+    latitude:                     undefined,
+    longitude:                    undefined,
 };
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -260,7 +262,7 @@ export function CreateGroupOrderPage() {
     }, []);
 
     const handlePackageChange = useCallback(
-        (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => {
+        (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => {
             setPackages(prev => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
             setErrors(prev => {
                 const n = { ...prev };

@@ -595,6 +595,12 @@ namespace Persistence.Migrations
                     b.Property<bool>("IsFragile")
                         .HasColumnType("bit");
 
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
                     b.Property<string>("OrderType")
                         .IsRequired()
                         .HasMaxLength(20)

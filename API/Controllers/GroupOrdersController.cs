@@ -67,7 +67,9 @@ public sealed class GroupOrdersController : BaseController
                         ReturnPickupDistrict:      o.ReturnPickupDistrict,
                         AmountToCollectForPackage: o.AmountToCollectForPackage,
                         CompanyServicePrice:       o.CompanyServicePrice,
-                        WeightPriceTierId:         o.WeightPriceTierId))
+                        WeightPriceTierId:         o.WeightPriceTierId,
+                        Latitude:                  o.Latitude,
+                        Longitude:                 o.Longitude))
                     .ToList(),
                 CustomerId: customerId
             )

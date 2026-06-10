@@ -136,6 +136,8 @@ public sealed class GetCourierOrdersQueryHandler
             RecipientCity:           o.RecipientCity,
             RecipientDistrict:       o.RecipientDistrict,
             RecipientAddress:        o.RecipientAddress,
+            Latitude:                o.Latitude,
+            Longitude:               o.Longitude,
             Description:             o.Description,
             IsFragile:               o.IsFragile,
             OrderType:               o.OrderType,

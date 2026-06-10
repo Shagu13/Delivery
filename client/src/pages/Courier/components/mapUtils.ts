@@ -58,7 +58,19 @@ function yandexPoint(s: Stop, cache?: GeocodeCache): string {
     return encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`);
 }
 
-export function mapUrl(city: string, district: string, address: string) {
+export function mapUrl(
+    city: string,
+    district: string,
+    address: string,
+    lat?: number | null,
+    lon?: number | null,
+) {
+    // Prefer exact coordinates (captured from the geocoded address pick): Google
+    // then drops a pin on the precise spot instead of fuzzy-matching the text —
+    // no more "did you mean…". Fall back to the text address when no pin exists.
+    if (lat != null && lon != null) {
+        return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+    }
     const q = encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
     return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }

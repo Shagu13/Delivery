@@ -156,6 +156,8 @@ public sealed class CreateGroupOrderCommandHandler
                 ReturnPickupAddress       = o.OrderType == OrderType.Return ? o.ReturnPickupAddress  : null,
                 ReturnPickupCity          = o.OrderType == OrderType.Return ? o.ReturnPickupCity     : null,
                 ReturnPickupDistrict      = o.OrderType == OrderType.Return ? o.ReturnPickupDistrict : null,
+                Latitude                  = o.Latitude,
+                Longitude                 = o.Longitude,
             };
 
             if (o.OrderType == OrderType.Return)

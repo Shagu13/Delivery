@@ -41,6 +41,15 @@ public class Order
     public required string RecipientDistrict  { get; set; }
     public required string RecipientAddress   { get; set; }
 
+    /// <summary>
+    /// Exact coordinates of the address the courier navigates to — captured when
+    /// the sender picks a geocoded autocomplete suggestion. For Send/Exchange this
+    /// is the recipient address; for Return it is the return-pickup address. Null
+    /// when the address was typed manually (no suggestion selected).
+    /// </summary>
+    public double? Latitude  { get; set; }
+    public double? Longitude { get; set; }
+
     // ── Return pickup (only for OrderType == Return) ─────────────────────────
     /// <summary>
     /// The address where the courier must go to collect the parcel for a Return.

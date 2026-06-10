@@ -41,5 +41,8 @@ public sealed record OrderItemRequest(
     string? ReturnPickupDistrict = null,
     decimal? AmountToCollectForPackage = null,
     decimal? CompanyServicePrice = null,
-    Guid? WeightPriceTierId = null
+    Guid? WeightPriceTierId = null,
+    /// <summary>Exact coordinates from a geocoded address pick; null when typed manually.</summary>
+    double? Latitude = null,
+    double? Longitude = null
 );

@@ -23,5 +23,7 @@ public sealed record CreateOrderDto(
     string?        ReturnPickupDistrict      = null,             // ← new
     decimal?       AmountToCollectForPackage = null,
     decimal?       CompanyServicePrice       = null,
-    Guid?          WeightPriceTierId         = null
+    Guid?          WeightPriceTierId         = null,
+    double?        Latitude                  = null,   // from geocoded address pick
+    double?        Longitude                 = null
 );

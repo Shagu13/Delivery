@@ -27,6 +27,9 @@ export interface OrderItemRequest {
     amountToCollectForPackage?: number;
     companyServicePrice?: number;     // admin override — omit to use auto-pricing
     weightPriceTierId?: string;       // selected weight tier — drives pricing on the backend
+    /** Exact coordinates captured when an address suggestion is picked; null/undefined when typed manually. */
+    latitude?: number | null;
+    longitude?: number | null;
 }
 
 export interface CreateGroupOrderRequest {

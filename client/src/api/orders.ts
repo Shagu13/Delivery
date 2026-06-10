@@ -30,6 +30,9 @@ export interface CourierOrder {
     recipientCity: string;
     recipientDistrict: string;
     recipientAddress: string;
+    /** Exact coordinates of the delivery/pickup point when the address was geocoded; null otherwise. */
+    latitude: number | null;
+    longitude: number | null;
     description: string | null;
     isFragile: boolean;
     status: OrderStatus;

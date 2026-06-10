@@ -21,10 +21,15 @@ interface Props {
   /** 'ka' | 'en' — passed through to Geoapify for localized results. */
   lang?: string;
   disabled?: boolean;
+  /**
+   * Fires with the picked suggestion's coordinates, or null when the user types
+   * manually (so stale coordinates from a previous pick are cleared).
+   */
+  onCoordinatesChange?: (coords: { lat: number; lon: number } | null) => void;
 }
 
 export function AddressAutocomplete({
-  label, value, onValueChange, error, required, placeholder, maxLength, lang = 'en', disabled,
+  label, value, onValueChange, error, required, placeholder, maxLength, lang = 'en', disabled, onCoordinatesChange,
 }: Props) {
   // `query` is set only when the user actually types, so selecting a suggestion
   // (or an external auto-fill) does not re-trigger a network request.
@@ -48,6 +53,10 @@ export function AddressAutocomplete({
 
   const select = (s: AddressSuggestion) => {
     onValueChange(s.formatted);
+    // Capture coordinates when the pick has them; the courier later navigates to
+    // this exact point instead of relying on fuzzy text matching.
+    if (s.lat != null && s.lon != null) onCoordinatesChange?.({ lat: s.lat, lon: s.lon });
+    else onCoordinatesChange?.(null);
     setQuery('');
     setOpen(false);
   };
@@ -55,6 +64,9 @@ export function AddressAutocomplete({
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     onValueChange(v);
+    // Manual edit ⇒ the text no longer corresponds to a picked point; drop coords
+    // so navigation falls back to the text address rather than a wrong pin.
+    onCoordinatesChange?.(null);
     setQuery(v);
     setOpen(true);
   };

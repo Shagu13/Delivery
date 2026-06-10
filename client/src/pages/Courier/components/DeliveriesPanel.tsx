@@ -168,7 +168,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         </div>
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelAddress}</span>
-                                            <a href={mapUrl(order.recipientCity, order.recipientDistrict, order.recipientAddress)} target="_blank" rel="noopener noreferrer" className="courier-card__map-link">
+                                            <a href={mapUrl(order.recipientCity, order.recipientDistrict, order.recipientAddress, order.latitude, order.longitude)} target="_blank" rel="noopener noreferrer" className="courier-card__map-link">
                                                 📍 {order.recipientAddress}
                                             </a>
                                         </div>

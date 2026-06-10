@@ -13,6 +13,9 @@ public sealed record CourierOrderDto(
     string RecipientCity,
     string RecipientDistrict,
     string RecipientAddress,
+    /// <summary>Exact coordinates of the delivery/pickup point, when the address was geocoded. Null otherwise.</summary>
+    double? Latitude,
+    double? Longitude,
     string? Description,
     bool   IsFragile,
     /// <summary>

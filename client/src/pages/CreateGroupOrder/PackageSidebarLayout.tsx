@@ -22,7 +22,7 @@ interface Props {
   senderAddress?: { city: string; district: string; address: string } | null;
   /** Flat lookup of all districts by name (EN + Geo) — used to rehydrate district on weight tier change after layout switch */
   districtLookup?: Record<string, District>;
-  onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
+  onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
   onAdd: () => void;
 }
@@ -94,7 +94,7 @@ interface DetailProps {
   weightTiers: WeightPriceTier[];
   senderAddress?: { city: string; district: string; address: string } | null;
   districtLookup: Record<string, District>;
-  onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number) => void;
+  onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
   onPrev: () => void;
   onNext: () => void;
@@ -143,6 +143,9 @@ function PackageDetail({
     setSelectedDistrict(null);
     setSelectedReturnDistrict(null);
     onChange(index, 'companyServicePrice', 0);
+    // Drop any geocoded coordinates — the operative address changes with the type.
+    onChange(index, 'latitude', null);
+    onChange(index, 'longitude', null);
     if (type === 'Return') {
       onChange(index, 'whoPaysForCompanyService', 'Sender');
       // Return parcels are not COD — force the payment status to Paid and clear any collect amount
@@ -270,6 +273,7 @@ function PackageDetail({
               label={t.cgoStreetAddress} required
               value={pkg.returnPickupAddress ?? ''}
               onValueChange={v => onChange(index, 'returnPickupAddress', v)}
+              onCoordinatesChange={c => { onChange(index, 'latitude', c ? c.lat : null); onChange(index, 'longitude', c ? c.lon : null); }}
               error={fe('returnPickupAddress')}
               placeholder={t.cgoStreetPlaceholder}
               maxLength={250}
@@ -329,6 +333,7 @@ function PackageDetail({
             label={t.cgoStreetAddress} required
             value={pkg.recipientAddress}
             onValueChange={v => onChange(index, 'recipientAddress', v)}
+            onCoordinatesChange={c => { onChange(index, 'latitude', c ? c.lat : null); onChange(index, 'longitude', c ? c.lon : null); }}
             error={fe('recipientAddress')}
             placeholder={t.cgoStreetPlaceholder}
             maxLength={250}
