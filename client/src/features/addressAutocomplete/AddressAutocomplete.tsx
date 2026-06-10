@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  useAddressAutocomplete,
-  ADDRESS_AUTOCOMPLETE_ENABLED,
-  type AddressSuggestion,
-} from './useAddressAutocomplete';
+import { useAddressAutocomplete, type AddressSuggestion } from './useAddressAutocomplete';
+import { useAuth } from '../../contexts/useAuth';
 import './addressAutocomplete.css';
 
 /**
  * Drop-in replacement for <FormField> on address inputs. Renders the same
  * `.form-field` markup so it matches the surrounding form visually, then adds
- * a Geoapify-powered suggestions dropdown. When no API key is configured it
- * behaves exactly like a plain text field.
+ * a suggestions dropdown sourced from the backend's `/api/address/autocomplete`
+ * proxy. When the user isn't signed in (no token) or the backend has no key
+ * configured, it behaves exactly like a plain text field.
  */
 interface Props {
   label: string;
@@ -34,8 +32,9 @@ export function AddressAutocomplete({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const { token } = useAuth();
 
-  const { suggestions, loading } = useAddressAutocomplete(query, { lang });
+  const { suggestions, loading } = useAddressAutocomplete(query, { lang, token });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -60,8 +59,8 @@ export function AddressAutocomplete({
     setOpen(true);
   };
 
-  const showMenu = open && ADDRESS_AUTOCOMPLETE_ENABLED && (loading || suggestions.length > 0);
-  const noMatch = open && ADDRESS_AUTOCOMPLETE_ENABLED && !loading && query.trim().length >= 3 && suggestions.length === 0;
+  const showMenu = open && (loading || suggestions.length > 0);
+  const noMatch = open && !loading && query.trim().length >= 3 && suggestions.length === 0;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!showMenu) return;

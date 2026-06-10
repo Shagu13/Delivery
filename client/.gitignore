@@ -11,8 +11,6 @@ node_modules
 dist
 dist-ssr
 *.local
-# but keep .env.local visible in the IDE (holds the Geoapify key, frontend-only)
-!.env.local
 
 # Editor directories and files
 .vscode/*
