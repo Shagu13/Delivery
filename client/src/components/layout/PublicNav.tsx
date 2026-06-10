@@ -29,6 +29,7 @@ export function PublicNav() {
         { to: '/#tariffs',  label: t.navTariffs },
         { to: '/#tracking', label: t.navTracking },
         { to: '/register',  label: t.navPartnership },
+        { to: '/faq',       label: t.navFaq },
         { to: '/contact',   label: t.navContact },
     ];
 
