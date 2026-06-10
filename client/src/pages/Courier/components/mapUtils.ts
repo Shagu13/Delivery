@@ -1,9 +1,31 @@
-export interface Stop { city: string; district: string; address: string; }
+export interface Stop {
+    city: string;
+    district: string;
+    address: string;
+    /** Exact coordinates from a geocoded address pick; used in preference to the text. */
+    lat?: number | null;
+    lon?: number | null;
+}
 
 export type GeocodeCache = Map<string, [number, number] | null>;
 
 function cacheKey(s: Stop) {
     return `${s.address}, ${s.district}, ${s.city}, Georgia`.toLowerCase();
+}
+
+// A stop's best-known coordinates: the exact pin captured at order time wins;
+// otherwise fall back to whatever the text-geocoder cached.
+function stopCoords(s: Stop, cache?: GeocodeCache): [number, number] | null {
+    if (s.lat != null && s.lon != null) return [s.lat, s.lon];
+    return cache?.get(cacheKey(s)) ?? null;
+}
+
+// A route point for text-based map deep-links: exact "lat,lon" when known,
+// else the URL-encoded text address.
+function routePoint(s: Stop, cache?: GeocodeCache): string {
+    const c = stopCoords(s, cache);
+    if (c) return `${c[0]},${c[1]}`;
+    return encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`);
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -23,7 +45,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 // keep their original order and go last.
 export function orderStopsByNearest(stops: Stop[], origin?: string, cache?: GeocodeCache): Stop[] {
     const m = origin?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
-    if (!m || !cache) return stops;
+    if (!m) return stops;
 
     let curLat = parseFloat(m[1]);
     let curLon = parseFloat(m[2]);
@@ -31,7 +53,7 @@ export function orderStopsByNearest(stops: Stop[], origin?: string, cache?: Geoc
     const remaining: { stop: Stop; lat: number; lon: number }[] = [];
     const ungeocoded: Stop[] = [];
     for (const s of stops) {
-        const c = cache.get(cacheKey(s));
+        const c = stopCoords(s, cache);
         if (c) remaining.push({ stop: s, lat: c[0], lon: c[1] });
         else ungeocoded.push(s);
     }
@@ -53,9 +75,7 @@ export function orderStopsByNearest(stops: Stop[], origin?: string, cache?: Geoc
 }
 
 function yandexPoint(s: Stop, cache?: GeocodeCache): string {
-    const coords = cache?.get(cacheKey(s));
-    if (coords) return `${coords[0]},${coords[1]}`;
-    return encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`);
+    return routePoint(s, cache);
 }
 
 export function mapUrl(
@@ -75,11 +95,11 @@ export function mapUrl(
     return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
-export function buildGoogleRouteUrl(stops: Stop[], origin?: string) {
-    const dest = encodeURIComponent(`${stops[stops.length - 1].address}, ${stops[stops.length - 1].district}, ${stops[stops.length - 1].city}, Georgia`);
-    const orig = origin ?? encodeURIComponent(`${stops[0].address}, ${stops[0].district}, ${stops[0].city}, Georgia`);
+export function buildGoogleRouteUrl(stops: Stop[], origin?: string, cache?: GeocodeCache) {
+    const dest = routePoint(stops[stops.length - 1], cache);
+    const orig = origin ?? routePoint(stops[0], cache);
     const midStops = origin ? stops.slice(0, -1) : stops.slice(1, -1);
-    const wps = midStops.map(s => encodeURIComponent(`${s.address}, ${s.district}, ${s.city}, Georgia`)).join('|');
+    const wps = midStops.map(s => routePoint(s, cache)).join('|');
     return `https://www.google.com/maps/dir/?api=1&origin=${orig}&destination=${dest}${wps ? `&waypoints=${wps}` : ''}&travelmode=driving`;
 }
 

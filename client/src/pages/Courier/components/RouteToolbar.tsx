@@ -52,7 +52,7 @@ export function RouteToolbar({ stops, onClear, geocodeCache, coords }: RouteTool
                     {locState === 'ready'   && <span className="route-toolbar__count" style={{ color: '#10b981' }}>{t.rtLocSet}</span>}
                 </>
             )}
-            <a href={buildGoogleRouteUrl(routeStops, origin)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--google">
+            <a href={buildGoogleRouteUrl(routeStops, origin, geocodeCache)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--google">
                 {t.rtGoogleMaps}
             </a>
             <a href={buildYandexRouteUrl(routeStops, origin, geocodeCache)} target="_blank" rel="noopener noreferrer" className="route-toolbar__btn route-toolbar__btn--yandex">
