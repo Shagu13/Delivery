@@ -86,8 +86,15 @@ public sealed class GeoapifyAddressService : IAddressAutocompleteService
 
             return list;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            // The browser aborted this lookup — typically the user typed another
+            // character and the previous request was superseded. Expected; not an error.
+            return Array.Empty<AddressSuggestion>();
+        }
+        catch (Exception ex)
+        {
+            // Real failure (network error, upstream timeout, bad response).
             _logger.LogError(ex, "Error calling Geoapify autocomplete.");
             return Array.Empty<AddressSuggestion>();
         }
