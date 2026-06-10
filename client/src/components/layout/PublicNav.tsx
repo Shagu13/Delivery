@@ -7,15 +7,15 @@ import { prefetchCalcData } from '../../pages/Home/calcDataCache';
 
 export function PublicNav() {
     const { t } = useLanguage();
-    const [calcOpen, setCalcOpen]   = useState(false);
-    const [menuOpen, setMenuOpen]   = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [calcOpen, setCalcOpen] = useState(false);
     const location = useLocation();
 
-    // Prefetch calculator data so the modal opens instantly
+    // Prefetch calculator/tariff data so the homepage price cards fill instantly
     useEffect(() => { prefetchCalcData(); }, []);
 
-    // Close drawer on route change
-    useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+    // Close drawer on route / anchor change
+    useEffect(() => { setMenuOpen(false); }, [location.pathname, location.hash]);
 
     // Prevent body scroll when drawer is open
     useEffect(() => {
@@ -24,31 +24,40 @@ export function PublicNav() {
     }, [menuOpen]);
 
     const navLinks = [
-        { to: '/',         label: t.navHome },
-        { to: '/faq',      label: t.navFaq },
-        { to: '/send',     label: t.navSendPackages },
-        { to: '/register', label: t.navRegister },
-        { to: '/contact',  label: t.navContact },
+        { to: '/',          label: t.navHome },
+        { to: '/#services', label: t.navServices },
+        { to: '/#tariffs',  label: t.navTariffs },
+        { to: '/#tracking', label: t.navTracking },
+        { to: '/register',  label: t.navPartnership },
+        { to: '/contact',   label: t.navContact },
     ];
+
+    const isActive = (to: string) => {
+        if (to === '/') return location.pathname === '/' && !location.hash;
+        if (to.startsWith('/#')) return location.pathname === '/' && location.hash === to.slice(1);
+        return location.pathname === to;
+    };
 
     return (
         <>
-            <header className="nav">
+            <header className="nav nav--public">
                 <div className="nav__inner">
                     {/* Logo */}
-                    <Link to="/" className="nav__logo">
-                        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                            <rect width="28" height="28" rx="6" fill="currentColor" />
-                            <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                        <span>{t.appName}</span>
+                    <Link to="/" className="nav__logo nav__logo--dilo">
+                        <img src="/dilo-logo-mark.png" alt="Dilo Delivery" className="nav__logo-img" />
+                        <span className="nav__logo-script">Delivery</span>
                     </Link>
 
                     {/* ── Desktop nav ── */}
-                    <nav className="nav__links nav__links--desktop">
-                        <LanguageToggle />
+                    <nav className="nav__links nav__links--desktop nav__links--center">
                         {navLinks.map(l => (
-                            <Link key={l.to} to={l.to} className="nav__link">{l.label}</Link>
+                            <Link
+                                key={l.to}
+                                to={l.to}
+                                className={`nav__link${isActive(l.to) ? ' nav__link--active' : ''}`}
+                            >
+                                {l.label}
+                            </Link>
                         ))}
                         <button
                             className="nav__calc-btn"
@@ -62,8 +71,19 @@ export function PublicNav() {
                                 <path d="M15 13v6M12 16h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
                             </svg>
                         </button>
-                        <Link to="/login" className="nav__link nav__link--cta">{t.navStaffLogin}</Link>
                     </nav>
+
+                    <div className="nav__links nav__links--desktop">
+                        <Link to="/send" className="nav__order-btn">{t.navPlaceOrder}</Link>
+                        <Link to="/login" className="nav__profile-btn" title={t.navStaffLogin} aria-label={t.navStaffLogin}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.6"/>
+                                <circle cx="12" cy="9.5" r="3" stroke="currentColor" strokeWidth="1.6"/>
+                                <path d="M5.5 19a7.5 7.5 0 0 1 13 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                            </svg>
+                        </Link>
+                        <LanguageToggle />
+                    </div>
 
                     {/* ── Mobile right side: lang + hamburger ── */}
                     <div className="nav__mobile-right">
@@ -118,10 +138,22 @@ export function PublicNav() {
                         {t.calcTitle}
                     </button>
                     <Link
-                        to="/login"
+                        to="/send"
                         className="nav__drawer-cta"
                         onClick={() => setMenuOpen(false)}
                     >
+                        {t.navPlaceOrder}
+                    </Link>
+                    <Link
+                        to="/login"
+                        className="nav__drawer-link nav__drawer-link--login"
+                        onClick={() => setMenuOpen(false)}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.6"/>
+                            <circle cx="12" cy="9.5" r="3" stroke="currentColor" strokeWidth="1.6"/>
+                            <path d="M5.5 19a7.5 7.5 0 0 1 13 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                        </svg>
                         {t.navStaffLogin}
                     </Link>
                 </div>
@@ -130,7 +162,12 @@ export function PublicNav() {
             {calcOpen && <PriceCalculatorModal onClose={() => setCalcOpen(false)} />}
 
             <style>{`
-                /* ── Shared calc button ── */
+                /* ── Public nav: wider inner + centered links ── */
+                .nav--public .nav__inner {
+                    max-width: 1240px;
+                }
+
+                /* ── Calculator icon button ── */
                 .nav__calc-btn {
                     background: none;
                     border: none;
@@ -144,6 +181,99 @@ export function PublicNav() {
                     transition: color var(--transition), background var(--transition);
                 }
                 .nav__calc-btn:hover {
+                    color: var(--color-accent);
+                    background: var(--color-accent-dim);
+                }
+
+                /* ── Drawer calculator entry ── */
+                .nav__drawer-calc {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 14px 16px;
+                    border-radius: var(--radius-md);
+                    font-size: 1rem;
+                    font-weight: 600;
+                    font-family: var(--font-body);
+                    color: var(--color-text);
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    text-align: left;
+                    transition: background var(--transition), color var(--transition);
+                }
+                .nav__drawer-calc:hover {
+                    background: var(--color-bg-3);
+                    color: var(--color-accent);
+                }
+                .nav--public .nav__links--center {
+                    flex: 1;
+                    justify-content: center;
+                    gap: 4px;
+                }
+                .nav--public .nav__link--active {
+                    color: var(--color-accent);
+                }
+
+                /* ── Dilo logo (image mark + script word) ── */
+                .nav__logo--dilo {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 0;
+                    text-decoration: none;
+                    flex-shrink: 0;
+                }
+                .nav__logo-img {
+                    height: 26px;
+                    width: auto;
+                    display: block;
+                }
+                .nav__logo-script {
+                    font-family: var(--font-display);
+                    font-style: italic;
+                    font-size: 0.6rem;
+                    font-weight: 700;
+                    letter-spacing: 0.22em;
+                    color: var(--color-accent);
+                    margin-top: 1px;
+                    text-transform: capitalize;
+                }
+
+                /* ── Order CTA ── */
+                .nav__order-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    background: var(--color-accent);
+                    color: #fff;
+                    border-radius: 10px;
+                    padding: 9px 18px;
+                    font-family: var(--font-body);
+                    font-size: 0.82rem;
+                    font-weight: 700;
+                    text-decoration: none;
+                    white-space: nowrap;
+                    min-height: 38px;
+                    transition: background 150ms, transform 150ms;
+                    touch-action: manipulation;
+                }
+                .nav__order-btn:hover {
+                    background: #dd9802;
+                    transform: translateY(-1px);
+                }
+
+                /* ── Profile icon ── */
+                .nav__profile-btn {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 38px;
+                    height: 38px;
+                    border-radius: 50%;
+                    color: var(--color-text);
+                    transition: color var(--transition), background var(--transition);
+                }
+                .nav__profile-btn:hover {
                     color: var(--color-accent);
                     background: var(--color-accent-dim);
                 }
@@ -228,25 +358,10 @@ export function PublicNav() {
                     background: var(--color-bg-3);
                     color: var(--color-accent);
                 }
-                .nav__drawer-calc {
+                .nav__drawer-link--login {
                     display: flex;
                     align-items: center;
                     gap: 10px;
-                    padding: 14px 16px;
-                    border-radius: var(--radius-md);
-                    font-size: 1rem;
-                    font-weight: 600;
-                    font-family: var(--font-body);
-                    color: var(--color-text);
-                    background: none;
-                    border: none;
-                    cursor: pointer;
-                    text-align: left;
-                    transition: background var(--transition), color var(--transition);
-                }
-                .nav__drawer-calc:hover {
-                    background: var(--color-bg-3);
-                    color: var(--color-accent);
                 }
                 .nav__drawer-cta {
                     display: block;
@@ -265,9 +380,9 @@ export function PublicNav() {
                 .nav__drawer-cta:hover { opacity: 0.88; }
 
                 /* ── Breakpoint: switch to mobile layout ── */
-                @media (max-width: 768px) {
-                    .nav__links--desktop { display: none !important; }
-                    .nav__mobile-right   { display: flex !important; }
+                @media (max-width: 900px) {
+                    .nav--public .nav__links--desktop { display: none !important; }
+                    .nav--public .nav__mobile-right   { display: flex !important; }
                 }
             `}</style>
         </>

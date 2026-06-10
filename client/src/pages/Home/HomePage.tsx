@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { trackParcel, type TrackOrderResult } from '../../services/tracking';
 import { UpdateAppButton } from '../../components/UpdateAppButton';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
+import { type WeightPriceTier } from '../../api/weightPriceTiers';
+import { prefetchCalcData, isCacheValid, _cachedTiers } from './calcDataCache';
+import { PriceCalculatorModal } from './PriceCalculatorModal';
 import './home.css';
 
 
@@ -14,24 +17,63 @@ function formatDate(iso: string, lang: string) {
     }).format(new Date(iso));
 }
 
-function HeroIllustration() {
+/** Lowest non-empty price across weight tiers for one destination column. */
+function minTierPrice(tiers: WeightPriceTier[], pick: (t: WeightPriceTier) => number | null): number | null {
+    const vals = tiers.map(pick).filter((v): v is number => v != null && v > 0);
+    return vals.length ? Math.min(...vals) : null;
+}
+
+/** "from 6₾" (en) / "6 დან" (ka) figure, big number + small qualifier. */
+function PriceFigure({ value, lang, from }: { value: number | null; lang: string; from: string }) {
+    const num = value == null ? '—' : (value % 1 === 0 ? String(value) : value.toFixed(2));
+    if (lang === 'ka') {
+        return (
+            <div className="home__tariff-price">
+                <span className="home__tariff-num">{num}</span>
+                <span className="home__tariff-from">{from}</span>
+            </div>
+        );
+    }
     return (
-        <img
-            src="/dilo_logo.png"
-            alt="Delivery logo"
-            className="home__hero-svg home__hero-logo"
-        />
+        <div className="home__tariff-price">
+            <span className="home__tariff-from">{from}</span>
+            <span className="home__tariff-num">{num === '—' ? num : `${num}₾`}</span>
+        </div>
     );
 }
+
 export function HomePage() {
     const { t, lang } = useLanguage();
+    const location = useLocation();
     const [trackingNumber, setTrackingNumber] = useState('');
     const [loading,  setLoading]  = useState(false);
     const [result,   setResult]   = useState<TrackOrderResult | null>(null);
     const [error,    setError]    = useState<'NOT_FOUND' | 'SERVER_ERROR' | null>(null);
+    const [calcOpen, setCalcOpen] = useState(false);
+    const [tiers,    setTiers]    = useState<WeightPriceTier[]>(() => _cachedTiers ?? []);
     const modalRef = useRef<HTMLDivElement>(null);
 
     const isModalOpen = loading || result !== null || error !== null;
+
+    // Real pricing data for the tariff cards (shared cache with the calculator)
+    useEffect(() => {
+        if (isCacheValid()) {
+            if (_cachedTiers) setTiers(_cachedTiers);
+            return;
+        }
+        prefetchCalcData().then(() => { if (_cachedTiers) setTiers(_cachedTiers); });
+    }, []);
+
+    // Smooth-scroll to #services / #tariffs / #tracking anchors from the navbar
+    useEffect(() => {
+        if (!location.hash) return;
+        const el = document.getElementById(location.hash.slice(1));
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, [location]);
+
+    const capitalFrom  = minTierPrice(tiers, x => x.capitalPrice);
+    const cityFrom     = minTierPrice(tiers, x => x.cityPrice);
+    const districtFrom = minTierPrice(tiers, x => x.districtPrice);
 
     async function handleTrack(e: React.FormEvent) {
         e.preventDefault();
@@ -66,189 +108,272 @@ export function HomePage() {
         <div className="home">
 
             {/* ══ 1. HERO ══ */}
-            <section className="home__hero-section">
+            <section className="home__hero">
+                <div className="home__hero-inner">
+                    <div className="home__hero-left">
+                        <div className="home__badge">{t.homeBadge}</div>
 
-                {/* Left — text + actions */}
-                <div className="home__hero-left">
-                    <div className="home__eyebrow">
-                        <span className="home__eyebrow-dot" />
-                        {t.homeEyebrow}
-                    </div>
+                        <h1 className="home__title">
+                            <span className="home__title-accent">{t.homeTitleAccent}</span><br />
+                            {t.homeTitleRest}
+                        </h1>
 
-                    <h1 className="home__title">
-                        {t.homeTitle1}<br />
-                        <span className="home__title-accent">{t.homeTitle2}</span>
-                    </h1>
+                        <p className="home__subtitle">{t.homeSubtitle}</p>
 
-                    <p className="home__subtitle">{t.homeSubtitle}</p>
-
-                    <div className="home__track-card">
-                        <p className="home__track-label">{t.homeTrackLabel}</p>
-                        <form className="home__track-form" onSubmit={handleTrack}>
-                            <input
-                                className="home__track-input"
-                                type="text"
-                                placeholder={t.phTrackingNumber}
-                                value={trackingNumber}
-                                onChange={e => setTrackingNumber(e.target.value)}
-                            />
-                            <button type="submit" className="home__track-btn" disabled={loading}>
-                                {loading ? t.homeTracking : (
-                                    <>
-                                        {t.homeTrack}
-                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    </>
-                                )}
+                        <div className="home__hero-actions">
+                            <Link to="/send" className="home__btn home__btn--primary">
+                                <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
+                                    <rect x="3" y="6" width="14" height="11" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+                                    <path d="M3 9h14M10 6v11" stroke="currentColor" strokeWidth="1.4"/>
+                                </svg>
+                                {t.homePlaceOrder}
+                            </Link>
+                            <button
+                                type="button"
+                                className="home__btn home__btn--ghost"
+                                onClick={() => document.getElementById('tracking')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
+                                    <rect x="1.5" y="6" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+                                    <path d="M13.5 9h3.6l2.4 3v3h-2" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+                                    <circle cx="6" cy="16.5" r="1.8" stroke="currentColor" strokeWidth="1.5"/>
+                                    <circle cx="15.5" cy="16.5" r="1.8" stroke="currentColor" strokeWidth="1.5"/>
+                                </svg>
+                                {t.homeTrackParcel}
                             </button>
-                        </form>
+                        </div>
+
+                        <div className="home__trust">
+                            <div className="home__trust-item">
+                                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                                    <path d="M4 12v-2a6 6 0 0 1 12 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                    <rect x="2.5" y="11" width="3.5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                                    <rect x="14" y="11" width="3.5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                                </svg>
+                                {t.homeTrust1}
+                            </div>
+                            <div className="home__trust-item">
+                                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                                    <path d="M10 2l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V5l7-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                                    <path d="M7 10l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                                {t.homeTrust2}
+                            </div>
+                            <div className="home__trust-item">
+                                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                                    <path d="M10 18s6-5.2 6-9.6A6 6 0 0 0 4 8.4C4 12.8 10 18 10 18z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                                    <circle cx="10" cy="8.4" r="2.2" stroke="currentColor" strokeWidth="1.5"/>
+                                </svg>
+                                {t.homeTrust3}
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="home__divider">{t.or}</div>
+                    <div className="home__hero-right">
+                        <img
+                            src="/hero-courier.png"
+                            alt="Dilo Delivery courier"
+                            className="home__hero-photo"
+                        />
+                    </div>
+                </div>
+            </section>
 
-                    <Link to="/send" className="home__send-btn">
-                        {t.homeSendPackages}
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            {/* ══ 2. STATS ══ */}
+            <section className="home__stats-wrap">
+                <div className="home__stats-card">
+                    <div className="home__stat">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 3l8 4v10l-8 4-8-4V7l8-4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                            <path d="M4 7l8 4 8-4M12 11v10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
                         </svg>
-                    </Link>
-                </div>
-
-                {/* Right — illustration */}
-                <div className="home__hero-right">
-                    <HeroIllustration />
-                </div>
-            </section>
-
-            {/* ══ 2. HOW IT WORKS ══ */}
-            <section className="home__how-section">
-                <p className="home__section-eyebrow">Simple Process</p>
-                <h2 className="home__section-title">How DILO works</h2>
-                <p className="home__section-sub">Three steps from your hands to theirs</p>
-
-                <div className="home__steps">
-                    <div className="home__step">
-                        <div className="home__step-number">01</div>
-                        <div className="home__step-icon">
-                            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                                <rect x="3" y="6" width="16" height="13" rx="2" stroke="currentColor" strokeWidth="1.6"/>
-                                <path d="M7 6V5a4 4 0 0 1 8 0v1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                                <path d="M8 11h6M8 14h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                            </svg>
-                        </div>
-                        <p className="home__step-name">Place your order</p>
-                        <p className="home__step-desc">Register and submit your shipment details. A unique tracking number is generated instantly.</p>
-                    </div>
-                    <div className="home__step">
-                        <div className="home__step-number">02</div>
-                        <div className="home__step-icon">
-                            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                                <path d="M3 9l8-6 8 6v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-                                <path d="M8 19v-7h6v7" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-                            </svg>
-                        </div>
-                        <p className="home__step-name">Pickup & warehouse</p>
-                        <p className="home__step-desc">Our courier picks up the package and brings it to our warehouse for sorting and processing.</p>
-                    </div>
-                    <div className="home__step">
-                        <div className="home__step-number">03</div>
-                        <div className="home__step-icon">
-                            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                                <rect x="1" y="11" width="20" height="8" rx="2" stroke="currentColor" strokeWidth="1.6"/>
-                                <path d="M4 11V8a7 7 0 0 1 14 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-                                <circle cx="6" cy="19" r="2" fill="currentColor"/>
-                                <circle cx="16" cy="19" r="2" fill="currentColor"/>
-                            </svg>
-                        </div>
-                        <p className="home__step-name">Last-mile delivery</p>
-                        <p className="home__step-desc">A dedicated courier delivers directly to the recipient's door, anywhere across Georgia.</p>
-                    </div>
-                </div>
-            </section>
-
-            {/* ══ 3. WHY DILO ══ */}
-            <section className="home__why-section">
-                <p className="home__section-eyebrow">Why Choose Us</p>
-                <h2 className="home__section-title">Why choose DILO?</h2>
-                <p className="home__section-sub">Built for businesses and individuals alike</p>
-
-                <div className="home__features">
-                    <div className="home__feature">
-                        <div className="home__feature-icon">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <circle cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.5"/>
-                                <circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.5"/>
-                                <path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            </svg>
-                        </div>
-                        <div className="home__feature-body">
-                            <p className="home__feature-name">Real-time tracking</p>
-                            <p className="home__feature-desc">Know exactly where your package is at every stage of the delivery process with live status updates.</p>
+                        <div>
+                            <div className="home__stat-value">50,000+</div>
+                            <div className="home__stat-label">{t.homeStatParcels}</div>
                         </div>
                     </div>
-                    <div className="home__feature">
-                        <div className="home__feature-icon">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <path d="M10 2l7 3v5c0 4-3 7-7 8C6 17 3 14 3 10V5l7-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                                <path d="M7 10l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                        </div>
-                        <div className="home__feature-body">
-                            <p className="home__feature-name">Secure warehousing</p>
-                            <p className="home__feature-desc">Packages are safely stored in our facility until a courier is ready for last-mile dispatch.</p>
-                        </div>
-                    </div>
-                    <div className="home__feature">
-                        <div className="home__feature-icon">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <rect x="2" y="5" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                                <path d="M2 9h16M6 13h3M13 13h1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            </svg>
-                        </div>
-                        <div className="home__feature-body">
-                            <p className="home__feature-name">Business accounts</p>
-                            <p className="home__feature-desc">Bulk shipments, custom pricing, and a full dashboard for managing your business orders.</p>
+                    <div className="home__stat">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                            <rect x="2" y="6" width="13" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                            <path d="M15 9h3.8l2.7 3.4V16h-2.2" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                            <circle cx="6.8" cy="17.5" r="2" stroke="currentColor" strokeWidth="1.4"/>
+                            <circle cx="17.3" cy="17.5" r="2" stroke="currentColor" strokeWidth="1.4"/>
+                        </svg>
+                        <div>
+                            <div className="home__stat-value">100+</div>
+                            <div className="home__stat-label">{t.homeStatCouriers}</div>
                         </div>
                     </div>
-                    <div className="home__feature">
-                        <div className="home__feature-icon">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                <path d="M10 3a7 7 0 1 0 0 14A7 7 0 0 0 10 3z" stroke="currentColor" strokeWidth="1.5"/>
-                                <path d="M10 7v4l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
+                    <div className="home__stat">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 21s7-6 7-11.2A7 7 0 0 0 5 9.8C5 15 12 21 12 21z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                            <circle cx="12" cy="9.8" r="2.6" stroke="currentColor" strokeWidth="1.5"/>
+                        </svg>
+                        <div>
+                            <div className="home__stat-value">70+</div>
+                            <div className="home__stat-label">{t.homeStatCities}</div>
                         </div>
-                        <div className="home__feature-body">
-                            <p className="home__feature-name">Reliable & safe</p>
-                            <p className="home__feature-desc">Every parcel is handled with care. We take full responsibility from pickup to final delivery.</p>
+                    </div>
+                    <div className="home__stat">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.4l-5.2 2.8 1-5.9L3.5 9.2l5.9-.8L12 3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                        </svg>
+                        <div>
+                            <div className="home__stat-value">4.9/5</div>
+                            <div className="home__stat-label">{t.homeStatRating}</div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* ══ 4. STATS ══ */}
-            <section className="home__stats-section">
-                <div className="home__stats">
-                    <div className="home__stat"><div className="home__stat-value">50K+</div><div className="home__stat-label">Parcels delivered</div></div>
-                    <div className="home__stat"><div className="home__stat-value">98%</div><div className="home__stat-label">On-time rate</div></div>
-                    <div className="home__stat"><div className="home__stat-value">70+</div><div className="home__stat-label">Cities covered</div></div>
-                    <div className="home__stat"><div className="home__stat-value">24h</div><div className="home__stat-label">Avg. delivery time</div></div>
+            {/* ══ 3. SERVICES ══ */}
+            <section className="home__services-section" id="services">
+                <p className="home__section-eyebrow">{t.homeServicesEyebrow}</p>
+                <h2 className="home__section-title">{t.homeServicesTitle}</h2>
+                <p className="home__section-sub">{t.homeServicesSub}</p>
+
+                <div className="home__services">
+                    <div className="home__service">
+                        <div className="home__service-head">
+                            <div className="home__service-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 3l8 4v10l-8 4-8-4V7l8-4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                                    <path d="M4 7l8 4 8-4M12 11v10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                                </svg>
+                            </div>
+                            <p className="home__service-name">{t.homeSvc1Title}</p>
+                        </div>
+                        <p className="home__service-desc">{t.homeSvc1Desc}</p>
+                    </div>
+                
+                    <div className="home__service">
+                        <div className="home__service-head">
+                            <div className="home__service-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2l8 3.5v6c0 4.8-3.6 8.4-8 9.5-4.4-1.1-8-4.7-8-9.5v-6L12 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                                </svg>
+                            </div>
+                            <p className="home__service-name">{t.homeSvc3Title}</p>
+                        </div>
+                        <p className="home__service-desc">{t.homeSvc3Desc}</p>
+                    </div>
+                    <div className="home__service">
+                        <div className="home__service-head">
+                            <div className="home__service-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <rect x="4" y="3" width="10" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                                    <path d="M14 9h5a1 1 0 0 1 1 1v11H14" stroke="currentColor" strokeWidth="1.5"/>
+                                    <path d="M7 7h2M7 11h2M7 15h2M16.5 13h1M16.5 17h1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                                </svg>
+                            </div>
+                            <p className="home__service-name">{t.homeSvc4Title}</p>
+                        </div>
+                        <p className="home__service-desc">{t.homeSvc4Desc}</p>
+                    </div>
                 </div>
             </section>
 
-            {/* ══ 5. CTA ══ */}
-            <section className="home__cta-section">
-                <div className="home__cta-card">
-                    <h2 className="home__cta-title">Ready to send your<br />first package?</h2>
-                    <p className="home__cta-sub">Create a free account and experience fast, reliable delivery across Georgia.</p>
-                    <div className="home__cta-actions">
-                        <Link to="/register" className="home__cta-primary">
-                            Create account
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            {/* ══ 4. TRACKING STRIP ══ */}
+            <section className="home__trackstrip-wrap" id="tracking">
+                <div className="home__trackstrip">
+                    <div className="home__trackstrip-left">
+                        <div className="home__trackstrip-icon">
+                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                                <path d="M4 6.5l8 4.5 8-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
                             </svg>
-                        </Link>
-                        <Link to="/send" className="home__cta-secondary">Send a package</Link>
+                        </div>
+                        <div>
+                            <p className="home__trackstrip-title">{t.homeTrackTitle}</p>
+                            <p className="home__trackstrip-sub">{t.homeTrackSub}</p>
+                        </div>
+                    </div>
+                    <form className="home__trackstrip-form" onSubmit={handleTrack}>
+                        <input
+                            className="home__trackstrip-input"
+                            type="text"
+                            placeholder={t.phTrackingCode}
+                            value={trackingNumber}
+                            onChange={e => setTrackingNumber(e.target.value)}
+                        />
+                        <button type="submit" className="home__trackstrip-btn" disabled={loading}>
+                            {loading ? t.homeTracking : t.homeSearch}
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            {/* ══ 5. TARIFFS ══ */}
+            <section className="home__tariffs-wrap" id="tariffs">
+                <div className="home__tariffs">
+                    <div className="home__tariffs-left">
+                        <p className="home__tariffs-eyebrow">{t.homeTariffsEyebrow}</p>
+                        <h2 className="home__tariffs-title">{t.homeTariffsTitle}</h2>
+                        <p className="home__tariffs-sub">{t.homeTariffsSub}</p>
+                        <button type="button" className="home__tariffs-btn" onClick={() => setCalcOpen(true)}>
+                            {t.homeTariffsBtn}
+                        </button>
+                    </div>
+                    <div className="home__tariffs-cards">
+                        <div className="home__tariff-card">
+                            <p className="home__tariff-name">{t.homeTariffCapital}</p>
+                            <PriceFigure value={capitalFrom} lang={lang} from={t.homeTariffFrom} />
+                            <p className="home__tariff-note">{t.homeTariffCapitalNote}</p>
+                        </div>
+                        <div className="home__tariff-card home__tariff-card--featured">
+                            <p className="home__tariff-name">{t.homeTariffCity}</p>
+                            <PriceFigure value={cityFrom} lang={lang} from={t.homeTariffFrom} />
+                            <p className="home__tariff-note">{t.homeTariffCityNote}</p>
+                        </div>
+                        <div className="home__tariff-card">
+                            <p className="home__tariff-name">{t.homeTariffRegion}</p>
+                            <PriceFigure value={districtFrom} lang={lang} from={t.homeTariffFrom} />
+                            <p className="home__tariff-note">{t.homeTariffRegionNote}</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* ══ 6. FEATURES ROW ══ */}
+            <section className="home__featrow">
+                <div className="home__feat">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 14v-2.5a7 7 0 0 1 14 0V14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <rect x="3" y="13" width="4" height="6" rx="1.8" stroke="currentColor" strokeWidth="1.5"/>
+                        <rect x="17" y="13" width="4" height="6" rx="1.8" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M19 19v.5a2 2 0 0 1-2 2h-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                    <div>
+                        <p className="home__feat-title">{t.homeFeat1Title}</p>
+                        <p className="home__feat-sub">{t.homeFeat1Sub}</p>
+                    </div>
+                </div>
+                <div className="home__feat">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2l8 3.5v6c0 4.8-3.6 8.4-8 9.5-4.4-1.1-8-4.7-8-9.5v-6L12 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                        <path d="M8.5 11.5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <div>
+                        <p className="home__feat-title">{t.homeFeat2Title}</p>
+                        <p className="home__feat-sub">{t.homeFeat2Sub}</p>
+                    </div>
+                </div>
+                <div className="home__feat">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L5 13h6l-1 9 9-12h-6l1-8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                    </svg>
+                    <div>
+                        <p className="home__feat-title">{t.homeFeat3Title}</p>
+                        <p className="home__feat-sub">{t.homeFeat3Sub}</p>
+                    </div>
+                </div>
+                <div className="home__feat">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2l3 2.2 3.7.3.9 3.6 2.9 2.4-1.6 3.4 1.6 3.4-2.9 2.4-.9 3.6-3.7.3L12 22l-3-2.2-3.7-.3-.9-3.6-2.9-2.4 1.6-3.4-1.6-3.4 2.9-2.4.9-3.6 3.7-.3L12 2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                    </svg>
+                    <div>
+                        <p className="home__feat-title">{t.homeFeat4Title}</p>
+                        <p className="home__feat-sub">{t.homeFeat4Sub}</p>
                     </div>
                 </div>
             </section>
@@ -342,6 +467,9 @@ export function HomePage() {
                     </div>
                 </div>
             )}
+
+            {/* ══ PRICE CALCULATOR ══ */}
+            {calcOpen && <PriceCalculatorModal onClose={() => setCalcOpen(false)} />}
 
             {/* App-update control — lets installed-PWA users drop the cached
                 build and pull the latest version. */}
