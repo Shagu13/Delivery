@@ -182,7 +182,7 @@ export function HomePage() {
 
                     <div className="home__hero-right">
                         <img
-                            src="/hero-dilo.png"
+                            src="/hero-dilo-girl.png"
                             alt="Dilo Delivery courier"
                             className="home__hero-photo"
                             width={1645}
