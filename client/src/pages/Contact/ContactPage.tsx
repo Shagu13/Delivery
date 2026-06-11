@@ -27,6 +27,7 @@ export function ContactPage() {
             callUs: 'Call us',
             whatsapp: 'WhatsApp',
             getDirections: 'Get directions',
+            followUs: 'Follow us',
         },
         ka: {
             hero: 'კონტაქტი',
@@ -39,6 +40,7 @@ export function ContactPage() {
             callUs: 'დარეკვა',
             whatsapp: 'WhatsApp',
             getDirections: 'მარშრუტი',
+            followUs: 'გამოგვყევით',
         },
     }[lang];
 
@@ -138,6 +140,47 @@ export function ContactPage() {
                             </svg>
                             {t.getDirections}
                         </a>
+                    </div>
+
+                    {/* Social links */}
+                    <div className="contact__social">
+                        <span className="contact__social-label">{t.followUs}</span>
+                        <div className="contact__social-icons">
+                            <a
+                                className="contact__social-link"
+                                href="https://www.instagram.com/dilodeliverygeo?igsh=aTV3amdvM3dham9j"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="Instagram"
+                            >
+                                <svg width="38" height="38" viewBox="0 0 24 24">
+                                    <defs>
+                                        <linearGradient id="igGradContact" x1="2" y1="22" x2="22" y2="2" gradientUnits="userSpaceOnUse">
+                                            <stop offset="0" stopColor="#FEDA75"/>
+                                            <stop offset="0.25" stopColor="#FA7E1E"/>
+                                            <stop offset="0.5" stopColor="#D62976"/>
+                                            <stop offset="0.75" stopColor="#962FBF"/>
+                                            <stop offset="1" stopColor="#4F5BD5"/>
+                                        </linearGradient>
+                                    </defs>
+                                    <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#igGradContact)"/>
+                                    <circle cx="12" cy="12" r="4.2" fill="none" stroke="#fff" strokeWidth="1.7"/>
+                                    <circle cx="17.2" cy="6.8" r="1.25" fill="#fff"/>
+                                </svg>
+                            </a>
+                            <a
+                                className="contact__social-link"
+                                href="https://www.facebook.com/share/1E7uXrB8Hp/?mibextid=wwXIfr"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="Facebook"
+                            >
+                                <svg width="38" height="38" viewBox="0 0 24 24">
+                                    <rect x="2" y="2" width="20" height="20" rx="6" fill="#1877F2"/>
+                                    <path d="M13.5 21v-7h2.3l.35-2.7H13.5V9.55c0-.78.22-1.31 1.34-1.31h1.43V5.82c-.25-.03-1.1-.11-2.08-.11-2.06 0-3.47 1.26-3.47 3.56v1.99H8.5V14h2.22v7h2.78z" fill="#fff"/>
+                                </svg>
+                            </a>
+                        </div>
                     </div>
                 </div>
 

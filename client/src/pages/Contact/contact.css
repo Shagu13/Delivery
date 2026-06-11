@@ -232,3 +232,34 @@
         min-height: 240px;
     }
 }
+
+/* ── Social links ── */
+.contact__social {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.contact__social-label {
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+.contact__social-icons {
+    display: flex;
+    gap: 10px;
+}
+.contact__social-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    transition: transform 150ms, box-shadow 150ms;
+}
+.contact__social-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(26, 23, 20, 0.18);
+}

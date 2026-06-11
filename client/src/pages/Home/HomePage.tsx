@@ -189,6 +189,42 @@ export function HomePage() {
                             height={956}
                             loading="eager"
                         />
+                        <div className="home__social">
+                            <a
+                                className="home__social-link"
+                                href="https://www.instagram.com/dilodeliverygeo?igsh=aTV3amdvM3dham9j"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="Instagram"
+                            >
+                                <svg width="42" height="42" viewBox="0 0 24 24">
+                                    <defs>
+                                        <linearGradient id="igGradHome" x1="2" y1="22" x2="22" y2="2" gradientUnits="userSpaceOnUse">
+                                            <stop offset="0" stopColor="#FEDA75"/>
+                                            <stop offset="0.25" stopColor="#FA7E1E"/>
+                                            <stop offset="0.5" stopColor="#D62976"/>
+                                            <stop offset="0.75" stopColor="#962FBF"/>
+                                            <stop offset="1" stopColor="#4F5BD5"/>
+                                        </linearGradient>
+                                    </defs>
+                                    <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#igGradHome)"/>
+                                    <circle cx="12" cy="12" r="4.2" fill="none" stroke="#fff" strokeWidth="1.7"/>
+                                    <circle cx="17.2" cy="6.8" r="1.25" fill="#fff"/>
+                                </svg>
+                            </a>
+                            <a
+                                className="home__social-link"
+                                href="https://www.facebook.com/share/1E7uXrB8Hp/?mibextid=wwXIfr"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="Facebook"
+                            >
+                                <svg width="42" height="42" viewBox="0 0 24 24">
+                                    <rect x="2" y="2" width="20" height="20" rx="6" fill="#1877F2"/>
+                                    <path d="M13.5 21v-7h2.3l.35-2.7H13.5V9.55c0-.78.22-1.31 1.34-1.31h1.43V5.82c-.25-.03-1.1-.11-2.08-.11-2.06 0-3.47 1.26-3.47 3.56v1.99H8.5V14h2.22v7h2.78z" fill="#fff"/>
+                                </svg>
+                            </a>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -202,7 +238,7 @@ export function HomePage() {
                             <path d="M4 7l8 4 8-4M12 11v10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
                         </svg>
                         <div>
-                            <div className="home__stat-value">50,000+</div>
+                            <div className="home__stat-value">57,000+</div>
                             <div className="home__stat-label">{t.homeStatParcels}</div>
                         </div>
                     </div>
@@ -214,7 +250,7 @@ export function HomePage() {
                             <circle cx="17.3" cy="17.5" r="2" stroke="currentColor" strokeWidth="1.4"/>
                         </svg>
                         <div>
-                            <div className="home__stat-value">100+</div>
+                            <div className="home__stat-value">60+</div>
                             <div className="home__stat-label">{t.homeStatCouriers}</div>
                         </div>
                     </div>
@@ -226,15 +262,6 @@ export function HomePage() {
                         <div>
                             <div className="home__stat-value">70+</div>
                             <div className="home__stat-label">{t.homeStatCities}</div>
-                        </div>
-                    </div>
-                    <div className="home__stat">
-                        <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.4l-5.2 2.8 1-5.9L3.5 9.2l5.9-.8L12 3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                        </svg>
-                        <div>
-                            <div className="home__stat-value">4.9/5</div>
-                            <div className="home__stat-label">{t.homeStatRating}</div>
                         </div>
                     </div>
                 </div>
