@@ -311,96 +311,6 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   4. TRACKING STRIP — cream band with code input
-   ═══════════════════════════════════════════════════════════════ */
-.home__trackstrip-wrap {
-    max-width: 1200px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 40px 28px 0;
-}
-.home__trackstrip {
-    background: #faf1e4;
-    border-radius: 16px;
-    padding: 26px 30px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-    flex-wrap: wrap;
-}
-.home__trackstrip-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    min-width: 0;
-}
-.home__trackstrip-icon {
-    width: 50px;
-    height: 50px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--color-accent);
-}
-.home__trackstrip-title {
-    font-family: var(--font-body);
-    font-size: 0.98rem;
-    font-weight: 700;
-    color: var(--color-text);
-    margin-bottom: 4px;
-}
-.home__trackstrip-sub {
-    font-family: var(--font-body);
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-}
-.home__trackstrip-form {
-    display: flex;
-    gap: 12px;
-    flex: 0 1 460px;
-    min-width: 260px;
-}
-.home__trackstrip-input {
-    flex: 1;
-    height: 48px;
-    padding: 0 16px;
-    border: 1px solid #e8dfd2;
-    border-radius: 10px;
-    font-family: var(--font-body);
-    background: #fff;
-    color: var(--color-text);
-    outline: none;
-    transition: border-color var(--transition), box-shadow var(--transition);
-    /* prevent iOS zoom on focus */
-    font-size: max(16px, 0.88rem);
-}
-.home__trackstrip-input::placeholder { color: var(--color-text-subtle); }
-.home__trackstrip-input:focus {
-    border-color: var(--color-accent);
-    box-shadow: var(--shadow-focus);
-}
-.home__trackstrip-btn {
-    height: 48px;
-    padding: 0 28px;
-    background: var(--color-accent);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.88rem;
-    font-weight: 700;
-    font-family: var(--font-body);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 150ms, transform 150ms;
-    min-height: 44px;
-    touch-action: manipulation;
-}
-.home__trackstrip-btn:hover:not(:disabled) { background: #dd9802; transform: translateY(-1px); }
-.home__trackstrip-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-/* ═══════════════════════════════════════════════════════════════
    5. TARIFFS — dark card, text left + three price cards right
    ═══════════════════════════════════════════════════════════════ */
 .home__tariffs-wrap {
@@ -684,8 +594,6 @@
     .home__stat:nth-child(odd) { border-right: 1px solid #f0ebe3; }
     .home__stat:last-child,
     .home__stat:nth-last-child(2):nth-child(odd) { border-bottom: none; }
-    .home__trackstrip { flex-direction: column; align-items: stretch; }
-    .home__trackstrip-form { flex: 1 1 auto; }
 }
 
 /* ── Mobile (≤ 560px) ── */
@@ -693,7 +601,6 @@
     .home__hero-inner,
     .home__stats-wrap,
     .home__services-section,
-    .home__trackstrip-wrap,
     .home__tariffs-wrap,
     .home__featrow { padding-left: 16px; padding-right: 16px; }
 
@@ -703,9 +610,6 @@
     .home__trust { gap: 12px 18px; }
     .home__services { grid-template-columns: 1fr; }
     .home__services-section { padding-top: 48px; }
-    .home__trackstrip { padding: 20px 18px; }
-    .home__trackstrip-form { flex-direction: column; }
-    .home__trackstrip-btn { width: 100%; }
     .home__tariffs { padding: 32px 20px; }
     .home__tariffs-cards { width: 100%; flex-direction: column; }
     .home__tariff-card { width: 100%; }

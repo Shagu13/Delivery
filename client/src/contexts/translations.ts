@@ -86,7 +86,6 @@ const en = {
   navContact: 'Contact',
   navServices:         'Services',
   navTariffs:          'Tariffs',
-  navTracking:         'Package Tracking',
   navPartnership:      'Partnership',
   navPlaceOrder:       'Place an Order',
 
@@ -114,8 +113,6 @@ const en = {
   homeSvc3Desc:        'Insured and protected — your parcel is in safe hands.',
   homeSvc4Title:       'Business Services',
   homeSvc4Desc:        'Corporate shipments and individual terms.',
-  homeTrackTitle:      'Package Tracking',
-  homeTrackSub:        'Enter your parcel code and find out where it is',
   phTrackingCode:      'Enter parcel code',
   homeTariffsEyebrow:  'Tariffs',
   homeTariffsTitle:    'Transparent and affordable tariffs',
@@ -1395,7 +1392,6 @@ const ka: typeof en = {
   navContact: 'კონტაქტი',
   navServices:         'სერვისები',
   navTariffs:          'ტარიფები',
-  navTracking:         'ამანათის თვალთვალი',
   navPartnership:      'პარტნიორობა',
   navPlaceOrder:       'ამანათის გაგზავნა',
 
@@ -1423,8 +1419,6 @@ const ka: typeof en = {
   homeSvc3Desc:        'დაზღვეული და დაცული ამანათები უსაფრთხოდ.',
   homeSvc4Title:       'ბიზნეს სერვისები',
   homeSvc4Desc:        'კორპორატიული ამანათები და ინდივიდუალური პირობები.',
-  homeTrackTitle:      'ამანათის თვალთვალი',
-  homeTrackSub:        'შეიყვანეთ ამანათის კოდი და გაიგეთ მისი მდებარეობა',
   phTrackingCode:      'შეიყვანეთ ამანათის კოდი',
   homeTariffsEyebrow:  'ტარიფები',
   homeTariffsTitle:    'გამჭვირვალე და ხელმისაწვდომი ტარიფები',
