@@ -9,7 +9,7 @@ function getSavedLang(): Lang {
     const v = localStorage.getItem(STORAGE_KEY);
     if (v === 'en' || v === 'ka') return v;
   } catch { /* storage blocked */ }
-  return 'en';
+  return 'ka';
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
