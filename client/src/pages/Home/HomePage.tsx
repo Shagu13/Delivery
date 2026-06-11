@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { trackParcel, type TrackOrderResult } from '../../services/tracking';
 import { UpdateAppButton } from '../../components/UpdateAppButton';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
-import { type WeightPriceTier } from '../../api/weightPriceTiers';
-import { prefetchCalcData, isCacheValid, _cachedTiers } from './calcDataCache';
+import { type AllDistrictEntry } from '../../api/cities';
+import { prefetchCalcData, isCacheValid, _cachedDistricts } from './calcDataCache';
 import { PriceCalculatorModal } from './PriceCalculatorModal';
 import './home.css';
 
@@ -17,9 +17,20 @@ function formatDate(iso: string, lang: string) {
     }).format(new Date(iso));
 }
 
-/** Lowest non-empty price across weight tiers for one destination column. */
-function minTierPrice(tiers: WeightPriceTier[], pick: (t: WeightPriceTier) => number | null): number | null {
-    const vals = tiers.map(pick).filter((v): v is number => v != null && v > 0);
+/**
+ * Lowest non-empty company-service price among active districts whose territory
+ * matches `match`. Drives the "from X₾" figure on each tariff card straight from
+ * the District records (capital / city / region) seeded in the DB.
+ */
+/** True when the district belongs to Zugdidi city, in either language. */
+function isZugdidiCity(d: AllDistrictEntry): boolean {
+    return d.cityName.trim().toLowerCase() === 'zugdidi' || (d.cityNameGeo ?? '').trim() === 'ზუგდიდი';
+}
+
+function minDistrictPrice(districts: AllDistrictEntry[], match: (d: AllDistrictEntry) => boolean): number | null {
+    const vals = districts
+        .filter(d => d.companyServicePrice != null && match(d))
+        .map(d => d.companyServicePrice as number);
     return vals.length ? Math.min(...vals) : null;
 }
 
@@ -50,7 +61,7 @@ export function HomePage() {
     const [result,   setResult]   = useState<TrackOrderResult | null>(null);
     const [error,    setError]    = useState<'NOT_FOUND' | 'SERVER_ERROR' | null>(null);
     const [calcOpen, setCalcOpen] = useState(false);
-    const [tiers,    setTiers]    = useState<WeightPriceTier[]>(() => _cachedTiers ?? []);
+    const [districts, setDistricts] = useState<AllDistrictEntry[]>(() => _cachedDistricts ?? []);
     const modalRef = useRef<HTMLDivElement>(null);
 
     const isModalOpen = loading || result !== null || error !== null;
@@ -58,10 +69,10 @@ export function HomePage() {
     // Real pricing data for the tariff cards (shared cache with the calculator)
     useEffect(() => {
         if (isCacheValid()) {
-            if (_cachedTiers) setTiers(_cachedTiers);
+            if (_cachedDistricts) setDistricts(_cachedDistricts);
             return;
         }
-        prefetchCalcData().then(() => { if (_cachedTiers) setTiers(_cachedTiers); });
+        prefetchCalcData().then(() => { if (_cachedDistricts) setDistricts(_cachedDistricts); });
     }, []);
 
     // Smooth-scroll to #services / #tariffs / #tracking anchors from the navbar
@@ -71,9 +82,11 @@ export function HomePage() {
         el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, [location]);
 
-    const capitalFrom  = minTierPrice(tiers, x => x.capitalPrice);
-    const cityFrom     = minTierPrice(tiers, x => x.cityPrice);
-    const districtFrom = minTierPrice(tiers, x => x.districtPrice);
+    // Tbilisi → any active Capital-territory district; Cities → any active
+    // City-territory district; Regions → any active district with no territory flag.
+    const capitalFrom  = minDistrictPrice(districts, d => d.isCapitalTerritory);
+    const cityFrom     = minDistrictPrice(districts, d => d.isCityTerritory);
+    const districtFrom = minDistrictPrice(districts, d => isZugdidiCity(d) && !d.isCapitalTerritory && !d.isCityTerritory);
 
     async function handleTrack(e: React.FormEvent) {
         e.preventDefault();
@@ -120,28 +133,26 @@ export function HomePage() {
 
                         <p className="home__subtitle">{t.homeSubtitle}</p>
 
-                        <div className="home__hero-actions">
-                            <Link to="/send" className="home__btn home__btn--primary">
-                                <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
-                                    <rect x="3" y="6" width="14" height="11" rx="2" stroke="currentColor" strokeWidth="1.6"/>
-                                    <path d="M3 9h14M10 6v11" stroke="currentColor" strokeWidth="1.4"/>
-                                </svg>
-                                {t.homePlaceOrder}
-                            </Link>
-                            <button
-                                type="button"
-                                className="home__btn home__btn--ghost"
-                                onClick={() => document.getElementById('tracking')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            >
-                                <svg width="18" height="18" viewBox="0 0 22 22" fill="none">
+                        <form className="home__hero-track" onSubmit={handleTrack}>
+                            <div className="home__hero-track-field">
+                                <svg className="home__hero-track-ico" width="18" height="18" viewBox="0 0 22 22" fill="none">
                                     <rect x="1.5" y="6" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
                                     <path d="M13.5 9h3.6l2.4 3v3h-2" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
                                     <circle cx="6" cy="16.5" r="1.8" stroke="currentColor" strokeWidth="1.5"/>
                                     <circle cx="15.5" cy="16.5" r="1.8" stroke="currentColor" strokeWidth="1.5"/>
                                 </svg>
-                                {t.homeTrackParcel}
+                                <input
+                                    className="home__hero-track-input"
+                                    type="text"
+                                    placeholder={t.phTrackingCode}
+                                    value={trackingNumber}
+                                    onChange={e => setTrackingNumber(e.target.value)}
+                                />
+                            </div>
+                            <button type="submit" className="home__hero-track-btn" disabled={loading}>
+                                {loading ? t.homeTracking : t.homeSearch}
                             </button>
-                        </div>
+                        </form>
 
                         <div className="home__trust">
                             <div className="home__trust-item">
@@ -171,9 +182,12 @@ export function HomePage() {
 
                     <div className="home__hero-right">
                         <img
-                            src="/hero-courier.png"
+                            src="/hero-dilo.png"
                             alt="Dilo Delivery courier"
                             className="home__hero-photo"
+                            width={1645}
+                            height={956}
+                            loading="eager"
                         />
                     </div>
                 </div>
