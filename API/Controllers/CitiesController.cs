@@ -4,6 +4,8 @@ using Application.Cities.Commands.DeleteCity;
 using Application.Cities.Commands.DeleteDistrict;
 using Application.Cities.Commands.EditCity;
 using Application.Cities.Commands.EditDistrict;
+using Application.Cities.Commands.RestoreCity;
+using Application.Cities.Commands.RestoreDistrict;
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using Application.Orders.Commands;
@@ -71,6 +73,40 @@ public sealed class CitiesController : ControllerBase
             .ToListAsync(ct);
 
         return Ok(cities);
+    }
+
+    // ── GET /api/cities/deleted  (Admin) ──────────────────────────────────────
+    /// <summary>Returns soft-deleted cities so an admin can reactivate them.</summary>
+    [HttpGet("deleted")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<CityResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetDeletedCities(CancellationToken ct)
+    {
+        var cities = await _context.Cities
+            .AsNoTracking()
+            .Where(c => c.DateDeleted != null)
+            .OrderBy(c => c.CityName)
+            .Select(c => new CityResponse(c.Id, c.CityName, c.CityNameGeo))
+            .ToListAsync(ct);
+
+        return Ok(cities);
+    }
+
+    // ── POST /api/cities/{cityId}/restore  (Admin) ────────────────────────────
+    [HttpPost("{cityId:guid}/restore")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RestoreCity(Guid cityId, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new RestoreCityCommand(cityId), ct);
+            return NoContent();
+        }
+        catch (NotFoundException ex) { return NotFound(ex.Message); }
+        catch (ConflictException ex) { return Conflict(ex.Message); }
     }
 
     // ── POST /api/cities  (Admin) ─────────────────────────────────────────────
@@ -146,6 +182,40 @@ public sealed class CitiesController : ControllerBase
             .ToListAsync(ct);
 
         return Ok(districts);
+    }
+
+    // ── GET /api/cities/{cityId}/districts/deleted  (Admin) ───────────────────
+    /// <summary>Returns soft-deleted districts of a city so an admin can reactivate them.</summary>
+    [HttpGet("{cityId:guid}/districts/deleted")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<DistrictResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetDeletedDistricts(Guid cityId, CancellationToken ct)
+    {
+        var districts = await _context.Districts
+            .AsNoTracking()
+            .Where(d => d.CityId == cityId && d.DateDeleted != null)
+            .OrderBy(d => d.DistrictName)
+            .Select(d => new DistrictResponse(d.Id, d.DistrictName, d.DistrictNameGeo, d.CompanyServicePrice, d.IsCapitalTerritory, d.IsCityTerritory))
+            .ToListAsync(ct);
+
+        return Ok(districts);
+    }
+
+    // ── POST /api/cities/districts/{districtId}/restore  (Admin) ──────────────
+    [HttpPost("districts/{districtId:guid}/restore")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RestoreDistrict(Guid districtId, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new RestoreDistrictCommand(districtId), ct);
+            return NoContent();
+        }
+        catch (NotFoundException ex) { return NotFound(ex.Message); }
+        catch (ConflictException ex) { return Conflict(ex.Message); }
     }
 
     // ── POST /api/cities/{cityId}/districts  (Admin) ──────────────────────────

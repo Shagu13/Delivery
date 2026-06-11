@@ -4,6 +4,7 @@ import {
   fetchCities, fetchDistricts, setDistrictServicePrice, setDistrictTerritory,
   createCity, createDistrict, editCity, editDistrict,
   deleteCity, deleteDistrict,
+  fetchDeletedCities, fetchDeletedDistricts, restoreCity, restoreDistrict,
 } from '../../api/cities';
 import { useLanguage } from '../../contexts/useLanguage';
 
@@ -64,8 +65,19 @@ export default function AdminCitiesPage({ token }: Props) {
   const [citySearch, setCitySearch]       = useState('');
   const [selectedCity, setSelectedCity]   = useState<City | null>(null);
   const [districts, setDistricts]         = useState<District[]>([]);
+  const [districtSearch, setDistrictSearch] = useState('');
   const [loadingCities, setLoadingCities] = useState(true);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
+
+  // soft-deleted / restore
+  const [showDeletedCities, setShowDeletedCities]     = useState(false);
+  const [deletedCities, setDeletedCities]             = useState<City[]>([]);
+  const [loadingDeletedCities, setLoadingDeletedCities] = useState(false);
+  const [showDeletedDistricts, setShowDeletedDistricts] = useState(false);
+  const [deletedDistricts, setDeletedDistricts]       = useState<District[]>([]);
+  const [loadingDeletedDistricts, setLoadingDeletedDistricts] = useState(false);
+  const [restoringCity, setRestoringCity]             = useState<City | null>(null);
+  const [restoringDistrict, setRestoringDistrict]     = useState<District | null>(null);
 
   // single-row edit
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -97,10 +109,18 @@ export default function AdminCitiesPage({ token }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  const filteredCities = cities.filter(c =>
+  const matchesCity = (c: City) =>
     cityLabel(c).toLowerCase().includes(citySearch.toLowerCase()) ||
     c.cityName.toLowerCase().includes(citySearch.toLowerCase()) ||
-    (c.cityNameGeo ?? '').toLowerCase().includes(citySearch.toLowerCase())
+    (c.cityNameGeo ?? '').toLowerCase().includes(citySearch.toLowerCase());
+
+  const filteredCities        = cities.filter(matchesCity);
+  const filteredDeletedCities = deletedCities.filter(matchesCity);
+
+  const filteredDistricts = districts.filter(d =>
+    districtLabel(d).toLowerCase().includes(districtSearch.toLowerCase()) ||
+    d.districtName.toLowerCase().includes(districtSearch.toLowerCase()) ||
+    (d.districtNameGeo ?? '').toLowerCase().includes(districtSearch.toLowerCase())
   );
 
   async function selectCity(city: City) {
@@ -108,6 +128,9 @@ export default function AdminCitiesPage({ token }: Props) {
     setEditingId(null);
     setSelectedIds(new Set());
     setBulkValue('');
+    setDistrictSearch('');
+    setShowDeletedDistricts(false);
+    setDeletedDistricts([]);
     setLoadingDistricts(true);
     try {
       const d = await fetchDistricts(city.id);
@@ -117,6 +140,57 @@ export default function AdminCitiesPage({ token }: Props) {
     } finally {
       setLoadingDistricts(false);
     }
+  }
+
+  // ── soft-deleted views ───────────────────────────────────────────────────────
+
+  async function toggleDeletedCities() {
+    const next = !showDeletedCities;
+    setShowDeletedCities(next);
+    if (next) {
+      setLoadingDeletedCities(true);
+      setError('');
+      try {
+        setDeletedCities(await fetchDeletedCities(token));
+      } catch {
+        setError(t.acpLoadFailed);
+      } finally {
+        setLoadingDeletedCities(false);
+      }
+    }
+  }
+
+  async function toggleDeletedDistricts() {
+    if (!selectedCity) return;
+    const next = !showDeletedDistricts;
+    setShowDeletedDistricts(next);
+    if (next) {
+      setLoadingDeletedDistricts(true);
+      setError('');
+      try {
+        setDeletedDistricts(await fetchDeletedDistricts(selectedCity.id, token));
+      } catch {
+        setError(t.acpLoadDistrictsFailed);
+      } finally {
+        setLoadingDeletedDistricts(false);
+      }
+    }
+  }
+
+  async function confirmRestoreCity(city: City) {
+    await restoreCity(city.id, token);
+    setDeletedCities(prev => prev.filter(c => c.id !== city.id));
+    setCities(prev => [...prev, city].sort((a, b) => a.cityName.localeCompare(b.cityName)));
+    setRestoringCity(null);
+  }
+
+  async function confirmRestoreDistrict(district: District) {
+    await restoreDistrict(district.id, token);
+    setDeletedDistricts(prev => prev.filter(d => d.id !== district.id));
+    if (selectedCity) {
+      setDistricts(prev => [...prev, district].sort((a, b) => a.districtName.localeCompare(b.districtName)));
+    }
+    setRestoringDistrict(null);
   }
 
   // ── single-row edit ────────────────────────────────────────────────────────
@@ -144,14 +218,14 @@ export default function AdminCitiesPage({ token }: Props) {
 
   // ── multi-select ───────────────────────────────────────────────────────────
 
-  const allSelected  = districts.length > 0 && selectedIds.size === districts.length;
+  const allSelected  = filteredDistricts.length > 0 && filteredDistricts.every(d => selectedIds.has(d.id));
   const someSelected = selectedIds.size > 0 && !allSelected;
 
   function toggleSelectAll() {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(districts.map(d => d.id)));
+      setSelectedIds(new Set(filteredDistricts.map(d => d.id)));
     }
   }
 
@@ -247,7 +321,54 @@ export default function AdminCitiesPage({ token }: Props) {
             }}
           />
 
-          {loadingCities ? (
+          {/* show deleted toggle */}
+          <button
+            onClick={toggleDeletedCities}
+            style={{
+              display: 'block', width: '100%', marginBottom: '0.6rem',
+              padding: '0.3rem 0.5rem', borderRadius: 6,
+              background: showDeletedCities ? '#fef2f2' : '#f9fafb',
+              border: `1px solid ${showDeletedCities ? '#fecaca' : '#e5e7eb'}`,
+              color: showDeletedCities ? '#b91c1c' : '#6b7280',
+              cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+            }}
+          >
+            {showDeletedCities ? `← ${t.acpShowActiveCities}` : `🗑 ${t.acpShowDeletedCities}`}
+          </button>
+
+          {showDeletedCities ? (
+            loadingDeletedCities ? (
+              <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Loading…</p>
+            ) : filteredDeletedCities.length === 0 ? (
+              <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{t.acpNoDeletedCities}</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: '70vh', overflowY: 'auto' }}>
+                {filteredDeletedCities.map(c => (
+                  <li key={c.id} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{
+                      flex: 1, padding: '0.45rem 0.75rem', borderRadius: 8,
+                      border: '1px solid #f3f4f6', background: '#fafafa',
+                      color: '#6b7280', fontSize: '0.87rem', textDecoration: 'line-through',
+                    }}>
+                      {cityLabel(c)}
+                    </span>
+                    <button
+                      onClick={() => setRestoringCity(c)}
+                      title={t.acpActivate}
+                      style={{
+                        padding: '0.35rem 0.6rem', borderRadius: 7,
+                        background: '#ecfdf5', border: '1px solid #a7f3d0',
+                        cursor: 'pointer', fontSize: '0.78rem', flexShrink: 0,
+                        color: '#047857', fontWeight: 600,
+                      }}
+                    >
+                      ↩ {t.acpActivate}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : loadingCities ? (
             <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Loading…</p>
           ) : filteredCities.length === 0 ? (
             <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{t.acpNoCitiesMatch}</p>
@@ -321,6 +442,33 @@ export default function AdminCitiesPage({ token }: Props) {
                   }}
                 >
                   {t.acpAddDistrictBtn}
+                </button>
+              </div>
+
+              {/* district search + deleted toggle */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: '0.75rem' }}>
+                <input
+                  type="text"
+                  value={districtSearch}
+                  onChange={e => setDistrictSearch(e.target.value)}
+                  placeholder={t.acpSearchDistrictsPh}
+                  style={{
+                    flex: 1, boxSizing: 'border-box',
+                    padding: '0.4rem 0.6rem', borderRadius: 7,
+                    border: '1px solid #d1d5db', fontSize: '0.83rem',
+                  }}
+                />
+                <button
+                  onClick={toggleDeletedDistricts}
+                  style={{
+                    flexShrink: 0, padding: '0.4rem 0.7rem', borderRadius: 7,
+                    background: showDeletedDistricts ? '#fef2f2' : '#f9fafb',
+                    border: `1px solid ${showDeletedDistricts ? '#fecaca' : '#e5e7eb'}`,
+                    color: showDeletedDistricts ? '#b91c1c' : '#6b7280',
+                    cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap',
+                  }}
+                >
+                  {showDeletedDistricts ? t.acpHideDeletedDistricts : `🗑 ${t.acpShowDeletedDistricts}`}
                 </button>
               </div>
 
@@ -430,7 +578,7 @@ export default function AdminCitiesPage({ token }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {districts.map(d => {
+                  {filteredDistricts.map(d => {
                     const isChecked = selectedIds.has(d.id);
                     return (
                       <tr key={d.id} style={{ borderBottom: '1px solid #eee', background: isChecked ? '#f0f7ff' : undefined }}>
@@ -502,6 +650,53 @@ export default function AdminCitiesPage({ token }: Props) {
                   })}
                 </tbody>
               </table>
+
+              {filteredDistricts.length === 0 && districts.length > 0 && (
+                <p style={{ fontSize: '0.85rem', color: '#9ca3af', padding: '0.6rem 0' }}>
+                  {t.acpNoDistrictsMatch}
+                </p>
+              )}
+
+              {/* deleted districts */}
+              {showDeletedDistricts && (
+                <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px dashed #e5e7eb' }}>
+                  <h3 style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', fontWeight: 700, color: '#b91c1c', letterSpacing: '0.05em' }}>
+                    {t.acpDeletedDistrictsHeader}
+                  </h3>
+                  {loadingDeletedDistricts ? (
+                    <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Loading…</p>
+                  ) : deletedDistricts.length === 0 ? (
+                    <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{t.acpNoDeletedDistricts}</p>
+                  ) : (
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {deletedDistricts.map(d => (
+                        <li key={d.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '0.5rem 0.6rem', marginBottom: 4,
+                          background: '#fafafa', border: '1px solid #f3f4f6', borderRadius: 8,
+                        }}>
+                          <span style={{ flex: 1, color: '#6b7280', fontSize: '0.87rem', textDecoration: 'line-through' }}>
+                            {districtLabel(d)}
+                          </span>
+                          {d.companyServicePrice != null && (
+                            <span style={{ color: '#9ca3af', fontSize: '0.82rem' }}>₾{d.companyServicePrice}</span>
+                          )}
+                          <button
+                            onClick={() => setRestoringDistrict(d)}
+                            style={{
+                              flexShrink: 0, padding: '0.25rem 0.6rem', borderRadius: 6,
+                              background: '#ecfdf5', border: '1px solid #a7f3d0',
+                              cursor: 'pointer', fontSize: '0.8rem', color: '#047857', fontWeight: 600,
+                            }}
+                          >
+                            ↩ {t.acpActivate}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -589,6 +784,28 @@ export default function AdminCitiesPage({ token }: Props) {
             setDistricts(prev => prev.filter(d => d.id !== deletingDistrict.id));
             setDeletingDistrict(null);
           }}
+        />
+      )}
+
+      {/* ── Confirm Activate City modal ───────────────────────────────────── */}
+      {restoringCity && (
+        <ConfirmActivateModal
+          title={t.acpActivateCityTitle}
+          message={t.acpActivateCityMsg(cityLabel(restoringCity))}
+          conflictMessage={t.acpRestoreCityConflict}
+          onClose={() => setRestoringCity(null)}
+          onConfirm={() => confirmRestoreCity(restoringCity)}
+        />
+      )}
+
+      {/* ── Confirm Activate District modal ───────────────────────────────── */}
+      {restoringDistrict && (
+        <ConfirmActivateModal
+          title={t.acpActivateDistrictTitle}
+          message={t.acpActivateDistrictMsg(districtLabel(restoringDistrict))}
+          conflictMessage={t.acpRestoreDistrictConflict}
+          onClose={() => setRestoringDistrict(null)}
+          onConfirm={() => confirmRestoreDistrict(restoringDistrict)}
         />
       )}
     </div>
@@ -933,6 +1150,47 @@ function ConfirmDeleteModal({ title, message, onClose, onConfirm }: {
         <button onClick={handleConfirm} disabled={deleting}
           style={{ padding: '0.4rem 1rem', borderRadius: 7, background: deleting ? '#fca5a5' : '#dc2626', color: '#fff', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
           {deleting ? t.awptDeleting : t.delete}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Confirm Activate Modal ────────────────────────────────────────────────────
+function ConfirmActivateModal({ title, message, conflictMessage, onClose, onConfirm }: {
+  title: string;
+  message: string;
+  conflictMessage: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const { t } = useLanguage();
+  const [working, setWorking] = useState(false);
+  const [error, setError]     = useState('');
+
+  async function handleConfirm() {
+    setWorking(true);
+    setError('');
+    try {
+      await onConfirm();
+    } catch (e) {
+      setError(e instanceof Error && e.message === 'CONFLICT' ? conflictMessage : t.acpRestoreFailed);
+      setWorking(false);
+    }
+  }
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <p style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', color: '#374151' }}>{message}</p>
+      {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} disabled={working}
+          style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
+          {t.cancel}
+        </button>
+        <button onClick={handleConfirm} disabled={working}
+          style={{ padding: '0.4rem 1rem', borderRadius: 7, background: working ? '#6ee7b7' : '#059669', color: '#fff', border: 'none', cursor: working ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
+          {working ? t.acpActivating : t.acpActivate}
         </button>
       </div>
     </Modal>

@@ -43,6 +43,40 @@ export async function fetchAllDistrictsFlat(): Promise<AllDistrictEntry[]> {
   return res.json();
 }
 
+export async function fetchDeletedCities(token: string): Promise<City[]> {
+  const res = await fetch('/api/cities/deleted', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to fetch deleted cities');
+  return res.json();
+}
+
+export async function fetchDeletedDistricts(cityId: string, token: string): Promise<District[]> {
+  const res = await fetch(`/api/cities/${cityId}/districts/deleted`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to fetch deleted districts');
+  return res.json();
+}
+
+export async function restoreCity(cityId: string, token: string): Promise<void> {
+  const res = await fetch(`/api/cities/${cityId}/restore`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 409) throw new Error('CONFLICT');
+  if (!res.ok) throw new Error('Failed to restore city');
+}
+
+export async function restoreDistrict(districtId: string, token: string): Promise<void> {
+  const res = await fetch(`/api/cities/districts/${districtId}/restore`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 409) throw new Error('CONFLICT');
+  if (!res.ok) throw new Error('Failed to restore district');
+}
+
 export async function setDistrictServicePrice(
   districtId: string,
   price: number | null,
