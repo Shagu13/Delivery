@@ -314,36 +314,6 @@ export function HomePage() {
                 </div>
             </section>
 
-            {/* ══ 4. TRACKING STRIP ══ */}
-            <section className="home__trackstrip-wrap" id="tracking">
-                <div className="home__trackstrip">
-                    <div className="home__trackstrip-left">
-                        <div className="home__trackstrip-icon">
-                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                                <path d="M4 6.5l8 4.5 8-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <p className="home__trackstrip-title">{t.homeTrackTitle}</p>
-                            <p className="home__trackstrip-sub">{t.homeTrackSub}</p>
-                        </div>
-                    </div>
-                    <form className="home__trackstrip-form" onSubmit={handleTrack}>
-                        <input
-                            className="home__trackstrip-input"
-                            type="text"
-                            placeholder={t.phTrackingCode}
-                            value={trackingNumber}
-                            onChange={e => setTrackingNumber(e.target.value)}
-                        />
-                        <button type="submit" className="home__trackstrip-btn" disabled={loading}>
-                            {loading ? t.homeTracking : t.homeSearch}
-                        </button>
-                    </form>
-                </div>
-            </section>
-
             {/* ══ 5. TARIFFS ══ */}
             <section className="home__tariffs-wrap" id="tariffs">
                 <div className="home__tariffs">
