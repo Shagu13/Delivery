@@ -53,8 +53,11 @@ public sealed class CreateOrderDtoValidator : AbstractValidator<CreateOrderDto>
 
         RuleFor(x => x.RecipientAddress).NotEmpty().MaximumLength(250);
         RuleFor(x => x.Description).MaximumLength(500).When(x => x.Description is not null);
+        // 0 is an accepted "not set" value (district / customer / weight-tier price
+        // wasn't configured) — an admin fills it in later. Only negatives are invalid.
+        // Mirrors UpdateOrderCommandValidator, which already allows 0.
         RuleFor(x => x.CompanyServicePrice)
-            .GreaterThan(0).WithMessage("CompanyServicePrice must be greater than 0 when provided.")
+            .GreaterThanOrEqualTo(0).WithMessage("CompanyServicePrice cannot be negative.")
             .When(x => x.CompanyServicePrice.HasValue);
     }
 

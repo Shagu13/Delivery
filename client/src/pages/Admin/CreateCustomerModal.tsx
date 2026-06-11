@@ -50,7 +50,13 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
     if (!form.address.trim())      e.address      = t.errAddressRequired;
     if (!form.email.trim())        e.email        = t.errEmailRequired;
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) e.email = t.errEmailInvalid;
-    if (form.password.length < 8)  e.password     = t.errPasswordShort;
+    // Mirror ASP.NET Identity's password policy so unmet rules surface as clear
+    // warnings here instead of an opaque server error: min 8, upper, lower, digit.
+    if (!form.password)                        e.password = t.errPasswordRequired;
+    else if (form.password.length < 8)         e.password = t.errPasswordShort;
+    else if (!/[A-Z]/.test(form.password))     e.password = t.errPasswordUppercase;
+    else if (!/[a-z]/.test(form.password))     e.password = t.errPasswordLowercase;
+    else if (!/[0-9]/.test(form.password))     e.password = t.errPasswordNumber;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -63,7 +69,22 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
       setForm(EMPTY);
       onCreated(result);
     } catch (err) {
-      setApiError(err instanceof CustomerApiError ? err.message : 'An unexpected error occurred.');
+      if (err instanceof CustomerApiError && err.errors) {
+        // Map field-level errors from the API onto the form fields so they appear
+        // inline (e.g. duplicate phone/email → red hint under the matching input).
+        const fieldMap: Partial<Record<keyof FormState, string>> = {};
+        for (const [key, messages] of Object.entries(err.errors)) {
+          const field = (key.charAt(0).toLowerCase() + key.slice(1)) as keyof FormState;
+          if (field in EMPTY) fieldMap[field] = messages[0];
+        }
+        if (Object.keys(fieldMap).length > 0) {
+          setErrors(prev => ({ ...prev, ...fieldMap }));
+        } else {
+          setApiError(err.message);
+        }
+      } else {
+        setApiError(err instanceof CustomerApiError ? err.message : 'An unexpected error occurred.');
+      }
     } finally {
       setLoading(false);
     }

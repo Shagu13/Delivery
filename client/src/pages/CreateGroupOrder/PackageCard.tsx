@@ -96,7 +96,7 @@ export function PackageCard({
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  const computeServiceFee = (district: District, tierId?: string): number => {
+  const computeServiceFee = (district: District, tierId?: string): number | null => {
     if (tierId) {
       const tier = weightTiers.find(t => t.id === tierId);
       if (tier) {
@@ -114,7 +114,9 @@ export function PackageCard({
       if ((customerPricing.companyServiceDistrictPrice ?? 0) > 0)
         return customerPricing.companyServiceDistrictPrice!;
     }
-    return district.companyServicePrice ?? 0;
+    // No tier / customer / district price configured → leave the fee unset (null)
+    // so the field reads as empty; admin can fill it in later when editing the order.
+    return district.companyServicePrice ?? null;
   };
 
   const showCollectAmount = data.productPaymentStatus === 'NotPaid';
@@ -131,7 +133,7 @@ export function PackageCard({
     // comes from the return pickup district — don't disturb the fee here.
     if (!isReturn) {
       setSelectedDistrict(null);
-      onChange(index, 'companyServicePrice', 0);
+      onChange(index, 'companyServicePrice', null);
     }
   };
 
@@ -145,7 +147,7 @@ export function PackageCard({
       const fee = computeServiceFee(district, data.weightPriceTierId);
       onChange(index, 'companyServicePrice', fee);
     } else {
-      onChange(index, 'companyServicePrice', 0);
+      onChange(index, 'companyServicePrice', null);
     }
   };
 
@@ -155,7 +157,7 @@ export function PackageCard({
       const fee = computeServiceFee(district, data.weightPriceTierId);
       onChange(index, 'companyServicePrice', fee);
     } else {
-      onChange(index, 'companyServicePrice', 0);
+      onChange(index, 'companyServicePrice', null);
     }
   };
 
@@ -187,7 +189,7 @@ export function PackageCard({
     onChange(index, 'orderType', value);
     setSelectedDistrict(null);
     setSelectedReturnDistrict(null);
-    onChange(index, 'companyServicePrice', 0);
+    onChange(index, 'companyServicePrice', null);
     // Drop any geocoded coordinates — the operative address changes with the type.
     onChange(index, 'latitude', null);
     onChange(index, 'longitude', null);
@@ -313,7 +315,7 @@ export function PackageCard({
               <CityDistrictPicker
                 cityValue={data.returnPickupCity ?? ''}
                 districtValue={data.returnPickupDistrict ?? ''}
-                onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', 0); }}
+                onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', null); }}
                 onDistrictChange={v => onChange(index, 'returnPickupDistrict', v)}
                 onDistrictSelect={handleReturnDistrictSelect}
                 cityError={fieldError('returnPickupCity')}

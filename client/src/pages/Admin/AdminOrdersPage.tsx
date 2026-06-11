@@ -11,6 +11,7 @@ import { STATUS_COLORS } from '../../utils/statusColors';
 import { EditOrderModal } from './EditOrderModal';
 import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
+import { PriceWarningModal } from './PriceWarningModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -300,6 +301,12 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [salaryDrafts,      setSalaryDrafts]      = useState<Record<string, string>>({});
   const [salaryChecked,     setSalaryChecked]     = useState<Set<string>>(new Set());
   const [salarySaving,      setSalarySaving]      = useState(false);
+  // Service-price warning/modal — parallel to the salary flow.
+  const [showPriceWarning,  setShowPriceWarning]  = useState(false);
+  const [showPriceModal,    setShowPriceModal]    = useState(false);
+  const [priceDrafts,       setPriceDrafts]       = useState<Record<string, string>>({});
+  const [priceChecked,      setPriceChecked]      = useState<Set<string>>(new Set());
+  const [priceSaving,       setPriceSaving]       = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false });
@@ -451,8 +458,25 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       .filter((o): o is AdminOrderItem => !!o && o.courierSalary == null),
   [selected, orders]);
 
+  // Orders with no company service price set (0 / null) — must be priced before
+  // assigning, mirroring the salary requirement.
+  const missingPriceOrders = useMemo(() =>
+    [...selected]
+      .map(id => orders.find(o => o.id === id))
+      .filter((o): o is AdminOrderItem => !!o && !o.companyServicePrice),
+  [selected, orders]);
+
   const handleBulkAssign = async () => {
     if (!bulkCourierId || selected.size === 0) return;
+    if (missingPriceOrders.length > 0) {
+      const drafts: Record<string, string> = {};
+      const checked = new Set<string>();
+      missingPriceOrders.forEach(o => { drafts[o.id] = ''; checked.add(o.id); });
+      setPriceDrafts(drafts);
+      setPriceChecked(checked);
+      setShowPriceWarning(true);
+      return;
+    }
     if (missingSalaryOrders.length > 0) {
       const drafts: Record<string, string> = {};
       const checked = new Set<string>();
@@ -508,6 +532,23 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setSalarySaving(false);
     setShowSalaryModal(false);
     showToast(`Salary set for ${toSave.length} order${toSave.length !== 1 ? 's' : ''}.`);
+  };
+
+  const handlePriceSave = async () => {
+    const toSave = [...priceChecked].filter(id => {
+      const val = parseFloat(priceDrafts[id] ?? '');
+      return !isNaN(val) && val >= 0;
+    });
+    if (toSave.length === 0) { setShowPriceModal(false); return; }
+    setPriceSaving(true);
+    try {
+      await Promise.all(toSave.map(id => setCompanyServicePrice(token, id, parseFloat(priceDrafts[id]))));
+      const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
+      await Promise.all([load(reloadParams), refreshUnpricedCount()]);
+    } catch { /* best-effort */ }
+    setPriceSaving(false);
+    setShowPriceModal(false);
+    showToast(`Service price set for ${toSave.length} order${toSave.length !== 1 ? 's' : ''}.`);
   };
 
   const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced;
@@ -788,6 +829,15 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         />
       )}
 
+      {/* Service-price warning */}
+      {showPriceWarning && (
+        <PriceWarningModal
+          orderCount={missingPriceOrders.length}
+          onCancel={() => setShowPriceWarning(false)}
+          onFillPrices={() => { setShowPriceWarning(false); setShowPriceModal(true); }}
+        />
+      )}
+
       {/* Salary modal portal */}
       {showSalaryModal && createPortal((() => {
         const allChecked = missingSalaryOrders.length > 0 && missingSalaryOrders.every(o => salaryChecked.has(o.id));
@@ -877,6 +927,94 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <button onClick={handleSalarySave} disabled={salarySaving || salaryChecked.size === 0}
                   style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (salarySaving || salaryChecked.size === 0) ? 0.6 : 1 }}>
                   {salarySaving ? 'Saving…' : `Save${salaryChecked.size > 0 ? ` (${salaryChecked.size})` : ''}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
+
+      {/* Service-price modal portal */}
+      {showPriceModal && createPortal((() => {
+        const allChecked = missingPriceOrders.length > 0 && missingPriceOrders.every(o => priceChecked.has(o.id));
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 640, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>{t.aopSetPrice}</div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.aopMissingPriceCount(missingPriceOrders.length)}</div>
+                </div>
+                <button onClick={() => setShowPriceModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                </button>
+              </div>
+              {/* Bulk apply banner */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', marginBottom: 12, background: 'var(--color-accent-dim)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>Apply to {priceChecked.size > 0 ? `selected (${priceChecked.size})` : 'all'}:</span>
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'var(--color-bg-2)' }}>
+                  <span style={{ padding: '0 6px 0 10px', fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>₾</span>
+                  <input type="number" min="0" step="0.01" placeholder="0.00" id="bulk-price-input-pkg"
+                    style={{ flex: 1, minWidth: 0, padding: '6px 8px 6px 2px', border: 'none', outline: 'none', background: 'transparent', color: 'var(--color-text)', fontSize: '0.88rem' }} />
+                </div>
+                <button onClick={() => {
+                  const inp = document.getElementById('bulk-price-input-pkg') as HTMLInputElement;
+                  const val = inp?.value; if (!val) return;
+                  const targets = priceChecked.size > 0 ? [...priceChecked] : missingPriceOrders.map(o => o.id);
+                  setPriceDrafts(prev => { const next = { ...prev }; targets.forEach(id => { next[id] = val; }); return next; });
+                  setPriceChecked(prev => { const next = new Set(prev); targets.forEach(id => next.add(id)); return next; });
+                  inp.value = '';
+                }} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0, background: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Apply</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--color-border)' }}>
+                <input type="checkbox" style={{ cursor: 'pointer' }} checked={allChecked}
+                  onChange={e => setPriceChecked(e.target.checked ? new Set(missingPriceOrders.map(o => o.id)) : new Set())} />
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Select all ({missingPriceOrders.length})</span>
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
+                      <th style={{ width: 28, padding: '6px 4px' }}></th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Tracking</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Address</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Svc Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missingPriceOrders.map(o => {
+                      const isChecked = priceChecked.has(o.id);
+                      return (
+                        <tr key={o.id} style={{ borderBottom: '1px solid var(--color-border)', background: isChecked ? 'var(--color-accent-dim)' : 'var(--color-bg-2)' }}>
+                          <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                            <input type="checkbox" style={{ cursor: 'pointer' }} checked={isChecked}
+                              onChange={() => setPriceChecked(prev => { const next = new Set(prev); isChecked ? next.delete(o.id) : next.add(o.id); return next; })} />
+                          </td>
+                          <td style={{ padding: '6px 8px' }}><span className="tn-badge">{o.trackingNumber}</span></td>
+                          <td style={{ padding: '6px 8px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>₾</span>
+                              <input type="number" min="0" step="0.01" placeholder="0.00" value={priceDrafts[o.id] ?? ''}
+                                onChange={e => { setPriceDrafts(prev => ({ ...prev, [o.id]: e.target.value })); if (e.target.value) setPriceChecked(prev => { const n = new Set(prev); n.add(o.id); return n; }); }}
+                                style={{ width: 72, textAlign: 'right', padding: '3px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', fontSize: '0.83rem' }} />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
+                <button onClick={() => setShowPriceModal(false)} disabled={priceSaving}
+                  style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Close</button>
+                <button onClick={handlePriceSave} disabled={priceSaving || priceChecked.size === 0}
+                  style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (priceSaving || priceChecked.size === 0) ? 0.6 : 1 }}>
+                  {priceSaving ? 'Saving…' : `Save${priceChecked.size > 0 ? ` (${priceChecked.size})` : ''}`}
                 </button>
               </div>
             </div>

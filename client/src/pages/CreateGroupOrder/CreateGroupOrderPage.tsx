@@ -135,11 +135,9 @@ function validate(
             }
         }
 
-        // Every order incurs a courier service fee (auto-filled from the
-        // recipient / return-pickup district). Required for all payment types.
-        if (!pkg.companyServicePrice || pkg.companyServicePrice <= 0) {
-            errors[`orders[${i}].companyServicePrice`] = t.cgoErrServiceFee;
-        }
+        // The courier service fee is optional at creation: when no district /
+        // customer / weight-tier price is configured it's left unset (null) and
+        // an admin fills it in later. A resolved price is still saved.
 
         if (pkg.orderType === 'Return') {
             if (!pkg.returnPickupCity?.trim())
@@ -352,7 +350,9 @@ export function CreateGroupOrderPage() {
                         fee = customerPricing.companyServiceDistrictPrice!;
                 }
                 if (fee === 0) fee = district.companyServicePrice ?? 0;
-                return { ...o, companyServicePrice: fee };
+                // Leave the fee unset (undefined) when nothing resolved, so the
+                // field reads as empty — matching the manual form. Admin fills later.
+                return { ...o, companyServicePrice: fee > 0 ? fee : undefined };
             });
 
             setPackages(withFees);

@@ -43,6 +43,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
 
     const [saving,     setSaving]     = useState(false);
     const [error,      setError]      = useState<string | null>(null);
+    const [errors,     setErrors]     = useState<Record<string, string>>({});
     const [activeTab,  setActiveTab]  = useState<'delivery' | 'financials' | 'type'>('delivery');
 
     const { t } = useLanguage();
@@ -89,6 +90,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         setReturnAddress(order.returnPickupAddress ?? '');
         setStatusOverride('');
         setError(null);
+        setErrors({});
         setActiveTab('delivery');
     }, [order]);
 
@@ -130,7 +132,71 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         }
     };
 
+    // Drop a single field's error as soon as the admin edits it.
+    const clearErr = (field: string) => setErrors(prev => {
+        if (!prev[field]) return prev;
+        const next = { ...prev };
+        delete next[field];
+        return next;
+    });
+
+    const validate = (): boolean => {
+        const e: Record<string, string> = {};
+
+        // Recipient (delivery tab)
+        if (!firstName.trim()) e.firstName = t.errFirstNameRequired;
+        if (!lastName.trim())  e.lastName  = t.errLastNameRequired;
+        if (!phone.trim())     e.phone     = t.errPhoneRequired;
+        if (!city.trim())      e.city      = t.errCityRequired;
+        if (!district.trim())  e.district  = t.errDistrictRequired;
+        if (!address.trim())   e.address   = t.errAddressRequired;
+
+        // COD amount — only relevant for unpaid parcels; optional but must be valid.
+        if (payStatus === 'NotPaid' && codAmount.trim()) {
+            const n = parseFloat(codAmount);
+            if (isNaN(n) || n < 0) e.codAmount = t.eomErrInvalidAmount;
+        }
+
+        // Company service price (financials tab) — required, non-negative.
+        if (!svcPrice.trim()) {
+            e.svcPrice = t.eomErrServicePriceRequired;
+        } else {
+            const n = parseFloat(svcPrice);
+            if (isNaN(n) || n < 0) e.svcPrice = t.eomErrInvalidAmount;
+        }
+
+        // Courier salary — optional, but must be valid when provided.
+        if (salary.trim()) {
+            const n = parseFloat(salary);
+            if (isNaN(n) || n < 0) e.salary = t.eomErrInvalidAmount;
+        }
+
+        // Return pickup address (type tab) — required for Return orders.
+        if (isReturn) {
+            if (!returnCity.trim())     e.returnCity     = t.errCityRequired;
+            if (!returnDistrict.trim()) e.returnDistrict = t.errDistrictRequired;
+            if (!returnAddress.trim())  e.returnAddress  = t.errAddressRequired;
+        }
+
+        setErrors(e);
+
+        // Surface the first offending tab so the highlighted fields are visible.
+        if (Object.keys(e).length > 0) {
+            if (e.firstName || e.lastName || e.phone || e.city || e.district || e.address || e.codAmount) {
+                setActiveTab('delivery');
+            } else if (e.returnCity || e.returnDistrict || e.returnAddress) {
+                setActiveTab('type');
+            } else if (e.svcPrice || e.salary) {
+                setActiveTab('financials');
+            }
+            setError(t.eomFixErrors);
+        }
+
+        return Object.keys(e).length === 0;
+    };
+
     const handleSave = async () => {
+        if (!validate()) return;
         setSaving(true);
         setError(null);
         try {
@@ -236,27 +302,29 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                         <fieldset className="modal__fieldset">
                             <legend className="modal__legend">{t.eomLegendRecipient}</legend>
                             <div className="eom-grid">
-                                <Field label={t.eomFirstName} required>
-                                    <input className="eom-input" value={firstName} onChange={e => setFirstName(e.target.value)} />
+                                <Field label={t.eomFirstName} required error={errors.firstName}>
+                                    <input className="eom-input" value={firstName} onChange={e => { setFirstName(e.target.value); clearErr('firstName'); }} />
                                 </Field>
-                                <Field label={t.eomLastName} required>
-                                    <input className="eom-input" value={lastName} onChange={e => setLastName(e.target.value)} />
+                                <Field label={t.eomLastName} required error={errors.lastName}>
+                                    <input className="eom-input" value={lastName} onChange={e => { setLastName(e.target.value); clearErr('lastName'); }} />
                                 </Field>
-                                <Field label={t.eomPhone} required className="eom-col-2">
-                                    <input className="eom-input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
+                                <Field label={t.eomPhone} required className="eom-col-2" error={errors.phone}>
+                                    <input className="eom-input" type="tel" value={phone} onChange={e => { setPhone(e.target.value); clearErr('phone'); }} />
                                 </Field>
 
                                 <Field label={t.eomDeliveryCity} required className="eom-col-2">
                                     <CityDistrictPicker
                                         cityValue={city}
                                         districtValue={district}
-                                        onCityChange={v => { setCity(v); setDistrict(''); }}
-                                        onDistrictChange={setDistrict}
+                                        onCityChange={v => { setCity(v); setDistrict(''); clearErr('city'); clearErr('district'); }}
+                                        onDistrictChange={v => { setDistrict(v); clearErr('district'); }}
                                         onDistrictSelect={() => {}}
+                                        cityError={errors.city}
+                                        districtError={errors.district}
                                     />
                                 </Field>
-                                <Field label={t.streetAddress} required className="eom-col-2">
-                                    <input className="eom-input" value={address} onChange={e => setAddress(e.target.value)} />
+                                <Field label={t.streetAddress} required className="eom-col-2" error={errors.address}>
+                                    <input className="eom-input" value={address} onChange={e => { setAddress(e.target.value); clearErr('address'); }} />
                                 </Field>
                                 <Field label={t.eomDescription} className="eom-col-2">
                                     <input className="eom-input" value={description} onChange={e => setDescription(e.target.value)} />
@@ -274,10 +342,10 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                     </select>
                                 </Field>
                                 {payStatus === 'NotPaid' && (
-                                    <Field label={t.eomCodAmount} className="eom-col-2">
+                                    <Field label={t.eomCodAmount} className="eom-col-2" error={errors.codAmount}>
                                         <div className="eom-currency-wrap">
                                             <span className="eom-currency">₾</span>
-                                            <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={codAmount} onChange={e => setCodAmount(e.target.value)} placeholder="0.00" />
+                                            <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={codAmount} onChange={e => { setCodAmount(e.target.value); clearErr('codAmount'); }} placeholder="0.00" />
                                         </div>
                                     </Field>
                                 )}
@@ -325,16 +393,18 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                             <CityDistrictPicker
                                                 cityValue={returnCity}
                                                 districtValue={returnDistrict}
-                                                onCityChange={v => { setReturnCity(v); setReturnDistrict(''); }}
-                                                onDistrictChange={setReturnDistrict}
+                                                onCityChange={v => { setReturnCity(v); setReturnDistrict(''); clearErr('returnCity'); clearErr('returnDistrict'); }}
+                                                onDistrictChange={v => { setReturnDistrict(v); clearErr('returnDistrict'); }}
                                                 onDistrictSelect={() => {}}
+                                                cityError={errors.returnCity}
+                                                districtError={errors.returnDistrict}
                                             />
                                         </Field>
-                                        <Field label={t.streetAddress} required className="eom-col-2">
+                                        <Field label={t.streetAddress} required className="eom-col-2" error={errors.returnAddress}>
                                             <input
                                                 className="eom-input"
                                                 value={returnAddress}
-                                                onChange={e => setReturnAddress(e.target.value)}
+                                                onChange={e => { setReturnAddress(e.target.value); clearErr('returnAddress'); }}
                                                 placeholder={t.eomReturnAddressPh}
                                             />
                                         </Field>
@@ -369,16 +439,16 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                         <fieldset className="modal__fieldset">
                             <legend className="modal__legend">{t.eomLegendFinancials}</legend>
                             <div className="eom-grid">
-                                <Field label={t.eomSvcPrice} required>
+                                <Field label={t.eomSvcPrice} required error={errors.svcPrice}>
                                     <div className="eom-currency-wrap">
                                         <span className="eom-currency">₾</span>
-                                        <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={svcPrice} onChange={e => setSvcPrice(e.target.value)} />
+                                        <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={svcPrice} onChange={e => { setSvcPrice(e.target.value); clearErr('svcPrice'); }} />
                                     </div>
                                 </Field>
-                                <Field label={t.eomCourierSalary}>
+                                <Field label={t.eomCourierSalary} error={errors.salary}>
                                     <div className="eom-currency-wrap">
                                         <span className="eom-currency">₾</span>
-                                        <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={salary} onChange={e => setSalary(e.target.value)} placeholder="0.00" />
+                                        <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={salary} onChange={e => { setSalary(e.target.value); clearErr('salary'); }} placeholder="0.00" />
                                     </div>
                                 </Field>
                                 {svcPrice && salary && (
@@ -542,6 +612,8 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                 .eom-label--required::after { content:' *';color:var(--color-accent); }
                 .eom-input { background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-size:0.875rem;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;transition:border-color var(--transition);font-family:var(--font-body); }
                 .eom-input:focus { border-color:var(--color-accent); }
+                .eom-field--error .eom-input { border-color:#ef4444; }
+                .eom-field-error { font-size:0.72rem;color:#ef4444;font-weight:500; }
                 .eom-currency-wrap { position:relative;display:flex;align-items:center; }
                 .eom-currency { position:absolute;left:10px;font-size:0.85rem;color:var(--color-text-subtle);pointer-events:none; }
                 .eom-input--currency { padding-left:24px; }
@@ -571,13 +643,14 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
-function Field({ label, required, className, children }: {
-    label: string; required?: boolean; className?: string; children: React.ReactNode;
+function Field({ label, required, className, error, children }: {
+    label: string; required?: boolean; className?: string; error?: string; children: React.ReactNode;
 }) {
     return (
-        <div className={`eom-field${className ? ` ${className}` : ''}`}>
+        <div className={`eom-field${className ? ` ${className}` : ''}${error ? ' eom-field--error' : ''}`}>
             <label className={`eom-label${required ? ' eom-label--required' : ''}`}>{label}</label>
             {children}
+            {error && <span className="eom-field-error">{error}</span>}
         </div>
     );
 }

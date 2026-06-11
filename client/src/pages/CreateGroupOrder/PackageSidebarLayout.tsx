@@ -47,7 +47,7 @@ function computeFee(
   tierId: string | undefined,
   weightTiers: WeightPriceTier[],
   customerPricing?: CustomerPricing | null
-): number {
+): number | null {
   if (tierId) {
     const tier = weightTiers.find(t => t.id === tierId);
     if (tier) {
@@ -65,7 +65,9 @@ function computeFee(
     if ((customerPricing.companyServiceDistrictPrice ?? 0) > 0)
       return customerPricing.companyServiceDistrictPrice!;
   }
-  return district.companyServicePrice ?? 0;
+  // No tier / customer / district price configured → leave the fee unset (null)
+  // so the field reads as empty; admin can fill it in later when editing the order.
+  return district.companyServicePrice ?? null;
 }
 
 function pkgSummary(pkg: OrderItemRequest): string {
@@ -119,13 +121,13 @@ function PackageDetail({
   const handleDistrictSelect = useCallback((district: District | null) => {
     setSelectedDistrict(district);
     if (district) onChange(index, 'companyServicePrice', computeFee(district, pkg.weightPriceTierId, weightTiers, customerPricing));
-    else onChange(index, 'companyServicePrice', 0);
+    else onChange(index, 'companyServicePrice', null);
   }, [index, pkg.weightPriceTierId, weightTiers, customerPricing, onChange]);
 
   const handleReturnDistrictSelect = useCallback((district: District | null) => {
     setSelectedReturnDistrict(district);
     if (district) onChange(index, 'companyServicePrice', computeFee(district, pkg.weightPriceTierId, weightTiers, customerPricing));
-    else onChange(index, 'companyServicePrice', 0);
+    else onChange(index, 'companyServicePrice', null);
   }, [index, pkg.weightPriceTierId, weightTiers, customerPricing, onChange]);
 
   const handleWeightTierChange = (tierId: string) => {
@@ -142,7 +144,7 @@ function PackageDetail({
     onChange(index, 'orderType', type);
     setSelectedDistrict(null);
     setSelectedReturnDistrict(null);
-    onChange(index, 'companyServicePrice', 0);
+    onChange(index, 'companyServicePrice', null);
     // Drop any geocoded coordinates — the operative address changes with the type.
     onChange(index, 'latitude', null);
     onChange(index, 'longitude', null);
@@ -263,7 +265,7 @@ function PackageDetail({
             <CityDistrictPicker
               cityValue={pkg.returnPickupCity ?? ''}
               districtValue={pkg.returnPickupDistrict ?? ''}
-              onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', 0); }}
+              onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', null); }}
               onDistrictChange={v => onChange(index, 'returnPickupDistrict', v)}
               onDistrictSelect={handleReturnDistrictSelect}
               cityError={fe('returnPickupCity')}
@@ -323,7 +325,7 @@ function PackageDetail({
           <CityDistrictPicker
             cityValue={pkg.recipientCity}
             districtValue={pkg.recipientDistrict}
-            onCityChange={v => { onChange(index, 'recipientCity', v); onChange(index, 'recipientDistrict', ''); if (!isReturn) { setSelectedDistrict(null); onChange(index, 'companyServicePrice', 0); } }}
+            onCityChange={v => { onChange(index, 'recipientCity', v); onChange(index, 'recipientDistrict', ''); if (!isReturn) { setSelectedDistrict(null); onChange(index, 'companyServicePrice', null); } }}
             onDistrictChange={v => onChange(index, 'recipientDistrict', v)}
             onDistrictSelect={isReturn ? () => {} : handleDistrictSelect}
             cityError={fe('recipientCity')}

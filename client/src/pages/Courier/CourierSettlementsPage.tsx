@@ -67,8 +67,7 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
                     </div>
                     <FinRow label={t.cdSettCashCollected} value={`₾${item.totalAmountOfCashCollected.toFixed(2)}`} />
                     <FinRow label={t.cdSettYourSalary}    value={`₾${item.totalCourierSalary.toFixed(2)}`} highlight />
-                    <FinRow label={t.cdSettAmountPaid}    value={`₾${item.amountCourierWasPaid.toFixed(2)}`} />
-                    {!isPaid && <FinRow label={t.cdSettRemaining} value={`₾${remainingSalary.toFixed(2)}`} />}
+                    <FinRow label={t.cdSettRemaining}     value={`₾${Math.max(0, remainingSalary).toFixed(2)}`} highlight={!isPaid} />
                     {item.totalAmountOfCashCollected > 0 && item.totalCourierTransferToCompany >= 0 && (
                         <div className={`settle-transfer ${isDone ? 'settle-transfer--done' : 'settle-transfer--pending'}`}>
                             <div className="settle-transfer__label">{isDone ? t.cdSettTransferDone : t.cdSettTransferPending}</div>

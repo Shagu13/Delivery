@@ -6,10 +6,11 @@ import {
     markReturnedToSender,
     type ReturnExchangeOrder,
 } from '../../api/returnExchange';
-import { setCourierSalary } from '../../api/orders';
+import { setCourierSalary, setCompanyServicePrice } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { SalaryWarningModal } from './SalaryWarningModal';
+import { PriceWarningModal } from './PriceWarningModal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,10 @@ function OrderRow({
     const [showSalaryModal, setShowSalaryModal]     = useState(false);
     const [salaryInput, setSalaryInput]             = useState('');
     const [salarySaving, setSalarySaving]           = useState(false);
+    const [showPriceWarning, setShowPriceWarning]   = useState(false);
+    const [showPriceModal, setShowPriceModal]       = useState(false);
+    const [priceInput, setPriceInput]               = useState('');
+    const [priceSaving, setPriceSaving]             = useState(false);
 
     const doAssign = async () => {
         setAssigning(true); setRowError(null);
@@ -161,6 +166,11 @@ function OrderRow({
 
     const handleAssign = async () => {
         if (!selectedCourier) return;
+        // Require a service price first (mirrors the salary requirement), then salary.
+        if (!order.companyServicePrice) {
+            setShowPriceWarning(true);
+            return;
+        }
         if (order.courierSalary == null) {
             setShowSalaryWarning(true);
             return;
@@ -178,6 +188,23 @@ function OrderRow({
         setSalarySaving(false);
         setShowSalaryModal(false);
         await doAssign();
+    };
+
+    const handlePriceSave = async () => {
+        const val = parseFloat(priceInput);
+        if (isNaN(val) || val < 0) return;
+        setPriceSaving(true);
+        try {
+            await setCompanyServicePrice(token, order.id, val);
+        } catch { /* best-effort */ }
+        setPriceSaving(false);
+        setShowPriceModal(false);
+        // Price is now set — continue the assign flow: salary next, else assign.
+        if (order.courierSalary == null) {
+            setShowSalaryWarning(true);
+        } else {
+            await doAssign();
+        }
     };
 
     const handleMarkReturned = async () => {
@@ -298,6 +325,52 @@ function OrderRow({
                     )}
                 </div>
             </td>
+
+            {/* Service-price warning */}
+            {showPriceWarning && (
+                <PriceWarningModal
+                    orderCount={1}
+                    onCancel={() => setShowPriceWarning(false)}
+                    onFillPrices={() => { setShowPriceWarning(false); setPriceInput(''); setShowPriceModal(true); }}
+                />
+            )}
+
+            {/* Service-price modal portal */}
+            {showPriceModal && createPortal(
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+                    <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 400, boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>Set Service Price</div>
+                                <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+                                    <span className="tn-badge" style={{ fontSize: '0.75rem' }}>{order.trackingNumber}</span>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowPriceModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}>
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                            </button>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>Service Price ₾</span>
+                            <input
+                                type="number" min="0" step="0.01" placeholder="0.00"
+                                autoFocus
+                                value={priceInput}
+                                onChange={e => setPriceInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') void handlePriceSave(); if (e.key === 'Escape') setShowPriceModal(false); }}
+                                style={{ flex: 1, padding: '7px 10px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', fontSize: '0.88rem', outline: 'none' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button onClick={() => setShowPriceModal(false)} disabled={priceSaving} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Cancel</button>
+                            <button onClick={handlePriceSave} disabled={priceSaving || !priceInput} style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (priceSaving || !priceInput) ? 0.6 : 1 }}>
+                                {priceSaving ? 'Saving…' : 'Save & Continue'}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {/* Salary warning */}
             {showSalaryWarning && (
