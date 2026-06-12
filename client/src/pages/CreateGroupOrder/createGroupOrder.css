@@ -345,21 +345,21 @@ body {
     display: flex;
     align-items: center;
     gap: 5px;
-    background: none;
+    background: var(--color-accent);
     border: none;
     cursor: pointer;
-    color: var(--color-text-subtle);
+    color: #ffffff;
     font-family: var(--font-body);
     font-size: 0.78rem;
-    font-weight: 500;
-    padding: 4px 8px;
+    font-weight: 600;
+    padding: 5px 12px;
     border-radius: var(--radius-sm);
-    transition: color var(--transition), background var(--transition);
+    transition: background var(--transition), box-shadow var(--transition);
 }
 
     .package-card__remove:hover {
-        color: var(--color-error);
-        background: var(--color-error-bg);
+        background: #f0b040;
+        box-shadow: 0 4px 20px var(--color-accent-glow);
     }
 
 .package-card__body {
@@ -407,21 +407,24 @@ body {
         cursor: not-allowed;
     }
 
-.btn--add {
-    background: transparent;
-    border: 1.5px dashed var(--color-border);
-    color: var(--color-text-muted);
-    padding: 13px 22px;
+.btn--add-package {
+    background: var(--color-accent-dim);
+    border: 2px solid var(--color-accent);
+    color: var(--color-accent);
+    padding: 15px 22px;
     width: 100%;
     border-radius: var(--radius-lg);
-    font-size: 0.88rem;
-    transition: border-color var(--transition), color var(--transition), background var(--transition);
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-top: 8px;
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition), transform var(--transition);
 }
 
-    .btn--add:hover {
-        border-color: var(--color-accent);
-        color: var(--color-accent);
-        background: var(--color-accent-dim);
+    .btn--add-package:hover {
+        background: var(--color-accent);
+        color: #ffffff;
+        box-shadow: 0 4px 14px var(--color-accent-dim);
+        transform: translateY(-1px);
     }
 
 .btn--ghost {

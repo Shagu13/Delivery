@@ -24,7 +24,6 @@ interface Props {
   districtLookup?: Record<string, District>;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
-  onAdd: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -465,7 +464,7 @@ function PackageDetail({
 
 // ── Main sidebar component ────────────────────────────────────────────────────
 
-export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, districtLookup = {}, onChange, onRemove, onAdd }: Props) {
+export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, districtLookup = {}, onChange, onRemove }: Props) {
   const { t } = useLanguage();
   const [activeIndex, setActiveIndex] = useState(0);
   const [listCollapsed, setListCollapsed] = useState(false);
@@ -497,11 +496,15 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
     setActiveIndex(i => Math.min(i, packages.length - 2));
   };
 
-  const handleAdd = () => {
-    onAdd();
-    setActiveIndex(packages.length);
-    setListCollapsed(false);
-  };
+  // When a package is added (length grows), jump to and reveal the new one
+  const prevLen = useRef(packages.length);
+  useEffect(() => {
+    if (packages.length > prevLen.current) {
+      setActiveIndex(packages.length - 1);
+      setListCollapsed(false);
+    }
+    prevLen.current = packages.length;
+  }, [packages.length]);
 
   const readyCount = packages.filter((p, i) => pkgStatus(p, errors, i) === 'ok').length;
   const errorCount = packages.filter((p, i) => pkgStatus(p, errors, i) === 'error').length;
@@ -578,16 +581,6 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
           })}
         </div>
 
-        {packages.length < 100 && (
-          <div className="psl-sidebar__footer">
-            <button type="button" className="psl-add-btn" onClick={handleAdd}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-              </svg>
-              {t.cgoAddPackage}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ── Detail panel ── */}
@@ -675,17 +668,6 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
         .psl-list-item__err-hint { font-size: 0.7rem; color: var(--color-error); }
         .psl-list-item__type-chip { font-size: 0.68rem; font-weight: 600; color: inherit; }
 
-        .psl-sidebar__footer { padding: 8px; border-top: 1px solid var(--color-border); flex-shrink: 0; }
-        .psl-add-btn {
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          width: 100%; padding: 7px;
-          border: 1px dashed var(--color-border); border-radius: var(--radius-sm);
-          background: none; color: var(--color-text-muted);
-          font-family: var(--font-body); font-size: 0.8rem; font-weight: 500;
-          cursor: pointer; transition: all var(--transition);
-        }
-        .psl-add-btn:hover { background: var(--color-accent-dim); color: var(--color-accent); border-color: var(--color-accent); }
-
         /* ── Detail panel ── */
         .psl-detail {
           display: flex; flex-direction: column; overflow: hidden;
@@ -717,13 +699,13 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
         .psl-nav-pos { font-size: 0.78rem; color: var(--color-text-muted); min-width: 36px; text-align: center; }
         .psl-remove-btn {
           display: flex; align-items: center; gap: 5px;
-          padding: 4px 10px; border: 1px solid var(--color-border);
-          border-radius: var(--radius-sm); background: none;
-          color: var(--color-text-subtle); font-size: 0.78rem; font-weight: 500;
-          cursor: pointer; transition: all var(--transition);
+          padding: 5px 12px; border: none;
+          border-radius: var(--radius-sm); background: var(--color-accent);
+          color: #ffffff; font-size: 0.78rem; font-weight: 600;
+          cursor: pointer; transition: background var(--transition), box-shadow var(--transition);
           font-family: var(--font-body);
         }
-        .psl-remove-btn:hover { background: var(--color-error-bg); color: var(--color-error); border-color: var(--color-error); }
+        .psl-remove-btn:hover { background: #f0b040; box-shadow: 0 4px 20px var(--color-accent-glow); }
 
         .psl-detail__body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 20px; }
 
@@ -798,9 +780,6 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
             max-height: 0;
             opacity: 0;
             overflow: hidden;
-          }
-          .psl-sidebar--collapsed .psl-sidebar__footer {
-            display: none;
           }
           .psl-sidebar__toggle {
             display: flex;

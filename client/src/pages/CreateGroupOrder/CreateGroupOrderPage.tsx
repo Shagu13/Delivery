@@ -657,33 +657,23 @@ export function CreateGroupOrderPage() {
 
                             {/* ── Package editors ── */}
                             {layout === 'cards' && (
-                                <>
-                                    <div className="package-list">
-                                        {packages.map((pkg, i) => (
-                                            <PackageCard
-                                                key={i}
-                                                index={i}
-                                                data={pkg}
-                                                errors={errors}
-                                                canRemove={packages.length > 1}
-                                                customerPricing={customerPricing}
-                                                weightTiers={weightTiers}
-                                                senderAddress={senderAddress}
-                                                districtLookup={districtLookup}
-                                                onChange={handlePackageChange}
-                                                onRemove={removePackage}
-                                            />
-                                        ))}
-                                    </div>
-                                    {packages.length < 100 && (
-                                        <button type="button" className="btn btn--add" onClick={addPackage}>
-                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                                            </svg>
-                                            {t.cgoAddPackage}
-                                        </button>
-                                    )}
-                                </>
+                                <div className="package-list">
+                                    {packages.map((pkg, i) => (
+                                        <PackageCard
+                                            key={i}
+                                            index={i}
+                                            data={pkg}
+                                            errors={errors}
+                                            canRemove={packages.length > 1}
+                                            customerPricing={customerPricing}
+                                            weightTiers={weightTiers}
+                                            senderAddress={senderAddress}
+                                            districtLookup={districtLookup}
+                                            onChange={handlePackageChange}
+                                            onRemove={removePackage}
+                                        />
+                                    ))}
+                                </div>
                             )}
 
                             {layout === 'sidebar' && (
@@ -696,7 +686,6 @@ export function CreateGroupOrderPage() {
                                     districtLookup={districtLookup}
                                     onChange={handlePackageChange}
                                     onRemove={removePackage}
-                                    onAdd={addPackage}
                                 />
                             )}
                         </div>
@@ -710,6 +699,15 @@ export function CreateGroupOrderPage() {
                             </svg>
                             {globalError}
                         </div>
+                    )}
+
+                    {packages.length < 100 && (
+                        <button type="button" className="btn btn--add-package" onClick={addPackage}>
+                            <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            </svg>
+                            {t.cgoAddPackage}
+                        </button>
                     )}
 
                     <div className="form-footer">
