@@ -68,6 +68,7 @@ export interface AdminGroupOrder {
     senderIdNumber: string | null;
     senderBusinessName: string;
     senderPhone: string;
+    alternativeSenderPhone?: string | null;
     pickUpCity: string;
     pickUpCityGeo?: string;
     pickUpDistrict: string;

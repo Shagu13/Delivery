@@ -13,6 +13,7 @@ public sealed record AdminGroupOrderDto(
     string? SenderIdNumber,
     string  SenderBusinessName,
     string  SenderPhone,
+    string? AlternativeSenderPhone,
     // Pickup
     string  PickUpCity,
     string? PickUpCityGeo,

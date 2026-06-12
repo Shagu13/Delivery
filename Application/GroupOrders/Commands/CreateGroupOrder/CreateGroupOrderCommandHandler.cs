@@ -77,6 +77,9 @@ public sealed class CreateGroupOrderCommandHandler
             SenderIdNumber     = dto.SenderIdNumber,
             SenderBusinessName = dto.SenderBusinessName,
             SenderPhone        = dto.SenderPhone,
+            AlternativeSenderPhone = string.IsNullOrWhiteSpace(dto.AlternativeSenderPhone)
+                ? null
+                : dto.AlternativeSenderPhone.Trim(),
             PickUpCity         = dto.PickUpCity,
             PickUpDistrict     = dto.PickUpDistrict,
             PickUpAddress      = dto.PickUpAddress,

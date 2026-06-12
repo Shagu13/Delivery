@@ -17,6 +17,9 @@ public class GroupOrder
     public required string SenderBusinessName { get; set; }
     public required string SenderPhone        { get; set; }
 
+    /// <summary>Optional second contact number the sender can supply. Null when not provided.</summary>
+    public string? AlternativeSenderPhone { get; set; }
+
     // ── Pick-up address ──────────────────────────────────────────────────────
     // Pre-filled from the customer's registered address by default.
     // The sender can override to a different pick-up location for the current order

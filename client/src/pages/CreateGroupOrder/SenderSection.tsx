@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FormField } from '../../components/ui/FormField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import type { ValidationErrors } from '../../types/groupOrder';
@@ -9,6 +10,7 @@ interface SenderData {
   senderIdNumber?:    string;
   senderBusinessName: string;
   senderPhone:        string;
+  alternativeSenderPhone: string;
   pickUpCity:         string;
   pickUpDistrict:     string;
   pickUpAddress:      string;
@@ -41,6 +43,12 @@ export function SenderSection({
   onOpenPickupModal,
 }: SenderSectionProps) {
   const { t } = useLanguage();
+  const [showAltPhone, setShowAltPhone] = useState(!!data.alternativeSenderPhone);
+
+  const clearAltPhone = () => {
+    setShowAltPhone(false);
+    onChange('alternativeSenderPhone', '');
+  };
 
   return (
     <section className="form-section">
@@ -93,6 +101,40 @@ export function SenderSection({
             />
           </div>
         </fieldset>}
+
+        {/* Alternative mobile number — optional, revealed on demand */}
+        <div className="alt-phone-block">
+          {!showAltPhone ? (
+            <button
+              type="button"
+              className="btn btn--ghost alt-phone-toggle"
+              onClick={() => setShowAltPhone(true)}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              {t.cgoAltPhoneButton}
+            </button>
+          ) : (
+            <div className="alt-phone-field">
+              <FormField
+                label={t.cgoAltPhone} type="tel"
+                value={data.alternativeSenderPhone ?? ''}
+                onChange={e => onChange('alternativeSenderPhone', e.target.value)}
+                error={errors.alternativeSenderPhone}
+                placeholder="5XX XXX XXX" maxLength={9}
+              />
+              <button
+                type="button"
+                className="alt-phone-remove"
+                onClick={clearAltPhone}
+                aria-label={t.cgoAltPhoneRemove}
+              >
+                {t.cgoAltPhoneRemove}
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Pickup Location */}
         <fieldset className="fieldset">

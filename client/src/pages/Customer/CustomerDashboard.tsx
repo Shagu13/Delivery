@@ -418,6 +418,15 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
 
           {/* Expanded: individual packages */}
           {expanded === go.id && (
+            <>
+            {go.alternativeSenderPhone && (
+              <div style={{ padding: '10px 16px', fontSize: '0.82rem', color: 'var(--color-text-subtle)' }}>
+                <span style={{ fontWeight: 600 }}>{t.custAltPhone}:</span>{' '}
+                <a href={`tel:${go.alternativeSenderPhone}`} style={{ color: 'var(--color-accent)', fontWeight: 600 }}>
+                  {go.alternativeSenderPhone}
+                </a>
+              </div>
+            )}
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                 <thead>
@@ -465,6 +474,7 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       ))}

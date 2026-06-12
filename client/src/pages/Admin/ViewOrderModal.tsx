@@ -110,6 +110,9 @@ export function ViewOrderModal({ order, open, onClose }: Props) {
                         <Row label={t.vomLblBusiness}  value={order.senderBusinessName} />
                         <Row label={t.vomLblName}      value={`${order.senderFirstName} ${order.senderLastName}`.trim()} />
                         <Row label={t.vomLblPhone}     value={order.senderPhone} />
+                        {order.alternativeSenderPhone && (
+                            <Row label={t.vomLblAltPhone} value={order.alternativeSenderPhone} />
+                        )}
                     </Section>
 
                     <Section title={t.vomSecRecipient}>

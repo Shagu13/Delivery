@@ -357,6 +357,9 @@ export default function AdminHistoryPage({ token }: { token: string }) {
 
                   <div className="go-meta">
                     <span className="go-meta__phone">{go.senderPhone}</span>
+                    {go.alternativeSenderPhone && (
+                      <span className="go-meta__phone">{go.alternativeSenderPhone}</span>
+                    )}
                     <span className="go-meta__city">
                       {locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}
                     </span>

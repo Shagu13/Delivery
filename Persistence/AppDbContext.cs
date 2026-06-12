@@ -104,6 +104,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(g => g.SenderIdNumber).HasMaxLength(50);
             e.Property(g => g.SenderBusinessName).HasMaxLength(150).IsRequired();
             e.Property(g => g.SenderPhone).HasMaxLength(20).IsRequired();
+            e.Property(g => g.AlternativeSenderPhone).HasMaxLength(20);
             e.Property(g => g.PickUpCity).HasMaxLength(100).IsRequired();
             e.Property(g => g.PickUpDistrict).HasMaxLength(100).IsRequired();
             e.Property(g => g.PickUpAddress).HasMaxLength(250).IsRequired();

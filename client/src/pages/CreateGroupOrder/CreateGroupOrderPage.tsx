@@ -32,6 +32,7 @@ interface SenderFormData {
     senderIdNumber?:    string;
     senderBusinessName: string;
     senderPhone:        string;
+    alternativeSenderPhone: string;
     registeredCity:     string;
     registeredDistrict: string;
     registeredAddress:  string;
@@ -47,6 +48,7 @@ const EMPTY_SENDER: SenderFormData = {
     senderIdNumber:     '',
     senderBusinessName: '',
     senderPhone:        '',
+    alternativeSenderPhone: '',
     registeredCity:     '',
     registeredDistrict: '',
     registeredAddress:  '',
@@ -223,6 +225,7 @@ export function CreateGroupOrderPage() {
                     senderIdNumber:     profile.idNumber ?? '',
                     senderBusinessName: profile.businessName,
                     senderPhone:        profile.phoneNumber,
+                    alternativeSenderPhone: '',
                     registeredCity:     profile.city,
                     registeredDistrict: profile.district,
                     registeredAddress:  profile.address,
@@ -404,6 +407,7 @@ export function CreateGroupOrderPage() {
                 senderIdNumber:     sender.senderIdNumber?.trim() || undefined,
                 senderBusinessName: sender.senderBusinessName,
                 senderPhone:        sender.senderPhone,
+                alternativeSenderPhone: sender.alternativeSenderPhone.trim() || undefined,
                 pickUpCity:         sender.pickUpCity,
                 pickUpDistrict:     sender.pickUpDistrict,
                 pickUpAddress:      sender.pickUpAddress,
@@ -456,6 +460,7 @@ export function CreateGroupOrderPage() {
                     senderIdNumber:     profile.idNumber ?? '',
                     senderBusinessName: profile.businessName,
                     senderPhone:        profile.phoneNumber,
+                    alternativeSenderPhone: '',
                     registeredCity:     profile.city,
                     registeredDistrict: profile.district,
                     registeredAddress:  profile.address,

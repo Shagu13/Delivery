@@ -38,6 +38,8 @@ export interface CreateGroupOrderRequest {
     senderIdNumber?: string;
     senderBusinessName: string;
     senderPhone: string;
+    /** Optional second contact number for the sender. */
+    alternativeSenderPhone?: string;
     pickUpCity: string;
     pickUpDistrict: string;
     pickUpAddress: string;

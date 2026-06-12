@@ -11,6 +11,7 @@ public sealed record AdminGroupOrderResponse(
     string? SenderIdNumber,
     string  SenderBusinessName,
     string  SenderPhone,
+    string? AlternativeSenderPhone,
     // Pickup
     string    PickUpCity,
     string?   PickUpCityGeo,

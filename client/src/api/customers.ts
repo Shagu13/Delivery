@@ -69,6 +69,7 @@ export interface CustomerOrder {
 export interface CustomerGroupOrder {
   id: string; createdAt: string; status: string;
   senderBusinessName: string;
+  alternativeSenderPhone?: string | null;
   pickUpCity: string; pickUpCityGeo?: string;
   pickUpDistrict: string; pickUpDistrictGeo?: string;
   note: string | null; numberOfPackages: number;

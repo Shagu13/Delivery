@@ -136,6 +136,14 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                                 </a>
                                             </div>
                                         )}
+                                        {go.alternativeSenderPhone && (
+                                            <div className="courier-card__row">
+                                                <span className="courier-card__label">{t.cdLabelAltPhone}</span>
+                                                <a href={`tel:${go.alternativeSenderPhone}`} className="courier-card__phone-link">
+                                                    📞 {go.alternativeSenderPhone}
+                                                </a>
+                                            </div>
+                                        )}
                                         {go.whenPackagePickedUpDate && (
                                             <div className="courier-card__row">
                                                 <span className="courier-card__label">{t.cdLabelScheduled}</span>

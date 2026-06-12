@@ -120,6 +120,7 @@ public sealed class GetAllOrdersQueryHandler
                 SenderFirstName:          o.GroupOrder?.SenderFirstName    ?? o.Customer?.FirstName    ?? string.Empty,
                 SenderLastName:           o.GroupOrder?.SenderLastName     ?? o.Customer?.LastName     ?? string.Empty,
                 SenderPhone:              o.GroupOrder?.SenderPhone        ?? o.Customer?.PhoneNumber  ?? string.Empty,
+                AlternativeSenderPhone:   o.GroupOrder?.AlternativeSenderPhone,
                 RecipientFirstName:       o.RecipientFirstName,
                 RecipientLastName:        o.RecipientLastName,
                 RecipientPhone:           o.RecipientPhone,

@@ -12,6 +12,7 @@ public sealed record GroupOrderResponseDto(
     string SenderLastName,
     string SenderIdNumber,
     string SenderPhone,
+    string? AlternativeSenderPhone,
     string PickUpCity,
     string PickUpDistrict,
     string PickUpAddress,

@@ -22,6 +22,7 @@ export interface AdminOrderItem {
   senderFirstName: string;
   senderLastName: string;
   senderPhone: string;
+  alternativeSenderPhone: string | null;
   recipientFirstName: string;
   recipientLastName: string;
   recipientPhone: string;

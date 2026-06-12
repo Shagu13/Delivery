@@ -61,6 +61,7 @@ public sealed class GetAllGroupOrdersQueryHandler
             SenderIdNumber:          go.SenderIdNumber,
             SenderBusinessName:      go.SenderBusinessName,
             SenderPhone:             go.SenderPhone,
+            AlternativeSenderPhone:  go.AlternativeSenderPhone,
             PickUpCity:              go.PickUpCity,
             PickUpCityGeo:           cityGeo.GetValueOrDefault(go.PickUpCity),
             PickUpDistrict:          go.PickUpDistrict,

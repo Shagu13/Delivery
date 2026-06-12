@@ -439,6 +439,42 @@ body {
         color: var(--color-text);
     }
 
+/* Alternative sender phone — optional reveal */
+.alt-phone-block {
+    margin-bottom: 4px;
+}
+
+    .alt-phone-toggle {
+        gap: 7px;
+        font-size: 0.85rem;
+    }
+
+.alt-phone-field {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+    .alt-phone-field > :first-child {
+        flex: 1;
+    }
+
+.alt-phone-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-subtle);
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    padding: 11px 4px;
+    text-decoration: underline;
+    transition: color var(--transition);
+}
+
+    .alt-phone-remove:hover {
+        color: var(--color-error);
+    }
+
 /* Spinner */
 .btn__spinner {
     width: 16px;

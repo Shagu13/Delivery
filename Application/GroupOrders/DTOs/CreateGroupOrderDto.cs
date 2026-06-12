@@ -6,6 +6,7 @@ public sealed record CreateGroupOrderDto(
     string? SenderIdNumber,
     string SenderBusinessName,
     string SenderPhone,
+    string? AlternativeSenderPhone,
     string PickUpCity,
     string PickUpDistrict,
     string PickUpAddress,

@@ -16,6 +16,8 @@ public sealed class CreateGroupOrderCommandValidator : AbstractValidator<CreateG
             .When(x => x.Dto.SenderIdNumber is not null);
         RuleFor(x => x.Dto.SenderBusinessName).NotEmpty().MaximumLength(150);
         RuleFor(x => x.Dto.SenderPhone).NotEmpty().MaximumLength(20);
+        RuleFor(x => x.Dto.AlternativeSenderPhone).MaximumLength(20)
+            .When(x => !string.IsNullOrWhiteSpace(x.Dto.AlternativeSenderPhone));
         RuleFor(x => x.Dto.PickUpCity).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.PickUpDistrict).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.PickUpAddress).NotEmpty().MaximumLength(250);

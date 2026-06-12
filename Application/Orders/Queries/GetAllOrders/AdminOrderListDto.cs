@@ -8,6 +8,7 @@ public sealed record AdminOrderListDto(
     string   SenderFirstName,
     string   SenderLastName,
     string   SenderPhone,
+    string?  AlternativeSenderPhone,
     // Recipient
     string   RecipientFirstName,
     string   RecipientLastName,

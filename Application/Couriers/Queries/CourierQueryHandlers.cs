@@ -45,6 +45,7 @@ public sealed class GetCourierGroupOrdersQueryHandler
             SenderLastName:         go.SenderLastName,
             SenderIdNumber:         go.SenderIdNumber ?? string.Empty,
             SenderPhone:            go.SenderPhone,
+            AlternativeSenderPhone: go.AlternativeSenderPhone,
             PickUpCity:             go.PickUpCity,
             PickUpDistrict:         go.PickUpDistrict,
             PickUpAddress:          go.PickUpAddress,

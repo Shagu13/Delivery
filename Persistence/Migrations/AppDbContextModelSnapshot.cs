@@ -443,6 +443,10 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("AcceptedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("AlternativeSenderPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<Guid?>("CourierId")
                         .HasColumnType("uniqueidentifier");
 

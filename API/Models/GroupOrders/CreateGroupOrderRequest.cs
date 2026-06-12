@@ -8,6 +8,7 @@ public sealed record CreateGroupOrderRequest(
     string? SenderIdNumber,
     string SenderBusinessName,
     string SenderPhone,
+    string? AlternativeSenderPhone,
     string PickUpCity,
     string PickUpDistrict,
     string PickUpAddress,
