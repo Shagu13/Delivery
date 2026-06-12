@@ -65,9 +65,10 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
     if (!lastName.trim())  e.recipientLastName  = t.errLastNameRequired;
     if (!phone.trim())     e.recipientPhone     = t.errPhoneRequired;
     if (!address.trim())   e.recipientAddress   = t.errAddressRequired;
-    if (isUnpaid && cod.trim()) {
+    // COD is required and must be > 0 for unpaid parcels — mirrors the create form.
+    if (isUnpaid) {
       const n = parseFloat(cod);
-      if (isNaN(n) || n < 0) e.amountToCollectForPackage = t.eomErrInvalidAmount;
+      if (!cod.trim() || isNaN(n) || n <= 0) e.amountToCollectForPackage = t.cgoErrParcelPrice;
     }
     setErrors(e);
     return Object.keys(e).length === 0;
