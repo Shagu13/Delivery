@@ -10,7 +10,8 @@ import {
   updateMyProfile, changePassword,
   CustomerApiError,
 } from '../../api/customers';
-import type { Customer, CustomerGroupOrder } from '../../api/customers';
+import type { Customer, CustomerGroupOrder, CustomerOrder } from '../../api/customers';
+import { CustomerEditOrderModal } from './CustomerEditOrderModal';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
@@ -101,6 +102,11 @@ export function CustomerDashboard() {
       .then(([p, o]) => { setProfile(p); setOrders(o); })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, [token]);
+
+  const refreshOrders = useCallback(() => {
+    if (!token) return;
+    getMyOrders(token).then(setOrders).catch(() => {});
   }, [token]);
 
   const handleSignOut = () => { signOut(); navigate('/login', { replace: true }); };
@@ -270,7 +276,7 @@ export function CustomerDashboard() {
                   onViewAll={() => setView('shipments')}
                 />
               )}
-              {view === 'shipments'   && <ShipmentsView orders={orders} />}
+              {view === 'shipments'   && <ShipmentsView orders={orders} token={token ?? ''} onRefresh={refreshOrders} />}
               {view === 'finance'     && <CustomerFinancePage />}
               {view === 'statistics'  && <CustomerStatisticsPage />}
               {view === 'calculator'  && token && <PriceCalculatorCard token={token} />}
@@ -352,8 +358,9 @@ function OverviewView({
 
 // ── Shipments ─────────────────────────────────────────────────────────────────
 
-function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
+function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrder[]; token: string; onRefresh: () => void }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [editingOrder, setEditingOrder] = useState<CustomerOrder | null>(null);
   const { lang, t } = useLanguage();
   const cityName     = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
   const districtName = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
@@ -378,7 +385,10 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {orders.map(go => (
+      {orders.map(go => {
+        // Customers may edit Send/Exchange packages only while the batch is Pending.
+        const editable = go.status === 'Pending' && go.orders.some(o => o.orderType !== 'Return');
+        return (
         <div key={go.id} className="content-card">
           {/* Group order header */}
           <div className="content-card__header" style={{ cursor: 'pointer' }}
@@ -438,6 +448,13 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                         {h}
                       </th>
                     ))}
+                    {editable && (
+                      <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600,
+                        fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
+                        color: 'var(--color-text-subtle)' }}>
+                        {t.ceoActionsCol}
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -469,6 +486,28 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
                         {o.companyServicePrice != null ? `₾${o.companyServicePrice.toFixed(2)}` : '—'}
                       </td>
+                      {editable && (
+                        <td style={{ padding: '10px 16px', textAlign: 'right' }}>
+                          {o.orderType !== 'Return' && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingOrder(o)}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                padding: '5px 12px', borderRadius: 'var(--radius-sm)',
+                                border: '1px solid var(--color-border)', background: 'var(--color-bg-2)',
+                                color: 'var(--color-text)', fontSize: '0.78rem', fontWeight: 600,
+                                cursor: 'pointer', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                              }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                <path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10l7.5-7.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              {t.ceoEditBtn}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -477,7 +516,16 @@ function ShipmentsView({ orders }: { orders: CustomerGroupOrder[] }) {
             </>
           )}
         </div>
-      ))}
+        );
+      })}
+
+      <CustomerEditOrderModal
+        order={editingOrder}
+        open={editingOrder !== null}
+        token={token}
+        onClose={() => setEditingOrder(null)}
+        onSaved={onRefresh}
+      />
     </div>
   );
 }

@@ -122,6 +122,36 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/{id}/my  (Customer — edit own package while Pending) ──
+    [HttpPut("{id:guid}/my")]
+    [Authorize(Roles = "Customer")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> UpdateMyOrder(
+        Guid id,
+        [FromBody] CustomerUpdateOrderRequest request,
+        CancellationToken ct)
+    {
+        var customerIdClaim = User.FindFirstValue("customerId");
+        if (!Guid.TryParse(customerIdClaim, out var customerId))
+            return Forbid();
+
+        await Sender.Send(new UpdateOrderByCustomerCommand(
+            OrderId:                   id,
+            CustomerId:                customerId,
+            RecipientFirstName:        request.RecipientFirstName,
+            RecipientLastName:         request.RecipientLastName,
+            RecipientPhone:            request.RecipientPhone,
+            RecipientAddress:          request.RecipientAddress,
+            AmountToCollectForPackage: request.AmountToCollectForPackage
+        ), ct);
+
+        return NoContent();
+    }
+
     // ── PUT /api/orders/{id}/send-to-city  (Admin) ───────────────────────────
     [HttpPut("{id:guid}/send-to-city")]
     [Authorize(Roles = "Admin")]
@@ -346,4 +376,12 @@ public sealed record UpdateOrderRequest(
     decimal? AmountToCollectForPackage,
     decimal  CompanyServicePrice,
     decimal? CourierSalary
+);
+
+public sealed record CustomerUpdateOrderRequest(
+    string   RecipientFirstName,
+    string   RecipientLastName,
+    string   RecipientPhone,
+    string   RecipientAddress,
+    decimal? AmountToCollectForPackage
 );

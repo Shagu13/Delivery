@@ -154,6 +154,25 @@ export async function cancelGroupOrder(groupOrderId: string, token: string): Pro
   }));
 }
 
+export interface UpdateMyOrderRequest {
+  recipientFirstName: string;
+  recipientLastName: string;
+  recipientPhone: string;
+  recipientAddress: string;
+  amountToCollectForPackage: number | null;
+}
+
+/// Edit one of the customer's own packages (only valid while the group order is Pending)
+export async function updateMyOrder(
+  orderId: string, data: UpdateMyOrderRequest, token: string
+): Promise<void> {
+  return handleEmpty(await fetch(`/api/orders/${orderId}/my`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
+}
+
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export async function createCustomer(data: CreateCustomerRequest, token: string): Promise<CreateCustomerResponse> {
