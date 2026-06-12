@@ -191,4 +191,45 @@ public sealed class CouriersController : BaseController
         return Ok(orders);
     }
 
+    // ── GET /api/couriers/assigned-pickups?from=ISO&to=ISO  (Admin) ───────────
+    /// <summary>
+    /// Returns every group-order pickup that was actually collected from the sender
+    /// (PickedUpAt) within [from, to), each tagged with the courier who picked it up.
+    /// The admin UI groups the result by courier to show which courier collected which
+    /// batches — and how many single orders — on the chosen day. Mirrors
+    /// GetAssignedForRange, but for the pickup (warehouse-collection) leg.
+    /// </summary>
+    [HttpGet("assigned-pickups")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAssignedPickupsForRange(
+        [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)
+    {
+        var fromUtc = from.ToUniversalTime();
+        var toUtc   = to.ToUniversalTime();
+
+        var pickups = await _context.GroupOrders
+            .AsNoTracking()
+            .Where(g => g.CourierId != null
+                     && g.PickedUpAt >= fromUtc
+                     && g.PickedUpAt <  toUtc)
+            .OrderByDescending(g => g.PickedUpAt)
+            .Select(g => new
+            {
+                courierId          = g.CourierId,
+                id                 = g.Id,
+                senderBusinessName = g.SenderBusinessName,
+                senderPhone        = g.SenderPhone,
+                pickUpCity         = g.PickUpCity,
+                pickUpDistrict     = g.PickUpDistrict,
+                pickUpAddress      = g.PickUpAddress,
+                numberOfPackages   = g.NumberOfPackages,
+                status             = g.Status.ToString(),
+                pickedUpAt         = g.PickedUpAt,
+                createdAt          = g.CreatedAt,
+            })
+            .ToListAsync(ct);
+
+        return Ok(pickups);
+    }
+
 }

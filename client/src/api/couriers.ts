@@ -121,6 +121,36 @@ export async function fetchAssignedForRange(
     return res.json();
 }
 
+/// A group-order pickup actually collected by a courier, tagged with the courier's id.
+export interface CourierDayPickup {
+    courierId: string;
+    id: string;
+    senderBusinessName: string;
+    senderPhone: string;
+    pickUpCity: string;
+    pickUpDistrict: string;
+    pickUpAddress: string;
+    numberOfPackages: number;
+    status: string;
+    pickedUpAt: string | null;
+    createdAt: string;
+}
+
+/// Fetches every group-order pickup collected (PickedUpAt) within [from, to),
+/// each tagged with its pickup courier. `from`/`to` are the UTC bounds of the chosen day.
+export async function fetchAssignedPickupsForRange(
+    from: Date,
+    to: Date,
+    token: string,
+): Promise<CourierDayPickup[]> {
+    const qs = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+    const res = await fetch(`/api/couriers/assigned-pickups?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch assigned pickups');
+    return res.json();
+}
+
 export interface UpdateCourierRequest {
     username: string;
     newPassword?: string;

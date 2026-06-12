@@ -4,10 +4,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
-import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery } from '../../api/couriers';
+import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
-import { fetchCouriers, fetchAssignedForRange, setCourierActiveStatus } from '../../api/couriers';
+import { fetchCouriers, fetchAssignedForRange, fetchAssignedPickupsForRange, setCourierActiveStatus } from '../../api/couriers';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import AdminCustomersPage from './AdminCustomersPage';
 import AdminCitiesPage from './AdminCitiesPage';
@@ -1258,6 +1258,23 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   );
 }
 
+// Group day-assignments (deliveries or pickups) by courier, dropping any whose
+// courier can't be resolved, sorted by who was assigned the most that day.
+function groupByCourier<T extends { courierId: string }>(
+  items: T[],
+  courierById: Map<string, Courier>,
+): { courier: Courier; items: T[] }[] {
+  const map = new Map<string, T[]>();
+  for (const it of items) {
+    const arr = map.get(it.courierId);
+    if (arr) arr.push(it); else map.set(it.courierId, [it]);
+  }
+  return [...map.entries()]
+    .map(([courierId, list]) => ({ courier: courierById.get(courierId), items: list }))
+    .filter((r): r is { courier: Courier; items: T[] } => !!r.courier)
+    .sort((a, b) => b.items.length - a.items.length);
+}
+
 function AdminCouriers({
   couriers,
   token,
@@ -1271,11 +1288,15 @@ function AdminCouriers({
   onEdit: (courier: Courier) => void;
   onActiveChanged: (courierId: string, isActive: boolean) => void;
 }) {
+  const { t } = useLanguage();
   // Single global day for the whole list — defaults to today.
   const [day, setDay] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   // Which sub-view is showing: the day's assigned orders ('today') or the plain roster ('all').
   const [view, setView] = useState<'today' | 'all'>('today');
+  // Which leg the day's assignments are shown for: last-mile delivery or warehouse pickup.
+  const [mode, setMode] = useState<'delivery' | 'pickup'>('delivery');
   const [deliveries, setDeliveries] = useState<CourierDayDelivery[]>([]);
+  const [pickups, setPickups] = useState<CourierDayPickup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1286,37 +1307,42 @@ function AdminCouriers({
   const shiftDay = (delta: number) =>
     setDay(d => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; });
 
-  // Fetch the day's assigned orders across all couriers whenever the day changes.
+  // Fetch the day's assignments (delivery or pickup leg) whenever day or mode changes.
   useEffect(() => {
     let cancelled = false;
     const dayStart = new Date(day);
     const dayEnd = new Date(day); dayEnd.setDate(dayEnd.getDate() + 1);
     setLoading(true);
     setError(null);
-    fetchAssignedForRange(dayStart, dayEnd, token)
-      .then(d => { if (!cancelled) setDeliveries(d); })
-      .catch(() => { if (!cancelled) setError('Failed to load assigned orders'); })
+    const request = mode === 'pickup'
+      ? fetchAssignedPickupsForRange(dayStart, dayEnd, token).then(d => { if (!cancelled) setPickups(d); })
+      : fetchAssignedForRange(dayStart, dayEnd, token).then(d => { if (!cancelled) setDeliveries(d); });
+    request
+      .catch(() => { if (!cancelled) setError(mode === 'pickup' ? 'Failed to load assigned pickups' : 'Failed to load assigned orders'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [day, token]);
+  }, [day, token, mode]);
 
   const courierById = useMemo(() => new Map(couriers.map(c => [c.courierId, c])), [couriers]);
 
   // Group the day's deliveries by courier, keeping only couriers we can resolve,
-  // sorted by who delivered the most that day.
-  const rows = useMemo(() => {
-    const map = new Map<string, CourierDayDelivery[]>();
-    for (const d of deliveries) {
-      const arr = map.get(d.courierId);
-      if (arr) arr.push(d); else map.set(d.courierId, [d]);
-    }
-    return [...map.entries()]
-      .map(([courierId, orders]) => ({ courier: courierById.get(courierId), orders }))
-      .filter((r): r is { courier: Courier; orders: CourierDayDelivery[] } => !!r.courier)
-      .sort((a, b) => b.orders.length - a.orders.length);
-  }, [deliveries, courierById]);
+  // sorted by who was assigned the most that day.
+  const deliveryRows = useMemo(
+    () => groupByCourier(deliveries, courierById),
+    [deliveries, courierById],
+  );
+  const pickupRows = useMemo(
+    () => groupByCourier(pickups, courierById),
+    [pickups, courierById],
+  );
 
-  const totalDelivered = deliveries.length;
+  const rows = mode === 'pickup' ? pickupRows : deliveryRows;
+  const totalAssigned = mode === 'pickup' ? pickups.length : deliveries.length;
+  // Pickup mode: total single orders (packages) collected across all batches that day.
+  const totalSingleOrders = useMemo(
+    () => pickups.reduce((sum, p) => sum + p.numberOfPackages, 0),
+    [pickups],
+  );
 
   if (couriers.length === 0) {
     return (
@@ -1358,8 +1384,25 @@ function AdminCouriers({
       {/* Global day navigator — controls every courier below */}
       <div className="content-card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'inline-flex', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: 2 }}>
+            {(['delivery', 'pickup'] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                style={{
+                  padding: '5px 14px', borderRadius: 100, border: 'none', cursor: 'pointer',
+                  fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--font-body)',
+                  background: mode === m ? 'var(--color-accent)' : 'transparent',
+                  color: mode === m ? '#fff' : 'var(--color-text-subtle)',
+                  transition: 'background 0.15s, color 0.15s',
+                }}
+              >
+                {m === 'delivery' ? t.crwModeDelivery : t.crwModePickup}
+              </button>
+            ))}
+          </div>
           <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-subtle)' }}>
-            Assigned on
+            {mode === 'pickup' ? t.crwNavPickedUpOn : t.crwNavAssignedOn}
           </span>
           <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.85rem', lineHeight: 1 }} onClick={() => shiftDay(-1)} title="Previous day">‹</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 210, justifyContent: 'center' }}>
@@ -1378,30 +1421,43 @@ function AdminCouriers({
             All Couriers ›
           </button>
           <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>
-            {rows.length} courier{rows.length !== 1 ? 's' : ''} · {totalDelivered} assigned
+            {rows.length} courier{rows.length !== 1 ? 's' : ''} ·{' '}
+            {mode === 'pickup'
+              ? <>{totalAssigned} {t.crwModePickup.toLowerCase()} · {totalSingleOrders} {t.crwOrdersWord}</>
+              : <>{totalAssigned} assigned</>}
           </span>
         </div>
       </div>
 
       <div className="content-card">
         <div className="content-card__header">
-          <span className="content-card__title">Couriers — Assigned Orders</span>
+          <span className="content-card__title">{mode === 'pickup' ? t.crwTitlePickups : t.crwTitleDeliveries}</span>
         </div>
         {loading ? (
-          <div className="go-loading"><div className="go-spinner" />Loading assigned orders…</div>
+          <div className="go-loading"><div className="go-spinner" />{mode === 'pickup' ? t.crwLoadingPickups : t.crwLoadingDeliveries}</div>
         ) : error ? (
           <div style={{ padding: '24px 20px', textAlign: 'center', color: '#ef4444', fontSize: '0.875rem' }}>{error}</div>
         ) : rows.length === 0 ? (
           <div style={{ padding: '28px 20px', textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem' }}>
-            No orders assigned on this day.
+            {mode === 'pickup' ? t.crwEmptyPickups : t.crwEmptyDeliveries}
+          </div>
+        ) : mode === 'pickup' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {pickupRows.map(r => (
+              <CourierPickupRow
+                key={r.courier.courierId}
+                courier={r.courier}
+                pickups={r.items}
+              />
+            ))}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {rows.map(r => (
+            {deliveryRows.map(r => (
               <CourierRow
                 key={r.courier.courierId}
                 courier={r.courier}
-                orders={r.orders}
+                orders={r.items}
               />
             ))}
           </div>
@@ -1540,6 +1596,97 @@ function AllCouriersList({
 }
 
 // ── Single expandable courier row ─────────────────────────────────────────────
+// One courier's pickups (group-order collections) for the selected day, read-only.
+function CourierPickupRow({ courier, pickups }: { courier: Courier; pickups: CourierDayPickup[]; }) {
+  const [expanded, setExpanded] = useState(false);
+  const { t } = useLanguage();
+
+  const totalPackages = useMemo(
+    () => pickups.reduce((sum, p) => sum + p.numberOfPackages, 0),
+    [pickups],
+  );
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--color-border)' }}>
+      {/* Header row */}
+      <div
+        className="go-row-header"
+        onClick={() => setExpanded(v => !v)}
+        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isDeleted ? 0.6 : 1 }}
+      >
+        <svg
+          className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`}
+          width="14" height="14" viewBox="0 0 16 16" fill="none"
+        >
+          <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <div style={{ flex: 1 }}>
+          <div className="courier-name">
+            {courier.fullName}
+            {courier.isDeleted && (
+              <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 100, padding: '1px 8px' }}>{t.courierDeactivatedBadge}</span>
+            )}
+          </div>
+          <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', border: '1px solid rgba(196,127,23,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+              {t.crwAssigned(pickups.length)}
+            </span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-subtle)', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+              {t.goPkgs(totalPackages)}
+            </span>
+          </div>
+          <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
+            {courier.phoneNumber}
+          </span>
+        </div>
+      </div>
+
+      {/* Pickups for the selected day (read-only) */}
+      {expanded && (
+        <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-3)', animation: 'expand-in 0.15s ease both' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="go-orders-table" style={{ minWidth: 640 }}>
+              <thead>
+                <tr>
+                  <th>{t.crwThSender}</th>
+                  <th>{t.crwThPickupLocation}</th>
+                  <th>{t.crwThAddress}</th>
+                  <th>{t.crwThPackages}</th>
+                  <th>{t.aopThStatus}</th>
+                  <th>{t.crwThPickedUp}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pickups.map(p => (
+                  <tr key={p.id}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{p.senderBusinessName}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontFamily: 'Courier New, monospace' }}>{p.senderPhone}</div>
+                    </td>
+                    <td>
+                      <div>{p.pickUpCity}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{p.pickUpDistrict}</div>
+                    </td>
+                    <td style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', maxWidth: 220 }}>{p.pickUpAddress}</td>
+                    <td style={{ fontWeight: 600 }}>{p.numberOfPackages}</td>
+                    <td><StatusBadge status={p.status} /></td>
+                    <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
+                      {p.pickedUpAt ? new Date(p.pickedUpAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrder[]; }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useLanguage();
