@@ -413,7 +413,7 @@ public sealed class GroupOrdersController : BaseController
                 "გადახდის სტატუსი",
                 "ვინ იხდის სერვის საფასურს",
                 "მტვრევადია",
-                "ამანათის ფასი (₾)"
+                    "ამანათის ფასი (₾)"
               ]
             : [
                 "RecipientFirstName",

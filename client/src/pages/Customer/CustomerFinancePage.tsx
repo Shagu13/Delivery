@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
-import { fetchMyCustomerSettlements, downloadSettlementInvoice } from '../../api/customerSettlements';
-import type { CustomerSettlement } from '../../api/customerSettlements';
+import { fetchMyOrderFinance } from '../../api/orderFinance';
+import type { OrderFinanceLine } from '../../api/orderFinance';
+import { getStatusMeta } from '../../utils/statusMeta';
+import { STATUS_COLORS } from '../../utils/statusColors';
 import '../../styles/dashboard.css';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
@@ -11,114 +13,129 @@ const gel = (n: number) => `₾${n.toFixed(2)}`;
 const toDateStr = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+// ── Shared button styles (these pages don't load the admin go-seg/.btn-ghost CSS) ──
+const segWrap: React.CSSProperties = {
+    display: 'inline-flex', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--color-bg)',
+};
+const segBtn = (active: boolean): React.CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
+    background: active ? 'var(--color-accent-dim)' : 'transparent',
+    color: active ? 'var(--color-accent)' : 'var(--color-text-subtle)',
+    fontSize: '0.8rem', fontWeight: active ? 700 : 500, padding: '7px 16px',
+    whiteSpace: 'nowrap', transition: 'background .15s, color .15s',
+});
+const navBtn: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)',
+    fontSize: '0.82rem', fontWeight: 600, padding: '6px 12px', cursor: 'pointer', lineHeight: 1,
+};
 
-function FinRow({ label, value, tone = 'default' }: {
-    label: string; value: string; tone?: 'default' | 'owed' | 'paid' | 'out';
-}) {
-    const color =
-        tone === 'paid' ? '#059669' :
-        tone === 'out'  ? '#b45309' : 'var(--color-text)';
+function Badge({ text, tone }: { text: string; tone: 'paid' | 'unpaid' | 'muted' }) {
+    const palette = {
+        paid:   { bg: 'rgba(5,150,105,0.12)',  fg: '#059669' },
+        unpaid: { bg: 'rgba(180,83,9,0.12)',   fg: '#b45309' },
+        muted:  { bg: 'var(--color-bg-3)',     fg: 'var(--color-text-subtle)' },
+    }[tone];
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--color-border)', fontSize: '0.85rem' }}>
-            <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-            <span style={{ fontWeight: 700, color }}>{value}</span>
-        </div>
+        <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 100, background: palette.bg, color: palette.fg, whiteSpace: 'nowrap' }}>
+            {text}
+        </span>
     );
 }
 
-function MoneyBlock({ title, owedLabel, owed, paid, paidLabel, outstanding }: {
-    title: string; owedLabel: string; owed: number; paid: number; paidLabel?: string; outstanding: number;
-}) {
-    const { t } = useLanguage();
+// ── Excel-style grid cell styles ──────────────────────────────────────────────────
+const cell: React.CSSProperties = {
+    border: '1px solid var(--color-border)',
+    padding: '7px 10px',
+    fontSize: '0.8rem',
+    color: 'var(--color-text)',
+    verticalAlign: 'middle',
+    whiteSpace: 'nowrap',
+};
+const headCell: React.CSSProperties = {
+    ...cell,
+    background: 'var(--color-bg-2)',
+    color: 'var(--color-text-subtle)',
+    fontWeight: 700,
+    fontSize: '0.68rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    textAlign: 'left',
+    position: 'sticky',
+    top: 0,
+};
+
+function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number }) {
+    const { t, lang } = useLanguage();
+    const cod = line.codAmount ?? 0;
+    const isSenderPays = line.whoPaysForCompanyService === 'Sender';
+    const servicePaid = line.companyServicePaymentStatus === 'Paid';
+    // COD is only owed back to the customer when there is a package amount to collect.
+    // Orders with no COD (codAmount null/0) have nothing to pay back → no paid/unpaid label.
+    const hasCod = cod > 0.005;
+    const statusMeta = getStatusMeta(line.status, lang);
+    const [statusBg, statusFg] = STATUS_COLORS[line.status] ?? ['var(--color-bg-3)', 'var(--color-text-subtle)'];
+
     return (
-        <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 14px' }}>
-            <div style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 6 }}>{title}</div>
-            <FinRow label={owedLabel}              value={gel(owed)}        tone="owed" />
-            <FinRow label={paidLabel ?? t.statPaidSoFar} value={gel(paid)}  tone="paid" />
-            <FinRow label={t.statOutstanding}      value={gel(outstanding)} tone="out" />
-        </div>
-    );
-}
-
-function InvoiceCard({ item, token }: { item: CustomerSettlement; token: string }) {
-    const { t } = useLanguage();
-    const [downloading, setDownloading] = useState(false);
-
-    const handleDownload = async () => {
-        setDownloading(true);
-        try {
-            await downloadSettlementInvoice(item.id, token);
-        } finally {
-            setDownloading(false);
-        }
-    };
-
-    return (
-        <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--color-text)' }}>
-                        {new Date(item.createdAt).toLocaleDateString()}
-                    </span>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: item.isReturn ? 'rgba(185,28,28,0.1)' : 'rgba(30,64,175,0.1)', color: item.isReturn ? '#b91c1c' : '#1e40af' }}>
-                        {item.isReturn ? t.statReturnBadge : t.statBatchBadge}
-                    </span>
+        <tr style={{ background: index % 2 ? 'var(--color-bg)' : 'var(--color-bg-2)' }}>
+            <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>{index + 1}</td>
+            <td style={{ ...cell, fontWeight: 700 }}>{line.trackingNumber}</td>
+            <td style={cell}>
+                {line.recipientFirstName} {line.recipientLastName}
+                <span style={{ color: 'var(--color-text-subtle)' }}> · {line.recipientCity}</span>
+            </td>
+            <td style={cell}>{line.orderType}</td>
+            <td style={cell}>
+                <span title={statusMeta.description} style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: statusBg, color: statusFg }}>
+                    {statusMeta.short}
+                </span>
+            </td>
+            {/* COD — company owes customer */}
+            <td style={{ ...cell, textAlign: 'right' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                    <span style={{ fontWeight: 700 }}>{gel(cod)}</span>
+                    {line.isCollectedCodPaidToCustomer
+                        ? <Badge text={t.ofinPaid} tone="paid" />
+                        : hasCod && <Badge text={t.ofinUnpaid} tone="unpaid" />}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>📦 {t.custPkg(item.numberOfPackages)}</span>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>✓ {t.statDelivered(item.totalNumberOfOrderDelivered)}</span>
-                    <button
-                        className="btn-ghost"
-                        onClick={handleDownload}
-                        disabled={downloading}
-                        style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 5 }}
-                    >
-                        ⬇ {downloading ? t.statDownloading : t.statDownloadInvoice}
-                    </button>
+            </td>
+            {/* Service fee — always show the amount so the customer knows the cost */}
+            <td style={{ ...cell, textAlign: 'right' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                    <span style={{ fontWeight: 700 }}>{gel(line.companyServicePrice)}</span>
+                    {isSenderPays
+                        ? <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
+                        : <Badge text={t.ofinRecipientPays} tone="muted" />}
                 </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-                <MoneyBlock
-                    title={t.statCodBlockTitle}
-                    owedLabel={t.statCollectedForPackages}
-                    owed={item.totalCODCompanyCollectedForPackages}
-                    paid={item.totalAmountOfCollectedCodPaidByCompany}
-                    outstanding={item.outstandingCodOwedToCustomer}
-                />
-                <MoneyBlock
-                    title={t.statServiceBlockTitle}
-                    owedLabel={t.statServicePriceOwed}
-                    owed={item.totalCompanyServicePriceOwedToCompany}
-                    paid={item.totalAmountPaidToCompanyForCompanyService}
-                    paidLabel={t.statServiceFeePaid}
-                    outstanding={item.outstandingServiceOwedToCompany}
-                />
-            </div>
-        </div>
+            </td>
+        </tr>
     );
 }
 
 export function CustomerFinancePage() {
     const { token } = useAuth();
     const { t } = useLanguage();
+    // 'placed' filters by order creation date; 'payments' by the COD-payment date
+    // (CodPaidToCustomerAt) — only orders whose COD was paid out are shown.
+    const [mode, setMode] = useState<'placed' | 'payments'>('placed');
     const [date, setDate] = useState('');            // '' = all dates
-    const [items, setItems] = useState<CustomerSettlement[]>([]);
+    const [items, setItems] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(() => {
         if (!token) return;
         setLoading(true); setError(null);
-        fetchMyCustomerSettlements(token, date || undefined)
+        fetchMyOrderFinance(token, date || undefined, mode === 'payments')
             .then(data => { setItems(data); setLoading(false); })
-            .catch(() => { setError(t.statLoadFailed); setLoading(false); });
-    }, [token, date, t.statLoadFailed]);
+            .catch(() => { setError(t.ofinErrLoad); setLoading(false); });
+    }, [token, date, mode, t.ofinErrLoad]);
 
     useEffect(() => { load(); }, [load]);
 
     const todayStr = toDateStr(new Date());
-    // Shift the filter by whole days. An empty filter starts from today.
     const shiftDay = (delta: number) => setDate(prev => {
         const base = prev ? new Date(prev + 'T00:00:00') : new Date();
         base.setDate(base.getDate() + delta);
@@ -126,41 +143,39 @@ export function CustomerFinancePage() {
     });
     const atToday = date !== '' && date >= todayStr;
 
-    // Totals across the listed invoices
-    const codOutstanding     = items.reduce((s, i) => s + i.outstandingCodOwedToCustomer, 0);
-    const serviceOutstanding = items.reduce((s, i) => s + i.outstandingServiceOwedToCompany, 0);
-    const totalDelivered     = items.reduce((s, i) => s + i.totalNumberOfOrderDelivered, 0);
+    // Totals across the listed orders
+    const codOutstanding = items.reduce((s, i) => s + ((i.codAmount ?? 0) - (i.codPaidToCustomerAmount ?? 0)), 0);
+    const serviceOutstanding = items.reduce(
+        (s, i) => i.whoPaysForCompanyService === 'Sender'
+            ? s + (i.companyServicePrice - (i.servicePaidByCustomerAmount ?? 0))
+            : s, 0);
 
     return (
         <div className="dashboard__section">
             <h2 className="dashboard__title">{t.statTitle}</h2>
 
+            {/* Mode toggle: placed (by creation) vs payments (by COD-paid date) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                <div style={segWrap}>
+                    <button style={{ ...segBtn(mode === 'placed'), borderRight: '1px solid var(--color-border)' }} onClick={() => setMode('placed')}>{t.ofinTabPlaced}</button>
+                    <button style={segBtn(mode === 'payments')} onClick={() => setMode('payments')}>{t.ofinTabPayments}</button>
+                </div>
+                <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{t.ofinShowing(date || t.statAllDates)}</span>
+            </div>
+
             {/* Date filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{t.statFilterByDate}</span>
-                <button
-                    className="btn-ghost"
-                    onClick={() => shiftDay(-1)}
-                    title={t.statPrevDay}
-                    style={{ padding: '5px 11px', fontSize: '0.9rem', lineHeight: 1 }}
-                >‹</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{mode === 'payments' ? t.ofinPaidDate : t.ofinFilterPlaced}</span>
+                <button onClick={() => shiftDay(-1)} title={t.statPrevDay} style={{ ...navBtn, padding: '6px 11px', fontSize: '0.95rem' }}>‹</button>
                 <input
                     type="date"
                     value={date}
                     onChange={e => setDate(e.target.value)}
                     style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }}
                 />
-                <button
-                    className="btn-ghost"
-                    onClick={() => !atToday && shiftDay(1)}
-                    disabled={atToday}
-                    title={t.statNextDay}
-                    style={{ padding: '5px 11px', fontSize: '0.9rem', lineHeight: 1, opacity: atToday ? 0.4 : 1 }}
-                >›</button>
-                {date && (
-                    <button className="btn-ghost" onClick={() => setDate('')} style={{ fontSize: '0.8rem' }}>{t.statAllDates}</button>
-                )}
-                <button className="btn-ghost" onClick={load} style={{ marginLeft: 4 }}>{t.statRefresh}</button>
+                <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay} style={{ ...navBtn, padding: '6px 11px', fontSize: '0.95rem', opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
+                {date && <button onClick={() => setDate('')} style={navBtn}>{t.statAllDates}</button>}
+                <button onClick={load} style={{ ...navBtn, marginLeft: 4 }}>{t.statRefresh}</button>
             </div>
 
             {loading ? (
@@ -170,18 +185,16 @@ export function CustomerFinancePage() {
             ) : items.length === 0 ? (
                 <div className="dashboard__empty" style={{ marginTop: 40 }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📊</div>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{date ? t.statNoneForDay : t.statNoneAll}</div>
-                    <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                        {t.statNoRecordsHint}
-                    </div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{date ? t.ofinNoneDay : t.ofinNoneAll}</div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t.statNoRecordsHint}</div>
                 </div>
             ) : (
                 <>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
                         {[
-                            { label: t.statSummaryDelivered,   value: totalDelivered.toString(), accent: false },
-                            { label: t.statSummaryCodOwed,     value: gel(codOutstanding),       accent: true },
-                            { label: t.statSummaryServiceOwed, value: gel(serviceOutstanding),   accent: false },
+                            { label: t.ofinSumOrders,     value: items.length.toString(), accent: false },
+                            { label: t.ofinSumCodOut,     value: gel(codOutstanding),     accent: true  },
+                            { label: t.ofinSumServiceOut, value: gel(serviceOutstanding), accent: false },
                         ].map(({ label, value, accent }) => (
                             <div key={label} style={{ background: accent ? 'var(--color-accent-dim)' : 'var(--color-bg-2)', border: `1px solid ${accent ? 'rgba(196,127,23,0.25)' : 'var(--color-border)'}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '1.05rem', fontWeight: 800, color: accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</div>
@@ -189,8 +202,23 @@ export function CustomerFinancePage() {
                             </div>
                         ))}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {items.map(item => <InvoiceCard key={item.id} item={item} token={token!} />)}
+                    <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+                            <thead>
+                                <tr>
+                                    <th style={{ ...headCell, textAlign: 'center', width: 36 }}>#</th>
+                                    <th style={headCell}>{t.ofinColTracking}</th>
+                                    <th style={headCell}>{t.ofinColRecipient}</th>
+                                    <th style={headCell}>{t.ofinColType}</th>
+                                    <th style={headCell}>{t.ofinColStatus}</th>
+                                    <th style={{ ...headCell, textAlign: 'right' }}>{t.ofinColCod}</th>
+                                    <th style={{ ...headCell, textAlign: 'right' }}>{t.ofinColService}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((line, i) => <OrderTableRow key={line.orderId} line={line} index={i} />)}
+                            </tbody>
+                        </table>
                     </div>
                 </>
             )}

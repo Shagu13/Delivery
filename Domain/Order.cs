@@ -86,6 +86,28 @@ public class Order
         = CompanyServicePaymentStatus.Unpaid;
     public bool HasCompanyPaidTheSender { get; set; } = false;
 
+    // ── Per-order settlement (admin-recorded, source of truth for finance) ─────
+    /// <summary>
+    /// COD payout — company → customer. True once the company has paid the customer
+    /// back the package COD it collected for this order. Set per order by admin on
+    /// the finance page; some orders in a batch may be paid out before others.
+    /// </summary>
+    public bool      IsCollectedCodPaidToCustomer { get; set; } = false;
+    /// <summary>Amount the company paid the customer for this order's COD. Null until paid.</summary>
+    public decimal?  CodPaidToCustomerAmount      { get; set; }
+    /// <summary>When the COD payout was recorded. Null until paid.</summary>
+    public DateTime? CodPaidToCustomerAt          { get; set; }
+
+    /// <summary>
+    /// Service fee — customer → company. Amount the customer paid the company for this
+    /// order's sender-paid service fee. Only meaningful when
+    /// <see cref="WhoPaysForCompanyService"/> == Sender; the paid/unpaid state lives on
+    /// <see cref="CompanyServicePaymentStatus"/>. Null until paid.
+    /// </summary>
+    public decimal?  ServicePaidByCustomerAmount  { get; set; }
+    /// <summary>When the sender-paid service fee payment was recorded. Null until paid.</summary>
+    public DateTime? ServicePaidByCustomerAt      { get; set; }
+
     // ── Financials (admin-managed) ───────────────────────────────────────────
     public decimal CompanyServicePrice { get; set; } = 0;
     public decimal? CourierSalary { get; set; }

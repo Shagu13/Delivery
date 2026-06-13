@@ -551,6 +551,12 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("AssignedToCourierAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal?>("CodPaidToCustomerAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("CodPaidToCustomerAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal?>("CompanyRevenue")
                         .HasColumnType("decimal(18,2)");
 
@@ -594,6 +600,9 @@ namespace Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("HasCompanyPaidTheSender")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCollectedCodPaidToCustomer")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsFragile")
@@ -668,6 +677,12 @@ namespace Persistence.Migrations
                     b.Property<string>("ReturnPickupDistrict")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("ServicePaidByCustomerAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ServicePaidByCustomerAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Status")
                         .IsRequired()

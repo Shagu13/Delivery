@@ -29,17 +29,22 @@ internal static class CustomerSettlementService
         OrderStatus.ReturnedToSender,
     };
 
-    /// <summary>The four order-derived figures for a batch.</summary>
+    /// <summary>The order-derived figures for a batch (owed + per-order recorded payments).</summary>
     public readonly record struct Figures(
         int OrdersPlaced,
         int OrdersDelivered,
         decimal CodCollectedForPackages,
-        decimal CompanyServicePriceOwed);
+        decimal CompanyServicePriceOwed,
+        decimal CodPaidToCustomer,
+        decimal ServicePaidByCustomer);
 
     /// <summary>
     /// Computes counts + money figures over the batch's <b>active</b> (non-cancelled)
-    /// orders: COD = Σ AmountToCollectForPackage (company owes the customer); service
-    /// owed = Σ CompanyServicePrice where the sender pays the fee (customer owes company).
+    /// orders. Owed: COD = Σ AmountToCollectForPackage (company owes the customer);
+    /// service owed = Σ CompanyServicePrice where the sender pays the fee (customer
+    /// owes company). Paid: derived live from the per-order payment fields admins tick
+    /// on the finance page — COD payout = Σ CodPaidToCustomerAmount; service paid =
+    /// Σ ServicePaidByCustomerAmount on sender-pays orders.
     /// </summary>
     private static Figures ComputeFigures(IReadOnlyCollection<Order> orders)
     {
@@ -47,11 +52,13 @@ internal static class CustomerSettlementService
 
         int delivered = active.Count(o => DeliveredStatuses.Contains(o.Status));
         decimal cod = active.Sum(o => o.AmountToCollectForPackage ?? 0m);
-        decimal service = active
-            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender)
-            .Sum(o => o.CompanyServicePrice);
+        decimal codPaid = active.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
 
-        return new Figures(active.Count, delivered, cod, service);
+        var senderPays = active.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender).ToList();
+        decimal service = senderPays.Sum(o => o.CompanyServicePrice);
+        decimal servicePaid = senderPays.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
+
+        return new Figures(active.Count, delivered, cod, service, codPaid, servicePaid);
     }
 
     /// <summary>
@@ -83,30 +90,27 @@ internal static class CustomerSettlementService
         var existing = await context.CustomerSettlements
             .FirstOrDefaultAsync(s => s.GroupOrderId == groupOrderId, ct);
 
-        CustomerSettlement settlement;
         if (existing is null)
         {
-            settlement = new CustomerSettlement
+            var settlement = new CustomerSettlement
             {
-                GroupOrderId                          = groupOrderId,
-                CustomerId                            = group.CustomerId.Value,
-                CreatedAt                             = group.CreatedAt,
-                TotalNumberOfOrdersPlaced             = figures.OrdersPlaced,
-                TotalNumberOfOrderDelivered           = figures.OrdersDelivered,
-                TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages,
-                TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed,
-                DateDeleted                           = figures.OrdersPlaced == 0 ? DateTime.UtcNow : null,
+                GroupOrderId                              = groupOrderId,
+                CustomerId                                = group.CustomerId.Value,
+                CreatedAt                                 = group.CreatedAt,
+                TotalNumberOfOrdersPlaced                 = figures.OrdersPlaced,
+                TotalNumberOfOrderDelivered               = figures.OrdersDelivered,
+                TotalCODCompanyCollectedForPackages       = figures.CodCollectedForPackages,
+                TotalCompanyServicePriceOwedToCompany     = figures.CompanyServicePriceOwed,
+                TotalAmountOfCollectedCodPaidByCompany    = figures.CodPaidToCustomer,
+                TotalAmountPaidToCompanyForCompanyService = figures.ServicePaidByCustomer,
+                DateDeleted                               = figures.OrdersPlaced == 0 ? DateTime.UtcNow : null,
             };
             context.CustomerSettlements.Add(settlement);
         }
         else
         {
             ApplyFigures(existing, figures);
-            settlement = existing;
         }
-
-        // Keep per-order paid/unpaid flags in lock-step with the recomputed balance.
-        ApplyServicePaymentStatus(settlement, group.Orders);
 
         await context.SaveChangesAsync(ct);
     }
@@ -140,61 +144,41 @@ internal static class CustomerSettlementService
 
         var figures = ComputeFigures(new[] { order });
 
-        CustomerSettlement settlement;
         if (existing is null)
         {
-            settlement = new CustomerSettlement
+            var settlement = new CustomerSettlement
             {
-                OrderId                               = order.Id,
-                CustomerId                            = order.CustomerId.Value,
-                CreatedAt                             = order.CreatedAt,
-                TotalNumberOfOrdersPlaced             = figures.OrdersPlaced,
-                TotalNumberOfOrderDelivered           = figures.OrdersDelivered,
-                TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages,
-                TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed,
+                OrderId                                   = order.Id,
+                CustomerId                                = order.CustomerId.Value,
+                CreatedAt                                 = order.CreatedAt,
+                TotalNumberOfOrdersPlaced                 = figures.OrdersPlaced,
+                TotalNumberOfOrderDelivered               = figures.OrdersDelivered,
+                TotalCODCompanyCollectedForPackages       = figures.CodCollectedForPackages,
+                TotalCompanyServicePriceOwedToCompany     = figures.CompanyServicePriceOwed,
+                TotalAmountOfCollectedCodPaidByCompany    = figures.CodPaidToCustomer,
+                TotalAmountPaidToCompanyForCompanyService = figures.ServicePaidByCustomer,
             };
             context.CustomerSettlements.Add(settlement);
         }
         else
         {
             ApplyFigures(existing, figures);
-            settlement = existing;
         }
-
-        // Keep the per-order paid/unpaid flag in lock-step with the recomputed balance.
-        ApplyServicePaymentStatus(settlement, new[] { order });
 
         await context.SaveChangesAsync(ct);
     }
 
-    /// <summary>
-    /// Reflects the settlement's service-fee balance down to the per-order flag:
-    /// when the customer has fully paid the batch's sender-paid service fees
-    /// (outstanding &lt;= 0) every sender-pays order in the batch is marked Paid;
-    /// otherwise they are all Unpaid. Partial payments are never attributed to
-    /// individual orders — the remaining balance lives on the settlement.
-    /// Only <see cref="ServicePayer.Sender"/> orders are touched; Recipient-pays
-    /// orders are settled in cash at delivery and keep their own status.
-    /// </summary>
-    public static void ApplyServicePaymentStatus(CustomerSettlement settlement, IEnumerable<Order> batchOrders)
-    {
-        bool fullyPaid = settlement.TotalCompanyServicePriceOwedToCompany
-                       - settlement.TotalAmountPaidToCompanyForCompanyService <= 0m;
-        var status = fullyPaid ? CompanyServicePaymentStatus.Paid : CompanyServicePaymentStatus.Unpaid;
-
-        foreach (var o in batchOrders.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender))
-            o.CompanyServicePaymentStatus = status;
-    }
-
-    /// <summary>Refreshes the order-derived figures on an existing row, reviving/soft-deleting by active count. Payments untouched.</summary>
+    /// <summary>Refreshes the order-derived figures on an existing row, reviving/soft-deleting by active count. Payments derived from per-order amounts.</summary>
     private static void ApplyFigures(CustomerSettlement existing, Figures figures)
     {
-        existing.TotalNumberOfOrdersPlaced             = figures.OrdersPlaced;
-        existing.TotalNumberOfOrderDelivered           = figures.OrdersDelivered;
-        existing.TotalCODCompanyCollectedForPackages   = figures.CodCollectedForPackages;
-        existing.TotalCompanyServicePriceOwedToCompany = figures.CompanyServicePriceOwed;
-        existing.UpdatedAt                             = DateTime.UtcNow;
-        existing.DateDeleted                           = figures.OrdersPlaced == 0
+        existing.TotalNumberOfOrdersPlaced                 = figures.OrdersPlaced;
+        existing.TotalNumberOfOrderDelivered               = figures.OrdersDelivered;
+        existing.TotalCODCompanyCollectedForPackages       = figures.CodCollectedForPackages;
+        existing.TotalCompanyServicePriceOwedToCompany     = figures.CompanyServicePriceOwed;
+        existing.TotalAmountOfCollectedCodPaidByCompany    = figures.CodPaidToCustomer;
+        existing.TotalAmountPaidToCompanyForCompanyService = figures.ServicePaidByCustomer;
+        existing.UpdatedAt                                 = DateTime.UtcNow;
+        existing.DateDeleted                               = figures.OrdersPlaced == 0
             ? existing.DateDeleted ?? DateTime.UtcNow
             : null;
     }

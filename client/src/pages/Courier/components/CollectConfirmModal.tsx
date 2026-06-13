@@ -20,20 +20,6 @@ export function CollectConfirmModal({ order, isBusy, onCancel, onConfirm }: Coll
                 <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', margin: '0 auto 14px' }}>💰</div>
                 <h3 style={{ margin: '0 0 6px', fontSize: '1.05rem', fontWeight: 700 }}>{t.cdCollectTitle}</h3>
                 <p style={{ margin: '0 0 14px', fontSize: '0.875rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>{t.cdCollectSubtitle}</p>
-                <div style={{ margin: '0 0 10px', padding: '12px 14px', borderRadius: '8px', background: 'var(--color-bg-2, #f9fafb)', border: '1px solid var(--color-border)', textAlign: 'left', fontSize: '0.85rem' }}>
-                    {hasProductAmount && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <span style={{ color: 'var(--color-text-muted)' }}>{t.cdCollectParcel}</span>
-                            <span style={{ fontWeight: 600 }}>₾{order.amountToCollectForPackage!.toFixed(2)}</span>
-                        </div>
-                    )}
-                    {hasServiceFee && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: hasProductAmount ? 6 : 0, borderTop: hasProductAmount ? '1px dashed var(--color-border)' : 'none' }}>
-                            <span style={{ color: 'var(--color-text-muted)' }}>{t.cdCollectFee}</span>
-                            <span style={{ fontWeight: 600 }}>₾{order.companyServicePrice.toFixed(2)}</span>
-                        </div>
-                    )}
-                </div>
                 <div style={{ margin: '0 0 20px', padding: '12px 16px', borderRadius: '10px', background: '#fef9c3', border: '1px solid #fde047', width: '100%' }}>
                     <div style={{ fontSize: '0.72rem', color: '#92400e', marginBottom: 2, fontWeight: 700, letterSpacing: '0.05em' }}>{t.cdCollectTotal}</div>
                     <span style={{ fontSize: '1.7rem', fontWeight: 800, color: '#92400e', letterSpacing: '-0.5px' }}>₾{total.toFixed(2)}</span>

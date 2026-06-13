@@ -3,11 +3,11 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import {
-    fetchCustomerSettlements,
-    recordCustomerSettlementPayment,
-    CustomerSettlementApiError,
-} from '../../api/customerSettlements';
-import type { CustomerSettlement } from '../../api/customerSettlements';
+    fetchCustomerOrderFinance,
+    payCustomerOrders,
+    OrderFinanceApiError,
+} from '../../api/orderFinance';
+import type { OrderFinanceLine } from '../../api/orderFinance';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
@@ -15,10 +15,6 @@ import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 import { OutstandingBalancesModal } from './OutstandingBalancesModal';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
-
-// Outstanding: red when something is still owed, green once settled (0 or overpaid).
-// Rounds to 2 decimals first so floating-point residue never shows red on a ₾0.00 row.
-const outstandingTone = (n: number): 'red' | 'paid' => (Math.round(n * 100) > 0 ? 'red' : 'paid');
 
 // ── Customer search/select ──────────────────────────────────────────────────────
 
@@ -267,13 +263,15 @@ function SignedRow({ label, value, sign }: { label: string; value: number; sign:
     );
 }
 
-// ── Customer batch invoices — list + per-batch record payment ─────────────────────
+// ── Customer settlement — aggregate summary + COD payment with allocation ──────────
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () => void }) {
     const { t } = useLanguage();
     const [customer, setCustomer] = useState<AdminCustomer | null>(null);
-    const [date, setDate] = useState('');                 // '' = all dates
-    const [invoices, setInvoices] = useState<CustomerSettlement[]>([]);
+    const [date, setDate] = useState(isoDate(new Date())); // defaults to today; '' = all dates
+    const [lines, setLines] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
@@ -281,30 +279,41 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3000); };
 
     const load = useCallback(() => {
-        if (!customer) { setInvoices([]); return; }
+        if (!customer) { setLines([]); return; }
         setLoading(true); setError(null);
-        fetchCustomerSettlements(customer.id, token, date || undefined)
-            .then(setInvoices)
-            .catch(e => setError(e instanceof CustomerSettlementApiError ? e.message : t.finErrLoad))
+        fetchCustomerOrderFinance(customer.id, token, date || undefined)
+            .then(setLines)
+            .catch(e => setError(e instanceof OrderFinanceApiError ? e.message : t.ofinErrLoad))
             .finally(() => setLoading(false));
-    }, [customer, date, token, t.finErrLoad]);
+    }, [customer, date, token, t.ofinErrLoad]);
 
     useEffect(() => { load(); }, [load]);
 
+    const todayStr = isoDate(new Date());
+    const shiftDay = (delta: number) => setDate(prev => {
+        const base = prev ? new Date(prev + 'T00:00:00') : new Date();
+        base.setDate(base.getDate() + delta);
+        return isoDate(base);
+    });
+    const atToday = date !== '' && date >= todayStr;
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Toolbar: customer picker + date filter */}
+            {/* Toolbar: customer picker + delivery-date filter */}
             <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5 }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <CustomerPicker
                         token={token}
                         selected={customer}
                         onSelect={setCustomer}
-                        onClear={() => { setCustomer(null); setInvoices([]); setError(null); }}
+                        onClear={() => { setCustomer(null); setLines([]); setError(null); }}
                     />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finFilterPlaced}</span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.ofinFilterDelivered}</span>
+                        <button onClick={() => shiftDay(-1)} title={t.statPrevDay} style={dateNavBtn}>‹</button>
                         <input type="date" value={date} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
+                        <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay}
+                            style={{ ...dateNavBtn, opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
                         {date && (
                             <button onClick={() => setDate('')} title={t.finAllDates}
                                 style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)', width: 28, height: 28, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
@@ -321,28 +330,25 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
 
             {!customer ? (
                 <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                    {t.finSelectPrompt}
+                    {t.ofinSelectCustomer}
                 </div>
             ) : loading ? (
                 <div className="content-card" style={{ padding: 40, textAlign: 'center' }}>
                     <div className="go-spinner" style={{ margin: '0 auto' }} />
                 </div>
-            ) : invoices.length === 0 ? (
+            ) : lines.length === 0 ? (
                 <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                    {t.finNoInvoices}
+                    {date ? t.ofinNoneDay : t.ofinNoneAll}
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: 12 }}>
-                    {invoices.map(inv => (
-                        <InvoiceCard
-                            key={inv.id}
-                            inv={inv}
-                            token={token}
-                            onError={setError}
-                            onPaid={() => { showToast(t.finToastPaymentRecorded); load(); onPaid(); }}
-                        />
-                    ))}
-                </div>
+                <CustomerSettleCard
+                    key={customer.id + '|' + date}
+                    customerId={customer.id}
+                    lines={lines}
+                    token={token}
+                    onError={setError}
+                    onChanged={() => { showToast(t.ofinSavedToast); load(); onPaid(); }}
+                />
             )}
 
             {toast && (
@@ -358,73 +364,219 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     );
 }
 
-function InvoiceCard({ inv, token, onPaid, onError }: {
-    inv: CustomerSettlement;
-    token: string;
-    onPaid: () => void;
-    onError: (msg: string) => void;
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+    return (
+        <div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</div>
+            <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+        </div>
+    );
+}
+
+type Sel = Record<string, { checked: boolean; amount: string }>;
+
+interface FlowVM {
+    payable: OrderFinanceLine[];
+    owed: number;
+    paid: number;
+    selTotal: number;
+    selCount: number;
+    allChecked: boolean;
+}
+
+// One money flow's pay bar: select-all + selected total + Pay button.
+function FlowBar({ f, payLabel, busy, onPay, onToggleAll, borderRight }: {
+    f: FlowVM; payLabel: string; busy: boolean;
+    onPay: () => void; onToggleAll: (check: boolean) => void; borderRight?: boolean;
 }) {
     const { t } = useLanguage();
-    const [cod, setCod] = useState('');
-    const [svc, setSvc] = useState('');
-    const [busy, setBusy] = useState(false);
+    const settled = f.owed <= 0.005;
+    return (
+        <div style={{ padding: '12px 14px', borderRight: borderRight ? '1px solid var(--color-border)' : undefined, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: 'var(--color-text-muted)', cursor: settled ? 'default' : 'pointer' }}>
+                    <input type="checkbox" checked={f.allChecked} disabled={settled} onChange={e => onToggleAll(e.target.checked)}
+                        style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: settled ? 'default' : 'pointer' }} />
+                    {t.ofinSelectAll}
+                </label>
+                <button className="btn-primary" disabled={busy || f.selTotal <= 0.005} onClick={onPay}>{payLabel}</button>
+            </div>
+            <div style={{ fontSize: '0.72rem' }}>
+                {settled
+                    ? <span style={{ color: '#059669', fontWeight: 600 }}>{t.ofinAllSettled}</span>
+                    : f.selCount > 0
+                        ? <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>{t.ofinSelectedTotal(gel(f.selTotal))}</span>
+                        : <span style={{ color: 'var(--color-text-subtle)' }}>{t.ofinSelectToAllocate}</span>}
+            </div>
+        </div>
+    );
+}
 
-    const record = async () => {
-        const codN = cod.trim() ? Number(cod) : undefined;
-        const svcN = svc.trim() ? Number(svc) : undefined;
-        if (codN === undefined && svcN === undefined) { onError(t.finErrEnterAmount); return; }
-        if ((codN !== undefined && (isNaN(codN) || codN <= 0)) || (svcN !== undefined && (isNaN(svcN) || svcN <= 0))) {
-            onError(t.finErrPositive); return;
+// One order's amount field for a single flow — checkbox + editable price, always available.
+function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmount }: {
+    applicable: boolean; outstanding: number; checked: boolean; amount: string;
+    onToggle: () => void; onAmount: (v: string) => void;
+}) {
+    const { t } = useLanguage();
+    if (!applicable)
+        return <div style={{ minWidth: 160, textAlign: 'right' }}><span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)' }}>{t.ofinRecipientPays}</span></div>;
+    if (outstanding <= 0.005)
+        return <div style={{ minWidth: 160, textAlign: 'right' }}><span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#059669' }}>{t.ofinPaid}</span></div>;
+
+    return (
+        <div style={{ minWidth: 160, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+            <input type="checkbox" checked={checked} onChange={onToggle}
+                style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }} />
+            {/* Actual amount owed, always shown next to the editable field. */}
+            <span title={t.ofinOutstandingCol} style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{gel(outstanding)}</span>
+            <input type="number" min="0" step="0.01" max={outstanding}
+                value={amount}
+                onChange={e => onAmount(e.target.value)}
+                style={{ width: 80, textAlign: 'right', background: checked ? 'var(--color-bg-3)' : 'transparent', border: `1px solid ${checked ? 'var(--color-accent)' : 'var(--color-border)'}`, borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.8rem', padding: '3px 6px', outline: 'none' }} />
+        </div>
+    );
+}
+
+function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
+    customerId: string;
+    lines: OrderFinanceLine[];
+    token: string;
+    onError: (msg: string) => void;
+    onChanged: () => void;
+}) {
+    const { t } = useLanguage();
+    const [expanded, setExpanded] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [selCod, setSelCod] = useState<Sel>({});
+    const [selSvc, setSelSvc] = useState<Sel>({});
+
+    // Outstanding per order for each flow.
+    const codOut = (o: OrderFinanceLine) => round2(Math.max(0, (o.codAmount ?? 0) - (o.codPaidToCustomerAmount ?? 0)));
+    const svcOut = (o: OrderFinanceLine) => o.whoPaysForCompanyService === 'Sender'
+        ? round2(Math.max(0, o.companyServicePrice - (o.servicePaidByCustomerAmount ?? 0)))
+        : 0;
+
+    // Displayed amount for a row (defaults to its full outstanding until edited).
+    const amountOf = (sel: Sel, o: OrderFinanceLine, out: (o: OrderFinanceLine) => number) =>
+        sel[o.orderId]?.amount ?? out(o).toFixed(2);
+
+    const buildFlow = (sel: Sel, out: (o: OrderFinanceLine) => number, paidOf: (o: OrderFinanceLine) => number): FlowVM => {
+        const payable = lines.filter(o => out(o) > 0.005);
+        const owed = round2(payable.reduce((s, o) => s + out(o), 0));
+        const paid = round2(lines.reduce((s, o) => s + paidOf(o), 0));
+        const checked = payable.filter(o => sel[o.orderId]?.checked);
+        const selTotal = round2(checked.reduce((s, o) => s + (Number(amountOf(sel, o, out)) || 0), 0));
+        const allChecked = payable.length > 0 && checked.length === payable.length;
+        return { payable, owed, paid, selTotal, selCount: checked.length, allChecked };
+    };
+
+    const cod = buildFlow(selCod, codOut, o => o.codPaidToCustomerAmount ?? 0);
+    const svc = buildFlow(selSvc, svcOut, o => o.servicePaidByCustomerAmount ?? 0);
+
+    const toggle = (setSel: React.Dispatch<React.SetStateAction<Sel>>, id: string, outstanding: number) =>
+        setSel(prev => { const c = prev[id]; return { ...prev, [id]: { checked: !c?.checked, amount: c?.amount ?? outstanding.toFixed(2) } }; });
+    // Editing a price also ticks the row so it's included in the payment.
+    const setAmt = (setSel: React.Dispatch<React.SetStateAction<Sel>>, id: string, amount: string) =>
+        setSel(prev => ({ ...prev, [id]: { checked: true, amount } }));
+    const toggleAll = (setSel: React.Dispatch<React.SetStateAction<Sel>>, payable: OrderFinanceLine[], out: (o: OrderFinanceLine) => number, check: boolean) =>
+        setSel(prev => {
+            const next: Sel = { ...prev };
+            for (const o of payable) next[o.orderId] = { checked: check, amount: prev[o.orderId]?.amount ?? out(o).toFixed(2) };
+            return next;
+        });
+
+    const doPay = async (
+        service: boolean, f: FlowVM, sel: Sel, out: (o: OrderFinanceLine) => number,
+        resetSel: (s: Sel) => void,
+    ) => {
+        const chosen = f.payable.filter(o => sel[o.orderId]?.checked);
+        if (chosen.length === 0) { onError(t.ofinErrSelectOrders); return; }
+        for (const o of chosen) {
+            const a = Number(amountOf(sel, o, out));
+            if (isNaN(a) || a <= 0 || a > out(o) + 0.005) { onError(t.ofinErrAllocInvalid); return; }
         }
+        const allocations = chosen.map(o => ({ orderId: o.orderId, amount: round2(Number(amountOf(sel, o, out))) }));
+
         setBusy(true);
         try {
-            await recordCustomerSettlementPayment(
-                { settlementId: inv.id, codPaidByCompany: codN, servicePaidToCompany: svcN }, token);
-            setCod(''); setSvc('');
-            onPaid();
+            await payCustomerOrders(customerId, service, allocations, token);
+            resetSel({});
+            onChanged();
         } catch (e) {
-            onError(e instanceof CustomerSettlementApiError ? e.message : t.finErrAction);
+            onError(e instanceof OrderFinanceApiError ? e.message : t.ofinErrAction);
         } finally {
             setBusy(false);
         }
     };
 
+    const colLabel: React.CSSProperties = { minWidth: 120, textAlign: 'right', fontSize: '0.6rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' };
+
     return (
-        <div className="content-card" style={{ padding: 16 }}>
-            {/* Header: date, kind, packages */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--color-text)' }}>{new Date(inv.createdAt).toLocaleDateString()}</span>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 7px', borderRadius: 100, background: inv.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: inv.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>
-                        {inv.isReturn ? t.statReturnBadge : t.statBatchBadge}
-                    </span>
+        <div className="content-card" style={{ padding: 0, overflow: 'hidden' }}>
+            {/* Summary header (click to expand). Left = service (customer → company); right = COD (company → customer). */}
+            <button onClick={() => setExpanded(x => !x)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 18 }}>
+                        <Stat label={t.ofinServiceToCollect} value={gel(svc.owed)} />
+                        <Stat label={t.ofinServicePaidLbl} value={gel(svc.paid)} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 18 }}>
+                        <Stat label={t.ofinCodToPay} value={gel(cod.owed)} accent />
+                        <Stat label={t.ofinCodPaidLbl} value={gel(cod.paid)} />
+                    </div>
                 </div>
-                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.custPkg(inv.numberOfPackages)}</span>
+                <span style={{ fontSize: '1.2rem', color: 'var(--color-text-subtle)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
+            </button>
+
+            {/* Pay bars: service (left), COD (right) */}
+            <div style={{ borderTop: '1px solid var(--color-border)', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+                <FlowBar f={svc} payLabel={t.ofinPayService} busy={busy} borderRight
+                    onToggleAll={check => toggleAll(setSelSvc, svc.payable, svcOut, check)}
+                    onPay={() => doPay(true, svc, selSvc, svcOut, setSelSvc)} />
+                <FlowBar f={cod} payLabel={t.ofinPayCod} busy={busy}
+                    onToggleAll={check => toggleAll(setSelCod, cod.payable, codOut, check)}
+                    onPay={() => doPay(false, cod, selCod, codOut, setSelCod)} />
             </div>
 
-            {/* COD — company → customer */}
-            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 2 }}>{t.finCodDir}</div>
-            <Row label={t.finCollected}   value={gel(inv.totalCODCompanyCollectedForPackages)} />
-            <Row label={t.finPaid}        value={gel(inv.totalAmountOfCollectedCodPaidByCompany)} tone="paid" />
-            <Row label={t.finOutstanding} value={gel(inv.outstandingCodOwedToCustomer)} tone={outstandingTone(inv.outstandingCodOwedToCustomer)} strong />
+            {/* Expanded per-order list — each order always has a checkbox + price field for both flows */}
+            {expanded && (
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>
+                        <div style={{ flex: '1 1 160px' }} />
+                        <div style={colLabel}>{t.ofinColService}</div>
+                        <div style={colLabel}>{t.ofinColCod}</div>
+                    </div>
+                    {lines.map(o => {
+                        const so = svcOut(o);
+                        const co = codOut(o);
+                        const isSenderPays = o.whoPaysForCompanyService === 'Sender';
+                        return (
+                            <div key={o.orderId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+                                <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--color-text)' }}>{o.trackingNumber}</span>
+                                        <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>{o.orderType}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{o.recipientFirstName} {o.recipientLastName} · {o.recipientCity}</div>
+                                </div>
 
-            {/* Service — customer → company */}
-            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)', margin: '10px 0 2px' }}>{t.finServiceDir}</div>
-            <Row label={t.finOwed}        value={gel(inv.totalCompanyServicePriceOwedToCompany)} />
-            <Row label={t.finPaid}        value={gel(inv.totalAmountPaidToCompanyForCompanyService)} tone="paid" />
-            <Row label={t.finOutstanding} value={gel(inv.outstandingServiceOwedToCompany)} tone={outstandingTone(inv.outstandingServiceOwedToCompany)} strong />
+                                {/* Service — customer → company (sender-pays only) */}
+                                <AllocCell applicable={isSenderPays} outstanding={so}
+                                    checked={selSvc[o.orderId]?.checked ?? false} amount={amountOf(selSvc, o, svcOut)}
+                                    onToggle={() => toggle(setSelSvc, o.orderId, so)}
+                                    onAmount={v => setAmt(setSelSvc, o.orderId, v)} />
 
-            {/* Record payment */}
-            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
-                <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 8 }}>{t.finRecordPayment}</div>
-                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 4 }}>{t.finCodPaidLabel}</label>
-                <input type="number" min="0" step="0.01" value={cod} onChange={e => setCod(e.target.value)} placeholder="0.00" style={inputStyle} />
-                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '8px 0 4px' }}>{t.finServicePaidLabel}</label>
-                <input type="number" min="0" step="0.01" value={svc} onChange={e => setSvc(e.target.value)} placeholder="0.00" style={inputStyle} />
-                <button className="btn-primary" onClick={record} disabled={busy} style={{ width: '100%', marginTop: 10 }}>
-                    {busy ? t.finWorking : t.finRecordPayment}
-                </button>
-            </div>
+                                {/* COD — company → customer */}
+                                <AllocCell applicable={true} outstanding={co}
+                                    checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
+                                    onToggle={() => toggle(setSelCod, o.orderId, co)}
+                                    onAmount={v => setAmt(setSelCod, o.orderId, v)} />
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }
@@ -470,14 +622,14 @@ export default function AdminFinancePage({ token }: { token: string }) {
     );
 }
 
-const inputStyle: React.CSSProperties = {
-    width: '100%', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.875rem',
-    padding: '8px 10px', outline: 'none',
-};
-
 const dateInputStyle: React.CSSProperties = {
     background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.82rem',
     padding: '5px 8px', outline: 'none',
+};
+
+const dateNavBtn: React.CSSProperties = {
+    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)',
+    fontSize: '0.95rem', lineHeight: 1, padding: '5px 10px', cursor: 'pointer',
 };

@@ -1,4 +1,3 @@
-using Application.CustomerSettlements.Commands;
 using Application.CustomerSettlements.DTOs;
 using Application.CustomerSettlements.Queries;
 using ClosedXML.Excel;
@@ -60,21 +59,6 @@ public sealed class CustomerSettlementsController : BaseController
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
     }
 
-    // ── POST /api/customersettlements/payment  (Admin) — record payment ───────
-    [HttpPost("payment")]
-    [Authorize(Roles = "Admin")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RecordPayment(
-        [FromBody] RecordPaymentRequest request,
-        CancellationToken ct)
-    {
-        var id = await Sender.Send(
-            new RecordCustomerSettlementPaymentCommand(
-                request.SettlementId, request.CodPaidByCompany, request.ServicePaidToCompany), ct);
-
-        return Ok(new { settlementId = id });
-    }
     // ── Excel builder ─────────────────────────────────────────────────────────
     private static byte[] BuildInvoiceExcel(SettlementInvoiceData data)
     {
@@ -204,10 +188,3 @@ public sealed class CustomerSettlementsController : BaseController
         return ms.ToArray();
     }
 }
-
-// ── Local request models ────────────────────────────────────────────────────────
-public sealed record RecordPaymentRequest(
-    Guid     SettlementId,
-    decimal? CodPaidByCompany,
-    decimal? ServicePaidToCompany
-);

@@ -154,6 +154,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(o => o.CompanyRevenue).HasColumnType("decimal(18,2)");
             e.Property(o => o.AmountOfCashCollected).HasColumnType("decimal(18,2)");
             e.Property(o => o.AmountToCollectForPackage).HasColumnType("decimal(18,2)");
+            e.Property(o => o.CodPaidToCustomerAmount).HasColumnType("decimal(18,2)");
+            e.Property(o => o.ServicePaidByCustomerAmount).HasColumnType("decimal(18,2)");
 
         });
 

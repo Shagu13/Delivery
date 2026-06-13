@@ -48,15 +48,6 @@ export interface CustomerOutstanding {
     outstandingServiceOwedToCompany: number;
 }
 
-export interface RecordPaymentRequest {
-    /** The batch invoice to record the payment against. */
-    settlementId: string;
-    /** COD the company pays the customer (omit if not paying COD this time). */
-    codPaidByCompany?: number;
-    /** Service fee the customer pays the company (omit if not paying service this time). */
-    servicePaidToCompany?: number;
-}
-
 // ── Error ───────────────────────────────────────────────────────────────────────
 
 export class CustomerSettlementApiError extends Error {
@@ -75,7 +66,6 @@ async function handle<T>(res: Response, fallback: string): Promise<T> {
 }
 
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` });
-const jsonHeaders = (token: string) => ({ 'Content-Type': 'application/json', ...authHeaders(token) });
 
 // ── Admin API ─────────────────────────────────────────────────────────────────
 
@@ -97,15 +87,6 @@ export async function fetchCustomersWithOutstanding(token: string): Promise<Cust
         headers: authHeaders(token), cache: 'no-store',
     });
     return handle<CustomerOutstanding[]>(res, 'Failed to load outstanding balances');
-}
-
-export async function recordCustomerSettlementPayment(
-    data: RecordPaymentRequest, token: string,
-): Promise<{ settlementId: string }> {
-    const res = await fetch('/api/customersettlements/payment', {
-        method: 'POST', headers: jsonHeaders(token), body: JSON.stringify(data),
-    });
-    return handle<{ settlementId: string }>(res, 'Failed to record payment');
 }
 
 // ── Customer API (read-only) ────────────────────────────────────────────────────

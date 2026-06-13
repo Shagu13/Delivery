@@ -3,7 +3,21 @@ import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { fetchMySettlements } from '../../api/settlements';
 import type { CourierSettlementItem } from '../../api/settlements';
+import { fetchCourierOrderFinance } from '../../api/orderFinance';
+import type { OrderFinanceLine } from '../../api/orderFinance';
 import '../../styles/dashboard.css';
+
+const gel = (n: number) => `₾${n.toFixed(2)}`;
+const toDateStr = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// This page doesn't load the admin .btn-ghost CSS, so style nav buttons inline.
+const navBtn: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)',
+    fontSize: '0.82rem', fontWeight: 600, padding: '6px 12px', cursor: 'pointer', lineHeight: 1,
+};
 
 const MONTHS = [
     'January','February','March','April','May','June',
@@ -110,6 +124,96 @@ function SummaryBar({ items }: { items: CourierSettlementItem[] }) {
     );
 }
 
+// ── Per-order list, filtered by delivery date ─────────────────────────────────────
+
+function CourierOrdersByDay({ token }: { token: string }) {
+    const { t } = useLanguage();
+    const [date, setDate] = useState(toDateStr(new Date()));
+    const [lines, setLines] = useState<OrderFinanceLine[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const load = useCallback(() => {
+        if (!token) return;
+        setLoading(true); setError(null);
+        fetchCourierOrderFinance(token, date || undefined)
+            .then(data => { setLines(data); setLoading(false); })
+            .catch(() => { setError(t.ofinErrLoad); setLoading(false); });
+    }, [token, date, t.ofinErrLoad]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const todayStr = toDateStr(new Date());
+    const shiftDay = (delta: number) => setDate(prev => {
+        const base = prev ? new Date(prev + 'T00:00:00') : new Date();
+        base.setDate(base.getDate() + delta);
+        return toDateStr(base);
+    });
+    const atToday = date !== '' && date >= todayStr;
+
+    const totalSalary = lines.reduce((s, i) => s + (i.courierSalary ?? 0), 0);
+    const totalCash   = lines.reduce((s, i) => s + (i.amountOfCashCollected ?? 0), 0);
+
+    return (
+        <div style={{ marginTop: 28 }}>
+            <h3 className="dashboard__title" style={{ fontSize: '1rem' }}>{t.ofinFilterDelivered}</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 16px', flexWrap: 'wrap' }}>
+                <button onClick={() => shiftDay(-1)} title={t.statPrevDay} style={{ ...navBtn, padding: '6px 11px', fontSize: '0.95rem' }}>‹</button>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                    style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }} />
+                <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay} style={{ ...navBtn, padding: '6px 11px', fontSize: '0.95rem', opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
+                <button onClick={load} style={{ ...navBtn, marginLeft: 4 }}>{t.statRefresh}</button>
+            </div>
+
+            {loading ? (
+                <div className="dashboard__loader">{t.statLoading}</div>
+            ) : error ? (
+                <div className="dashboard__error">{error} <button onClick={load}>{t.statRetry}</button></div>
+            ) : lines.length === 0 ? (
+                <div className="dashboard__empty"><div style={{ fontWeight: 600 }}>{t.ofinNoneDay}</div></div>
+            ) : (
+                <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+                        {[
+                            { label: t.ofinSumOrders,   value: lines.length.toString() },
+                            { label: t.ofinColSalary,   value: gel(totalSalary) },
+                            { label: t.ofinColCash,     value: gel(totalCash) },
+                        ].map(({ label, value }) => (
+                            <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text)' }}>{value}</div>
+                                <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {lines.map(line => (
+                            <div key={line.orderId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, padding: '10px 14px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 10 }}>
+                                <div style={{ minWidth: 0, flex: '1 1 180px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text)' }}>{line.trackingNumber}</span>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)' }}>{line.orderType}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                                        {line.recipientFirstName} {line.recipientLastName} · {line.recipientCity}
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right', minWidth: 90 }}>
+                                    <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ofinColSalary}</div>
+                                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text)' }}>{gel(line.courierSalary ?? 0)}</div>
+                                </div>
+                                <div style={{ textAlign: 'right', minWidth: 90 }}>
+                                    <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ofinColCash}</div>
+                                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text)' }}>{gel(line.amountOfCashCollected ?? 0)}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
 export function CourierSettlementsPage() {
     const { token } = useAuth();
     const { t } = useLanguage();
@@ -183,6 +287,8 @@ export function CourierSettlementsPage() {
                     </div>
                 </>
             )}
+
+            {token && <CourierOrdersByDay token={token} />}
         </div>
     );
 }
