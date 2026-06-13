@@ -413,8 +413,7 @@ public sealed class GroupOrdersController : BaseController
                 "გადახდის სტატუსი",
                 "ვინ იხდის სერვის საფასურს",
                 "მტვრევადია",
-                "ამანათის ფასი (₾)",
-                "წონის კატეგორია"
+                "ამანათის ფასი (₾)"
               ]
             : [
                 "RecipientFirstName",
@@ -427,11 +426,10 @@ public sealed class GroupOrdersController : BaseController
                 "PaymentStatus",
                 "WhoPaysForCourierFee",
                 "IsFragile",
-                "ParcelPrice (₾)",
-                "WeightCategory"
+                "ParcelPrice (₾)"
               ];
 
-        bool[] required = [true, true, true, true, true, true, false, true, true, true, false, false];
+        bool[] required = [true, true, true, true, true, true, false, true, true, true, false];
 
         for (int i = 0; i < headers.Length; i++)
         {
@@ -457,7 +455,6 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 9).Value = "მიმღები";
             ws.Cell(2, 10).Value = "არა";
             ws.Cell(2, 11).Value = 45.00;
-            ws.Cell(2, 12).Value = "";
         }
         else
         {
@@ -472,7 +469,6 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 9).Value = "Recipient";
             ws.Cell(2, 10).Value = "No";
             ws.Cell(2, 11).Value = 45.00;
-            ws.Cell(2, 12).Value = "";
         }
 
         // The row-2 example is a placeholder. Grey/italic it via CONDITIONAL
@@ -543,28 +539,6 @@ public sealed class GroupOrdersController : BaseController
         fragileVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
         fragileVal.ErrorMessage = isGeo ? "აირჩიეთ: კი ან არა" : "Choose Yes or No";
 
-        // ── Weight tier dropdown (L2:L500) — built from DB ─────────────────────
-        var weightTiers = await db.WeightPriceTiers
-            .AsNoTracking()
-            .Where(t => t.DateDeleted == null)
-            .OrderBy(t => t.MinWeightKg)
-            .Select(t => new { t.Label, t.MinWeightKg, t.MaxWeightKg })
-            .ToListAsync(ct);
-
-        if (weightTiers.Count > 0)
-        {
-            // Build a quoted comma-separated list of tier labels for the dropdown
-            var tierLabels = weightTiers
-                .Select(t => string.IsNullOrWhiteSpace(t.Label)
-                    ? $"{t.MinWeightKg}–{t.MaxWeightKg} kg"
-                    : t.Label);
-            var tierOptions = "\"" + string.Join(",", tierLabels) + "\"";
-
-            var weightVal = ws.Range("L2:L500").CreateDataValidation();
-            weightVal.List(tierOptions, true);
-            weightVal.ShowErrorMessage = false;
-        }
-
         ws.Columns().AdjustToContents();
         ws.SheetView.FreezeRows(1);
 
@@ -622,24 +596,6 @@ public sealed class GroupOrdersController : BaseController
                 districtGeoToEn[d.DistrictNameGeo!] = d.DistrictName;
         }
 
-        // Build weight tier lookup: label (e.g. "0–1 kg") or id string → Guid
-        var weightTiers = await db.WeightPriceTiers
-            .AsNoTracking()
-            .Where(t => t.DateDeleted == null)
-            .Select(t => new { t.Id, t.Label, t.MinWeightKg, t.MaxWeightKg })
-            .ToListAsync(ct);
-
-        // Map by label text (case-insensitive) → id
-        var tierByLabel = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
-        foreach (var tier in weightTiers)
-        {
-            if (!string.IsNullOrWhiteSpace(tier.Label))
-                tierByLabel[tier.Label] = tier.Id;
-            // Also key by "min–max kg" format the template will write
-            var rangeKey = $"{tier.MinWeightKg}–{tier.MaxWeightKg} kg";
-            tierByLabel.TryAdd(rangeKey, tier.Id);
-        }
-
         // ── Parse file ────────────────────────────────────────────────────────
         using var stream = file.OpenReadStream();
         using var workbook = new XLWorkbook(stream);
@@ -675,12 +631,6 @@ public sealed class GroupOrdersController : BaseController
             {
                 amountToCollect = parsedPrice;
             }
-
-            // ── Col L: weight category ────────────────────────────────────────
-            Guid? weightPriceTierId = null;
-            var weightRaw = ws.Cell(row, 12).GetString().Trim();
-            if (!string.IsNullOrWhiteSpace(weightRaw) && tierByLabel.TryGetValue(weightRaw, out var tierId))
-                weightPriceTierId = tierId;
 
             var paymentStatus =
                 paymentRaw.Equals("Paid", StringComparison.OrdinalIgnoreCase) ||
@@ -726,7 +676,7 @@ public sealed class GroupOrdersController : BaseController
                 ProductPaymentStatus: paymentStatus,
                 WhoPaysForCompanyService: payer,
                 AmountToCollectForPackage: amountToCollect,
-                WeightPriceTierId: weightPriceTierId
+                WeightPriceTierId: null
                 // OrderType defaults to Send for Excel imports
             ));
         }
