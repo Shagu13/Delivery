@@ -24,8 +24,10 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
         if (order.GroupOrder is null || order.GroupOrder.CustomerId != request.CustomerId)
             throw new ForbiddenException("You can only edit your own orders.");
 
-        // Editable only before the company accepts the batch — same window as cancel.
-        if (order.GroupOrder.Status != OrderStatus.Pending)
+        // Editable per-package up until the parcel is handed to a courier for
+        // last-mile delivery (CourierAssignedToDeliver onward is locked) — same
+        // window as cancel.
+        if (!CustomerOrderActionPolicy.EditableOrCancellable.Contains(order.Status))
             throw new ConflictException("This order can no longer be edited.");
 
         order.RecipientFirstName = request.RecipientFirstName.Trim();

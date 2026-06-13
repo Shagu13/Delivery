@@ -162,7 +162,7 @@ export interface UpdateMyOrderRequest {
   amountToCollectForPackage: number | null;
 }
 
-/// Edit one of the customer's own packages (only valid while the group order is Pending)
+/// Edit one of the customer's own packages (valid until it's assigned to a delivery courier)
 export async function updateMyOrder(
   orderId: string, data: UpdateMyOrderRequest, token: string
 ): Promise<void> {
@@ -170,6 +170,14 @@ export async function updateMyOrder(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(data),
+  }));
+}
+
+/// Cancel one of the customer's own packages (valid until it's assigned to a delivery courier)
+export async function cancelMyOrder(orderId: string, token: string): Promise<void> {
+  return handleEmpty(await fetch(`/api/orders/${orderId}/my/cancel`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
   }));
 }
 

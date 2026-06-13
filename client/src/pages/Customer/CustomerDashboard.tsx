@@ -8,6 +8,7 @@ import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import {
   getMyProfile, getMyOrders,
   updateMyProfile, changePassword,
+  cancelMyOrder,
   CustomerApiError,
 } from '../../api/customers';
 import type { Customer, CustomerGroupOrder, CustomerOrder } from '../../api/customers';
@@ -75,6 +76,28 @@ function specialTypes(go: CustomerGroupOrder): string[] {
 
 // Terminal "cancelled" statuses (mirrors the customer statistics page).
 const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
+
+// A customer may edit or cancel a package until it's handed to a courier for
+// last-mile delivery — from CourierAssignedToDeliver onward the order is locked.
+// (Mirrors the backend CustomerOrderActionPolicy.)
+const CUSTOMER_MODIFIABLE_STATUSES = new Set([
+  'Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp',
+  'CourierDeliveringToWarehouse', 'DeliveredToWarehouse', 'AdminAcceptedOrderInWareHouse',
+  'AcceptedOrder', 'OrderIsOnItsWayToRecipientsCity',
+]);
+
+// Cancel is allowed for any package type (Send/Exchange and Returns) while still
+// in an early status. For Returns the early statuses (Pending / assigned-to-pickup)
+// fall in the same set, so cancel locks once the courier has collected the parcel.
+function canCustomerCancel(o: CustomerOrder): boolean {
+  return CUSTOMER_MODIFIABLE_STATUSES.has(o.status);
+}
+
+// Edit is limited to Send/Exchange — the edit modal changes recipient fields that
+// don't apply to a Return's deliver-back-to address.
+function canCustomerEdit(o: CustomerOrder): boolean {
+  return o.orderType !== 'Return' && CUSTOMER_MODIFIABLE_STATUSES.has(o.status);
+}
 
 // How many individual packages in a group are cancelled — surfaced as a card
 // chip so a single cancelled item isn't hidden until the group is expanded.
@@ -361,7 +384,25 @@ function OverviewView({
 function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrder[]; token: string; onRefresh: () => void }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<CustomerOrder | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<CustomerOrder | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const { lang, t } = useLanguage();
+
+  const handleCancel = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await cancelMyOrder(cancelTarget.id, token);
+      setCancelTarget(null);
+      onRefresh();
+    } catch (e) {
+      setCancelError(e instanceof Error ? e.message : t.ceoCancelError);
+    } finally {
+      setCancelling(false);
+    }
+  };
   const cityName     = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
   const districtName = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
 
@@ -386,8 +427,9 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {orders.map(go => {
-        // Customers may edit Send/Exchange packages only while the batch is Pending.
-        const editable = go.status === 'Pending' && go.orders.some(o => o.orderType !== 'Return');
+        // Customers may edit (Send/Exchange) or cancel (any type) a package while it's
+        // still early in its flow — judged per individual order.
+        const groupHasActions = go.orders.some(o => canCustomerEdit(o) || canCustomerCancel(o));
         return (
         <div key={go.id} className="content-card">
           {/* Group order header */}
@@ -448,7 +490,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                         {h}
                       </th>
                     ))}
-                    {editable && (
+                    {groupHasActions && (
                       <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600,
                         fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
                         color: 'var(--color-text-subtle)' }}>
@@ -486,25 +528,47 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
                         {o.companyServicePrice != null ? `₾${o.companyServicePrice.toFixed(2)}` : '—'}
                       </td>
-                      {editable && (
+                      {groupHasActions && (
                         <td style={{ padding: '10px 16px', textAlign: 'right' }}>
-                          {o.orderType !== 'Return' && (
-                            <button
-                              type="button"
-                              onClick={() => setEditingOrder(o)}
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 5,
-                                padding: '5px 12px', borderRadius: 'var(--radius-sm)',
-                                border: '1px solid var(--color-border)', background: 'var(--color-bg-2)',
-                                color: 'var(--color-text)', fontSize: '0.78rem', fontWeight: 600,
-                                cursor: 'pointer', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
-                              }}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                                <path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10l7.5-7.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              {t.ceoEditBtn}
-                            </button>
+                          {(canCustomerEdit(o) || canCustomerCancel(o)) && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                              {canCustomerEdit(o) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingOrder(o)}
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                    padding: '5px 12px', borderRadius: 'var(--radius-sm)',
+                                    border: '1px solid var(--color-border)', background: 'var(--color-bg-2)',
+                                    color: 'var(--color-text)', fontSize: '0.78rem', fontWeight: 600,
+                                    cursor: 'pointer', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                    <path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10l7.5-7.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                  {t.ceoEditBtn}
+                                </button>
+                              )}
+                              {canCustomerCancel(o) && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setCancelError(null); setCancelTarget(o); }}
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                    padding: '5px 12px', borderRadius: 'var(--radius-sm)',
+                                    border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.06)',
+                                    color: '#ef4444', fontSize: '0.78rem', fontWeight: 600,
+                                    cursor: 'pointer', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                    <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                  </svg>
+                                  {t.ceoCancelBtn}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </td>
                       )}
@@ -526,6 +590,57 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
         onClose={() => setEditingOrder(null)}
         onSaved={onRefresh}
       />
+
+      {cancelTarget && (
+        <div
+          onClick={() => { if (!cancelling) setCancelTarget(null); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(26,23,20,0.55)', backdropFilter: 'blur(4px)',
+            zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            role="dialog" aria-modal="true"
+            style={{ width: 'min(440px, 100%)', background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-lg)', boxShadow: '0 20px 60px rgba(0,0,0,0.22)', padding: 24 }}
+          >
+            <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text)' }}>
+              {t.ceoCancelConfirmTitle}
+            </h3>
+            <p style={{ margin: '0 0 4px', fontSize: '0.875rem', color: 'var(--color-text-subtle)', lineHeight: 1.5 }}>
+              <span style={{ fontFamily: 'monospace', color: 'var(--color-accent)', fontWeight: 700 }}>{cancelTarget.trackingNumber}</span>
+              {' — '}{t.ceoCancelConfirmBody}
+            </p>
+            {cancelError && (
+              <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 'var(--radius-sm)', color: '#ef4444', fontSize: '0.82rem', padding: '10px 14px', margin: '12px 0 0' }}>
+                {cancelError}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+              <button
+                type="button"
+                onClick={() => setCancelTarget(null)}
+                disabled={cancelling}
+                style={{ padding: '10px 18px', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', fontWeight: 600,
+                  cursor: cancelling ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-body)',
+                  background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', opacity: cancelling ? 0.6 : 1 }}
+              >
+                {t.ceoCancelKeep}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={cancelling}
+                style={{ padding: '10px 18px', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', fontWeight: 600,
+                  cursor: cancelling ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-body)',
+                  background: '#ef4444', border: 'none', color: '#fff', opacity: cancelling ? 0.6 : 1 }}
+              >
+                {cancelling ? t.ceoCancelling : t.ceoCancelConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -84,6 +84,10 @@ const ORDER_TYPE_COLORS: Record<OrderType, { bg: string; color: string; border: 
   Exchange: { bg: 'rgba(59,130,246,0.08)',    color: '#3b82f6',                  border: 'rgba(59,130,246,0.4)' },
 };
 
+// The weight price tier selector is hidden for now — packages default to no tier
+// (weightPriceTierId stays null). Flip this to re-enable the field.
+const SHOW_WEIGHT_TIER = false;
+
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
 interface DetailProps {
@@ -341,7 +345,7 @@ function PackageDetail({
             lang={lang}
           />
           <FormField
-            as="textarea" label={t.cgoPackageDescription}
+            as="textarea" label={`${t.cgoPackageDescription} ${t.cgoDescOptional}`}
             value={pkg.description ?? ''}
             onChange={e => onChange(index, 'description', e.target.value)}
             error={fe('description')}
@@ -355,7 +359,7 @@ function PackageDetail({
         <div className="psl-section">
           <div className="psl-section__label">{t.cgoPackageOptions}</div>
 
-          {weightTiers.length > 0 && (
+          {SHOW_WEIGHT_TIER && weightTiers.length > 0 && (
             <div className="form-field">
               <label className="form-field__label">{t.cgoWeightTier} <span className="form-field__required">*</span></label>
               <select

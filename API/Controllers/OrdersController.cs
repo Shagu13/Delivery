@@ -152,6 +152,23 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/{id}/my/cancel  (Customer — cancel own package) ───────
+    [HttpPut("{id:guid}/my/cancel")]
+    [Authorize(Roles = "Customer")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelMyOrder(Guid id, CancellationToken ct)
+    {
+        var customerIdClaim = User.FindFirstValue("customerId");
+        if (!Guid.TryParse(customerIdClaim, out var customerId))
+            return Forbid();
+
+        await Sender.Send(new CancelOrderByCustomerCommand(id, customerId), ct);
+        return NoContent();
+    }
+
     // ── PUT /api/orders/{id}/send-to-city  (Admin) ───────────────────────────
     [HttpPut("{id:guid}/send-to-city")]
     [Authorize(Roles = "Admin")]

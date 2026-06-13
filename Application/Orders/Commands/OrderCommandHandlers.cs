@@ -321,6 +321,57 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
     }
 }
 
+// ── CancelOrderByCustomer ─────────────────────────────────────────────────────
+public sealed class CancelOrderByCustomerCommandHandler : IRequestHandler<CancelOrderByCustomerCommand>
+{
+    private readonly IAppDbContext _context;
+    private readonly IRealtimeNotifier _notifier;
+    public CancelOrderByCustomerCommandHandler(IAppDbContext context, IRealtimeNotifier notifier)
+    {
+        _context = context;
+        _notifier = notifier;
+    }
+
+    public async Task Handle(CancelOrderByCustomerCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _context.Orders
+            .Include(o => o.GroupOrder)
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        // Ownership covers both paths: Send/Exchange (and batch Returns) belong via
+        // GroupOrder.CustomerId; standalone Return orders own the customer directly.
+        var ownsViaGroup = order.GroupOrder is not null && order.GroupOrder.CustomerId == request.CustomerId;
+        var ownsDirectly = order.CustomerId == request.CustomerId;
+        if (!ownsViaGroup && !ownsDirectly)
+            throw new ForbiddenException("You can only cancel your own orders.");
+
+        // Cancellable per-package up until the parcel is handed to a courier for
+        // last-mile delivery (CourierAssignedToDeliver onward is locked).
+        if (!CustomerOrderActionPolicy.EditableOrCancellable.Contains(order.Status))
+            throw new ConflictException("This order can no longer be cancelled.");
+
+        // Remember who (if anyone) had it so their open dashboard can drop it live.
+        var assignedCourierId = order.CourierId;
+
+        order.Status = OrderStatus.CancelledBySender;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Drop the cancelled order from its batch invoice.
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
+
+        // Auto-close the parent GroupOrder when all packages are now terminal.
+        if (order.GroupOrderId.HasValue)
+            await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
+
+        // Live-refresh dashboards: the assigned courier (so the cancelled order
+        // leaves their list) and admins.
+        if (assignedCourierId is Guid courierId)
+            _notifier.NotifyCourierOrdersChanged(courierId);
+        _notifier.NotifyAdminsOrdersChanged();
+    }
+}
+
 // ── Shared: auto-close GroupOrder ─────────────────────────────────────────────
 file static class GroupOrderCloser
 {

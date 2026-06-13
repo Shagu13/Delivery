@@ -1071,6 +1071,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                     <th>{t.goThAddress}</th>
                     <th>{t.goThDescription}</th>
                     <th>{t.goThStatus}</th>
+                    <th>{t.goThCollect}</th>
                     <th>{t.goThPaid}</th>
                     <th>{t.goThActions}</th>
                   </tr>
@@ -1090,6 +1091,11 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                         {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
                       </td>
                       <td><StatusBadge status={o.status} /></td>
+                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {o.amountToCollectForPackage != null
+                          ? `₾${o.amountToCollectForPackage.toFixed(2)}`
+                          : <span style={{ opacity: 0.4 }}>—</span>}
+                      </td>
                       <td>
                         {o.productPaymentStatus === 'Paid' ? (
                           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>{t.goPaid}</span>
@@ -1191,6 +1197,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                     <th>{t.goThAddress}</th>
                                     <th>{t.goThDescription}</th>
                                     <th>{t.goThStatus}</th>
+                                    <th>{t.goThCollect}</th>
                                     <th>{t.goThPaid}</th>
                                     <th>{t.goThActions}</th>
                                   </tr>
@@ -1210,6 +1217,11 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                         {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
                                       </td>
                                       <td><StatusBadge status={o.status} /></td>
+                                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                        {o.amountToCollectForPackage != null
+                                          ? `₾${o.amountToCollectForPackage.toFixed(2)}`
+                                          : <span style={{ opacity: 0.4 }}>—</span>}
+                                      </td>
                                       <td>
                                         {o.productPaymentStatus === 'Paid' ? (
                                           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>{t.goPaid}</span>
