@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FormField } from '../../components/ui/FormField';
+import { GeorgianPhoneField } from '../../components/ui/GeorgianPhoneField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { AddressAutocomplete } from '../../features/addressAutocomplete';
 import type { District } from '../../api/cities';
@@ -373,15 +374,13 @@ export function PackageCard({
                 maxLength={100}
               />
             </div>
-            <FormField
+            <GeorgianPhoneField
               label={t.cgoRecipientPhone}
               required
-              type="tel"
               value={data.recipientPhone}
-              onChange={e => onChange(index, 'recipientPhone', e.target.value)}
+              onValueChange={v => onChange(index, 'recipientPhone', v)}
               error={fieldError('recipientPhone')}
-              placeholder="5XX XXX XXX"
-              maxLength={9}
+              invalidMessage={t.cgoErrInvalidPhone}
             />
           </fieldset>
 

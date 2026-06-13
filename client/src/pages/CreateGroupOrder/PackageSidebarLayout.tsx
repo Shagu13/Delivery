@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { FormField } from '../../components/ui/FormField';
+import { GeorgianPhoneField } from '../../components/ui/GeorgianPhoneField';
 import { AddressAutocomplete } from '../../features/addressAutocomplete';
 import type { District } from '../../api/cities';
 import type { WeightPriceTier } from '../../api/weightPriceTiers';
@@ -310,13 +311,12 @@ function PackageDetail({
               maxLength={100}
             />
           </div>
-          <FormField
-            label={t.cgoRecipientPhone} required type="tel"
+          <GeorgianPhoneField
+            label={t.cgoRecipientPhone} required
             value={pkg.recipientPhone}
-            onChange={e => onChange(index, 'recipientPhone', e.target.value)}
+            onValueChange={v => onChange(index, 'recipientPhone', v)}
             error={fe('recipientPhone')}
-            placeholder="5XX XXX XXX"
-            maxLength={9}
+            invalidMessage={t.cgoErrInvalidPhone}
           />
         </div>
 

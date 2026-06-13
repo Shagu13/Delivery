@@ -15,6 +15,7 @@ import type {
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import type { Translations } from '../../contexts/translations';
+import { isValidGeorgianMobile, sanitizeGeorgianMobile } from '../../components/ui/GeorgianPhoneField';
 import { SenderSection } from './SenderSection';
 import { PackageCard } from './PackageCard';
 import { PackageSidebarLayout } from './PackageSidebarLayout';
@@ -110,7 +111,11 @@ function validate(
         };
         p('recipientFirstName', pkg.recipientFirstName, t.cgoErrRecipientFirstName);
         p('recipientLastName',  pkg.recipientLastName,  t.cgoErrRecipientLastName);
-        p('recipientPhone',   pkg.recipientPhone,   t.cgoErrPhone);
+        if (!pkg.recipientPhone.trim()) {
+            errors[`orders[${i}].recipientPhone`] = t.cgoErrPhone;
+        } else if (!isValidGeorgianMobile(pkg.recipientPhone)) {
+            errors[`orders[${i}].recipientPhone`] = t.cgoErrInvalidPhone;
+        }
         p('recipientAddress', pkg.recipientAddress, t.cgoErrAddress);
 
         if (!pkg.recipientCity.trim()) {
@@ -311,7 +316,12 @@ export function CreateGroupOrderPage() {
         setExcelImporting(true);
         try {
             const parsed = await parseGroupOrderExcel(file);
-            const normalised = parsed.map(o => ({ ...EMPTY_PACKAGE, ...o, description: o.description ?? '' }));
+            const normalised = parsed.map(o => ({
+                ...EMPTY_PACKAGE,
+                ...o,
+                recipientPhone: sanitizeGeorgianMobile(o.recipientPhone ?? ''),
+                description: o.description ?? '',
+            }));
 
             const uniqueCities = [...new Set(normalised.map(o => o.recipientCity).filter(Boolean))];
             const districtMap: Record<string, Record<string, import('../../api/cities').District>> = {};

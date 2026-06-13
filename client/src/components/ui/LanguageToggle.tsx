@@ -21,16 +21,24 @@ export function LanguageToggle({ className = '' }: Props) {
 
   const active = OPTIONS.find(o => o.value === lang) ?? OPTIONS[0];
 
-  // Reposition portal below button whenever it opens
+  // Position the portal next to the button, flipping above it when there isn't
+  // enough room below (e.g. the toggle sits low in the viewport). Without this the
+  // fixed-position menu can render off the bottom edge and be unreachable.
   useEffect(() => {
     if (!open || !btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
+    const menuW   = Math.max(r.width, 140);
+    const estH    = 110; // ~2 options
+    const flipUp  = window.innerHeight - r.bottom < estH + 12 && r.top > window.innerHeight - r.bottom;
+    const left    = Math.max(8, Math.min(r.left, window.innerWidth - menuW - 8));
     setDropStyle({
-      position : 'fixed',
-      top      : r.bottom + 6,
-      left     : r.left,
-      minWidth : Math.max(r.width, 140),
-      zIndex   : 99999,
+      position  : 'fixed',
+      left,
+      minWidth  : menuW,
+      zIndex    : 99999,
+      maxHeight : '70vh',
+      overflowY : 'auto',
+      ...(flipUp ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
     });
   }, [open]);
 

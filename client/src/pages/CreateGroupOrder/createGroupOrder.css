@@ -290,6 +290,38 @@ body {
     font-weight: 500;
 }
 
+/* ── Phone field with fixed +995 prefix ── */
+.phone-field {
+    display: flex;
+    align-items: stretch;
+}
+
+.phone-field__prefix {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    background: var(--color-bg-3);
+    border: 1px solid var(--color-border);
+    border-right: none;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.phone-field__input {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none;
+}
+
+.form-field--error .phone-field__prefix {
+    border-color: var(--color-error);
+}
+
 /* ── Package Card ────────────────────────────────────────────────────────────── */
 .package-list {
     display: flex;

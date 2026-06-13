@@ -166,6 +166,13 @@ export function CustomerDashboard() {
         </div>
         <span className="sidebar__role-badge">{profile?.businessName ?? t.custRoleBadge}</span>
 
+        <a href="/send" className="sidebar__cta">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <span className="sidebar__cta-text">{t.custNewShipment}</span>
+        </a>
+
         <div className="sidebar__divider" />
         <p className="sidebar__section-label">{t.custMyAccount}</p>
 
@@ -210,16 +217,27 @@ export function CustomerDashboard() {
             <span className="cust-mobile-topbar__brand">Delivery</span>
             <span className="cust-role-badge-sm">{profile?.businessName ?? t.custRoleBadge}</span>
           </div>
-          <button
-            className="cust-hamburger"
-            onClick={() => setMobileMenuOpen(true)}
-            aria-label="Open navigation"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-            {t.custMenu}
-          </button>
+          <div className="cust-mobile-topbar__right">
+            <a
+              href="/send"
+              className="cust-mobile-new"
+              aria-label={t.custNewShipment}
+            >
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </a>
+            <button
+              className="cust-hamburger"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open navigation"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              {t.custMenu}
+            </button>
+          </div>
         </div>
 
         {/* ── Mobile menu bottom sheet ── */}
@@ -243,6 +261,17 @@ export function CustomerDashboard() {
                 </button>
               </div>
               <nav className="cust-menu-sheet__nav">
+                <a
+                  href="/send"
+                  className="sidebar__cta"
+                  style={{ marginInline: 8 }}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <span className="sidebar__cta-text">{t.custNewShipment}</span>
+                </a>
                 {navItems.map(([v, label, icon]) => (
                   <button
                     key={v}
