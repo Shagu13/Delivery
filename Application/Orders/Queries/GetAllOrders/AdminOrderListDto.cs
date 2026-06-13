@@ -33,6 +33,8 @@ public sealed record AdminOrderListDto(
     decimal? AmountToCollectForPackage,
     // Financials
     decimal  CompanyServicePrice,
+    /// <summary>True when the package price was entered all-in (product + service fee bundled).</summary>
+    bool     IsCompanyServicePriceIncluded,
     decimal? CourierSalary,
     decimal? CompanyRevenue,
     // Courier assignment

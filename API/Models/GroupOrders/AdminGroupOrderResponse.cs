@@ -57,6 +57,8 @@ public sealed record AdminOrderResponse(
     decimal? CourierSalary,
     /// <summary>Company service fee for this package — shown to the sender on their dashboard.</summary>
     decimal  CompanyServicePrice,
+    /// <summary>True when the package price was entered all-in (product + service fee bundled).</summary>
+    bool     IsCompanyServicePriceIncluded,
     /// <summary>Company revenue (margin) — admin only; null on customer responses.</summary>
     decimal? CompanyRevenue,
     // Last-mile delivery courier (null until assigned)

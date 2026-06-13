@@ -72,6 +72,7 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
             City              = dto.City,
             District          = dto.District,
             Address           = dto.Address,
+            IsCompanyServicePriceIncludedInPrice = dto.IsCompanyServicePriceIncludedInPrice,
             ApplicationUserId = user.Id
         };
 

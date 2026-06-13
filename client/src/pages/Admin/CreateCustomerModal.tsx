@@ -23,8 +23,9 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
   const [errors,   setErrors]   = useState<Partial<Record<keyof FormState, string>>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading,  setLoading]  = useState(false);
+  const [priceIncluded, setPriceIncluded] = useState(false);
 
-  useEffect(() => { if (open) { setForm(EMPTY); setErrors({}); setApiError(null); } }, [open]);
+  useEffect(() => { if (open) { setForm(EMPTY); setErrors({}); setApiError(null); setPriceIncluded(false); } }, [open]);
 
   if (!open) return null;
 
@@ -65,7 +66,7 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
     if (!validate() || !token) return;
     setLoading(true);
     try {
-      const result = await createCustomer({ ...form, idNumber: form.idNumber.trim() || undefined }, token);
+      const result = await createCustomer({ ...form, idNumber: form.idNumber.trim() || undefined, isCompanyServicePriceIncludedInPrice: priceIncluded }, token);
       setForm(EMPTY);
       onCreated(result);
     } catch (err) {
@@ -129,6 +130,15 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
           <p className="modal__section-label">{t.customerCredSection}</p>
           <FormField label={t.emailAddress} type="email"    value={form.email}    onChange={set('email')}    error={errors.email}    placeholder={t.phEmail} />
           <FormField label={t.password}     type="password" value={form.password} onChange={set('password')} error={errors.password} placeholder={t.phPassword} />
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginTop: 12 }}>
+            <input type="checkbox" checked={priceIncluded} onChange={e => setPriceIncluded(e.target.checked)} />
+            <span style={{ fontSize: '0.85rem', lineHeight: 1.4 }}>
+              {t.cgoServiceIncluded}
+              <br />
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{t.cgoServiceIncludedHint}</span>
+            </span>
+          </label>
 
           {apiError && <div className="form-error-banner" role="alert">{apiError}</div>}
         </div>

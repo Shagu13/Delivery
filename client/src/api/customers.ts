@@ -12,6 +12,7 @@ export interface CreateCustomerRequest {
   businessName: string; phoneNumber: string;
   city: string; district: string; address: string;
   email: string; password: string;
+  isCompanyServicePriceIncludedInPrice?: boolean;
 }
 
 export interface UpdateCustomerRequest {
@@ -39,6 +40,8 @@ export interface Customer {
   companyServiceCapitalPrice:  number | null;
   companyServiceCityPrice:     number | null;
   companyServiceDistrictPrice: number | null;
+  /** When true, this customer's package prices are all-in (service fee deducted in background). */
+  isCompanyServicePriceIncludedInPrice: boolean;
 }
 
 export interface AdminCustomer extends Customer {
@@ -63,6 +66,8 @@ export interface CustomerOrder {
   orderType: 'Send' | 'Return' | 'Exchange';
   productPaymentStatus: 'NotPaid' | 'Paid'; createdAt: string;
   companyServicePrice?: number;
+  /** True when amountToCollectForPackage is the all-in price (product + service fee bundled). */
+  isCompanyServicePriceIncluded?: boolean;
   amountToCollectForPackage?: number | null;
 }
 
@@ -202,7 +207,10 @@ export async function getCustomerById(id: string, token: string): Promise<Custom
 
 export async function setCustomerCompanyPrice(
   id: string,
-  prices: { capitalPrice: number | null; cityPrice: number | null; districtPrice: number | null },
+  prices: {
+    capitalPrice: number | null; cityPrice: number | null; districtPrice: number | null;
+    isCompanyServicePriceIncludedInPrice?: boolean;
+  },
   token: string
 ): Promise<void> {
   return handleEmpty(await fetch(`/api/customers/${id}/company-price`, {

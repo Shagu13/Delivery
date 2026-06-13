@@ -20,5 +20,7 @@ public sealed record AdminCustomerResponseDto(
     // Admin-only pricing tiers
     decimal? CompanyServiceCapitalPrice,
     decimal? CompanyServiceCityPrice,
-    decimal? CompanyServiceDistrictPrice
+    decimal? CompanyServiceDistrictPrice,
+    /// <summary>When true, this customer's package prices are all-in (service fee deducted in the background).</summary>
+    bool     IsCompanyServicePriceIncludedInPrice
 );

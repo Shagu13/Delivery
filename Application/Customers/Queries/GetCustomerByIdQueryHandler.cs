@@ -76,6 +76,7 @@ internal static class CustomerProjection
         c.CreatedAt,
         c.CompanyServiceCapitalPrice,
         c.CompanyServiceCityPrice,
-        c.CompanyServiceDistrictPrice
+        c.CompanyServiceDistrictPrice,
+        c.IsCompanyServicePriceIncludedInPrice
     );
 }

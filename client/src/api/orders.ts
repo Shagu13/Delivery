@@ -70,6 +70,8 @@ export interface UpdateOrderRequest {
     productPaymentStatus: string;       // "Paid" | "NotPaid"
     amountToCollectForPackage: number | null;
     companyServicePrice: number;
+    /** True when amountToCollectForPackage is the all-in price (product + service fee bundled). */
+    isCompanyServicePriceIncluded: boolean;
     courierSalary: number | null;
     orderType?: string | null;
     returnPickupCity?: string | null;

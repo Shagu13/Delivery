@@ -26,6 +26,9 @@ interface PackageCardProps {
   senderAddress?: { city: string; district: string; address: string } | null;
   /** Flat lookup of all districts by name (EN + Geo) — used to rehydrate district on weight tier change after layout switch */
   districtLookup?: Record<string, District>;
+  /** When the customer has account-level "service included in price", the per-package
+   *  checkbox is hidden and every package is treated as all-in. */
+  serviceIncludedForced?: boolean;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
 }
@@ -88,6 +91,7 @@ export function PackageCard({
   weightTiers = [],
   senderAddress,
   districtLookup = {},
+  serviceIncludedForced = false,
   onChange,
   onRemove,
 }: PackageCardProps) {
@@ -125,6 +129,8 @@ export function PackageCard({
   };
 
   const showCollectAmount = data.productPaymentStatus === 'NotPaid';
+  // All-in pricing: the entered price already includes the company service fee.
+  const serviceIncluded = serviceIncludedForced || !!data.isCompanyServicePriceIncluded;
   const isReturn   = data.orderType === 'Return';
   const isExchange = data.orderType === 'Exchange';
   const typeStyle  = ORDER_TYPE_STYLE[data.orderType ?? 'Send'];
@@ -490,6 +496,43 @@ export function PackageCard({
 
             {showCollectAmount ? (
               <>
+              {!serviceIncludedForced && (
+                <label className="package-card__fragile-toggle" style={{ marginBottom: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!data.isCompanyServicePriceIncluded}
+                    onChange={e => onChange(index, 'isCompanyServicePriceIncluded', e.target.checked)}
+                  />
+                  <span>{t.cgoServiceIncluded}</span>
+                </label>
+              )}
+
+              {serviceIncluded ? (
+                <div className="form-field">
+                  <label className="form-field__label">
+                    {t.cgoPriceAllIn} <span className="form-field__required">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="form-field__input"
+                    value={data.amountToCollectForPackage ?? ''}
+                    onChange={e => {
+                      const val = parseFloat(e.target.value);
+                      onChange(index, 'amountToCollectForPackage', isNaN(val) ? 0 : val);
+                    }}
+                    placeholder="e.g. 100.00"
+                  />
+                  <p className="form-field__hint" style={{ marginTop: 4, fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                    {t.cgoPriceAllInHint}
+                  </p>
+                  {fieldError('amountToCollectForPackage') && (
+                    <p className="form-field__error">{fieldError('amountToCollectForPackage')}</p>
+                  )}
+                </div>
+              ) : (
+              <>
               <div className="grid grid--2">
                 <div className="form-field">
                   <label className="form-field__label">
@@ -549,6 +592,8 @@ export function PackageCard({
                   {t.cgoTotalPriceHint}
                 </p>
               </div>
+              </>
+              )}
               </>
             ) : (
               <div className="form-field">

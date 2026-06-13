@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FormField } from '../../components/ui/FormField';
+import { GeorgianPhoneField, sanitizeGeorgianMobile, isValidGeorgianMobile } from '../../components/ui/GeorgianPhoneField';
 import { updateMyOrder, CustomerApiError } from '../../api/customers';
 import type { CustomerOrder } from '../../api/customers';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -31,9 +32,15 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
     if (!order) return;
     setFirstName(order.recipientFirstName);
     setLastName(order.recipientLastName);
-    setPhone(order.recipientPhone);
+    setPhone(sanitizeGeorgianMobile(order.recipientPhone));
     setAddress(order.recipientAddress);
-    setCod(order.amountToCollectForPackage != null ? String(order.amountToCollectForPackage) : '');
+    // For "service included" orders the customer works with the all-in price, so show
+    // product COD + service fee in the single field (the backend re-splits on save).
+    const fee = order.companyServicePrice ?? 0;
+    const shownCod = order.isCompanyServicePriceIncluded
+      ? (order.amountToCollectForPackage ?? 0) + fee
+      : order.amountToCollectForPackage;
+    setCod(shownCod != null ? String(shownCod) : '');
     setError(null);
     setErrors({});
   }, [order]);
@@ -64,11 +71,15 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
     if (!firstName.trim()) e.recipientFirstName = t.errFirstNameRequired;
     if (!lastName.trim())  e.recipientLastName  = t.errLastNameRequired;
     if (!phone.trim())     e.recipientPhone     = t.errPhoneRequired;
+    else if (!isValidGeorgianMobile(phone)) e.recipientPhone = t.cgoErrInvalidPhone;
     if (!address.trim())   e.recipientAddress   = t.errAddressRequired;
     // COD is required and must be > 0 for unpaid parcels — mirrors the create form.
     if (isUnpaid) {
       const n = parseFloat(cod);
       if (!cod.trim() || isNaN(n) || n <= 0) e.amountToCollectForPackage = t.cgoErrParcelPrice;
+      // All-in price must cover the service fee that the backend deducts.
+      else if (order.isCompanyServicePriceIncluded && n < (order.companyServicePrice ?? 0))
+        e.amountToCollectForPackage = t.cgoErrPriceBelowFee;
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -142,12 +153,12 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
             />
           </div>
 
-          <FormField
-            label={t.ceoPhone} required type="tel"
+          <GeorgianPhoneField
+            label={t.ceoPhone} required
             value={phone}
-            onChange={e => { setPhone(e.target.value); clearErr('recipientPhone'); }}
+            onValueChange={v => { setPhone(v); clearErr('recipientPhone'); }}
             error={errors.recipientPhone}
-            placeholder="5XX XXX XXX" maxLength={9}
+            invalidMessage={t.cgoErrInvalidPhone}
           />
 
           <FormField
@@ -160,7 +171,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
 
           {isUnpaid && (
             <FormField
-              label={t.ceoCod} type="number"
+              label={order.isCompanyServicePriceIncluded ? t.cgoPriceAllIn : t.ceoCod} type="number"
               value={cod}
               onChange={e => { setCod(e.target.value); clearErr('amountToCollectForPackage'); }}
               error={errors.amountToCollectForPackage}

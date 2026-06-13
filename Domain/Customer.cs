@@ -43,6 +43,13 @@ public class Customer
     /// </summary>
     public decimal? CompanyServiceDistrictPrice { get; set; }
 
+    /// <summary>
+    /// When true, every order this customer places treats the entered package price as the
+    /// all-in amount (product + company service fee). The fee is deducted in the background,
+    /// so the per-order "service included" checkbox is forced on and hidden for this customer.
+    /// </summary>
+    public bool IsCompanyServicePriceIncludedInPrice { get; set; } = false;
+
     // ── Account status ───────────────────────────────────────────────────────
     public bool     IsActive  { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

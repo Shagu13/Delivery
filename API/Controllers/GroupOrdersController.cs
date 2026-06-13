@@ -70,7 +70,8 @@ public sealed class GroupOrdersController : BaseController
                         CompanyServicePrice:       o.CompanyServicePrice,
                         WeightPriceTierId:         o.WeightPriceTierId,
                         Latitude:                  o.Latitude,
-                        Longitude:                 o.Longitude))
+                        Longitude:                 o.Longitude,
+                        IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded))
                     .ToList(),
                 CustomerId: customerId
             )
@@ -413,7 +414,8 @@ public sealed class GroupOrdersController : BaseController
                 "გადახდის სტატუსი",
                 "ვინ იხდის სერვის საფასურს",
                 "მტვრევადია",
-                    "ამანათის ფასი (₾)"
+                    "ამანათის ფასი (₾)",
+                    "სერვისის საფასური ფასშია"
               ]
             : [
                 "RecipientFirstName",
@@ -426,10 +428,11 @@ public sealed class GroupOrdersController : BaseController
                 "PaymentStatus",
                 "WhoPaysForCourierFee",
                 "IsFragile",
-                "ParcelPrice (₾)"
+                "ParcelPrice (₾)",
+                "ServiceIncludedInPrice"
               ];
 
-        bool[] required = [true, true, true, true, true, true, false, true, true, true, false];
+        bool[] required = [true, true, true, true, true, true, false, true, true, true, false, false];
 
         for (int i = 0; i < headers.Length; i++)
         {
@@ -455,6 +458,7 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 9).Value = "მიმღები";
             ws.Cell(2, 10).Value = "არა";
             ws.Cell(2, 11).Value = 45.00;
+            ws.Cell(2, 12).Value = "არა";
         }
         else
         {
@@ -469,6 +473,7 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 9).Value = "Recipient";
             ws.Cell(2, 10).Value = "No";
             ws.Cell(2, 11).Value = 45.00;
+            ws.Cell(2, 12).Value = "No";
         }
 
         // The row-2 example is a placeholder. Grey/italic it via CONDITIONAL
@@ -538,6 +543,13 @@ public sealed class GroupOrdersController : BaseController
         fragileVal.ShowErrorMessage = true;
         fragileVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
         fragileVal.ErrorMessage = isGeo ? "აირჩიეთ: კი ან არა" : "Choose Yes or No";
+
+        // ── "Service fee included in price" dropdown (L2:L500) ─────────────────
+        var includedVal = ws.Range("L2:L500").CreateDataValidation();
+        includedVal.List(fragileOptions, true);   // same Yes/No (კი/არა) option list
+        includedVal.ShowErrorMessage = true;
+        includedVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
+        includedVal.ErrorMessage = isGeo ? "აირჩიეთ: კი ან არა" : "Choose Yes or No";
 
         ws.Columns().AdjustToContents();
         ws.SheetView.FreezeRows(1);
@@ -653,6 +665,12 @@ public sealed class GroupOrdersController : BaseController
                 fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
                 fragileRaw.Equals("კი", StringComparison.Ordinal);
 
+            // ── Col L: is the service fee already included in the parcel price? ──
+            var includedRaw = ws.Cell(row, 12).GetString().Trim();
+            var isServiceIncluded =
+                includedRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
+                includedRaw.Equals("კი", StringComparison.Ordinal);
+
             // ── City / district: normalise geo names → English canonical ──────
             var cellCity     = ws.Cell(row, 4).GetString().Trim();
             var cellDistrict = ws.Cell(row, 5).GetString().Trim();
@@ -676,8 +694,9 @@ public sealed class GroupOrdersController : BaseController
                 ProductPaymentStatus: paymentStatus,
                 WhoPaysForCompanyService: payer,
                 AmountToCollectForPackage: amountToCollect,
-                WeightPriceTierId: null
+                WeightPriceTierId: null,
                 // OrderType defaults to Send for Excel imports
+                IsCompanyServicePriceIncluded: isServiceIncluded
             ));
         }
 
@@ -735,6 +754,7 @@ public sealed class GroupOrdersController : BaseController
                 AmountOfCashCollected:            o.AmountOfCashCollected,
                 CourierSalary:                    o.CourierSalary,
                 CompanyServicePrice:              o.CompanyServicePrice,
+                IsCompanyServicePriceIncluded:    o.IsCompanyServicePriceIncluded,
                 CompanyRevenue:                   includeRevenue ? o.CompanyRevenue : null,
                 CourierId:                        o.CourierId,
                 CreatedAt:                        o.CreatedAt,

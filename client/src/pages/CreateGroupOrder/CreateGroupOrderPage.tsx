@@ -88,6 +88,7 @@ function validate(
     cities: City[],
     cityDistrictCache: Record<string, Set<string>>,
     t: Translations,
+    serviceIncludedForced: boolean,
 ): ValidationErrors {
     const errors: ValidationErrors = {};
 
@@ -139,6 +140,13 @@ function validate(
         if (pkg.productPaymentStatus === 'NotPaid') {
             if (!pkg.amountToCollectForPackage || pkg.amountToCollectForPackage <= 0) {
                 errors[`orders[${i}].amountToCollectForPackage`] = t.cgoErrParcelPrice;
+            } else if (
+                (serviceIncludedForced || pkg.isCompanyServicePriceIncluded) &&
+                pkg.companyServicePrice != null &&
+                pkg.amountToCollectForPackage < pkg.companyServicePrice
+            ) {
+                // All-in price must cover the service fee that will be deducted.
+                errors[`orders[${i}].amountToCollectForPackage`] = t.cgoErrPriceBelowFee;
             }
         }
 
@@ -173,6 +181,7 @@ export function CreateGroupOrderPage() {
     const [globalError,  setGlobalError]  = useState<string | null>(null);
     const [result,       setResult]       = useState<CreateGroupOrderResponse | null>(null);
     const [customerPricing, setCustomerPricing] = useState<Pick<Customer, 'companyServiceCapitalPrice' | 'companyServiceCityPrice' | 'companyServiceDistrictPrice'> | null>(null);
+    const [serviceIncludedForced, setServiceIncludedForced] = useState(false);
     const [senderAddress, setSenderAddress] = useState<{ city: string; district: string; address: string } | null>(null);
 
     const [excelImporting, setExcelImporting] = useState(false);
@@ -243,6 +252,7 @@ export function CreateGroupOrderPage() {
                     companyServiceCityPrice:     profile.companyServiceCityPrice,
                     companyServiceDistrictPrice: profile.companyServiceDistrictPrice,
                 });
+                setServiceIncludedForced(profile.isCompanyServicePriceIncludedInPrice);
                 setSenderAddress({ city: profile.city, district: profile.district, address: profile.address });
                 setPrefilled(true);
             } catch { /* ignore */ }
@@ -402,7 +412,7 @@ export function CreateGroupOrderPage() {
         e.preventDefault();
         setGlobalError(null);
 
-        const validationErrors = validate(sender, packages, cities, cityDistrictCache, t);
+        const validationErrors = validate(sender, packages, cities, cityDistrictCache, t, serviceIncludedForced);
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
             scrollToTopError();
@@ -430,6 +440,7 @@ export function CreateGroupOrderPage() {
                     whoPaysForCompanyService: p.productPaymentStatus === 'NotPaid' ? 'Recipient' : p.whoPaysForCompanyService,
                     amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
                     companyServicePrice: p.companyServicePrice ?? undefined,
+                    isCompanyServicePriceIncluded: serviceIncludedForced || !!p.isCompanyServicePriceIncluded,
                     weightPriceTierId: p.weightPriceTierId || undefined,
                     orderType: p.orderType,
                     returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
@@ -684,6 +695,7 @@ export function CreateGroupOrderPage() {
                                             weightTiers={weightTiers}
                                             senderAddress={senderAddress}
                                             districtLookup={districtLookup}
+                                            serviceIncludedForced={serviceIncludedForced}
                                             onChange={handlePackageChange}
                                             onRemove={removePackage}
                                         />
@@ -699,6 +711,7 @@ export function CreateGroupOrderPage() {
                                     weightTiers={weightTiers}
                                     senderAddress={senderAddress}
                                     districtLookup={districtLookup}
+                                    serviceIncludedForced={serviceIncludedForced}
                                     onChange={handlePackageChange}
                                     onRemove={removePackage}
                                 />

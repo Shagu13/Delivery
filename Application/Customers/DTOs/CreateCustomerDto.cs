@@ -20,5 +20,8 @@ public sealed record CreateCustomerDto(
 
     // Login — Email becomes UserName in Identity
     string Email,
-    string Password
+    string Password,
+
+    /// <summary>When true, this customer's package prices are all-in (service fee deducted in background).</summary>
+    bool IsCompanyServicePriceIncludedInPrice = false
 );

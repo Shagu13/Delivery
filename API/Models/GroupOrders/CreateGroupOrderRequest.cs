@@ -45,5 +45,7 @@ public sealed record OrderItemRequest(
     Guid? WeightPriceTierId = null,
     /// <summary>Exact coordinates from a geocoded address pick; null when typed manually.</summary>
     double? Latitude = null,
-    double? Longitude = null
+    double? Longitude = null,
+    /// <summary>True when AmountToCollectForPackage is the all-in price (product + service fee bundled).</summary>
+    bool IsCompanyServicePriceIncluded = false
 );

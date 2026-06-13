@@ -116,7 +116,8 @@ public sealed class OrdersController : BaseController
             ProductPaymentStatus:      payStatus,
             AmountToCollectForPackage: request.AmountToCollectForPackage,
             CompanyServicePrice:       request.CompanyServicePrice,
-            CourierSalary:             request.CourierSalary
+            CourierSalary:             request.CourierSalary,
+            IsCompanyServicePriceIncluded: request.IsCompanyServicePriceIncluded
         ), ct);
 
         return NoContent();
@@ -392,7 +393,8 @@ public sealed record UpdateOrderRequest(
     string   ProductPaymentStatus,      // "Paid" | "NotPaid"
     decimal? AmountToCollectForPackage,
     decimal  CompanyServicePrice,
-    decimal? CourierSalary
+    decimal? CourierSalary,
+    bool     IsCompanyServicePriceIncluded = false
 );
 
 public sealed record CustomerUpdateOrderRequest(

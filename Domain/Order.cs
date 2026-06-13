@@ -108,6 +108,15 @@ public class Order
     /// <summary>When the sender-paid service fee payment was recorded. Null until paid.</summary>
     public DateTime? ServicePaidByCustomerAt      { get; set; }
 
+    /// <summary>
+    /// When true, the price the sender entered for this package was the all-in amount
+    /// (product + company service fee bundled). The service fee is resolved separately
+    /// and subtracted, so <see cref="AmountToCollectForPackage"/> stores only the product
+    /// portion and <see cref="CompanyServicePrice"/> the fee. When false (default), the
+    /// entered price is the product price and the fee is added on top as today.
+    /// </summary>
+    public bool IsCompanyServicePriceIncluded { get; set; } = false;
+
     // ── Financials (admin-managed) ───────────────────────────────────────────
     public decimal CompanyServicePrice { get; set; } = 0;
     public decimal? CourierSalary { get; set; }

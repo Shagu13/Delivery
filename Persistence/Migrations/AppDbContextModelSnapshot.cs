@@ -306,6 +306,9 @@ namespace Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsCompanyServicePriceIncludedInPrice")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -603,6 +606,9 @@ namespace Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsCollectedCodPaidToCustomer")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCompanyServicePriceIncluded")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsFragile")

@@ -67,7 +67,6 @@ export function GeorgianPhoneField({
           value={value}
           onChange={e => onValueChange(sanitizeGeorgianMobile(e.target.value))}
           placeholder="5XXXXXXXX"
-          maxLength={9}
         />
       </div>
       {shownError && <span className="form-field__error">{shownError}</span>}

@@ -28,6 +28,8 @@ public sealed record UpdateOrderCommand(
     // Financials
     decimal       CompanyServicePrice,
     decimal?      CourierSalary,
+    /// <summary>True when AmountToCollectForPackage is the all-in price (product + service fee bundled).</summary>
+    bool          IsCompanyServicePriceIncluded,
     // Order type & return address
     OrderType     OrderType            = OrderType.Send,
     string?       ReturnPickupAddress  = null,

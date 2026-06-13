@@ -100,6 +100,7 @@ public sealed class GetAllGroupOrdersQueryHandler
                     AmountOfCashCollected:            o.AmountOfCashCollected,
                     CourierSalary:                    o.CourierSalary,
                     CompanyServicePrice:              o.CompanyServicePrice,
+                    IsCompanyServicePriceIncluded:    o.IsCompanyServicePriceIncluded,
                     CompanyRevenue:                   o.CompanyRevenue,
                     CourierId:                        o.CourierId,
                     CreatedAt:                        o.CreatedAt,

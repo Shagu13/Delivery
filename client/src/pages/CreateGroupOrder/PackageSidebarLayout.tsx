@@ -23,6 +23,8 @@ interface Props {
   senderAddress?: { city: string; district: string; address: string } | null;
   /** Flat lookup of all districts by name (EN + Geo) — used to rehydrate district on weight tier change after layout switch */
   districtLookup?: Record<string, District>;
+  /** When the customer's account forces all-in pricing, the per-package checkbox is hidden. */
+  serviceIncludedForced?: boolean;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
 }
@@ -100,6 +102,7 @@ interface DetailProps {
   weightTiers: WeightPriceTier[];
   senderAddress?: { city: string; district: string; address: string } | null;
   districtLookup: Record<string, District>;
+  serviceIncludedForced: boolean;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
   onPrev: () => void;
@@ -111,13 +114,15 @@ interface DetailProps {
 
 function PackageDetail({
   index, pkg, errors, canRemove, customerPricing, weightTiers,
-  senderAddress, districtLookup, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
+  senderAddress, districtLookup, serviceIncludedForced, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
 }: DetailProps) {
   const { t, lang } = useLanguage();
   const fe = (f: string) => errors[`orders[${index}].${f}`];
   const isReturn   = pkg.orderType === 'Return';
   const isExchange = pkg.orderType === 'Exchange';
   const showCOD    = pkg.productPaymentStatus === 'NotPaid';
+  // All-in pricing: the entered price already includes the company service fee.
+  const serviceIncluded = serviceIncludedForced || !!pkg.isCompanyServicePriceIncluded;
 
   const [selectedDistrict,       setSelectedDistrict]       = useState<District | null>(null);
   const [selectedReturnDistrict, setSelectedReturnDistrict] = useState<District | null>(null);
@@ -400,7 +405,33 @@ function PackageDetail({
             )}
           </div>
 
-          {showCOD && (
+          {showCOD && !serviceIncludedForced && (
+            <label className="package-card__fragile-toggle" style={{ marginBottom: 2 }}>
+              <input
+                type="checkbox"
+                checked={!!pkg.isCompanyServicePriceIncluded}
+                onChange={e => onChange(index, 'isCompanyServicePriceIncluded', e.target.checked)}
+              />
+              <span>{t.cgoServiceIncluded}</span>
+            </label>
+          )}
+
+          {showCOD && serviceIncluded && (
+            <div className="form-field">
+              <label className="form-field__label">{t.cgoPriceAllIn} <span className="form-field__required">*</span></label>
+              <input
+                type="number" min={0} step="0.01"
+                className="form-field__input"
+                value={pkg.amountToCollectForPackage ?? ''}
+                onChange={e => { const v = parseFloat(e.target.value); onChange(index, 'amountToCollectForPackage', isNaN(v) ? 0 : v); }}
+                placeholder="e.g. 100.00"
+              />
+              {fe('amountToCollectForPackage') && <p className="form-field__error">{fe('amountToCollectForPackage')}</p>}
+              <p className="form-field__hint">{t.cgoPriceAllInHint}</p>
+            </div>
+          )}
+
+          {showCOD && !serviceIncluded && (
             <div className="psl-grid psl-grid--2">
               <div className="form-field">
                 <label className="form-field__label">{t.cgoParcelPrice} <span className="form-field__required">*</span></label>
@@ -428,7 +459,7 @@ function PackageDetail({
             </div>
           )}
 
-          {showCOD && (
+          {showCOD && !serviceIncluded && (
             <div className="form-field">
               <label className="form-field__label">{t.cgoTotalPrice}</label>
               <input
@@ -468,7 +499,7 @@ function PackageDetail({
 
 // ── Main sidebar component ────────────────────────────────────────────────────
 
-export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, districtLookup = {}, onChange, onRemove }: Props) {
+export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, districtLookup = {}, serviceIncludedForced = false, onChange, onRemove }: Props) {
   const { t } = useLanguage();
   const [activeIndex, setActiveIndex] = useState(0);
   const [listCollapsed, setListCollapsed] = useState(false);
@@ -599,6 +630,7 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
           weightTiers={weightTiers}
           senderAddress={senderAddress}
           districtLookup={districtLookup}
+          serviceIncludedForced={serviceIncludedForced}
           onChange={onChange}
           onRemove={handleRemove}
           onPrev={() => setActiveIndex(i => i - 1)}

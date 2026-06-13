@@ -4,6 +4,7 @@ import { updateOrder, adminMarkOrderDelivered, adminMarkReturnAtWarehouse, assig
 import type { AdminOrderItem } from './AdminOrdersPage';
 import type { Courier } from '../../api/couriers';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { GeorgianPhoneField, sanitizeGeorgianMobile, isValidGeorgianMobile } from '../../components/ui/GeorgianPhoneField';
 import { useLanguage } from '../../contexts/useLanguage';
 
 interface Props {
@@ -32,6 +33,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
     const [payStatus,   setPayStatus]   = useState('NotPaid');
     const [codAmount,   setCodAmount]   = useState('');
     const [svcPrice,    setSvcPrice]    = useState('');
+    const [svcIncluded, setSvcIncluded] = useState(false);
     const [salary,      setSalary]      = useState('');
 
     // Return/Exchange fields
@@ -73,7 +75,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         if (!order) return;
         setFirstName(order.recipientFirstName);
         setLastName(order.recipientLastName);
-        setPhone(order.recipientPhone);
+        setPhone(sanitizeGeorgianMobile(order.recipientPhone));
         setCity(order.recipientCity);
         setDistrict(order.recipientDistrict);
         setAddress(order.recipientAddress);
@@ -81,8 +83,17 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         setIsFragile(order.isFragile);
         setPayer(order.whoPaysForCompanyService);
         setPayStatus(order.productPaymentStatus);
-        setCodAmount(order.amountToCollectForPackage != null ? String(order.amountToCollectForPackage) : '');
+        // For "service included" orders the admin works with the all-in price: show
+        // product COD + service fee in the COD field (the backend re-splits on save).
+        setCodAmount(
+            order.amountToCollectForPackage != null
+                ? String(order.isCompanyServicePriceIncluded
+                    ? order.amountToCollectForPackage + order.companyServicePrice
+                    : order.amountToCollectForPackage)
+                : ''
+        );
         setSvcPrice(String(order.companyServicePrice));
+        setSvcIncluded(order.isCompanyServicePriceIncluded);
         setSalary(order.courierSalary != null ? String(order.courierSalary) : '');
         setOrderType(order.orderType ?? 'Send');
         setReturnCity(order.returnPickupCity ?? '');
@@ -147,6 +158,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         if (!firstName.trim()) e.firstName = t.errFirstNameRequired;
         if (!lastName.trim())  e.lastName  = t.errLastNameRequired;
         if (!phone.trim())     e.phone     = t.errPhoneRequired;
+        else if (!isValidGeorgianMobile(phone)) e.phone = t.cgoErrInvalidPhone;
         if (!city.trim())      e.city      = t.errCityRequired;
         if (!district.trim())  e.district  = t.errDistrictRequired;
         if (!address.trim())   e.address   = t.errAddressRequired;
@@ -155,6 +167,8 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         if (payStatus === 'NotPaid' && codAmount.trim()) {
             const n = parseFloat(codAmount);
             if (isNaN(n) || n < 0) e.codAmount = t.eomErrInvalidAmount;
+            // All-in price must cover the service fee that the backend deducts.
+            else if (svcIncluded && n < (parseFloat(svcPrice) || 0)) e.codAmount = t.cgoErrPriceBelowFee;
         }
 
         // Company service price (financials tab) — required, non-negative.
@@ -213,6 +227,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                 productPaymentStatus:      payStatus,
                 amountToCollectForPackage: codAmount ? parseFloat(codAmount) : null,
                 companyServicePrice:       parseFloat(svcPrice) || 0,
+                isCompanyServicePriceIncluded: svcIncluded,
                 courierSalary:             salary ? parseFloat(salary) : null,
                 orderType,
                 returnPickupCity:          isReturn ? returnCity.trim() || null     : null,
@@ -308,9 +323,16 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                 <Field label={t.eomLastName} required error={errors.lastName}>
                                     <input className="eom-input" value={lastName} onChange={e => { setLastName(e.target.value); clearErr('lastName'); }} />
                                 </Field>
-                                <Field label={t.eomPhone} required className="eom-col-2" error={errors.phone}>
-                                    <input className="eom-input" type="tel" value={phone} onChange={e => { setPhone(e.target.value); clearErr('phone'); }} />
-                                </Field>
+                                <div className="eom-col-2">
+                                    <GeorgianPhoneField
+                                        label={t.eomPhone}
+                                        required
+                                        value={phone}
+                                        onValueChange={v => { setPhone(v); clearErr('phone'); }}
+                                        error={errors.phone}
+                                        invalidMessage={t.cgoErrInvalidPhone}
+                                    />
+                                </div>
 
                                 <Field label={t.eomDeliveryCity} required className="eom-col-2">
                                     <CityDistrictPicker
@@ -342,7 +364,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                     </select>
                                 </Field>
                                 {payStatus === 'NotPaid' && (
-                                    <Field label={t.eomCodAmount} className="eom-col-2" error={errors.codAmount}>
+                                    <Field label={svcIncluded ? t.cgoPriceAllIn : t.eomCodAmount} className="eom-col-2" error={errors.codAmount}>
                                         <div className="eom-currency-wrap">
                                             <span className="eom-currency">₾</span>
                                             <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={codAmount} onChange={e => { setCodAmount(e.target.value); clearErr('codAmount'); }} placeholder="0.00" />
@@ -460,6 +482,31 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         <span className="eom-hint">{t.eomRevenueHint}</span>
                                     </div>
                                 )}
+                                <div className="eom-col-2">
+                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={svcIncluded}
+                                            onChange={e => {
+                                                const on = e.target.checked;
+                                                setSvcIncluded(on);
+                                                // Keep the COD field meaningful: convert between net and all-in
+                                                // using the current service fee so the displayed number is correct.
+                                                const fee = parseFloat(svcPrice) || 0;
+                                                const cur = parseFloat(codAmount);
+                                                if (!isNaN(cur) && fee > 0) {
+                                                    setCodAmount(String(on ? cur + fee : Math.max(0, cur - fee)));
+                                                }
+                                                clearErr('codAmount');
+                                            }}
+                                        />
+                                        <span style={{ fontSize: '0.82rem', lineHeight: 1.4 }}>
+                                            {t.cgoServiceIncluded}
+                                            <br />
+                                            <span className="eom-hint">{t.cgoServiceIncludedHint}</span>
+                                        </span>
+                                    </label>
+                                </div>
                             </div>
                         </fieldset>
                     )}

@@ -22,5 +22,7 @@ public sealed record CustomerResponseDto(
     // Negotiated company service pricing tiers (null = use district default)
     decimal? CompanyServiceCapitalPrice,
     decimal? CompanyServiceCityPrice,
-    decimal? CompanyServiceDistrictPrice
+    decimal? CompanyServiceDistrictPrice,
+    /// <summary>When true, this customer's package prices are all-in; the per-order checkbox is forced on and hidden.</summary>
+    bool     IsCompanyServicePriceIncludedInPrice
 );

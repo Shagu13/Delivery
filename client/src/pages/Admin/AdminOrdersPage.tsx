@@ -38,6 +38,7 @@ export interface AdminOrderItem {
   productPaymentStatus: string;
   whoPaysForCompanyService: string;
   companyServicePrice: number;
+  isCompanyServicePriceIncluded: boolean;
   courierSalary: number | null;
   companyRevenue: number | null;
   amountToCollectForPackage: number | null;

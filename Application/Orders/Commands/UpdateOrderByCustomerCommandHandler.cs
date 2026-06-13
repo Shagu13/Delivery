@@ -36,9 +36,29 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
         order.RecipientAddress   = request.RecipientAddress.Trim();
 
         // COD only applies to unpaid parcels; ignore any value for already-paid products.
-        order.AmountToCollectForPackage = order.ProductPaymentStatus == PaymentStatus.NotPaid
-            ? request.AmountToCollectForPackage
-            : null;
+        if (order.ProductPaymentStatus != PaymentStatus.NotPaid)
+        {
+            order.AmountToCollectForPackage = null;
+        }
+        // For "service included" orders the customer enters the all-in price; subtract the
+        // (admin-resolved, immutable here) service fee so only the product portion is stored.
+        else if (order.IsCompanyServicePriceIncluded && request.AmountToCollectForPackage is decimal gross)
+        {
+            if (gross < order.CompanyServicePrice)
+            {
+                throw new Application.Common.Exceptions.ValidationException(new[]
+                {
+                    new FluentValidation.Results.ValidationFailure(
+                        nameof(request.AmountToCollectForPackage),
+                        $"The all-in price ({gross:0.##}) is less than the service fee ({order.CompanyServicePrice:0.##}).")
+                });
+            }
+            order.AmountToCollectForPackage = gross - order.CompanyServicePrice;
+        }
+        else
+        {
+            order.AmountToCollectForPackage = request.AmountToCollectForPackage;
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
 

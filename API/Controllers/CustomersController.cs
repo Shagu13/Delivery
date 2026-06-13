@@ -46,7 +46,8 @@ public sealed class CustomersController : BaseController
             request.FirstName, request.LastName, request.IdNumber,
             request.BusinessName, request.PhoneNumber,
             request.City, request.District, request.Address,
-            request.Email, request.Password), ct);
+            request.Email, request.Password,
+            request.IsCompanyServicePriceIncludedInPrice), ct);
 
         return CreatedAtAction(nameof(GetById), new { id = customerId },
             new CreateCustomerResponse(customerId, request.Email,
@@ -145,7 +146,8 @@ public sealed class CustomersController : BaseController
             id,
             request.CapitalPrice,
             request.CityPrice,
-            request.DistrictPrice), ct);
+            request.DistrictPrice,
+            request.IsCompanyServicePriceIncludedInPrice), ct);
         return NoContent();
     }
 
@@ -162,14 +164,17 @@ public sealed class CustomersController : BaseController
         string firstName, string lastName, string? idNumber,
         string businessName, string phoneNumber,
         string city, string district, string address,
-        string email, string password) =>
+        string email, string password,
+        bool isCompanyServicePriceIncludedInPrice = false) =>
         new(new CreateCustomerDto(firstName, lastName, idNumber,
-            businessName, phoneNumber, city, district, address, email, password));
+            businessName, phoneNumber, city, district, address, email, password,
+            isCompanyServicePriceIncludedInPrice));
 }
 
 // ── Request model ─────────────────────────────────────────────────────────────
 public sealed record SetCompanyPriceRequest(
     decimal? CapitalPrice,
     decimal? CityPrice,
-    decimal? DistrictPrice
+    decimal? DistrictPrice,
+    bool     IsCompanyServicePriceIncludedInPrice = false
 );

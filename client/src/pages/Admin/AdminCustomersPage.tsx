@@ -14,6 +14,7 @@ interface EditState {
   capitalPrice:  string;
   cityPrice:     string;
   districtPrice: string;
+  included:      boolean;
 }
 
 function priceDisplay(v: number | null, defaultLabel: string) {
@@ -28,7 +29,7 @@ export default function AdminCustomersPage({ token }: Props) {
   const [totalPages, setTotalPages]     = useState(1);
   const [loading, setLoading]           = useState(false);
   const [editingId, setEditingId]       = useState<string | null>(null);
-  const [editState, setEditState]       = useState<EditState>({ capitalPrice: '', cityPrice: '', districtPrice: '' });
+  const [editState, setEditState]       = useState<EditState>({ capitalPrice: '', cityPrice: '', districtPrice: '', included: false });
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
 
@@ -56,6 +57,7 @@ export default function AdminCustomersPage({ token }: Props) {
       capitalPrice:  c.companyServiceCapitalPrice  != null ? String(c.companyServiceCapitalPrice)  : '',
       cityPrice:     c.companyServiceCityPrice     != null ? String(c.companyServiceCityPrice)     : '',
       districtPrice: c.companyServiceDistrictPrice != null ? String(c.companyServiceDistrictPrice) : '',
+      included:      c.isCompanyServicePriceIncludedInPrice,
     });
   }
 
@@ -67,6 +69,7 @@ export default function AdminCustomersPage({ token }: Props) {
         capitalPrice:  parse(editState.capitalPrice),
         cityPrice:     parse(editState.cityPrice),
         districtPrice: parse(editState.districtPrice),
+        isCompanyServicePriceIncludedInPrice: editState.included,
       };
       await setCustomerCompanyPrice(id, prices, token);
       setCustomers(prev => prev.map(c =>
@@ -75,6 +78,7 @@ export default function AdminCustomersPage({ token }: Props) {
           companyServiceCapitalPrice:  prices.capitalPrice,
           companyServiceCityPrice:     prices.cityPrice,
           companyServiceDistrictPrice: prices.districtPrice,
+          isCompanyServicePriceIncludedInPrice: prices.isCompanyServicePriceIncludedInPrice,
         } : c
       ));
       setEditingId(null);
@@ -115,7 +119,7 @@ export default function AdminCustomersPage({ token }: Props) {
             <tr style={{ background: '#f5f5f5' }}>
               {[
                 t.acupThBusiness, t.acupThName, t.acupThPhone, t.acupThCity, t.acupThDistrict, t.acupThEmail, t.acupThActive,
-                t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, '',
+                t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, t.acupThIncluded, '',
               ].map((h, i) => (
                 <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
                   {h}
@@ -157,6 +161,13 @@ export default function AdminCustomersPage({ token }: Props) {
                         onChange={e => setEditState(s => ({ ...s, districtPrice: e.target.value }))}
                       />
                     </td>
+                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={editState.included}
+                        onChange={e => setEditState(s => ({ ...s, included: e.target.checked }))}
+                      />
+                    </td>
                     <td style={{ padding: '0.6rem 0.75rem' }}>
                       <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button
@@ -175,6 +186,9 @@ export default function AdminCustomersPage({ token }: Props) {
                     <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCapitalPrice, t.acupDefault)}</td>
                     <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCityPrice, t.acupDefault)}</td>
                     <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceDistrictPrice, t.acupDefault)}</td>
+                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                      {c.isCompanyServicePriceIncludedInPrice ? t.acupYes : t.acupNo}
+                    </td>
                     <td style={{ padding: '0.6rem 0.75rem' }}>
                       <button
                         onClick={() => startEdit(c)}

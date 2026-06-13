@@ -140,6 +140,7 @@ public sealed class GetAllOrdersQueryHandler
                 ReturnPickupDistrict:     o.ReturnPickupDistrict,
                 AmountToCollectForPackage:o.AmountToCollectForPackage,
                 CompanyServicePrice:      o.CompanyServicePrice,
+                IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded,
                 CourierSalary:            o.CourierSalary,
                 CompanyRevenue:           o.CompanyRevenue,
                 CourierId:                o.CourierId,

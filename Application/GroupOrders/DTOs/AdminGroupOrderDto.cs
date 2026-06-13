@@ -60,6 +60,8 @@ public sealed record AdminOrderDto(
     decimal?      AmountOfCashCollected,
     decimal?      CourierSalary,
     decimal       CompanyServicePrice,
+    /// <summary>True when the package price was entered all-in (product + service fee bundled).</summary>
+    bool          IsCompanyServicePriceIncluded,
     decimal?      CompanyRevenue,
     // Last-mile courier (null until admin assigns for delivery)
     Guid?    CourierId,

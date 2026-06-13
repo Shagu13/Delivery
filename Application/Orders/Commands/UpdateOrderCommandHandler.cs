@@ -32,10 +32,32 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         // ── Payment ──────────────────────────────────────────────────────────
         order.WhoPaysForCompanyService  = request.WhoPaysForCompanyService;
         order.ProductPaymentStatus      = request.ProductPaymentStatus;
-        order.AmountToCollectForPackage = request.AmountToCollectForPackage;
 
         // ── Financials ───────────────────────────────────────────────────────
-        order.CompanyServicePrice = request.CompanyServicePrice;
+        order.CompanyServicePrice            = request.CompanyServicePrice;
+        order.IsCompanyServicePriceIncluded  = request.IsCompanyServicePriceIncluded;
+
+        // When the service fee is bundled into the entered price, the supplied COD is the
+        // all-in amount: subtract the fee so only the product portion is stored. Block
+        // rather than record a negative product price.
+        if (request.IsCompanyServicePriceIncluded && request.AmountToCollectForPackage is decimal gross)
+        {
+            if (gross < request.CompanyServicePrice)
+            {
+                throw new Application.Common.Exceptions.ValidationException(new[]
+                {
+                    new FluentValidation.Results.ValidationFailure(
+                        nameof(request.AmountToCollectForPackage),
+                        $"The all-in price ({gross:0.##}) is less than the service fee ({request.CompanyServicePrice:0.##}).")
+                });
+            }
+            order.AmountToCollectForPackage = gross - request.CompanyServicePrice;
+        }
+        else
+        {
+            order.AmountToCollectForPackage = request.AmountToCollectForPackage;
+        }
+
         order.CourierSalary       = request.CourierSalary;
 
         // Auto-recalculate company revenue when both values are set

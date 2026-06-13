@@ -9,7 +9,8 @@ public sealed record SetCustomerCompanyPriceCommand(
     Guid     CustomerId,
     decimal? CapitalPrice,
     decimal? CityPrice,
-    decimal? DistrictPrice
+    decimal? DistrictPrice,
+    bool     IsCompanyServicePriceIncludedInPrice = false
 ) : IRequest;
 
 public sealed class SetCustomerCompanyPriceCommandHandler
@@ -37,6 +38,7 @@ public sealed class SetCustomerCompanyPriceCommandHandler
         customer.CompanyServiceCapitalPrice  = request.CapitalPrice;
         customer.CompanyServiceCityPrice     = request.CityPrice;
         customer.CompanyServiceDistrictPrice = request.DistrictPrice;
+        customer.IsCompanyServicePriceIncludedInPrice = request.IsCompanyServicePriceIncludedInPrice;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

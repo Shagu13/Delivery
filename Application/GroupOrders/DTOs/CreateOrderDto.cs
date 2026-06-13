@@ -25,5 +25,10 @@ public sealed record CreateOrderDto(
     decimal?       CompanyServicePrice       = null,
     Guid?          WeightPriceTierId         = null,
     double?        Latitude                  = null,   // from geocoded address pick
-    double?        Longitude                 = null
+    double?        Longitude                 = null,
+    /// <summary>
+    /// True when AmountToCollectForPackage is the all-in price (product + service fee).
+    /// The resolved service fee is subtracted so only the product portion is stored as COD.
+    /// </summary>
+    bool           IsCompanyServicePriceIncluded = false
 );

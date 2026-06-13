@@ -1,3 +1,4 @@
+using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using Application.CustomerSettlements;
 using Application.GroupOrders.DTOs;
@@ -139,6 +140,28 @@ public sealed class CreateGroupOrderCommandHandler
                 amountToCollect = o.AmountToCollectForPackage;
             }
 
+            // ── "Service price included" handling ─────────────────────────────
+            // When the package price is entered all-in (per-order flag OR the customer
+            // is flagged at account level), the resolved service fee is the slice baked
+            // into that price: keep CompanyServicePrice as the fee and store only the
+            // product remainder as COD. Block rather than record a negative product price.
+            bool includeService = o.IsCompanyServicePriceIncluded
+                || customer?.IsCompanyServicePriceIncludedInPrice == true;
+
+            if (includeService && amountToCollect is decimal gross)
+            {
+                if (gross < companyServicePrice)
+                {
+                    throw new ValidationException(new[]
+                    {
+                        new FluentValidation.Results.ValidationFailure(
+                            $"orders[{i}].AmountToCollectForPackage",
+                            $"The all-in price ({gross:0.##}) is less than the service fee ({companyServicePrice:0.##}).")
+                    });
+                }
+                amountToCollect = gross - companyServicePrice;
+            }
+
             var order = new Order
             {
                 RecipientFirstName        = o.RecipientFirstName,
@@ -154,6 +177,7 @@ public sealed class CreateGroupOrderCommandHandler
                 AmountToCollectForPackage = amountToCollect,
                 TrackingNumber            = trackingNumbers[i],
                 CompanyServicePrice       = companyServicePrice,
+                IsCompanyServicePriceIncluded = includeService,
                 WeightPriceTierId         = o.WeightPriceTierId,
                 OrderType                 = o.OrderType,
                 ReturnPickupAddress       = o.OrderType == OrderType.Return ? o.ReturnPickupAddress  : null,

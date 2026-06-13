@@ -28,7 +28,8 @@ public sealed record CreateCustomerRequest(
     [Required][MaxLength(100)]  string  District,
     [Required][MaxLength(250)]  string  Address,
     [Required][EmailAddress][MaxLength(256)] string Email,
-    [Required][MinLength(8)][MaxLength(100)] string Password
+    [Required][MinLength(8)][MaxLength(100)] string Password,
+    bool IsCompanyServicePriceIncludedInPrice = false
 );
 
 // ── Profile update ────────────────────────────────────────────────────────────
