@@ -9,8 +9,7 @@ namespace Application.CustomerSettlements.DTOs;
 public sealed record OrderFinanceLineDto(
     Guid    OrderId,
     string  TrackingNumber,
-    string  RecipientFirstName,
-    string  RecipientLastName,
+    string  RecipientName,
     string  RecipientCity,
     string  OrderType,
     string  Status,

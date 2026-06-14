@@ -7,8 +7,7 @@ namespace Application.GroupOrders.DTOs;
 /// One of these becomes one Order row with its own tracking number.
 /// </summary>
 public sealed record CreateOrderDto(
-    string RecipientFirstName,
-    string RecipientLastName,
+    string RecipientName,
     string RecipientPhone,
     string RecipientCity,
     string RecipientDistrict,

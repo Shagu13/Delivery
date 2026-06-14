@@ -18,8 +18,7 @@ public sealed record CreateGroupOrderRequest(
 );
 
 public sealed record OrderItemRequest(
-    string RecipientFirstName,
-    string RecipientLastName,
+    string RecipientName,
     string RecipientPhone,
     string RecipientCity,
     string RecipientDistrict,

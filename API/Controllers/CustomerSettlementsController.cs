@@ -113,7 +113,7 @@ public sealed class CustomerSettlementsController : BaseController
         row++; // blank
 
         // ── Column headers ───────────────────────────────────────────────────
-        string[] headers = ["#", "Tracking #", "First Name", "Last Name", "Phone",
+        string[] headers = ["#", "Tracking #", "Name", "Phone",
             "City", "District", "Address", "Type", "Status",
             "Payment", "Who Pays Service", "COD (₾)", "Service (₾)", "Delivered"];
 
@@ -135,24 +135,23 @@ public sealed class CustomerSettlementsController : BaseController
         {
             ws.Cell(row,  1).Value = orderNum++;
             ws.Cell(row,  2).Value = order.TrackingNumber;
-            ws.Cell(row,  3).Value = order.RecipientFirstName;
-            ws.Cell(row,  4).Value = order.RecipientLastName;
-            ws.Cell(row,  5).Value = order.RecipientPhone;
-            ws.Cell(row,  6).Value = order.RecipientCity;
-            ws.Cell(row,  7).Value = order.RecipientDistrict;
-            ws.Cell(row,  8).Value = order.RecipientAddress;
-            ws.Cell(row,  9).Value = order.OrderType;
-            ws.Cell(row, 10).Value = order.Status;
-            ws.Cell(row, 11).Value = order.ProductPaymentStatus;
-            ws.Cell(row, 12).Value = order.WhoPaysServiceFee;
+            ws.Cell(row,  3).Value = order.RecipientName;
+            ws.Cell(row,  4).Value = order.RecipientPhone;
+            ws.Cell(row,  5).Value = order.RecipientCity;
+            ws.Cell(row,  6).Value = order.RecipientDistrict;
+            ws.Cell(row,  7).Value = order.RecipientAddress;
+            ws.Cell(row,  8).Value = order.OrderType;
+            ws.Cell(row,  9).Value = order.Status;
+            ws.Cell(row, 10).Value = order.ProductPaymentStatus;
+            ws.Cell(row, 11).Value = order.WhoPaysServiceFee;
             if (order.CodAmount.HasValue)
             {
-                ws.Cell(row, 13).Value = order.CodAmount.Value;
-                ws.Cell(row, 13).Style.NumberFormat.Format = "#,##0.00";
+                ws.Cell(row, 12).Value = order.CodAmount.Value;
+                ws.Cell(row, 12).Style.NumberFormat.Format = "#,##0.00";
             }
-            ws.Cell(row, 14).Value = order.ServiceFee;
-            ws.Cell(row, 14).Style.NumberFormat.Format = "#,##0.00";
-            ws.Cell(row, 15).Value = order.DeliveredAt ?? string.Empty;
+            ws.Cell(row, 13).Value = order.ServiceFee;
+            ws.Cell(row, 13).Style.NumberFormat.Format = "#,##0.00";
+            ws.Cell(row, 14).Value = order.DeliveredAt ?? string.Empty;
             row++;
         }
 
@@ -163,25 +162,25 @@ public sealed class CustomerSettlementsController : BaseController
 
         if (data.Orders.Count > 0)
         {
+            ws.Cell(row, 12).FormulaA1 = $"=SUM(L{firstDataRow}:L{lastDataRow})";
             ws.Cell(row, 13).FormulaA1 = $"=SUM(M{firstDataRow}:M{lastDataRow})";
-            ws.Cell(row, 14).FormulaA1 = $"=SUM(N{firstDataRow}:N{lastDataRow})";
         }
         else
         {
+            ws.Cell(row, 12).Value = 0m;
             ws.Cell(row, 13).Value = 0m;
-            ws.Cell(row, 14).Value = 0m;
         }
 
-        foreach (int col in (int[])[2, 13, 14])
+        foreach (int col in (int[])[2, 12, 13])
         {
             ws.Cell(row, col).Style.Font.Bold = true;
             ws.Cell(row, col).Style.Fill.BackgroundColor = XLColor.FromArgb(0xEE, 0xEE, 0xEE);
         }
+        ws.Cell(row, 12).Style.NumberFormat.Format = "#,##0.00";
         ws.Cell(row, 13).Style.NumberFormat.Format = "#,##0.00";
-        ws.Cell(row, 14).Style.NumberFormat.Format = "#,##0.00";
 
         ws.Columns().AdjustToContents();
-        ws.Column(8).Width = Math.Max(ws.Column(8).Width, 20);
+        ws.Column(7).Width = Math.Max(ws.Column(7).Width, 20);
 
         using MemoryStream ms = new();
         workbook.SaveAs(ms);

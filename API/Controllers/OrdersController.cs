@@ -53,8 +53,7 @@ public sealed class OrdersController : BaseController
             OrderId:                result.OrderId,
             TrackingNumber:         result.TrackingNumber,
             Status:                 result.Status.ToString(),
-            RecipientFirstName:     result.RecipientFirstName,
-            RecipientLastName:      result.RecipientLastName,
+            RecipientName:          result.RecipientName,
             RecipientCity:          result.RecipientCity,
             RecipientDistrict:      result.RecipientDistrict,
             RecipientAddress:       result.RecipientAddress,
@@ -104,8 +103,7 @@ public sealed class OrdersController : BaseController
 
         await Sender.Send(new UpdateOrderCommand(
             OrderId:                   id,
-            RecipientFirstName:        request.RecipientFirstName,
-            RecipientLastName:         request.RecipientLastName,
+            RecipientName:             request.RecipientName,
             RecipientPhone:            request.RecipientPhone,
             RecipientCity:             request.RecipientCity,
             RecipientDistrict:         request.RecipientDistrict,
@@ -143,8 +141,7 @@ public sealed class OrdersController : BaseController
         await Sender.Send(new UpdateOrderByCustomerCommand(
             OrderId:                   id,
             CustomerId:                customerId,
-            RecipientFirstName:        request.RecipientFirstName,
-            RecipientLastName:         request.RecipientLastName,
+            RecipientName:             request.RecipientName,
             RecipientPhone:            request.RecipientPhone,
             RecipientAddress:          request.RecipientAddress,
             AmountToCollectForPackage: request.AmountToCollectForPackage
@@ -381,8 +378,7 @@ public sealed record SetCompanyServicePriceRequest(decimal Price);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);
 
 public sealed record UpdateOrderRequest(
-    string   RecipientFirstName,
-    string   RecipientLastName,
+    string   RecipientName,
     string   RecipientPhone,
     string   RecipientCity,
     string   RecipientDistrict,
@@ -398,8 +394,7 @@ public sealed record UpdateOrderRequest(
 );
 
 public sealed record CustomerUpdateOrderRequest(
-    string   RecipientFirstName,
-    string   RecipientLastName,
+    string   RecipientName,
     string   RecipientPhone,
     string   RecipientAddress,
     decimal? AmountToCollectForPackage

@@ -164,8 +164,7 @@ public sealed class CreateGroupOrderCommandHandler
 
             var order = new Order
             {
-                RecipientFirstName        = o.RecipientFirstName,
-                RecipientLastName         = o.RecipientLastName,
+                RecipientName             = o.RecipientName,
                 RecipientPhone            = o.RecipientPhone,
                 RecipientCity             = o.RecipientCity,
                 RecipientDistrict         = o.RecipientDistrict,
@@ -238,7 +237,7 @@ public sealed class CreateGroupOrderCommandHandler
             SenderBusinessName: groupOrder.SenderBusinessName,
             Orders: allOrders
                 .Select(o => new CreatedOrderDto(o.Id, o.TrackingNumber,
-                    o.RecipientFirstName, o.RecipientLastName))
+                    o.RecipientName))
                 .ToList()
         );
     }

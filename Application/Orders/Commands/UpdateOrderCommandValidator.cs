@@ -6,8 +6,7 @@ public sealed class UpdateOrderCommandValidator : AbstractValidator<UpdateOrderC
 {
     public UpdateOrderCommandValidator()
     {
-        RuleFor(x => x.RecipientFirstName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.RecipientLastName) .NotEmpty().MaximumLength(100);
+        RuleFor(x => x.RecipientName)     .NotEmpty().MaximumLength(201);
         RuleFor(x => x.RecipientPhone)    .NotEmpty().MaximumLength(30);
         RuleFor(x => x.RecipientCity)     .NotEmpty().MaximumLength(100);
         RuleFor(x => x.RecipientDistrict) .NotEmpty().MaximumLength(100);

@@ -59,7 +59,7 @@ export interface PagedResult<T> {
 
 export interface CustomerOrder {
   id: string; trackingNumber: string;
-  recipientFirstName: string; recipientLastName: string;
+  recipientName: string;
   recipientPhone: string; recipientCity: string; recipientCityGeo?: string;
   recipientDistrict: string; recipientDistrictGeo?: string; recipientAddress: string;
   description: string | null; status: string;
@@ -160,8 +160,7 @@ export async function cancelGroupOrder(groupOrderId: string, token: string): Pro
 }
 
 export interface UpdateMyOrderRequest {
-  recipientFirstName: string;
-  recipientLastName: string;
+  recipientName: string;
   recipientPhone: string;
   recipientAddress: string;
   amountToCollectForPackage: number | null;

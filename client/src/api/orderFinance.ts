@@ -4,8 +4,7 @@
 export interface OrderFinanceLine {
     orderId: string;
     trackingNumber: string;
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
     recipientCity: string;
     orderType: string;
     status: string;

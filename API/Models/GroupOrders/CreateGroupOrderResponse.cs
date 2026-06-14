@@ -19,6 +19,5 @@ public sealed record CreateGroupOrderResponse(
 public sealed record OrderTrackingResponse(
     Guid OrderId,
     string TrackingNumber,
-    string RecipientFirstName,
-    string RecipientLastName
+    string RecipientName
 );

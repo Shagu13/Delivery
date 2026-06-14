@@ -8,8 +8,7 @@ namespace Application.GroupOrders.DTOs;
 public sealed record OrderResponseDto(
     Guid   Id,
     string TrackingNumber,
-    string RecipientFirstName,
-    string RecipientLastName,
+    string RecipientName,
     string RecipientPhone,
     string RecipientCity,
     string RecipientDistrict,

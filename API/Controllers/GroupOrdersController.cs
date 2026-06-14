@@ -52,8 +52,7 @@ public sealed class GroupOrdersController : BaseController
                 Note: request.Note,
                 Orders: request.Orders
                     .Select(o => new CreateOrderDto(
-                        RecipientFirstName:        o.RecipientFirstName,
-                        RecipientLastName:         o.RecipientLastName,
+                        RecipientName:             o.RecipientName,
                         RecipientPhone:            o.RecipientPhone,
                         RecipientCity:             o.RecipientCity,
                         RecipientDistrict:         o.RecipientDistrict,
@@ -86,8 +85,7 @@ public sealed class GroupOrdersController : BaseController
                 .Select(o => new OrderTrackingResponse(
                     o.OrderId,
                     o.TrackingNumber,
-                    o.RecipientFirstName,
-                    o.RecipientLastName))
+                    o.RecipientName))
                 .ToList()
         );
 
@@ -404,8 +402,7 @@ public sealed class GroupOrdersController : BaseController
 
         string[] headers = isGeo
             ? [
-                "მიმღების სახელი",
-                "მიმღების გვარი",
+                "მიმღების სახელი და გვარი",
                 "მიმღების ტელეფონი",
                 "ქალაქი",
                 "რაიონი",
@@ -418,8 +415,7 @@ public sealed class GroupOrdersController : BaseController
                     "სერვისის საფასური ფასშია"
               ]
             : [
-                "RecipientFirstName",
-                "RecipientLastName",
+                "RecipientName",
                 "RecipientPhone",
                 "RecipientCity",
                 "RecipientDistrict",
@@ -432,7 +428,7 @@ public sealed class GroupOrdersController : BaseController
                 "ServiceIncludedInPrice"
               ];
 
-        bool[] required = [true, true, true, true, true, true, false, true, true, true, false, false];
+        bool[] required = [true, true, true, true, true, false, true, true, true, false, false];
 
         for (int i = 0; i < headers.Length; i++)
         {
@@ -447,33 +443,31 @@ public sealed class GroupOrdersController : BaseController
 
         if (isGeo)
         {
-            ws.Cell(2, 1).Value = "ანა";
-            ws.Cell(2, 2).Value = "სმიტი";
-            ws.Cell(2, 3).Value = "599123456";
-            ws.Cell(2, 4).Value = "თბილისი";
-            ws.Cell(2, 5).Value = "საბურთალო";
-            ws.Cell(2, 6).Value = "პეკინის გამზ. 42";
-            ws.Cell(2, 7).Value = "მტვრევადი – ფრთხილად";
-            ws.Cell(2, 8).Value = "გადასახდელი";
-            ws.Cell(2, 9).Value = "მიმღები";
-            ws.Cell(2, 10).Value = "არა";
-            ws.Cell(2, 11).Value = 45.00;
-            ws.Cell(2, 12).Value = "არა";
+            ws.Cell(2, 1).Value = "ანა სმიტი";
+            ws.Cell(2, 2).Value = "599123456";
+            ws.Cell(2, 3).Value = "თბილისი";
+            ws.Cell(2, 4).Value = "საბურთალო";
+            ws.Cell(2, 5).Value = "პეკინის გამზ. 42";
+            ws.Cell(2, 6).Value = "მტვრევადი – ფრთხილად";
+            ws.Cell(2, 7).Value = "გადასახდელი";
+            ws.Cell(2, 8).Value = "მიმღები";
+            ws.Cell(2, 9).Value = "არა";
+            ws.Cell(2, 10).Value = 45.00;
+            ws.Cell(2, 11).Value = "არა";
         }
         else
         {
-            ws.Cell(2, 1).Value = "Ana";
-            ws.Cell(2, 2).Value = "Smith";
-            ws.Cell(2, 3).Value = "599123456";
-            ws.Cell(2, 4).Value = "Tbilisi";
-            ws.Cell(2, 5).Value = "Saburtalo";
-            ws.Cell(2, 6).Value = "Pekini Ave 42";
-            ws.Cell(2, 7).Value = "Fragile – handle with care";
-            ws.Cell(2, 8).Value = "Not Paid";
-            ws.Cell(2, 9).Value = "Recipient";
-            ws.Cell(2, 10).Value = "No";
-            ws.Cell(2, 11).Value = 45.00;
-            ws.Cell(2, 12).Value = "No";
+            ws.Cell(2, 1).Value = "Ana Smith";
+            ws.Cell(2, 2).Value = "599123456";
+            ws.Cell(2, 3).Value = "Tbilisi";
+            ws.Cell(2, 4).Value = "Saburtalo";
+            ws.Cell(2, 5).Value = "Pekini Ave 42";
+            ws.Cell(2, 6).Value = "Fragile – handle with care";
+            ws.Cell(2, 7).Value = "Not Paid";
+            ws.Cell(2, 8).Value = "Recipient";
+            ws.Cell(2, 9).Value = "No";
+            ws.Cell(2, 10).Value = 45.00;
+            ws.Cell(2, 11).Value = "No";
         }
 
         // The row-2 example is a placeholder. Grey/italic it via CONDITIONAL
@@ -492,18 +486,18 @@ public sealed class GroupOrdersController : BaseController
             whenSample.Font.FontColor = placeholderColor;
         }
 
-        // ── City dropdown (D2:D500) ───────────────────────────────────────────
-        var cityVal = ws.Range("D2:D500").CreateDataValidation();
+        // ── City dropdown (C2:C500) ───────────────────────────────────────────
+        var cityVal = ws.Range("C2:C500").CreateDataValidation();
         cityVal.List("CityList", true);
         cityVal.ShowErrorMessage = false;
 
-        // ── District dependent dropdown (E2:E500) ─────────────────────────────
+        // ── District dependent dropdown (D2:D500) ─────────────────────────────
         for (int row = 2; row <= 500; row++)
         {
-            var distVal = ws.Cell(row, 5).CreateDataValidation();
-            // Map the selected city (D{row}) to its district range by position:
+            var distVal = ws.Cell(row, 4).CreateDataValidation();
+            // Map the selected city (C{row}) to its district range by position:
             // MATCH finds the city's index in CityList, giving the DIST_<n> name.
-            distVal.List($"INDIRECT(\"DIST_\"&MATCH(D{row},CityList,0))", true);
+            distVal.List($"INDIRECT(\"DIST_\"&MATCH(C{row},CityList,0))", true);
             distVal.ShowErrorMessage = true;
             distVal.ErrorTitle = isGeo ? "არასწორი რაიონი" : "Invalid District";
             distVal.ErrorMessage = isGeo
@@ -511,26 +505,26 @@ public sealed class GroupOrdersController : BaseController
                 : "Please select a city first, then choose a district.";
         }
 
-        // ── Static dropdowns (H, J) ───────────────────────────────────────────
+        // ── Static dropdowns (G, I) ───────────────────────────────────────────
         string paymentOptions = isGeo ? "\"გადახდილი,გადასახდელი\"" : "\"Paid,Not Paid\"";
         string fragileOptions = isGeo ? "\"კი,არა\"" : "\"Yes,No\"";
 
-        var paymentVal = ws.Range("H2:H500").CreateDataValidation();
+        var paymentVal = ws.Range("G2:G500").CreateDataValidation();
         paymentVal.List(paymentOptions, true);
         paymentVal.ShowErrorMessage = true;
         paymentVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
         paymentVal.ErrorMessage = isGeo ? "აირჩიეთ: გადახდილი ან გადასახდელი" : "Choose Paid or Not Paid";
 
-        // ── "Who pays" dependent dropdown (I2:I500) ───────────────────────────
-        // When the payment status (H) is "Not Paid", the recipient always pays
+        // ── "Who pays" dependent dropdown (H2:H500) ───────────────────────────
+        // When the payment status (G) is "Not Paid", the recipient always pays
         // the courier fee, so the dropdown collapses to Recipient only. For paid
         // parcels both options are offered. (The importer also forces Recipient
         // on Not Paid rows, so the value is guaranteed even if left blank.)
         string notPaidLiteral = isGeo ? "გადასახდელი" : "Not Paid";
         for (int row = 2; row <= 500; row++)
         {
-            var payerVal = ws.Cell(row, 9).CreateDataValidation();
-            payerVal.List($"IF(H{row}=\"{notPaidLiteral}\",PayerRecipient,PayerBoth)", true);
+            var payerVal = ws.Cell(row, 8).CreateDataValidation();
+            payerVal.List($"IF(G{row}=\"{notPaidLiteral}\",PayerRecipient,PayerBoth)", true);
             payerVal.ShowErrorMessage = true;
             payerVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
             payerVal.ErrorMessage = isGeo
@@ -538,14 +532,14 @@ public sealed class GroupOrdersController : BaseController
                 : "For Not Paid parcels the recipient pays.";
         }
 
-        var fragileVal = ws.Range("J2:J500").CreateDataValidation();
+        var fragileVal = ws.Range("I2:I500").CreateDataValidation();
         fragileVal.List(fragileOptions, true);
         fragileVal.ShowErrorMessage = true;
         fragileVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
         fragileVal.ErrorMessage = isGeo ? "აირჩიეთ: კი ან არა" : "Choose Yes or No";
 
-        // ── "Service fee included in price" dropdown (L2:L500) ─────────────────
-        var includedVal = ws.Range("L2:L500").CreateDataValidation();
+        // ── "Service fee included in price" dropdown (K2:K500) ─────────────────
+        var includedVal = ws.Range("K2:K500").CreateDataValidation();
         includedVal.List(fragileOptions, true);   // same Yes/No (კი/არა) option list
         includedVal.ShowErrorMessage = true;
         includedVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
@@ -629,23 +623,22 @@ public sealed class GroupOrdersController : BaseController
 
         for (int row = 2; row <= lastRow; row++)
         {
-            var firstName = ws.Cell(row, 1).GetString().Trim();
-            if (string.IsNullOrWhiteSpace(firstName)) continue;
+            var recipientName = ws.Cell(row, 1).GetString().Trim();
+            if (string.IsNullOrWhiteSpace(recipientName)) continue;
 
-            // Skip built-in sample rows
-            var lastName = ws.Cell(row, 2).GetString().Trim();
-            if ((firstName.Equals("Ana", StringComparison.OrdinalIgnoreCase) && lastName.Equals("Smith", StringComparison.OrdinalIgnoreCase)) ||
-                (firstName.Equals("ანა", StringComparison.Ordinal) && lastName.Equals("სმიტი", StringComparison.Ordinal)))
+            // Skip the built-in sample row
+            if (recipientName.Equals("Ana Smith", StringComparison.OrdinalIgnoreCase) ||
+                recipientName.Equals("ანა სმიტი", StringComparison.Ordinal))
                 continue;
 
-            var description = ws.Cell(row, 7).GetString().Trim();
-            var paymentRaw  = ws.Cell(row, 8).GetString().Trim();
-            var payerRaw    = ws.Cell(row, 9).GetString().Trim();
-            var fragileRaw  = ws.Cell(row, 10).GetString().Trim();
+            var description = ws.Cell(row, 6).GetString().Trim();
+            var paymentRaw  = ws.Cell(row, 7).GetString().Trim();
+            var payerRaw    = ws.Cell(row, 8).GetString().Trim();
+            var fragileRaw  = ws.Cell(row, 9).GetString().Trim();
 
-            // ── Col K: parcel price ───────────────────────────────────────────
+            // ── Col J: parcel price ───────────────────────────────────────────
             decimal? amountToCollect = null;
-            var parcelPriceRaw = ws.Cell(row, 11).GetString().Trim();
+            var parcelPriceRaw = ws.Cell(row, 10).GetString().Trim();
             if (decimal.TryParse(parcelPriceRaw,
                 System.Globalization.NumberStyles.Any,
                 System.Globalization.CultureInfo.InvariantCulture,
@@ -675,15 +668,15 @@ public sealed class GroupOrdersController : BaseController
                 fragileRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
                 fragileRaw.Equals("კი", StringComparison.Ordinal);
 
-            // ── Col L: is the service fee already included in the parcel price? ──
-            var includedRaw = ws.Cell(row, 12).GetString().Trim();
+            // ── Col K: is the service fee already included in the parcel price? ──
+            var includedRaw = ws.Cell(row, 11).GetString().Trim();
             var isServiceIncluded =
                 includedRaw.Equals("Yes", StringComparison.OrdinalIgnoreCase) ||
                 includedRaw.Equals("კი", StringComparison.Ordinal);
 
             // ── City / district: normalise geo names → English canonical ──────
-            var cellCity     = ws.Cell(row, 4).GetString().Trim();
-            var cellDistrict = ws.Cell(row, 5).GetString().Trim();
+            var cellCity     = ws.Cell(row, 3).GetString().Trim();
+            var cellDistrict = ws.Cell(row, 4).GetString().Trim();
 
             // If the cell contains a Georgian name, map it to the English key.
             // If it's already English (or unrecognised), pass through as-is.
@@ -701,12 +694,11 @@ public sealed class GroupOrdersController : BaseController
             }
 
             orders.Add(new OrderItemRequest(
-                RecipientFirstName: firstName,
-                RecipientLastName: lastName,
-                RecipientPhone: ws.Cell(row, 3).GetString().Trim(),
+                RecipientName: recipientName,
+                RecipientPhone: ws.Cell(row, 2).GetString().Trim(),
                 RecipientCity: recipientCity,
                 RecipientDistrict: recipientDistrict,
-                RecipientAddress: ws.Cell(row, 6).GetString().Trim(),
+                RecipientAddress: ws.Cell(row, 5).GetString().Trim(),
                 Description: description.Length > 0 ? description : null,
                 IsFragile: isFragile,
                 ProductPaymentStatus: paymentStatus,
@@ -751,8 +743,7 @@ public sealed class GroupOrdersController : BaseController
             Orders: go.Orders.Select(o => new AdminOrderResponse(
                 Id:                               o.Id,
                 TrackingNumber:                   o.TrackingNumber,
-                RecipientFirstName:               o.RecipientFirstName,
-                RecipientLastName:                o.RecipientLastName,
+                RecipientName:                    o.RecipientName,
                 RecipientPhone:                   o.RecipientPhone,
                 RecipientCity:                    o.RecipientCity,
                 RecipientCityGeo:                 o.RecipientCityGeo,

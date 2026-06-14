@@ -18,8 +18,7 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
             ?? throw new NotFoundException("Order", request.OrderId);
 
         // ── Recipient / Delivery ─────────────────────────────────────────────
-        order.RecipientFirstName = request.RecipientFirstName.Trim();
-        order.RecipientLastName  = request.RecipientLastName.Trim();
+        order.RecipientName      = request.RecipientName.Trim();
         order.RecipientPhone     = request.RecipientPhone.Trim();
         order.RecipientCity      = request.RecipientCity.Trim();
         order.RecipientDistrict  = request.RecipientDistrict.Trim();

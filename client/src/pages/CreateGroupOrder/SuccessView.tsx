@@ -50,7 +50,7 @@ export function SuccessView({ result, onNewOrder }: SuccessViewProps) {
           {result.orders.map(order => (
             <div key={order.orderId} className="tracking-item">
               <div className="tracking-item__recipient">
-                {order.recipientFirstName} {order.recipientLastName}
+                {order.recipientName}
               </div>
               <button
                 type="button"

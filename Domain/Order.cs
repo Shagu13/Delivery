@@ -34,8 +34,8 @@ public class Order
     public Customer? Customer   { get; set; }
 
     // ── Recipient / Delivery ─────────────────────────────────────────────────
-    public required string RecipientFirstName { get; set; }
-    public required string RecipientLastName  { get; set; }
+    /// <summary>Recipient's full name — a single united field (first + last are not stored separately).</summary>
+    public required string RecipientName      { get; set; }
     public required string RecipientPhone     { get; set; }
     public required string RecipientCity      { get; set; }
     public required string RecipientDistrict  { get; set; }

@@ -8,8 +8,7 @@ namespace Application.CustomerSettlements.Queries;
 
 public sealed record InvoiceOrderRow(
     string   TrackingNumber,
-    string   RecipientFirstName,
-    string   RecipientLastName,
+    string   RecipientName,
     string   RecipientPhone,
     string   RecipientCity,
     string   RecipientDistrict,
@@ -88,8 +87,7 @@ public sealed class GetSettlementInvoiceDataQueryHandler
             .Where(o => !CancelledStatuses.Contains(o.Status))
             .Select(o => new InvoiceOrderRow(
                 TrackingNumber:       o.TrackingNumber,
-                RecipientFirstName:   o.RecipientFirstName,
-                RecipientLastName:    o.RecipientLastName,
+                RecipientName:        o.RecipientName,
                 RecipientPhone:       o.RecipientPhone,
                 RecipientCity:        o.RecipientCity,
                 RecipientDistrict:    o.RecipientDistrict,

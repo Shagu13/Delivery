@@ -178,8 +178,7 @@ internal static class OrderFinanceQueries
         return new OrderFinanceLineDto(
             OrderId:                      o.Id,
             TrackingNumber:               o.TrackingNumber,
-            RecipientFirstName:           o.RecipientFirstName,
-            RecipientLastName:            o.RecipientLastName,
+            RecipientName:                o.RecipientName,
             RecipientCity:                o.RecipientCity,
             OrderType:                    o.OrderType.ToString(),
             Status:                       o.Status.ToString(),

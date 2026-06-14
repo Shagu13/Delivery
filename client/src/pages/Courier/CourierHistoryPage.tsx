@@ -101,7 +101,7 @@ function DeliveryHistoryTab({ token }: { token: string }) {
             onRetry={retry} hasItems={items.length > 0}>
             {items.map(order => (
                 <HistoryCard key={order.id}
-                    title={<>{order.isFragile ? '🥚' : '📦'} {order.recipientFirstName}</>}
+                    title={<>{order.isFragile ? '🥚' : '📦'} {order.recipientName}</>}
                     status={order.status}
                     location={`${order.recipientCity}, ${order.recipientDistrict}`}
                     address={order.recipientAddress}

@@ -34,8 +34,7 @@ public sealed record AdminGroupOrderDto(
 public sealed record AdminOrderDto(
     Guid   Id,
     string TrackingNumber,
-    string RecipientFirstName,
-    string RecipientLastName,
+    string RecipientName,
     string RecipientPhone,
     string RecipientCity,
     string? RecipientCityGeo,

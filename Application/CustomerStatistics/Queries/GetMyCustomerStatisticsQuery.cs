@@ -41,8 +41,7 @@ public sealed class GetMyCustomerStatisticsQueryHandler
             {
                 o.Status,
                 o.CreatedAt,
-                o.RecipientFirstName,
-                o.RecipientLastName,
+                o.RecipientName,
                 o.RecipientPhone,
                 o.RecipientCity,
                 o.RecipientDistrict,
@@ -76,7 +75,7 @@ public sealed class GetMyCustomerStatisticsQueryHandler
             {
                 var latest = g.OrderByDescending(o => o.CreatedAt).First();
                 return new TopRecipientDto(
-                    Name:       $"{latest.RecipientFirstName} {latest.RecipientLastName}".Trim(),
+                    Name:       latest.RecipientName,
                     Phone:      g.Key,
                     City:       latest.RecipientCity,
                     District:   latest.RecipientDistrict,

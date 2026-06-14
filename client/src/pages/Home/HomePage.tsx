@@ -436,7 +436,7 @@ export function HomePage() {
                                 <div className="track-modal__info">
                                     <div className="track-modal__info-item">
                                         <span className="track-modal__info-label">{t.trackRecipient}</span>
-                                        <span className="track-modal__info-value">{result.recipientFirstName} {result.recipientLastName}</span>
+                                        <span className="track-modal__info-value">{result.recipientName}</span>
                                     </div>
                                     <div className="track-modal__info-item">
                                         <span className="track-modal__info-label">{t.trackDestination}</span>

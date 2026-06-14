@@ -16,8 +16,7 @@ public sealed record CourierDailyDeliveriesDto(
 public sealed record CourierDailyOrderDto(
     Guid   Id,
     string TrackingNumber,
-    string RecipientFirstName,
-    string RecipientLastName,
+    string RecipientName,
     string RecipientCity,
     string RecipientDistrict,
     OrderStatus Status,

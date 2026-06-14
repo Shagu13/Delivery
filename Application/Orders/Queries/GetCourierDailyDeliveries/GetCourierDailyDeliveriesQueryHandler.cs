@@ -36,8 +36,7 @@ public sealed class GetCourierDailyDeliveriesQueryHandler
         var orderDtos = orders.Select(o => new CourierDailyOrderDto(
             Id:                  o.Id,
             TrackingNumber:      o.TrackingNumber,
-            RecipientFirstName:  o.RecipientFirstName,
-            RecipientLastName:   o.RecipientLastName,
+            RecipientName:       o.RecipientName,
             RecipientCity:       o.RecipientCity,
             RecipientDistrict:   o.RecipientDistrict,
             Status:              o.Status,

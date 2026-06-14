@@ -23,8 +23,7 @@ export interface AdminOrderItem {
   senderLastName: string;
   senderPhone: string;
   alternativeSenderPhone: string | null;
-  recipientFirstName: string;
-  recipientLastName: string;
+  recipientName: string;
   recipientPhone: string;
   recipientCity: string;
   recipientCityGeo?: string;
@@ -1091,7 +1090,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       <div className="aop-sender-name">{order.senderFirstName} {order.senderLastName}</div>
                     </td>
                     <td className="aop-td">
-                      <div className="aop-name">{order.recipientFirstName} {order.recipientLastName}</div>
+                      <div className="aop-name">{order.recipientName}</div>
                       <div className="aop-addr">{order.recipientAddress}</div>
                     </td>
                     <td className="aop-td aop-td--mono">{order.recipientPhone}</td>

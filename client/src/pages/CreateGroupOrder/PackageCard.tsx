@@ -57,7 +57,7 @@ function summaryLine(data: OrderItemRequest, placeholder: string): string {
   const parts: string[] = [];
 
   if (data.orderType && data.orderType !== 'Send') parts.push(`[${data.orderType}]`);
-  const name = [data.recipientFirstName, data.recipientLastName].filter(Boolean).join(' ');
+  const name = data.recipientName;
   if (name) parts.push(name);
   if (data.recipientPhone) parts.push(data.recipientPhone);
   if (data.recipientCity) {
@@ -360,26 +360,15 @@ export function PackageCard({
           {/* Recipient Info */}
           <fieldset className="fieldset">
             <legend className="fieldset__legend">{t.cgoRecipientInfo}</legend>
-            <div className="grid grid--2">
-              <FormField
-                label={t.cgoRecipientFirstName}
-                required
-                value={data.recipientFirstName}
-                onChange={e => onChange(index, 'recipientFirstName', e.target.value)}
-                error={fieldError('recipientFirstName')}
-                placeholder={t.cgoRecipientFNPlaceholder}
-                maxLength={100}
-              />
-              <FormField
-                label={t.cgoRecipientLastName}
-                required
-                value={data.recipientLastName}
-                onChange={e => onChange(index, 'recipientLastName', e.target.value)}
-                error={fieldError('recipientLastName')}
-                placeholder={t.cgoRecipientLNPlaceholder}
-                maxLength={100}
-              />
-            </div>
+            <FormField
+              label={t.cgoRecipientName}
+              required
+              value={data.recipientName}
+              onChange={e => onChange(index, 'recipientName', e.target.value)}
+              error={fieldError('recipientName')}
+              placeholder={t.cgoRecipientFNPlaceholder}
+              maxLength={200}
+            />
             <GeorgianPhoneField
               label={t.cgoRecipientPhone}
               required

@@ -30,8 +30,7 @@ export type OrderType     = 'Send' | 'Return' | 'Exchange';
 export interface AdminOrder {
     id: string;
     trackingNumber: string;
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
     recipientPhone: string;
     recipientCity: string;
     recipientCityGeo?: string;

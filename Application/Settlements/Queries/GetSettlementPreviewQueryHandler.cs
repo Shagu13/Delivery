@@ -94,7 +94,7 @@ public sealed class GetSettlementPreviewQueryHandler
         var lines = orders.Select(o => new SettlementOrderLineDto(
             Id:                    o.Id,
             TrackingNumber:        o.TrackingNumber,
-            RecipientName:         $"{o.RecipientFirstName} {o.RecipientLastName}",
+            RecipientName:         o.RecipientName,
             RecipientCity:         o.RecipientCity,
             RecipientDistrict:     o.RecipientDistrict,
             CompanyServicePrice:   o.CompanyServicePrice,

@@ -12,8 +12,7 @@ namespace Application.Orders.Commands;
 public sealed record UpdateOrderCommand(
     Guid          OrderId,
     // Recipient / Delivery
-    string        RecipientFirstName,
-    string        RecipientLastName,
+    string        RecipientName,
     string        RecipientPhone,
     string        RecipientCity,
     string        RecipientDistrict,

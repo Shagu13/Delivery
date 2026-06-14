@@ -31,8 +31,7 @@ public sealed record AdminGroupOrderResponse(
 public sealed record AdminOrderResponse(
     Guid    Id,
     string  TrackingNumber,
-    string  RecipientFirstName,
-    string  RecipientLastName,
+    string  RecipientName,
     string  RecipientPhone,
     string  RecipientCity,
     string? RecipientCityGeo,

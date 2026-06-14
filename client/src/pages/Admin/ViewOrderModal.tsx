@@ -116,7 +116,7 @@ export function ViewOrderModal({ order, open, onClose }: Props) {
                     </Section>
 
                     <Section title={t.vomSecRecipient}>
-                        <Row label={t.vomLblName}     value={`${order.recipientFirstName} ${order.recipientLastName}`.trim()} />
+                        <Row label={t.vomLblName}     value={order.recipientName} />
                         <Row label={t.vomLblPhone}    value={order.recipientPhone} />
                         <Row label={t.vomLblCity}     value={city} />
                         <Row label={t.vomLblDistrict} value={district} />

@@ -1080,7 +1080,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                   {flatOrders.map(o => (
                     <tr key={o.id}>
                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
-                      <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
+                      <td><div style={{ fontWeight: 600 }}>{o.recipientName}</div></td>
                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                       <td>
                         <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
@@ -1206,7 +1206,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                   {filteredOrders.map(o => (
                                     <tr key={o.id}>
                                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
-                                      <td><div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div></td>
+                                      <td><div style={{ fontWeight: 600 }}>{o.recipientName}</div></td>
                                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                                       <td>
                                         <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
@@ -1788,7 +1788,7 @@ function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrde
                     <tr key={o.id}>
                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
                       <td>
-                        <div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div>
+                        <div style={{ fontWeight: 600 }}>{o.recipientName}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontFamily: 'Courier New, monospace' }}>{o.recipientPhone}</div>
                       </td>
                       <td>

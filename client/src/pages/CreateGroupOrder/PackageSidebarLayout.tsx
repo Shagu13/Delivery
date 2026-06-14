@@ -73,7 +73,7 @@ function computeFee(
 }
 
 function pkgSummary(pkg: OrderItemRequest): string {
-  const name = [pkg.recipientFirstName, pkg.recipientLastName].filter(Boolean).join(' ');
+  const name = pkg.recipientName;
   const loc  = [pkg.recipientCity, pkg.recipientDistrict].filter(Boolean).join(', ');
   if (name && loc) return `${name} · ${loc}`;
   if (name)        return name;
@@ -296,26 +296,15 @@ function PackageDetail({
         {/* Recipient info */}
         <div className="psl-section">
           <div className="psl-section__label">{t.cgoRecipientInfo}</div>
-          <div className="psl-grid psl-grid--2">
-            <FormField
-              label={t.cgoRecipientFirstName}
-              required
-              value={pkg.recipientFirstName}
-              onChange={e => onChange(index, 'recipientFirstName', e.target.value)}
-              error={fe('recipientFirstName')}
-              placeholder={t.cgoRecipientFNPlaceholder}
-              maxLength={100}
-            />
-            <FormField
-              label={t.cgoRecipientLastName}
-              required
-              value={pkg.recipientLastName}
-              onChange={e => onChange(index, 'recipientLastName', e.target.value)}
-              error={fe('recipientLastName')}
-              placeholder={t.cgoRecipientLNPlaceholder}
-              maxLength={100}
-            />
-          </div>
+          <FormField
+            label={t.cgoRecipientName}
+            required
+            value={pkg.recipientName}
+            onChange={e => onChange(index, 'recipientName', e.target.value)}
+            error={fe('recipientName')}
+            placeholder={t.cgoRecipientFNPlaceholder}
+            maxLength={200}
+          />
           <GeorgianPhoneField
             label={t.cgoRecipientPhone} required
             value={pkg.recipientPhone}

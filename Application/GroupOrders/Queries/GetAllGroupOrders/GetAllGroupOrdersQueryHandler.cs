@@ -32,8 +32,7 @@ public sealed class GetAllGroupOrdersQueryHandler
                 go.PickUpDistrict.ToLower().Contains(term) ||
                 go.PickUpAddress.ToLower().Contains(term) ||
                 go.Orders.Any(o =>
-                    o.RecipientFirstName.ToLower().Contains(term) ||
-                    o.RecipientLastName.ToLower().Contains(term) ||
+                    o.RecipientName.ToLower().Contains(term) ||
                     o.RecipientPhone.Contains(term) ||
                     o.RecipientCity.ToLower().Contains(term) ||
                     o.RecipientDistrict.ToLower().Contains(term) ||
@@ -79,8 +78,7 @@ public sealed class GetAllGroupOrdersQueryHandler
                 .Select(o => new AdminOrderDto(
                     Id:                               o.Id,
                     TrackingNumber:                   o.TrackingNumber,
-                    RecipientFirstName:               o.RecipientFirstName,
-                    RecipientLastName:                o.RecipientLastName,
+                    RecipientName:                    o.RecipientName,
                     RecipientPhone:                   o.RecipientPhone,
                     RecipientCity:                    o.RecipientCity,
                     RecipientCityGeo:                 cityGeo.GetValueOrDefault(o.RecipientCity),

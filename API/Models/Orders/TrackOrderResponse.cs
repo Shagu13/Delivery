@@ -11,8 +11,7 @@ public sealed record TrackOrderResponse(
     string TrackingNumber,
     string Status,
 
-    string RecipientFirstName,
-    string RecipientLastName,
+    string RecipientName,
     string RecipientCity,
     string RecipientDistrict,
     string RecipientAddress,

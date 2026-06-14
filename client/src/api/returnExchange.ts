@@ -20,8 +20,7 @@ export interface ReturnExchangeOrder {
     senderName: string;
     senderPhone: string;
     customerId: string | null;
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
     recipientPhone: string;
     recipientCity: string;
     recipientDistrict: string;

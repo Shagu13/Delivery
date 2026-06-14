@@ -21,8 +21,7 @@ interface Props {
 
 export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDelivered, canMarkWarehouse, couriers = [], onActioned }: Props) {
     // ── Form state ────────────────────────────────────────────────────────────
-    const [firstName,   setFirstName]   = useState('');
-    const [lastName,    setLastName]    = useState('');
+    const [name,        setName]        = useState('');
     const [phone,       setPhone]       = useState('');
     const [city,        setCity]        = useState('');
     const [district,    setDistrict]    = useState('');
@@ -73,8 +72,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
     // Populate form when order changes
     useEffect(() => {
         if (!order) return;
-        setFirstName(order.recipientFirstName);
-        setLastName(order.recipientLastName);
+        setName(order.recipientName);
         setPhone(sanitizeGeorgianMobile(order.recipientPhone));
         setCity(order.recipientCity);
         setDistrict(order.recipientDistrict);
@@ -155,8 +153,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         const e: Record<string, string> = {};
 
         // Recipient (delivery tab)
-        if (!firstName.trim()) e.firstName = t.errFirstNameRequired;
-        if (!lastName.trim())  e.lastName  = t.errLastNameRequired;
+        if (!name.trim()) e.name = t.cgoErrRecipientName;
         if (!phone.trim())     e.phone     = t.errPhoneRequired;
         else if (!isValidGeorgianMobile(phone)) e.phone = t.cgoErrInvalidPhone;
         if (!city.trim())      e.city      = t.errCityRequired;
@@ -196,7 +193,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
 
         // Surface the first offending tab so the highlighted fields are visible.
         if (Object.keys(e).length > 0) {
-            if (e.firstName || e.lastName || e.phone || e.city || e.district || e.address || e.codAmount) {
+            if (e.name || e.phone || e.city || e.district || e.address || e.codAmount) {
                 setActiveTab('delivery');
             } else if (e.returnCity || e.returnDistrict || e.returnAddress) {
                 setActiveTab('type');
@@ -215,8 +212,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         setError(null);
         try {
             await updateOrder(token, order.id, {
-                recipientFirstName:        firstName.trim(),
-                recipientLastName:         lastName.trim(),
+                recipientName:             name.trim(),
                 recipientPhone:            phone.trim(),
                 recipientCity:             city.trim(),
                 recipientDistrict:         district.trim(),
@@ -317,12 +313,11 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                         <fieldset className="modal__fieldset">
                             <legend className="modal__legend">{t.eomLegendRecipient}</legend>
                             <div className="eom-grid">
-                                <Field label={t.eomFirstName} required error={errors.firstName}>
-                                    <input className="eom-input" value={firstName} onChange={e => { setFirstName(e.target.value); clearErr('firstName'); }} />
-                                </Field>
-                                <Field label={t.eomLastName} required error={errors.lastName}>
-                                    <input className="eom-input" value={lastName} onChange={e => { setLastName(e.target.value); clearErr('lastName'); }} />
-                                </Field>
+                                <div className="eom-col-2">
+                                    <Field label={t.cgoRecipientName} required error={errors.name}>
+                                        <input className="eom-input" value={name} onChange={e => { setName(e.target.value); clearErr('name'); }} />
+                                    </Field>
+                                </div>
                                 <div className="eom-col-2">
                                     <GeorgianPhoneField
                                         label={t.eomPhone}

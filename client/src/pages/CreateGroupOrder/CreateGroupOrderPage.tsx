@@ -60,8 +60,7 @@ const EMPTY_SENDER: SenderFormData = {
 };
 
 const EMPTY_PACKAGE: OrderItemRequest = {
-    recipientFirstName:           '',
-    recipientLastName:            '',
+    recipientName:                '',
     recipientPhone:               '',
     recipientCity:                '',
     recipientDistrict:            '',
@@ -110,8 +109,7 @@ function validate(
         const p = (field: string, val: string, errMsg: string) => {
             if (!val.trim()) errors[`orders[${i}].${field}`] = errMsg;
         };
-        p('recipientFirstName', pkg.recipientFirstName, t.cgoErrRecipientFirstName);
-        p('recipientLastName',  pkg.recipientLastName,  t.cgoErrRecipientLastName);
+        p('recipientName', pkg.recipientName, t.cgoErrRecipientName);
         if (!pkg.recipientPhone.trim()) {
             errors[`orders[${i}].recipientPhone`] = t.cgoErrPhone;
         } else if (!isValidGeorgianMobile(pkg.recipientPhone)) {

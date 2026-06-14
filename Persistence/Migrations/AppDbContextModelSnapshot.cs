@@ -657,15 +657,10 @@ namespace Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("RecipientFirstName")
+                    b.Property<string>("RecipientName")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("RecipientLastName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(201)
+                        .HasColumnType("nvarchar(201)");
 
                     b.Property<string>("RecipientPhone")
                         .IsRequired()

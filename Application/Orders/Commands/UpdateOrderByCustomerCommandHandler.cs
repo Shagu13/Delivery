@@ -30,8 +30,7 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
         if (!CustomerOrderActionPolicy.EditableOrCancellable.Contains(order.Status))
             throw new ConflictException("This order can no longer be edited.");
 
-        order.RecipientFirstName = request.RecipientFirstName.Trim();
-        order.RecipientLastName  = request.RecipientLastName.Trim();
+        order.RecipientName      = request.RecipientName.Trim();
         order.RecipientPhone     = request.RecipientPhone.Trim();
         order.RecipientAddress   = request.RecipientAddress.Trim();
 

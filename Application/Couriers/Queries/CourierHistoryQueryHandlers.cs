@@ -39,7 +39,7 @@ public sealed class GetCourierDeliveryHistoryQueryHandler
 
         return orders.Select(o => new CourierOrderHistoryDto(
             Id:                 o.Id,
-            RecipientFirstName: o.RecipientFirstName,
+            RecipientName:      o.RecipientName,
             RecipientCity:      o.RecipientCity,
             RecipientDistrict:  o.RecipientDistrict,
             RecipientAddress:   o.RecipientAddress,

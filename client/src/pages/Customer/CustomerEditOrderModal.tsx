@@ -17,8 +17,7 @@ interface Props {
 export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }: Props) {
   const { lang, t } = useLanguage();
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName,  setLastName]  = useState('');
+  const [name,      setName]      = useState('');
   const [phone,     setPhone]     = useState('');
   const [address,   setAddress]   = useState('');
   const [cod,       setCod]       = useState('');
@@ -30,8 +29,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
   // Populate when the target order changes
   useEffect(() => {
     if (!order) return;
-    setFirstName(order.recipientFirstName);
-    setLastName(order.recipientLastName);
+    setName(order.recipientName);
     setPhone(sanitizeGeorgianMobile(order.recipientPhone));
     setAddress(order.recipientAddress);
     // For "service included" orders the customer works with the all-in price, so show
@@ -68,8 +66,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
-    if (!firstName.trim()) e.recipientFirstName = t.errFirstNameRequired;
-    if (!lastName.trim())  e.recipientLastName  = t.errLastNameRequired;
+    if (!name.trim())      e.recipientName      = t.cgoErrRecipientName;
     if (!phone.trim())     e.recipientPhone     = t.errPhoneRequired;
     else if (!isValidGeorgianMobile(phone)) e.recipientPhone = t.cgoErrInvalidPhone;
     if (!address.trim())   e.recipientAddress   = t.errAddressRequired;
@@ -91,8 +88,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
     setError(null);
     try {
       await updateMyOrder(order.id, {
-        recipientFirstName: firstName.trim(),
-        recipientLastName:  lastName.trim(),
+        recipientName:      name.trim(),
         recipientPhone:     phone.trim(),
         recipientAddress:   address.trim(),
         amountToCollectForPackage: isUnpaid && cod.trim() ? parseFloat(cod) : null,
@@ -136,22 +132,13 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
             <span className="ceo-location__value">{cityName}, {districtName}</span>
           </div>
 
-          <div className="ceo-grid">
-            <FormField
-              label={t.ceoFirstName} required
-              value={firstName}
-              onChange={e => { setFirstName(e.target.value); clearErr('recipientFirstName'); }}
-              error={errors.recipientFirstName}
-              maxLength={100}
-            />
-            <FormField
-              label={t.ceoLastName} required
-              value={lastName}
-              onChange={e => { setLastName(e.target.value); clearErr('recipientLastName'); }}
-              error={errors.recipientLastName}
-              maxLength={100}
-            />
-          </div>
+          <FormField
+            label={t.cgoRecipientName} required
+            value={name}
+            onChange={e => { setName(e.target.value); clearErr('recipientName'); }}
+            error={errors.recipientName}
+            maxLength={200}
+          />
 
           <GeorgianPhoneField
             label={t.ceoPhone} required

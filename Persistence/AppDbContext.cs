@@ -133,8 +133,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
              .HasForeignKey(t => t.OrderId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(o => o.WeightPriceTier).WithMany()
              .HasForeignKey(o => o.WeightPriceTierId).OnDelete(DeleteBehavior.SetNull);
-            e.Property(o => o.RecipientFirstName).HasMaxLength(100).IsRequired();
-            e.Property(o => o.RecipientLastName).HasMaxLength(100).IsRequired();
+            e.Property(o => o.RecipientName).HasMaxLength(201).IsRequired();
             e.Property(o => o.RecipientPhone).HasMaxLength(20).IsRequired();
             e.Property(o => o.RecipientCity).HasMaxLength(100).IsRequired();
             e.Property(o => o.RecipientDistrict).HasMaxLength(100).IsRequired();

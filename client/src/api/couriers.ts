@@ -31,8 +31,7 @@ export interface Courier {
 export interface CourierOrder {
     id: string;
     trackingNumber: string;
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
     recipientPhone: string;
     recipientCity: string;
     recipientDistrict: string;

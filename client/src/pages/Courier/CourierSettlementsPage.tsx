@@ -194,7 +194,7 @@ function CourierOrdersByDay({ token }: { token: string }) {
                                         <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)' }}>{line.orderType}</span>
                                     </div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                                        {line.recipientFirstName} {line.recipientLastName} · {line.recipientCity}
+                                        {line.recipientName} · {line.recipientCity}
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right', minWidth: 90 }}>

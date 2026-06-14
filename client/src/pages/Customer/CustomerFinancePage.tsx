@@ -83,7 +83,7 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
             <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>{index + 1}</td>
             <td style={{ ...cell, fontWeight: 700 }}>{line.trackingNumber}</td>
             <td style={cell}>
-                {line.recipientFirstName} {line.recipientLastName}
+                {line.recipientName}
                 <span style={{ color: 'var(--color-text-subtle)' }}> · {line.recipientCity}</span>
             </td>
             <td style={cell}>{line.orderType}</td>

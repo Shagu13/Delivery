@@ -85,8 +85,7 @@ public sealed class GetAllOrdersQueryHandler
             var term = request.Search.Trim().ToLower();
             query = query.Where(o =>
                 o.TrackingNumber.ToLower().Contains(term) ||
-                o.RecipientFirstName.ToLower().Contains(term) ||
-                o.RecipientLastName.ToLower().Contains(term) ||
+                o.RecipientName.ToLower().Contains(term) ||
                 o.RecipientPhone.Contains(term) ||
                 o.RecipientAddress.ToLower().Contains(term) ||
                 (o.GroupOrder != null && o.GroupOrder.SenderBusinessName.ToLower().Contains(term)) ||
@@ -121,8 +120,7 @@ public sealed class GetAllOrdersQueryHandler
                 SenderLastName:           o.GroupOrder?.SenderLastName     ?? o.Customer?.LastName     ?? string.Empty,
                 SenderPhone:              o.GroupOrder?.SenderPhone        ?? o.Customer?.PhoneNumber  ?? string.Empty,
                 AlternativeSenderPhone:   o.GroupOrder?.AlternativeSenderPhone,
-                RecipientFirstName:       o.RecipientFirstName,
-                RecipientLastName:        o.RecipientLastName,
+                RecipientName:            o.RecipientName,
                 RecipientPhone:           o.RecipientPhone,
                 RecipientCity:            o.RecipientCity,
                 RecipientCityGeo:         cityGeo.GetValueOrDefault(o.RecipientCity),

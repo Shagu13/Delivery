@@ -101,8 +101,7 @@ function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
     orders: [{
       id: r.id,
       trackingNumber: r.trackingNumber,
-      recipientFirstName: r.recipientFirstName,
-      recipientLastName: r.recipientLastName,
+      recipientName: r.recipientName,
       recipientPhone: r.recipientPhone,
       recipientCity: r.recipientCity,
       recipientDistrict: r.recipientDistrict,
@@ -138,8 +137,7 @@ function groupOrderMatchesSearch(go: AdminGroupOrder, term: string): boolean {
   if (go.senderPhone.toLowerCase().includes(q)) return true;
   if (go.pickUpCity.toLowerCase().includes(q)) return true;
   return go.orders.some(o =>
-    o.recipientFirstName.toLowerCase().includes(q) ||
-    o.recipientLastName.toLowerCase().includes(q) ||
+    o.recipientName.toLowerCase().includes(q) ||
     o.recipientPhone.toLowerCase().includes(q) ||
     o.recipientCity.toLowerCase().includes(q) ||
     o.trackingNumber.toLowerCase().includes(q));
@@ -422,7 +420,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                               <tr key={o.id}>
                                 <td><span className="tn-badge">{o.trackingNumber}</span></td>
                                 <td>
-                                  <div style={{ fontWeight: 600 }}>{o.recipientFirstName} {o.recipientLastName}</div>
+                                  <div style={{ fontWeight: 600 }}>{o.recipientName}</div>
                                   <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>
                                     {o.recipientPhone}
                                   </div>

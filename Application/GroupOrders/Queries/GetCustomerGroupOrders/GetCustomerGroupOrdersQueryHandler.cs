@@ -52,8 +52,7 @@ public sealed class GetCustomerGroupOrdersQueryHandler
         AdminOrderDto MapOrder(Order o) => new AdminOrderDto(
             Id:                               o.Id,
             TrackingNumber:                   o.TrackingNumber,
-            RecipientFirstName:               o.RecipientFirstName,
-            RecipientLastName:                o.RecipientLastName,
+            RecipientName:                    o.RecipientName,
             RecipientPhone:                   o.RecipientPhone,
             RecipientCity:                    o.RecipientCity,
             RecipientCityGeo:                 cityGeo.GetValueOrDefault(o.RecipientCity),

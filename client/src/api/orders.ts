@@ -24,8 +24,7 @@ export interface CourierOrder {
     trackingNumber: string;
     orderType: 'Send' | 'Return' | 'Exchange';
     senderBusinessName: string | null;
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
     recipientPhone: string;
     recipientCity: string;
     recipientDistrict: string;
@@ -58,8 +57,7 @@ export interface CourierOrder {
 }
 
 export interface UpdateOrderRequest {
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
     recipientPhone: string;
     recipientCity: string;
     recipientDistrict: string;
@@ -141,7 +139,7 @@ export async function fetchMyDeliveries(token: string): Promise<CourierOrder[]> 
 
 export interface CourierOrderHistory {
     id: string;
-    recipientFirstName: string;
+    recipientName: string;
     recipientCity: string;
     recipientDistrict: string;
     recipientAddress: string;

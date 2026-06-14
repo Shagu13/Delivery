@@ -3,8 +3,7 @@ import type { PaymentStatus, ServicePayer } from '../api/adminGroupOrders';
 export type OrderType = 'Send' | 'Return' | 'Exchange';
 
 export interface OrderItemRequest {
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
     recipientPhone: string;
     recipientCity: string;
     /** The delivery district. */
@@ -53,8 +52,7 @@ export interface CreateGroupOrderRequest {
 export interface OrderTrackingResponse {
     orderId: string;
     trackingNumber: string;
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
 }
 
 export interface CreateGroupOrderResponse {

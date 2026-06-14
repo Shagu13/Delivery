@@ -15,6 +15,5 @@ public sealed record CreateGroupOrderResultDto(
 public sealed record CreatedOrderDto(
     Guid OrderId,
     string TrackingNumber,
-    string RecipientFirstName,
-    string RecipientLastName
+    string RecipientName
 );

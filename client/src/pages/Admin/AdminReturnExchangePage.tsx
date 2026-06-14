@@ -239,7 +239,7 @@ function OrderRow({
             </td>
             <td>
                 <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                    {order.recipientFirstName} {order.recipientLastName}
+                    {order.recipientName}
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', fontFamily: 'monospace' }}>
                     {order.recipientPhone}

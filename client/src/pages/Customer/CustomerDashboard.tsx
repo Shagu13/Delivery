@@ -539,7 +539,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                         </div>
                       </td>
                       <td style={{ padding: '10px 16px' }}>
-                        <div style={{ fontWeight: 500 }}>{o.recipientFirstName} {o.recipientLastName}</div>
+                        <div style={{ fontWeight: 500 }}>{o.recipientName}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientPhone}</div>
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>

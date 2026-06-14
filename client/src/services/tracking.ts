@@ -8,8 +8,7 @@ export interface TrackOrderResult {
     orderId: string;
     trackingNumber: string;
     status: string;
-    recipientFirstName: string;
-    recipientLastName: string;
+    recipientName: string;
     recipientCity: string;
     recipientDistrict: string;
     recipientAddress: string;

@@ -10,8 +10,7 @@ namespace Application.Orders.Commands;
 public sealed record UpdateOrderByCustomerCommand(
     Guid     OrderId,
     Guid     CustomerId,
-    string   RecipientFirstName,
-    string   RecipientLastName,
+    string   RecipientName,
     string   RecipientPhone,
     string   RecipientAddress,
     decimal? AmountToCollectForPackage

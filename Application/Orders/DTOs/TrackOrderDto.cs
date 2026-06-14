@@ -8,8 +8,7 @@ public sealed record TrackOrderDto(
     OrderStatus Status,
 
     // Recipient
-    string RecipientFirstName,
-    string RecipientLastName,
+    string RecipientName,
     string RecipientCity,
     string RecipientDistrict,
     string RecipientAddress,

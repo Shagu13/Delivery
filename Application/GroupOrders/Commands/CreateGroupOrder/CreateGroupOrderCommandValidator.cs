@@ -37,8 +37,7 @@ public sealed class CreateOrderDtoValidator : AbstractValidator<CreateOrderDto>
     {
         _context = context;
 
-        RuleFor(x => x.RecipientFirstName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.RecipientLastName).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.RecipientName).NotEmpty().MaximumLength(201);
         RuleFor(x => x.RecipientPhone).NotEmpty().MaximumLength(20);
 
         RuleFor(x => x.RecipientCity)
