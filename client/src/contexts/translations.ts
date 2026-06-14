@@ -238,6 +238,7 @@ const en = {
   cdpNoDistrictMatch:  (q: string) => `No match for "${q}"`,
   cdpNoDistricts:      'No districts available',
   cdpLoadingDistricts: 'Loading districts…',
+  cdpCapitalNoDistrict: 'District not required for the capital — citywide pricing applies.',
 
   // ── Admin Orders Page ─────────────────────────────────────────────────────
   aopSearchPh:         'Search by TN, recipient, sender, phone…',
@@ -1662,6 +1663,7 @@ const ka: typeof en = {
   cdpNoDistrictMatch:  (q: string) => `"${q}" — შედეგი ვერ მოიძებნა`,
   cdpNoDistricts:      'რაიონები არ არის',
   cdpLoadingDistricts: 'რაიონების ჩატვირთვა…',
+  cdpCapitalNoDistrict: 'დედაქალაქისთვის რაიონი არ არის საჭირო — მოქმედებს ერთიანი ფასი.',
 
   // ── Admin Orders Page ─────────────────────────────────────────────────────
   aopSearchPh:         'ძებნა TN-ით, მიმღებით, გამგზავნით, ტელ…',
@@ -2059,10 +2061,10 @@ const ka: typeof en = {
   cgoTotalPriceHint:        'ამანათის ფასი + საკურიერო მომსახურება — მიმღებისგან ასაღები.',
   cgoFragile:               'მტვრევადი — შეიცავს მინას ან ადვილად დაშლადს',
   // "Service fee included in price" feature
-  cgoServiceIncluded:       'საკურიერო მომსახურება უკვე ჩართულია ფასში',
+  cgoServiceIncluded:       'საკურიერო მომსახურება ჩათვლილია ფასში',
   cgoServiceIncludedHint:   'შეყვანილი ფასი არის სრული თანხა. საკურიერო მომსახურება ავტომატურად გამოიქვითება.',
-  cgoPriceAllIn:            'სრული ფასი (მომსახურება ჩათვლით, ₾)',
-  cgoPriceAllInHint:        'სრული თანხა, რომელსაც მიმღები იხდის. საკურიერო ფონურად გამოიქვითება.',
+  cgoPriceAllIn:            'სრული ფასი (საკურიეროს ჩათვლით, ₾)',
+  cgoPriceAllInHint:        'სრული თანხა, რომელსაც მიმღები იხდის. საკურიერო ავტომატურად გამოიქვითება.',
   cgoErrPriceBelowFee:      'ფასი არ უნდა იყოს საკურიერო მომსახურებაზე ნაკლები.',
   // Validation messages
   cgoErrFirstName:          'სახელი სავალდებულოა.',
@@ -2319,7 +2321,7 @@ const ka: typeof en = {
   acupThCapital:             'დედაქალაქი (₾)',
   acupThCityPrice:           'ქალაქი (₾)',
   acupThDistrictPrice:       'რაიონი/სოფელი (₾)',
-  acupThIncluded:            'სერვისი ფასში',
+  acupThIncluded:            'საკურიერო ფასში',
   acupYes:                   'კი',
   acupNo:                    'არა',
   acupDefault:               'ნაგულისხმევი',
@@ -2519,7 +2521,7 @@ const ka: typeof en = {
   custThStatus:              'სტატუსი',
   custThPaid:                'გადახდა',
   custThCod:                 'COD',
-  custThServiceFee:          'სერვისის საფასური',
+  custThServiceFee:          'საკურიეროს საფასური',
   custAltPhone:              'ალტერნატიული მობილურის ნომერი',
 
   // Customer edit-order modal

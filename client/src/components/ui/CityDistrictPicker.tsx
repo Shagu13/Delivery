@@ -114,6 +114,23 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
       lc(districtLabel(d)).includes(lc(districtSearch)) || lc(d.districtName).includes(lc(districtSearch))
     );
 
+  // ── Capital city (e.g. Tbilisi) ──────────────────────────────────────────────
+  // Its districts are flagged IsCapitalTerritory and the customer shouldn't have
+  // to pick one — the district field is hidden and a capital-territory district is
+  // bound automatically so order pricing falls on the capital tier.
+  const capitalDistrict = districts.find(d => d.isCapitalTerritory) ?? null;
+  const isCapitalCity   = capitalDistrict !== null;
+
+  useEffect(() => {
+    if (!isCapitalCity || !capitalDistrict) return;
+    const current = districts.find(d => d.districtName === districtValue);
+    if (current?.isCapitalTerritory) return; // already bound to a capital district
+    setDistrictSearch(districtLabel(capitalDistrict));
+    onDistrictChange(capitalDistrict.districtName);
+    onDistrictSelect?.(capitalDistrict);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCapitalCity, capitalDistrict, districts, districtValue, lang]);
+
   const clearCity = useCallback(() => {
     setCitySearch(''); onCityChange(''); setSelectedCityId(null); setDistrictSearch(''); onDistrictChange(''); onDistrictSelect?.(null);
     cityInputRef.current?.focus();
@@ -173,7 +190,7 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
   );
 
   return (
-    <div className="cdp-row">
+    <div className={`cdp-row${isCapitalCity ? ' cdp-row--single' : ''}`}>
       {/* City */}
       <div className={`cdp-field${cityError ? ' cdp-field--error' : ''}`} ref={cityWrapRef}>
         <label className="cdp-label">{t.city} <span className="cdp-required">*</span></label>
@@ -217,7 +234,13 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
         {cityError && <span className="cdp-error-msg">{cityError}</span>}
       </div>
 
-      {/* District */}
+      {/* District — hidden for the capital (Tbilisi); a capital-territory district
+          is bound automatically and citywide pricing applies. */}
+      {isCapitalCity ? (
+        <div className="cdp-field cdp-field--capital-note">
+          <span className="cdp-capital-note">{t.cdpCapitalNoDistrict}</span>
+        </div>
+      ) : (
       <div className={`cdp-field${districtError ? ' cdp-field--error' : ''}`} ref={districtWrapRef}>
         <label className="cdp-label">{t.district} <span className="cdp-required">*</span></label>
         <div className={`cdp-control${districtOpen ? ' cdp-control--open' : ''}${!selectedCityId || disabled ? ' cdp-control--disabled' : ''}`}>
@@ -255,6 +278,7 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
         </DropdownPortal>
         {districtError && <span className="cdp-error-msg">{districtError}</span>}
       </div>
+      )}
     </div>
   );
 }

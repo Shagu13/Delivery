@@ -608,6 +608,16 @@ public sealed class GroupOrdersController : BaseController
                 districtGeoToEn[d.DistrictNameGeo!] = d.DistrictName;
         }
 
+        // City (English) → a capital-territory district name. When a row's city is the
+        // capital (Tbilisi) and the district cell is left blank, bind one of its
+        // capital-territory districts so the order resolves to the capital price.
+        var capitalDistrictByCity = await db.Districts
+            .AsNoTracking()
+            .Where(d => d.DateDeleted == null && d.IsCapitalTerritory)
+            .GroupBy(d => d.City.CityName)
+            .Select(g => new { CityName = g.Key, DistrictName = g.Min(d => d.DistrictName) })
+            .ToDictionaryAsync(x => x.CityName, x => x.DistrictName!, StringComparer.OrdinalIgnoreCase, ct);
+
         // ── Parse file ────────────────────────────────────────────────────────
         using var stream = file.OpenReadStream();
         using var workbook = new XLWorkbook(stream);
@@ -681,6 +691,14 @@ public sealed class GroupOrdersController : BaseController
                                         ? enCity : cellCity;
             var recipientDistrict = districtGeoToEn.TryGetValue(cellDistrict, out var enDist)
                                         ? enDist : cellDistrict;
+
+            // Capital city (Tbilisi): district is optional in the sheet. When left
+            // blank, bind a capital-territory district so pricing still resolves.
+            if (string.IsNullOrWhiteSpace(recipientDistrict) &&
+                capitalDistrictByCity.TryGetValue(recipientCity, out var capitalDist))
+            {
+                recipientDistrict = capitalDist;
+            }
 
             orders.Add(new OrderItemRequest(
                 RecipientFirstName: firstName,

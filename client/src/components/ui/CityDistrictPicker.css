@@ -10,6 +10,20 @@
   .cdp-row { grid-template-columns: 1fr; }
 }
 
+/* Capital city: district field hidden, city takes the full width */
+.cdp-row--single { grid-template-columns: 1fr; }
+
+.cdp-field--capital-note {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 0.4rem;
+}
+.cdp-capital-note {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
 /* ─── Field wrapper ──────────────────────────────────────────────────────── */
 
 .cdp-field {
