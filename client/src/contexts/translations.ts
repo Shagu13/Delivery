@@ -1111,6 +1111,8 @@ const en = {
   custSearchPlaceholder:     'Search by tracking #, recipient name, mobile number, or city',
   custSearchNoResults:       'No packages match your search',
   custSearchClear:           'Clear',
+  custLabelBtn:              'Label',
+  custPrintAllLabels:        'Print all labels',
 
   // Customer edit-order modal
   ceoTitle:                  'Edit Package',
@@ -2549,6 +2551,8 @@ const ka: typeof en = {
   custSearchPlaceholder:     'ძებნა Tracking #-ით, მიმღების სახელით, მობილურის ნომრით ან ქალაქით',
   custSearchNoResults:       'თქვენს ძებნას არცერთი ამანათი არ ემთხვევა',
   custSearchClear:           'გასუფთავება',
+  custLabelBtn:              'ლეიბლი',
+  custPrintAllLabels:        'ყველა ლეიბლის ბეჭდვა',
 
   // Customer edit-order modal
   ceoTitle:                  'ამანათის რედაქტირება',

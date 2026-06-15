@@ -65,6 +65,8 @@ export interface CustomerOrder {
   description: string | null; status: string;
   orderType: 'Send' | 'Return' | 'Exchange';
   productPaymentStatus: 'NotPaid' | 'Paid'; createdAt: string;
+  /** Who pays the company service fee — decides whether it's added to the recipient's amount due. */
+  whoPaysForCompanyService?: 'Sender' | 'Recipient';
   companyServicePrice?: number;
   /** True when amountToCollectForPackage is the all-in price (product + service fee bundled). */
   isCompanyServicePriceIncluded?: boolean;
@@ -74,6 +76,7 @@ export interface CustomerOrder {
 export interface CustomerGroupOrder {
   id: string; createdAt: string; status: string;
   senderBusinessName: string;
+  senderPhone?: string;
   alternativeSenderPhone?: string | null;
   pickUpCity: string; pickUpCityGeo?: string;
   pickUpDistrict: string; pickUpDistrictGeo?: string;

@@ -15,6 +15,7 @@ import type { Customer, CustomerGroupOrder, CustomerOrder } from '../../api/cust
 import { CustomerEditOrderModal } from './CustomerEditOrderModal';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
+import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
 import { CustomerFinancePage } from './CustomerFinancePage';
 import { CustomerStatisticsPage } from './CustomerStatisticsPage';
@@ -115,6 +116,33 @@ function orderMatchesSearch(o: CustomerOrder, q: string): boolean {
     o.trackingNumber, o.recipientName, o.recipientPhone,
     o.recipientCity, o.recipientCityGeo,
   ].some(field => field?.toLowerCase().includes(q));
+}
+
+// Amount the recipient pays = COD (only when the product isn't prepaid) + the company
+// service fee (only when the recipient pays it). When the price is all-in, the fee is
+// already inside the COD figure, so it is not added again. Returns 0 when nothing is
+// collectible (e.g. prepaid product whose service fee the sender covers).
+function recipientAmountDue(o: CustomerOrder): number {
+  const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
+  const fee = (!o.isCompanyServicePriceIncluded && o.whoPaysForCompanyService === 'Recipient')
+    ? (o.companyServicePrice ?? 0) : 0;
+  return cod + fee;
+}
+
+// Build a Georgian parcel-sticker payload from a group order + one of its packages.
+function buildParcelLabel(go: CustomerGroupOrder, o: CustomerOrder): ParcelLabelData {
+  const due = recipientAmountDue(o);
+  const city     = o.recipientCityGeo     || o.recipientCity;
+  const district = o.recipientDistrictGeo || o.recipientDistrict;
+  return {
+    storeName:        go.senderBusinessName,
+    senderPhone:      go.senderPhone || go.alternativeSenderPhone || '',
+    recipientName:    o.recipientName,
+    recipientPhone:   o.recipientPhone,
+    recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
+    amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
+    trackingNumber:   o.trackingNumber,
+  };
 }
 
 // ── Main dashboard ─────────────────────────────────────────────────────────────
@@ -542,9 +570,6 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
       )}
 
       {visibleGroups.map(({ go, pkgs }) => {
-        // Customers may edit (Send/Exchange) or cancel (any type) a package while it's
-        // still early in its flow — judged per individual order.
-        const groupHasActions = pkgs.some(o => canCustomerEdit(o) || canCustomerCancel(o));
         // While searching, force matching groups open so the hits are visible.
         const isExpanded = searching || expanded === go.id;
         return (
@@ -575,6 +600,21 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); printParcelLabels(go.orders.map(o => buildParcelLabel(go, o))); }}
+                title={t.custPrintAllLabels}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--color-border)', background: 'var(--color-bg-2)',
+                  color: 'var(--color-text)', fontSize: '0.76rem', fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                }}
+              >
+                {printIcon}
+                {t.custPrintAllLabels}
+              </button>
               <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
                 {new Date(go.createdAt).toLocaleDateString()}
               </span>
@@ -607,13 +647,11 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                         {h}
                       </th>
                     ))}
-                    {groupHasActions && (
-                      <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600,
-                        fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
-                        color: 'var(--color-text-subtle)' }}>
-                        {t.ceoActionsCol}
-                      </th>
-                    )}
+                    <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600,
+                      fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase',
+                      color: 'var(--color-text-subtle)' }}>
+                      {t.ceoActionsCol}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -645,10 +683,23 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
                         {o.companyServicePrice != null ? `₾${o.companyServicePrice.toFixed(2)}` : '—'}
                       </td>
-                      {groupHasActions && (
-                        <td style={{ padding: '10px 16px', textAlign: 'right' }}>
-                          {(canCustomerEdit(o) || canCustomerCancel(o)) && (
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                      <td style={{ padding: '10px 16px', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                onClick={() => printParcelLabels([buildParcelLabel(go, o)])}
+                                title={t.custLabelBtn}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                                  padding: '5px 12px', borderRadius: 'var(--radius-sm)',
+                                  border: '1px solid var(--color-border)', background: 'var(--color-bg-2)',
+                                  color: 'var(--color-text)', fontSize: '0.78rem', fontWeight: 600,
+                                  cursor: 'pointer', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {printIcon}
+                                {t.custLabelBtn}
+                              </button>
                               {canCustomerEdit(o) && (
                                 <button
                                   type="button"
@@ -685,10 +736,8 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                                   {t.ceoCancelBtn}
                                 </button>
                               )}
-                            </div>
-                          )}
-                        </td>
-                      )}
+                          </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1088,5 +1137,12 @@ const logoutIcon = (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
     <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M10 11l3-3-3-3M13 8H6"
       stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const printIcon = (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+    <path d="M4 6V2h8v4M4 12H3a1 1 0 01-1-1V7a1 1 0 011-1h10a1 1 0 011 1v4a1 1 0 01-1 1h-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    <rect x="4" y="10" width="8" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.3" />
   </svg>
 );
