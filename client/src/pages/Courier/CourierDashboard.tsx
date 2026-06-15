@@ -91,11 +91,22 @@ export function CourierDashboard() {
         finally { setBusyId(null); }
     }
 
+    // Apply the same action to several pickups at once (same-status bulk action).
+    // Each order is attempted independently so one failure doesn't abort the rest.
+    async function actBulk(ids: string[], fn: (id: string) => Promise<void>, msg: string) {
+        setBusyId('__bulk__');
+        let fail = 0;
+        for (const id of ids) { try { await fn(id); } catch { fail++; } }
+        showToast(fail === 0 ? msg : t.cdBulkPartial(ids.length - fail, fail));
+        loadPickups(true); loadDeliveries(true);
+        setBusyId(null);
+    }
+
     const handleSignOut = () => { signOut(); navigate('/login', { replace: true }); };
     const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : 'C';
     const fullName = user ? `${user.firstName} ${user.lastName}` : '';
 
-    const pickupProps = { pickups, loading: pickupLoading, error: pickupError, onRefresh: loadPickups, busyId, token: token!, onAct: act };
+    const pickupProps = { pickups, loading: pickupLoading, error: pickupError, onRefresh: loadPickups, busyId, token: token!, onAct: act, onBulkAct: actBulk };
     const deliveryProps = { deliveries, loading: deliveriesLoading, error: deliveriesError, busyId, token: token!, onAct: act };
 
     // ── Mobile ─────────────────────────────────────────────────────────────────

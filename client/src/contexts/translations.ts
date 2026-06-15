@@ -731,6 +731,12 @@ const en = {
   cdDeliveryToastReturnPickup:    'Picked up from recipient.',
   cdDeliveryToastReturnWarehouse: 'Return delivered to warehouse.',
   cdToastFailed:             'Action failed.',
+  cdBulkSelected:            (n: number) => `${n} selected`,
+  cdBulkApplying:            'Applying…',
+  cdBulkMixed:               'Select pickups at the same stage to act on all at once',
+  cdBulkClear:               'Clear',
+  cdBulkPartial:             (ok: number, fail: number) => `${ok} done, ${fail} failed.`,
+  cdSelectCustomerTitle:     (n: number) => `Select all ${n} orders from this customer`,
 
   // Collect confirm modal
   cdCollectTitle:    'Confirm Cash Collection',
@@ -2156,6 +2162,12 @@ const ka: typeof en = {
   cdDeliveryToastReturnPickup:    'მიმღებისგან აღებულია.',
   cdDeliveryToastReturnWarehouse: 'დაბრუნება საწყობში ჩაბარდა.',
   cdToastFailed:             'მოქმედება ვერ შესრულდა.',
+  cdBulkSelected:            (n: number) => `არჩეულია ${n}`,
+  cdBulkApplying:            'მიმდინარეობს…',
+  cdBulkMixed:               'ერთდროულად მოქმედებისთვის აირჩიეთ ერთ ეტაპზე მყოფი აღებები',
+  cdBulkClear:               'გასუფთავება',
+  cdBulkPartial:             (ok: number, fail: number) => `${ok} შესრულდა, ${fail} ვერ შესრულდა.`,
+  cdSelectCustomerTitle:     (n: number) => `ამ მომხმარებლის ${n} შეკვეთის მონიშვნა`,
 
   // Collect confirm modal
   cdCollectTitle:    'ნაღდის დადასტურება',
