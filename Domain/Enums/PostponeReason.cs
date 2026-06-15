@@ -8,5 +8,4 @@ public enum PostponeReason
     RecipientNotAtAddress       = 3,
     RecipientRequestedReschedule = 4,
     AddressNotFound             = 5,
-    InsufficientAccessToBuilding = 6,
 }

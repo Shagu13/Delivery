@@ -41,5 +41,7 @@ public sealed record AdminOrderListDto(
     string?  CourierFullName,   // assigned courier's first + last name, null when unassigned
     // Dates
     DateTime CreatedAt,
-    DateTime? DeliveredAt
+    DateTime? DeliveredAt,
+    // Reason a delivery attempt failed (only set when Status == DeliveryPostponed)
+    string?  PostponeReason
 );

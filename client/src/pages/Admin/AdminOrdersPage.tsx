@@ -48,6 +48,7 @@ export interface AdminOrderItem {
   courierFullName: string | null;
   createdAt: string;
   deliveredAt: string | null;
+  postponeReason: string | null;
 }
 
 interface PagedResult {
@@ -1110,6 +1111,11 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       {order.courierFullName && (
                         <div className="aop-courier-name" title={order.courierFullName}>
                           {order.courierFullName}
+                        </div>
+                      )}
+                      {order.status === 'DeliveryPostponed' && order.postponeReason && (
+                        <div style={{ fontSize: '0.7rem', color: '#f97316', marginTop: 2 }}>
+                          {t.cdPostponeReasons[order.postponeReason]}
                         </div>
                       )}
                     </td>

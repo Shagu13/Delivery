@@ -3,7 +3,6 @@ import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markOrderDelivering, markOrderDelivered, postponeOrder, retryDelivery,
     markReturnPickedUp, markReturnDeliveredWarehouse,
-    POSTPONE_REASON_LABELS,
 } from '../../../api/orders';
 import type { CourierOrder } from '../../../api/orders';
 import { SwipeButton } from './SwipeButton';
@@ -209,7 +208,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         {order.status === 'DeliveryPostponed' && order.postponeReason && (
                                             <div className="courier-card__row">
                                                 <span className="courier-card__label">{t.cdLabelPostponed}</span>
-                                                <span className="courier-card__value" style={{ color: '#f97316' }}>{POSTPONE_REASON_LABELS[order.postponeReason]}</span>
+                                                <span className="courier-card__value" style={{ color: '#f97316' }}>{t.cdPostponeReasons[order.postponeReason]}</span>
                                             </div>
                                         )}
                                         {order.description && <div className="courier-card__note">{order.description}</div>}

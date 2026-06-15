@@ -25,7 +25,7 @@ export function PostponeModal({ isBusy, onCancel, onConfirm }: PostponeModalProp
                                 background: selected === reason ? 'var(--color-accent-dim)' : 'transparent',
                                 textAlign: 'left', cursor: 'pointer', fontSize: '0.875rem',
                                 fontWeight: selected === reason ? 600 : 400 }}>
-                            {POSTPONE_REASON_LABELS[reason]}
+                            {t.cdPostponeReasons[reason]}
                         </button>
                     ))}
                 </div>

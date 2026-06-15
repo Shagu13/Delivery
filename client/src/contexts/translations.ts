@@ -749,6 +749,13 @@ const en = {
 
   // Postpone modal
   cdPostponeTitle: 'Why could you not deliver?',
+  cdPostponeReasons: {
+    RecipientDidNotAnswer:        'Recipient did not answer',
+    WrongRecipientPhoneNumber:    'Wrong recipient phone number',
+    RecipientNotAtAddress:        'Recipient is not at the address',
+    RecipientRequestedReschedule: 'Recipient requested a reschedule',
+    AddressNotFound:              'Address could not be found',
+  } as Record<string, string>,
 
   // Settlements page
   cdSettTitle:              'My Settlements',
@@ -2180,6 +2187,13 @@ const ka: typeof en = {
 
   // Postpone modal
   cdPostponeTitle: 'რატომ ვერ ჩააბარეთ?',
+  cdPostponeReasons: {
+    RecipientDidNotAnswer:        'მიმღებმა არ უპასუხა',
+    WrongRecipientPhoneNumber:    'მიმღების არასწორი ტელეფონის ნომერი',
+    RecipientNotAtAddress:        'მიმღები მისამართზე არ იმყოფება',
+    RecipientRequestedReschedule: 'მიმღებმა გადატანა მოითხოვა',
+    AddressNotFound:              'მისამართი ვერ მოიძებნა',
+  } as Record<string, string>,
 
   // Settlements page
   cdSettTitle:              'ჩემი ანგარიშსწორებები',

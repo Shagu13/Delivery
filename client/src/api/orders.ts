@@ -7,8 +7,7 @@ export type PostponeReason =
     | 'WrongRecipientPhoneNumber'
     | 'RecipientNotAtAddress'
     | 'RecipientRequestedReschedule'
-    | 'AddressNotFound'
-    | 'InsufficientAccessToBuilding';
+    | 'AddressNotFound';
 
 export const POSTPONE_REASON_LABELS: Record<PostponeReason, string> = {
     RecipientDidNotAnswer:         'Recipient did not answer',
@@ -16,7 +15,6 @@ export const POSTPONE_REASON_LABELS: Record<PostponeReason, string> = {
     RecipientNotAtAddress:         'Recipient is not at the address',
     RecipientRequestedReschedule:  'Recipient requested a reschedule',
     AddressNotFound:               'Address could not be found',
-    InsufficientAccessToBuilding:  'Insufficient access to the building',
 };
 
 export interface CourierOrder {
