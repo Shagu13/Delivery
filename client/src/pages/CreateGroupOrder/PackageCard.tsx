@@ -509,7 +509,7 @@ export function PackageCard({
                     value={data.amountToCollectForPackage ?? ''}
                     onChange={e => {
                       const val = parseFloat(e.target.value);
-                      onChange(index, 'amountToCollectForPackage', isNaN(val) ? 0 : val);
+                      onChange(index, 'amountToCollectForPackage', isNaN(val) ? null : val);
                     }}
                     placeholder="e.g. 100.00"
                   />
@@ -535,7 +535,7 @@ export function PackageCard({
                     value={data.amountToCollectForPackage ?? ''}
                     onChange={e => {
                       const val = parseFloat(e.target.value);
-                      onChange(index, 'amountToCollectForPackage', isNaN(val) ? 0 : val);
+                      onChange(index, 'amountToCollectForPackage', isNaN(val) ? null : val);
                     }}
                     placeholder="e.g. 45.00"
                   />

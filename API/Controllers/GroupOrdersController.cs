@@ -316,7 +316,7 @@ public sealed class GroupOrdersController : BaseController
                 Districts = c.Districts
                     .Where(d => d.DateDeleted == null)
                     .OrderBy(d => d.DistrictName)
-                    .Select(d => new { d.DistrictName, d.DistrictNameGeo })
+                    .Select(d => new { d.DistrictName, d.DistrictNameGeo, d.IsCapitalTerritory })
                     .ToList()
             })
             .ToListAsync(ct);
@@ -397,6 +397,24 @@ public sealed class GroupOrdersController : BaseController
         wsData.Cell(2, payerRecipientCol).Value = recipientLabel;
         workbook.DefinedNames.Add("PayerRecipient", wsData.Range(2, payerRecipientCol, 2, payerRecipientCol));
 
+        // ── Empty district list (for capital cities) ──────────────────────────
+        // The capital (e.g. Tbilisi) has no user-facing district choice — the
+        // district dropdown points here (an empty cell) so nothing is offered and
+        // nothing is required. Leaving the cell blank is accepted; the importer
+        // resolves a capital-territory district for pricing on its own.
+        int noDistrictCol = cities.Count + 5;
+        wsData.Cell(1, noDistrictCol).Value = "NoDistrict";
+        // row 2 intentionally left blank
+        workbook.DefinedNames.Add("NoDistrict", wsData.Range(2, noDistrictCol, 2, noDistrictCol));
+
+        // Display names of capital cities (those whose districts are capital
+        // territory) for the current template language — used to blank out their
+        // district dropdown below.
+        var capitalCityNames = cities
+            .Where(c => c.Districts.Any(d => d.IsCapitalTerritory))
+            .Select(c => isGeo && !string.IsNullOrWhiteSpace(c.CityNameGeo) ? c.CityNameGeo! : c.CityName)
+            .ToList();
+
         // ── Orders sheet ──────────────────────────────────────────────────────
         var ws = workbook.Worksheets.Add("Orders");
 
@@ -409,10 +427,10 @@ public sealed class GroupOrdersController : BaseController
                 "მისამართი",
                 "აღწერა",
                 "გადახდის სტატუსი",
-                "ვინ იხდის სერვის საფასურს",
+                "ვინ იხდის საკურიეროს",
                 "მტვრევადია",
                     "ამანათის ფასი (₾)",
-                    "სერვისის საფასური ფასშია"
+                    "საკურიეროს საფასური ფასშია"
               ]
             : [
                 "RecipientName",
@@ -446,7 +464,7 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 1).Value = "ანა სმიტი";
             ws.Cell(2, 2).Value = "599123456";
             ws.Cell(2, 3).Value = "თბილისი";
-            ws.Cell(2, 4).Value = "საბურთალო";
+            // Capital: no district — leave the district cell blank on purpose.
             ws.Cell(2, 5).Value = "პეკინის გამზ. 42";
             ws.Cell(2, 6).Value = "მტვრევადი – ფრთხილად";
             ws.Cell(2, 7).Value = "გადასახდელი";
@@ -460,7 +478,7 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 1).Value = "Ana Smith";
             ws.Cell(2, 2).Value = "599123456";
             ws.Cell(2, 3).Value = "Tbilisi";
-            ws.Cell(2, 4).Value = "Saburtalo";
+            // Capital: no district — leave the district cell blank on purpose.
             ws.Cell(2, 5).Value = "Pekini Ave 42";
             ws.Cell(2, 6).Value = "Fragile – handle with care";
             ws.Cell(2, 7).Value = "Not Paid";
@@ -497,7 +515,18 @@ public sealed class GroupOrdersController : BaseController
             var distVal = ws.Cell(row, 4).CreateDataValidation();
             // Map the selected city (C{row}) to its district range by position:
             // MATCH finds the city's index in CityList, giving the DIST_<n> name.
-            distVal.List($"INDIRECT(\"DIST_\"&MATCH(C{row},CityList,0))", true);
+            string distListFormula = $"INDIRECT(\"DIST_\"&MATCH(C{row},CityList,0))";
+
+            // For the capital (e.g. Tbilisi) the district list collapses to the
+            // empty NoDistrict range — nothing to choose, nothing required.
+            if (capitalCityNames.Count > 0)
+            {
+                string cond = string.Join(",", capitalCityNames.Select(n => $"C{row}=\"{n}\""));
+                string capitalTest = capitalCityNames.Count == 1 ? cond : $"OR({cond})";
+                distListFormula = $"IF({capitalTest},NoDistrict,{distListFormula})";
+            }
+
+            distVal.List(distListFormula, true);
             distVal.ShowErrorMessage = true;
             distVal.ErrorTitle = isGeo ? "არასწორი რაიონი" : "Invalid District";
             distVal.ErrorMessage = isGeo

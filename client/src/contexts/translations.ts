@@ -1095,6 +1095,9 @@ const en = {
   custThCod:                 'COD',
   custThServiceFee:          'Service Fee',
   custAltPhone:              'Alternative Mobile Number',
+  custSearchPlaceholder:     'Search by tracking #, recipient name, mobile number, or city',
+  custSearchNoResults:       'No packages match your search',
+  custSearchClear:           'Clear',
 
   // Customer edit-order modal
   ceoTitle:                  'Edit Package',
@@ -2517,6 +2520,9 @@ const ka: typeof en = {
   custThCod:                 'COD',
   custThServiceFee:          'საკურიეროს საფასური',
   custAltPhone:              'ალტერნატიული მობილურის ნომერი',
+  custSearchPlaceholder:     'ძებნა Tracking #-ით, მიმღების სახელით, მობილურის ნომრით ან ქალაქით',
+  custSearchNoResults:       'თქვენს ძებნას არცერთი ამანათი არ ემთხვევა',
+  custSearchClear:           'გასუფთავება',
 
   // Customer edit-order modal
   ceoTitle:                  'ამანათის რედაქტირება',
@@ -2806,7 +2812,7 @@ const ka: typeof en = {
     ofinNoneDay:         'ამ თარიღზე შეკვეთები არ არის.',
     ofinNoneAll:         'შეკვეთები ჯერ არ არის.',
     ofinSelectCustomer:  'აირჩიეთ მომხმარებელი მისი შეკვეთების სანახავად და დასარეგულირებლად.',
-    ofinSumOrders:       'შეკვეთები',
+    ofinSumOrders:       'შეკვეთა',
     ofinSumCodOut:       'COD ნაშთი',
     ofinSumServiceOut:   'მომსახურების ნაშთი',
     ofinSumCodPaidOut:   'გადახდილი COD',

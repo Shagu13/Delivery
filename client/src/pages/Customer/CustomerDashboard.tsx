@@ -105,6 +105,16 @@ function cancelledCount(go: CustomerGroupOrder): number {
   return go.orders.filter(o => CANCELLED_STATUSES.has(o.status)).length;
 }
 
+// Does a package match the customer's free-text search? Matches against tracking
+// number, recipient name, recipient mobile number, and recipient city (both the
+// English and Georgian city names). Query is already lower-cased & trimmed.
+function orderMatchesSearch(o: CustomerOrder, q: string): boolean {
+  return [
+    o.trackingNumber, o.recipientName, o.recipientPhone,
+    o.recipientCity, o.recipientCityGeo,
+  ].some(field => field?.toLowerCase().includes(q));
+}
+
 // ── Main dashboard ─────────────────────────────────────────────────────────────
 
 export function CustomerDashboard() {
@@ -416,7 +426,19 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
   const [cancelTarget, setCancelTarget] = useState<CustomerOrder | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const { lang, t } = useLanguage();
+
+  const query = search.trim().toLowerCase();
+  const searching = query.length > 0;
+
+  // When searching, narrow each group to the packages that match and drop groups
+  // with no matches. Each entry carries the packages to render for that card.
+  const visibleGroups: { go: CustomerGroupOrder; pkgs: CustomerOrder[] }[] = searching
+    ? orders
+        .map(go => ({ go, pkgs: go.orders.filter(o => orderMatchesSearch(o, query)) }))
+        .filter(entry => entry.pkgs.length > 0)
+    : orders.map(go => ({ go, pkgs: go.orders }));
 
   const handleCancel = async () => {
     if (!cancelTarget) return;
@@ -455,10 +477,62 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {orders.map(go => {
+      {/* Search bar */}
+      <div style={{ position: 'relative' }}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+             style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+          <circle cx="7" cy="7" r="5" stroke="var(--color-text-subtle)" strokeWidth="1.5" />
+          <path d="M11 11l3 3" stroke="var(--color-text-subtle)" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={t.custSearchPlaceholder}
+          style={{
+            width: '100%', padding: '11px 38px 11px 40px', borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-border)', background: 'var(--color-bg-2)',
+            color: 'var(--color-text)', fontSize: '0.88rem', fontFamily: 'var(--font-body)',
+            boxSizing: 'border-box',
+          }}
+        />
+        {searching && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            aria-label={t.custSearchClear}
+            style={{
+              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 22, height: 22, borderRadius: '50%', border: 'none', cursor: 'pointer',
+              background: 'var(--color-border)', color: 'var(--color-text-subtle)',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {searching && visibleGroups.length === 0 && (
+        <div className="content-card">
+          <div className="empty-state">
+            <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
+              <circle cx="17" cy="17" r="12" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M26 26l9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span className="empty-state__text">{t.custSearchNoResults}</span>
+          </div>
+        </div>
+      )}
+
+      {visibleGroups.map(({ go, pkgs }) => {
         // Customers may edit (Send/Exchange) or cancel (any type) a package while it's
         // still early in its flow — judged per individual order.
-        const groupHasActions = go.orders.some(o => canCustomerEdit(o) || canCustomerCancel(o));
+        const groupHasActions = pkgs.some(o => canCustomerEdit(o) || canCustomerCancel(o));
+        // While searching, force matching groups open so the hits are visible.
+        const isExpanded = searching || expanded === go.id;
         return (
         <div key={go.id} className="content-card">
           {/* Group order header */}
@@ -491,14 +565,14 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                 {new Date(go.createdAt).toLocaleDateString()}
               </span>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-                   style={{ transform: expanded === go.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
+                   style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
                 <path d="M3 6l5 5 5-5" stroke="var(--color-text-subtle)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
           </div>
 
           {/* Expanded: individual packages */}
-          {expanded === go.id && (
+          {isExpanded && (
             <>
             {go.alternativeSenderPhone && (
               <div style={{ padding: '10px 16px', fontSize: '0.82rem', color: 'var(--color-text-subtle)' }}>
@@ -529,7 +603,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                   </tr>
                 </thead>
                 <tbody>
-                  {go.orders.map(o => (
+                  {pkgs.map(o => (
                     <tr key={o.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                       <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: '0.8rem',
                         color: 'var(--color-accent)', fontWeight: 600 }}>

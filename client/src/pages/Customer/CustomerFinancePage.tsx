@@ -116,11 +116,15 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
 
 export function CustomerFinancePage() {
     const { token } = useAuth();
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
+    // Render a YYYY-MM-DD value as a localized, human-readable date (with weekday).
+    const readableDate = (s: string) =>
+        new Date(s + 'T00:00:00').toLocaleDateString(lang === 'ka' ? 'ka-GE' : 'en-US',
+            { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     // 'placed' filters by order creation date; 'payments' by the COD-payment date
     // (CodPaidToCustomerAt) — only orders whose COD was paid out are shown.
     const [mode, setMode] = useState<'placed' | 'payments'>('placed');
-    const [date, setDate] = useState('');            // '' = all dates
+    const [date, setDate] = useState(toDateStr(new Date()));   // defaults to today ('' = all dates)
     const [items, setItems] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -160,7 +164,9 @@ export function CustomerFinancePage() {
                     <button style={{ ...segBtn(mode === 'placed'), borderRight: '1px solid var(--color-border)' }} onClick={() => setMode('placed')}>{t.ofinTabPlaced}</button>
                     <button style={segBtn(mode === 'payments')} onClick={() => setMode('payments')}>{t.ofinTabPayments}</button>
                 </div>
-                <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{t.ofinShowing(date || t.statAllDates)}</span>
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text)', fontWeight: 600 }}>
+                    {t.ofinShowing(date ? readableDate(date) : t.statAllDates)}
+                </span>
             </div>
 
             {/* Date filter */}
