@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
@@ -22,6 +22,8 @@ import '../../styles/dashboard.css';
 
 
 type View = 'overview' | 'shipments' | 'finance' | 'statistics' | 'profile' | 'password' | 'calculator';
+
+const CUSTOMER_VIEWS: readonly View[] = ['overview', 'shipments', 'finance', 'statistics', 'profile', 'password', 'calculator'];
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
@@ -120,9 +122,21 @@ function orderMatchesSearch(o: CustomerOrder, q: string): boolean {
 export function CustomerDashboard() {
   const { user, token, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useLanguage();
-  const [view, setView] = useState<View>('overview');
+
+  // Seed the active view from the URL so a page refresh stays on the current page.
+  const viewParam = searchParams.get('view') ?? '';
+  const [view, setView] = useState<View>(
+    (CUSTOMER_VIEWS as readonly string[]).includes(viewParam) ? (viewParam as View) : 'overview'
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Persist the view in the URL (replace, no history spam) so refresh restores it.
+  const goTo = (v: View) => {
+    navigate(v === 'overview' ? '/customer' : `/customer?view=${v}`, { replace: true });
+    setView(v);
+  };
 
   // shared state fetched once
   const [profile,  setProfile]  = useState<Customer | null>(null);
@@ -191,7 +205,7 @@ export function CustomerDashboard() {
             <button
               key={v}
               className={`sidebar__link ${view === v ? 'sidebar__link--active' : ''}`}
-              onClick={() => setView(v)}
+              onClick={() => goTo(v)}
             >
               {icon}{label}
             </button>
@@ -286,7 +300,7 @@ export function CustomerDashboard() {
                   <button
                     key={v}
                     className={`sidebar__link ${view === v ? 'sidebar__link--active' : ''}`}
-                    onClick={() => { setView(v); setMobileMenuOpen(false); }}
+                    onClick={() => { goTo(v); setMobileMenuOpen(false); }}
                   >
                     {icon}{label}
                   </button>
@@ -335,7 +349,7 @@ export function CustomerDashboard() {
                   active={active}
                   delivered={delivered}
                   recentOrders={orders.slice(0, 3)}
-                  onViewAll={() => setView('shipments')}
+                  onViewAll={() => goTo('shipments')}
                 />
               )}
               {view === 'shipments'   && <ShipmentsView orders={orders} token={token ?? ''} onRefresh={refreshOrders} />}

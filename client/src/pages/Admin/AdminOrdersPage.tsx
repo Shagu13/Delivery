@@ -280,7 +280,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
 
-  const [showTracking,  setShowTracking]  = useState(true);
+  const [showTracking,  setShowTracking]  = useState(false);
   const [showPrices,    setShowPrices]    = useState(true);
 
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -1054,6 +1054,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <th className="aop-th">{t.aopThPhone}</th>
                 <th className="aop-th">{t.aopThCityDistrict}</th>
                 <th className="aop-th">{t.aopThStatus}</th>
+                <th className="aop-th aop-th--num">{t.aopThCod}</th>
                 {showPrices && <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>}
                 {showPrices && <th className="aop-th aop-th--num">{t.aopThSalary}</th>}
                 {showPrices && <th className="aop-th aop-th--num">{t.aopThRevenue}</th>}
@@ -1111,6 +1112,12 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                           {order.courierFullName}
                         </div>
                       )}
+                    </td>
+                    <td className="aop-td aop-td--num">
+                      {order.amountToCollectForPackage != null
+                        ? <span className="aop-price">₾{order.amountToCollectForPackage.toFixed(2)}</span>
+                        : <span className="aop-price aop-price--empty">—</span>
+                      }
                     </td>
                     {showPrices && (
                       <td className="aop-td aop-td--num">
