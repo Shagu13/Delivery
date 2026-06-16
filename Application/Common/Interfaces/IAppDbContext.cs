@@ -17,5 +17,8 @@ public interface IAppDbContext
     DbSet<CustomerSettlement>   CustomerSettlements  { get; }
     DbSet<WeightPriceTier>      WeightPriceTiers     { get; }
     DbSet<PasswordResetToken>   PasswordResetTokens  { get; }
+    DbSet<PartnerApiKey>        PartnerApiKeys       { get; }
+    DbSet<PartnerWebhook>       PartnerWebhooks      { get; }
+    DbSet<WebhookDelivery>      WebhookDeliveries    { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

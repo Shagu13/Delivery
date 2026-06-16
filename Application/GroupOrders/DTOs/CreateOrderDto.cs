@@ -29,5 +29,10 @@ public sealed record CreateOrderDto(
     /// True when AmountToCollectForPackage is the all-in price (product + service fee).
     /// The resolved service fee is subtracted so only the product portion is stored as COD.
     /// </summary>
-    bool           IsCompanyServicePriceIncluded = false
+    bool           IsCompanyServicePriceIncluded = false,
+    /// <summary>
+    /// The partner's own order number when this order is placed through the partner API.
+    /// Stored on the Order for de-duplication and reconciliation. Null for web/admin orders.
+    /// </summary>
+    string?        ExternalReference             = null
 );

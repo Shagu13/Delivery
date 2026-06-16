@@ -184,6 +184,7 @@ public sealed class CreateGroupOrderCommandHandler
                 ReturnPickupDistrict      = o.OrderType == OrderType.Return ? o.ReturnPickupDistrict : null,
                 Latitude                  = o.Latitude,
                 Longitude                 = o.Longitude,
+                ExternalReference         = o.ExternalReference,
             };
 
             if (o.OrderType == OrderType.Return)

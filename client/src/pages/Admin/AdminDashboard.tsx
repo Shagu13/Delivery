@@ -18,6 +18,7 @@ import { getStatusMeta } from '../../utils/statusMeta';
 import '../../styles/dashboard.css';
 import { fetchSmsBalance } from '../../api/sms';
 import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
+import AdminPartnersPage from './AdminPartnersPage';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
@@ -37,9 +38,9 @@ const ACTIVE_ORDER_STATUSES_ONLY = new Set([
 ]);
 
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'history' | 'returnExchange' | 'finance';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'history' | 'returnExchange' | 'finance';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'history', 'returnExchange', 'finance'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'history', 'returnExchange', 'finance'];
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -189,6 +190,17 @@ export function AdminDashboard() {
               <span className="sidebar__link-text">{t.sidebarWeightTiers}</span>
           </button>
           <button
+            className={`sidebar__link ${activeView === 'partners' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('partners')}
+            title="Partner API"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M6.5 9.5L3.8 12.2a2.2 2.2 0 0 1-3.1-3.1l2.7-2.7M9.5 6.5l2.7-2.7a2.2 2.2 0 0 1 3.1 3.1l-2.7 2.7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M6 10l4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            <span className="sidebar__link-text">Partner API</span>
+          </button>
+          <button
             className={`sidebar__link ${activeView === 'history' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('history')}
             title={t.sidebarHistory}
@@ -256,6 +268,7 @@ export function AdminDashboard() {
             {activeView === 'customers' && t.topbarCustomers}
             {activeView === 'cities' && t.topbarCities}
             {activeView === 'weightTiers' && t.topbarWeightTiers}
+            {activeView === 'partners' && 'Partner API'}
             {activeView === 'history' && t.topbarHistory}
             {activeView === 'returnExchange' && t.navReturnExchange}
             {activeView === 'finance' && t.navFinance}
@@ -279,6 +292,7 @@ export function AdminDashboard() {
                   {activeView === 'weightTiers' && token && (
                       <AdminWeightPriceTiersPage token={token} />
                   )}
+          {activeView === 'partners' && token && <AdminPartnersPage token={token} />}
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
           {activeView === 'finance' && <AdminFinancePage token={token ?? ''} />}
           {activeView === 'returnExchange' && token && (

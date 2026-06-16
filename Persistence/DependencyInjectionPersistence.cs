@@ -19,6 +19,8 @@ public static class DependencyInjectionPersistence
         services.AddScoped<PendingCountsChangeInterceptor>();
         // Pushes "refetch" pings to admin + courier dashboards after order/assignment saves.
         services.AddScoped<RealtimeDashboardInterceptor>();
+        // Enqueues partner webhook deliveries (outbox) when an order's status changes.
+        services.AddScoped<WebhookOutboxInterceptor>();
 
         services.AddDbContext<AppDbContext>((sp, options) =>
             options
@@ -30,7 +32,8 @@ public static class DependencyInjectionPersistence
                         .CommandTimeout(30))
                 .AddInterceptors(
                     sp.GetRequiredService<PendingCountsChangeInterceptor>(),
-                    sp.GetRequiredService<RealtimeDashboardInterceptor>()));
+                    sp.GetRequiredService<RealtimeDashboardInterceptor>(),
+                    sp.GetRequiredService<WebhookOutboxInterceptor>()));
 
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<ITrackingNumberGenerator, TrackingNumberGenerator>();

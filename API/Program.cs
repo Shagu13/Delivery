@@ -58,6 +58,13 @@ try
     builder.Services.AddPersistence(builder.Configuration);
     builder.Services.AddInfrastructure(builder.Configuration);
 
+    // ── Partner API-key authentication ─────────────────────────────────────────
+    // Registered as an extra scheme alongside the JWT default (set in Infrastructure).
+    // Partner endpoints opt in via [Authorize(AuthenticationSchemes = "ApiKey")].
+    builder.Services.AddAuthentication()
+        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, API.Auth.ApiKeyAuthenticationHandler>(
+            API.Auth.ApiKeyAuthenticationHandler.SchemeName, null);
+
     // ── Controllers ──────────────────────────────────────────────────────────
     builder.Services.AddControllers()
         .AddJsonOptions(o =>
@@ -76,6 +83,10 @@ try
         });
     builder.Services.AddSingleton<IPendingCountsNotifier, PendingCountsNotifier>();
     builder.Services.AddSingleton<IRealtimeNotifier, RealtimeNotifier>();
+
+    // ── Partner webhooks: outbound delivery worker ─────────────────────────────
+    builder.Services.AddHttpClient("webhooks", c => c.Timeout = TimeSpan.FromSeconds(10));
+    builder.Services.AddHostedService<API.Webhooks.WebhookSenderService>();
 
     // ── Swagger ──────────────────────────────────────────────────────────────
     builder.Services.AddEndpointsApiExplorer();

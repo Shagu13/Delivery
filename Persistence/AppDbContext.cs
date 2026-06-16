@@ -22,6 +22,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<CustomerSettlement> CustomerSettlements => Set<CustomerSettlement>();
     public DbSet<WeightPriceTier>  WeightPriceTiers  => Set<WeightPriceTier>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<PartnerApiKey>    PartnerApiKeys    => Set<PartnerApiKey>();
+    public DbSet<PartnerWebhook>   PartnerWebhooks   => Set<PartnerWebhook>();
+    public DbSet<WebhookDelivery>  WebhookDeliveries => Set<WebhookDelivery>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -139,6 +142,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(o => o.RecipientDistrict).HasMaxLength(100).IsRequired();
             e.Property(o => o.RecipientAddress).HasMaxLength(250).IsRequired();
             e.Property(o => o.TrackingNumber).HasMaxLength(30).IsRequired();
+            e.HasIndex(o => o.ExternalReference);
+            e.Property(o => o.ExternalReference).HasMaxLength(100);
             e.Property(o => o.Description).HasMaxLength(500);
             e.Property(o => o.Status).HasConversion<string>().HasMaxLength(50);
             e.Property(o => o.OrderType).HasConversion<string>().HasMaxLength(20);
@@ -244,6 +249,45 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(t => t.CapitalPrice).HasColumnType("decimal(18,2)");
             e.Property(t => t.CityPrice).HasColumnType("decimal(18,2)");
             e.Property(t => t.DistrictPrice).HasColumnType("decimal(18,2)");
+        });
+
+        // ── PartnerApiKey ─────────────────────────────────────────────────────
+        modelBuilder.Entity<PartnerApiKey>(e =>
+        {
+            e.HasKey(k => k.Id);
+            e.HasIndex(k => k.KeyHash).IsUnique();
+            e.HasIndex(k => k.CustomerId);
+            e.HasOne(k => k.Customer).WithMany()
+             .HasForeignKey(k => k.CustomerId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(k => k.Name).HasMaxLength(150).IsRequired();
+            e.Property(k => k.KeyHash).HasMaxLength(128).IsRequired();
+            e.Property(k => k.KeyPrefix).HasMaxLength(20).IsRequired();
+        });
+
+        // ── PartnerWebhook ────────────────────────────────────────────────────
+        modelBuilder.Entity<PartnerWebhook>(e =>
+        {
+            e.HasKey(w => w.Id);
+            e.HasIndex(w => w.CustomerId);
+            e.HasOne(w => w.Customer).WithMany()
+             .HasForeignKey(w => w.CustomerId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(w => w.Url).HasMaxLength(500).IsRequired();
+            e.Property(w => w.Secret).HasMaxLength(200).IsRequired();
+        });
+
+        // ── WebhookDelivery (outbox) ──────────────────────────────────────────
+        modelBuilder.Entity<WebhookDelivery>(e =>
+        {
+            e.HasKey(d => d.Id);
+            e.HasIndex(d => new { d.Status, d.NextAttemptAt });
+            e.HasIndex(d => d.WebhookId);
+            e.HasIndex(d => d.CustomerId);
+            e.HasOne(d => d.Webhook).WithMany()
+             .HasForeignKey(d => d.WebhookId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(d => d.EventType).HasMaxLength(100).IsRequired();
+            e.Property(d => d.PayloadJson).IsRequired();
+            e.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(d => d.LastError).HasMaxLength(1000);
         });
 
         // ── PasswordResetToken ────────────────────────────────────────────────

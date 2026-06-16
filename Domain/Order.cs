@@ -127,6 +127,14 @@ public class Order
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
     public required string TrackingNumber { get; set; }
 
+    /// <summary>
+    /// The partner's own order number for orders placed through the partner API
+    /// (onway's <c>order_number</c> equivalent). Used to de-duplicate retried
+    /// submissions and to let a partner reconcile/track by their own reference.
+    /// Null for orders placed through the web/admin UI.
+    /// </summary>
+    public string? ExternalReference { get; set; }
+
     // ── Timestamps ───────────────────────────────────────────────────────────
     public DateTime  CreatedAt                { get; set; } = DateTime.UtcNow;
 
