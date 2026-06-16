@@ -1,4 +1,5 @@
 using Application.Common.Exceptions;
+using Application.Common.Validation;
 using Domain;
 using FluentValidation;
 using FluentValidation.Results;
@@ -23,12 +24,7 @@ public sealed class ChangePasswordCommandValidator : AbstractValidator<ChangePas
     public ChangePasswordCommandValidator()
     {
         RuleFor(x => x.CurrentPassword).NotEmpty();
-        RuleFor(x => x.NewPassword)
-            .NotEmpty()
-            .MinimumLength(8)
-            .MaximumLength(100)
-            .Matches("[A-Z]").WithMessage("New password must contain at least one uppercase letter.")
-            .Matches("[0-9]").WithMessage("New password must contain at least one number.");
+        RuleFor(x => x.NewPassword).ApplyPasswordRules();
     }
 }
 

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { resetPassword, AuthError } from '../../api/auth';
 import { FormField } from '../../components/ui/FormField';
+import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
+import { firstPasswordError } from '../../utils/passwordRules';
 import { useLanguage } from '../../contexts/useLanguage';
 import '../Login/login.css';
 
@@ -29,12 +31,8 @@ export function ResetPasswordPage() {
 
   const validate = (): boolean => {
     const e: Partial<typeof form> = {};
-    if (form.newPassword.length < 8)
-      e.newPassword = t.errPasswordShort;
-    else if (!/[A-Z]/.test(form.newPassword))
-      e.newPassword = t.custErrNewPwdUppercase;
-    else if (!/[0-9]/.test(form.newPassword))
-      e.newPassword = t.custErrNewPwdNumber;
+    const pwdErr = firstPasswordError(form.newPassword, t);
+    if (pwdErr) e.newPassword = pwdErr;
     if (form.newPassword !== form.confirmPassword)
       e.confirmPassword = t.errPasswordMismatch;
     setErrors(e);
@@ -103,6 +101,7 @@ export function ResetPasswordPage() {
               placeholder={t.custNewPasswordPh}
               autoFocus
             />
+            <PasswordRequirements value={form.newPassword} />
             <FormField
               label={t.custConfirmNewPassword}
               type="password"

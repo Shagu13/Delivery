@@ -13,7 +13,8 @@ const gel = (n: number) => `₾${n.toFixed(2)}`;
 const toDateStr = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-// ── Shared button styles (these pages don't load the admin go-seg/.btn-ghost CSS) ──
+// Segmented toggle control (a tab selector, not a ghost button) — kept inline as a
+// small bespoke control. Day-nav buttons use the shared `.btn-ghost btn-ghost--sm`.
 const segWrap: React.CSSProperties = {
     display: 'inline-flex', border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--color-bg)',
@@ -25,12 +26,6 @@ const segBtn = (active: boolean): React.CSSProperties => ({
     fontSize: '0.8rem', fontWeight: active ? 700 : 500, padding: '7px 16px',
     whiteSpace: 'nowrap', transition: 'background .15s, color .15s',
 });
-const navBtn: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)',
-    fontSize: '0.82rem', fontWeight: 600, padding: '6px 12px', cursor: 'pointer', lineHeight: 1,
-};
 
 function Badge({ text, tone }: { text: string; tone: 'paid' | 'unpaid' | 'muted' }) {
     const palette = {
@@ -172,16 +167,16 @@ export function CustomerFinancePage() {
             {/* Date filter */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{mode === 'payments' ? t.ofinPaidDate : t.ofinFilterPlaced}</span>
-                <button onClick={() => shiftDay(-1)} title={t.statPrevDay} style={{ ...navBtn, padding: '6px 11px', fontSize: '0.95rem' }}>‹</button>
+                <button onClick={() => shiftDay(-1)} title={t.statPrevDay} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>‹</button>
                 <input
                     type="date"
                     value={date}
                     onChange={e => setDate(e.target.value)}
                     style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }}
                 />
-                <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay} style={{ ...navBtn, padding: '6px 11px', fontSize: '0.95rem', opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
-                {date && <button onClick={() => setDate('')} style={navBtn}>{t.statAllDates}</button>}
-                <button onClick={load} style={{ ...navBtn, marginLeft: 4 }}>{t.statRefresh}</button>
+                <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>›</button>
+                {date && <button onClick={() => setDate('')} className="btn-ghost btn-ghost--sm">{t.statAllDates}</button>}
+                <button onClick={load} className="btn-ghost btn-ghost--sm" style={{ marginLeft: 4 }}>{t.statRefresh}</button>
             </div>
 
             {loading ? (

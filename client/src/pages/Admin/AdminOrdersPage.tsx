@@ -131,7 +131,6 @@ function buildAdminLabel(o: AdminOrderItem): ParcelLabelData {
   const district = o.recipientDistrictGeo || o.recipientDistrict;
   return {
     storeName:        o.senderBusinessName,
-    senderPhone:      o.senderPhone || o.alternativeSenderPhone || '',
     recipientName:    o.recipientName,
     recipientPhone:   o.recipientPhone,
     recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
@@ -449,7 +448,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       .map(id => orders.find(o => o.id === id))
       .filter((o): o is AdminOrderItem => !!o)
       .map(buildAdminLabel);
-    printParcelLabels(labels);
+    void printParcelLabels(labels);
   };
 
   const handleBulkApply = async () => {

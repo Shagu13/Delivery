@@ -1,3 +1,4 @@
+using Application.Common.Validation;
 using FluentValidation;
 
 namespace Application.Customers.Commands.CreateCustomer;
@@ -27,9 +28,6 @@ public sealed class CreateCustomerCommandValidator : AbstractValidator<CreateCus
             .EmailAddress()
             .WithMessage("Please provide a valid email address.");
 
-        RuleFor(x => x.Dto.Password)
-            .NotEmpty()
-            .MinimumLength(8)
-            .MaximumLength(100);
+        RuleFor(x => x.Dto.Password).ApplyPasswordRules();
     }
 }

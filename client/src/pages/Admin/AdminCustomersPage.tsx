@@ -3,7 +3,10 @@ import {
   type AdminCustomer,
   getCustomers,
   setCustomerCompanyPrice,
+  setCustomerActive,
 } from '../../api/customers';
+import { AdminSetPasswordModal } from './AdminSetPasswordModal';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useLanguage } from '../../contexts/useLanguage';
 
 interface Props {
@@ -32,6 +35,10 @@ export default function AdminCustomersPage({ token }: Props) {
   const [editState, setEditState]       = useState<EditState>({ capitalPrice: '', cityPrice: '', districtPrice: '', included: false });
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
+  const [pwdCustomer, setPwdCustomer]   = useState<AdminCustomer | null>(null);
+  const [togglingId, setTogglingId]     = useState<string | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<AdminCustomer | null>(null);
+  const [notice, setNotice]             = useState('');
 
   const PAGE_SIZE = 20;
 
@@ -89,6 +96,26 @@ export default function AdminCustomersPage({ token }: Props) {
     }
   }
 
+  // Deactivating needs confirmation (it blocks login); reactivating is immediate.
+  function onToggleClick(c: AdminCustomer) {
+    if (c.isActive) setDeactivateTarget(c);
+    else void applyActive(c, true);
+  }
+
+  async function applyActive(c: AdminCustomer, next: boolean) {
+    setTogglingId(c.id);
+    setError('');
+    try {
+      await setCustomerActive(c.id, next, token);
+      setCustomers(prev => prev.map(x => x.id === c.id ? { ...x, isActive: next } : x));
+      setDeactivateTarget(null);
+    } catch {
+      setError(t.acupActiveFail);
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
   const inputStyle: React.CSSProperties = {
     width: 80, padding: '0.25rem', borderRadius: 6,
     border: '1px solid #ccc', fontSize: '0.82rem',
@@ -110,6 +137,7 @@ export default function AdminCustomersPage({ token }: Props) {
       />
 
       {error && <p style={{ color: 'red' }}>{error}</p>}
+      {notice && <p style={{ color: '#15803d' }}>{notice}</p>}
 
       {loading ? (
         <p>{t.loading}</p>
@@ -119,7 +147,7 @@ export default function AdminCustomersPage({ token }: Props) {
             <tr style={{ background: '#f5f5f5' }}>
               {[
                 t.acupThBusiness, t.acupThName, t.acupThPhone, t.acupThCity, t.acupThDistrict, t.acupThEmail, t.acupThActive,
-                t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, t.acupThIncluded, '',
+                t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, t.acupThIncluded, t.acupThActions,
               ].map((h, i) => (
                 <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
                   {h}
@@ -190,10 +218,26 @@ export default function AdminCustomersPage({ token }: Props) {
                       {c.isCompanyServicePriceIncludedInPrice ? t.acupYes : t.acupNo}
                     </td>
                     <td style={{ padding: '0.6rem 0.75rem' }}>
-                      <button
-                        onClick={() => startEdit(c)}
-                        style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
-                      >{t.edit}</button>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => startEdit(c)}
+                          style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
+                        >{t.edit}</button>
+                        <button
+                          onClick={() => setPwdCustomer(c)}
+                          style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
+                        >{t.acupSetPwd}</button>
+                        <button
+                          onClick={() => onToggleClick(c)}
+                          disabled={togglingId === c.id}
+                          style={{
+                            padding: '0.2rem 0.5rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem',
+                            border: '1px solid ' + (c.isActive ? '#fca5a5' : '#86efac'),
+                            background: c.isActive ? '#fef2f2' : '#f0fdf4',
+                            color: c.isActive ? '#b91c1c' : '#15803d',
+                          }}
+                        >{c.isActive ? t.acupDeactivate : t.acupActivate}</button>
+                      </div>
                     </td>
                   </>
                 )}
@@ -216,6 +260,23 @@ export default function AdminCustomersPage({ token }: Props) {
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
         >Next →</button>
       </div>
+
+      <AdminSetPasswordModal
+        customer={pwdCustomer}
+        onClose={() => setPwdCustomer(null)}
+        onDone={() => { setPwdCustomer(null); setNotice(t.acupSetPwdSuccess); }}
+      />
+
+      <ConfirmDialog
+        open={deactivateTarget !== null}
+        title={t.acupDeactivate}
+        message={deactivateTarget ? t.acupConfirmDeactivate(`${deactivateTarget.firstName} ${deactivateTarget.lastName}`) : ''}
+        confirmLabel={t.acupDeactivate}
+        variant="danger"
+        loading={togglingId !== null}
+        onConfirm={() => { if (deactivateTarget) void applyActive(deactivateTarget, false); }}
+        onCancel={() => setDeactivateTarget(null)}
+      />
     </div>
   );
 }

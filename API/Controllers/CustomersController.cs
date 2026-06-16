@@ -1,7 +1,9 @@
 using API.Models.Customers;
 using Application.Common.Exceptions;
+using Application.Customers.Commands.AdminSetPassword;
 using Application.Customers.Commands.ChangePassword;
 using Application.Customers.Commands.CreateCustomer;
+using Application.Customers.Commands.SetActive;
 using Application.Customers.Commands.SetCompanyPrice;
 using Application.Customers.Commands.UpdateCustomer;
 using Application.Customers.DTOs;
@@ -148,6 +150,39 @@ public sealed class CustomersController : BaseController
             request.CityPrice,
             request.DistrictPrice,
             request.IsCompanyServicePriceIncludedInPrice), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/customers/{id}/password  (Admin sets a new password) ─────────
+    /// <summary>
+    /// Admin override for customers who can't recover their account. Sets a new
+    /// password directly without requiring the current one.
+    /// </summary>
+    [HttpPut("{id:guid}/password")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AdminSetPassword(
+        Guid id, [FromBody] AdminSetPasswordRequest request, CancellationToken ct)
+    {
+        if (request.NewPassword != request.ConfirmNewPassword)
+            throw new ValidationException(
+                new[] { new FluentValidation.Results.ValidationFailure(
+                    "ConfirmNewPassword", "Passwords do not match.") });
+
+        await Sender.Send(new AdminSetCustomerPasswordCommand(id, request.NewPassword), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/customers/{id}/active  (Admin soft-delete / activate) ────────
+    [HttpPut("{id:guid}/active")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetActive(
+        Guid id, [FromBody] SetCustomerActiveRequest request, CancellationToken ct)
+    {
+        await Sender.Send(new SetCustomerActiveCommand(id, request.IsActive), ct);
         return NoContent();
     }
 

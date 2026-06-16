@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerCustomer, CustomerApiError } from '../../api/customers';
 import { FormField } from '../../components/ui/FormField';
+import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { firstPasswordError } from '../../utils/passwordRules';
 import { useLanguage } from '../../contexts/useLanguage';
 import './register.css';
 
@@ -72,13 +74,12 @@ export function RegisterPage() {
       e.email = t.errEmailInvalid;
     }
     // Mirror ASP.NET Identity's password policy so unmet rules surface here as
-    // clear warnings instead of an opaque server error: min 8, an uppercase,
-    // a lowercase, and a digit.
-    if (!form.password)                        e.password = t.errPasswordRequired;
-    else if (form.password.length < 8)         e.password = t.errPasswordShort;
-    else if (!/[A-Z]/.test(form.password))     e.password = t.errPasswordUppercase;
-    else if (!/[a-z]/.test(form.password))     e.password = t.errPasswordLowercase;
-    else if (!/[0-9]/.test(form.password))     e.password = t.errPasswordNumber;
+    // clear warnings instead of an opaque server error (see passwordRules.ts).
+    if (!form.password)               e.password = t.errPasswordRequired;
+    else {
+      const pwdErr = firstPasswordError(form.password, t);
+      if (pwdErr) e.password = pwdErr;
+    }
     if (!form.confirmPassword)        e.confirmPassword  = t.errConfirmPasswordRequired;
     else if (form.password !== form.confirmPassword) e.confirmPassword = t.errPasswordMismatch;
     setErrors(e);
@@ -212,6 +213,7 @@ export function RegisterPage() {
             label={t.password} type="password" autoComplete="new-password"
             value={form.password} onChange={set('password')} error={errors.password} placeholder={t.phPassword}
           />
+          <PasswordRequirements value={form.password} />
           <FormField
             label={t.confirmPassword} type="password" autoComplete="new-password"
             value={form.confirmPassword} onChange={set('confirmPassword')} error={errors.confirmPassword} placeholder={t.phConfirmPassword}

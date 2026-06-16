@@ -62,6 +62,10 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
             var customer = await _context.Customers
                 .FirstOrDefaultAsync(c => c.ApplicationUserId == user.Id, cancellationToken)
                 ?? throw new NotFoundException(nameof(Customer), user.Id);
+
+            if (!customer.IsActive)
+                throw new ForbiddenException("This account has been deactivated. Please contact support.");
+
             customerId = customer.Id;
         }
 

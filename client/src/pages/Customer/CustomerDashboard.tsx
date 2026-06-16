@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
+import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
+import { firstPasswordError } from '../../utils/passwordRules';
 import {
   getMyProfile, getMyOrders,
   updateMyProfile, changePassword,
@@ -136,7 +138,6 @@ function buildParcelLabel(go: CustomerGroupOrder, o: CustomerOrder): ParcelLabel
   const district = o.recipientDistrictGeo || o.recipientDistrict;
   return {
     storeName:        go.senderBusinessName,
-    senderPhone:      go.senderPhone || go.alternativeSenderPhone || '',
     recipientName:    o.recipientName,
     recipientPhone:   o.recipientPhone,
     recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
@@ -602,7 +603,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
               <button
                 type="button"
-                onClick={e => { e.stopPropagation(); printParcelLabels(go.orders.map(o => buildParcelLabel(go, o))); }}
+                onClick={e => { e.stopPropagation(); void printParcelLabels(go.orders.map(o => buildParcelLabel(go, o))); }}
                 title={t.custPrintAllLabels}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -687,7 +688,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                               <button
                                 type="button"
-                                onClick={() => printParcelLabels([buildParcelLabel(go, o)])}
+                                onClick={() => void printParcelLabels([buildParcelLabel(go, o)])}
                                 title={t.custLabelBtn}
                                 style={{
                                   display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -1004,9 +1005,8 @@ function ChangePasswordView({ token }: { token: string }) {
   const validate = (): boolean => {
     const e: Partial<typeof form> = {};
     if (!form.currentPassword)                         e.currentPassword    = t.custErrCurrentPwdRequired;
-    if (form.newPassword.length < 8)                   e.newPassword        = t.custErrNewPwdShort;
-    else if (!/[A-Z]/.test(form.newPassword))          e.newPassword        = t.custErrNewPwdUppercase;
-    else if (!/[0-9]/.test(form.newPassword))          e.newPassword        = t.custErrNewPwdNumber;
+    const pwdErr = firstPasswordError(form.newPassword, t);
+    if (pwdErr)                                        e.newPassword        = pwdErr;
     if (form.newPassword !== form.confirmNewPassword)  e.confirmNewPassword = t.errPasswordMismatch;
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -1058,6 +1058,9 @@ function ChangePasswordView({ token }: { token: string }) {
           placeholder={t.custNewPasswordPh}
           autoComplete="new-password"
         />
+        <div style={{ margin: '8px 0' }}>
+          <PasswordRequirements value={form.newPassword} />
+        </div>
         <FormField
           label={t.custConfirmNewPassword} type="password"
           value={form.confirmNewPassword} onChange={set('confirmNewPassword')}

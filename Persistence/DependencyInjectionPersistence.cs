@@ -46,7 +46,8 @@ public static class DependencyInjectionPersistence
             options.Password.RequireDigit            = true;
             options.Password.RequiredLength          = 8;
             options.Password.RequireUppercase        = true;
-            options.Password.RequireNonAlphanumeric  = false;
+            options.Password.RequireLowercase        = true;
+            options.Password.RequireNonAlphanumeric  = true;   // require at least one symbol
             options.Lockout.MaxFailedAccessAttempts  = 5;
             options.Lockout.DefaultLockoutTimeSpan   = TimeSpan.FromMinutes(15);
             options.User.RequireUniqueEmail          = true;

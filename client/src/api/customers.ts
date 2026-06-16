@@ -207,6 +207,30 @@ export async function getCustomerById(id: string, token: string): Promise<Custom
   return handle(await fetch(`/api/customers/${id}`, { headers: { Authorization: `Bearer ${token}` } }));
 }
 
+/** Admin sets a new password for a customer without knowing the old one. */
+export async function adminSetCustomerPassword(
+  id: string,
+  data: { newPassword: string; confirmNewPassword: string },
+  token: string,
+): Promise<void> {
+  return handleEmpty(await fetch(`/api/customers/${id}/password`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
+}
+
+/** Admin soft-deletes (deactivates) or restores (activates) a customer. */
+export async function setCustomerActive(
+  id: string, isActive: boolean, token: string,
+): Promise<void> {
+  return handleEmpty(await fetch(`/api/customers/${id}/active`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ isActive }),
+  }));
+}
+
 export async function setCustomerCompanyPrice(
   id: string,
   prices: {

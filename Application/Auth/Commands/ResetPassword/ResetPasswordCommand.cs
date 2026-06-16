@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Common.Validation;
 using Domain;
 using FluentValidation;
 using FluentValidation.Results;
@@ -31,12 +32,7 @@ public sealed class ResetPasswordCommandValidator
     {
         RuleFor(x => x.Code).NotEmpty();
 
-        RuleFor(x => x.NewPassword)
-            .NotEmpty()
-            .MinimumLength(8)  .WithMessage("Password must be at least 8 characters.")
-            .MaximumLength(100)
-            .Matches("[A-Z]")  .WithMessage("Password must contain at least one uppercase letter.")
-            .Matches("[0-9]")  .WithMessage("Password must contain at least one number.");
+        RuleFor(x => x.NewPassword).ApplyPasswordRules();
 
         RuleFor(x => x.ConfirmNewPassword)
             .NotEmpty()

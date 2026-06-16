@@ -51,6 +51,15 @@ public sealed record ChangePasswordRequest(
     [Required] string ConfirmNewPassword
 );
 
+// ── Admin: set a customer's password (no current password required) ─────────────
+public sealed record AdminSetPasswordRequest(
+    [Required][MinLength(8)][MaxLength(100)] string NewPassword,
+    [Required] string ConfirmNewPassword
+);
+
+// ── Admin: soft-delete / activate a customer ────────────────────────────────────
+public sealed record SetCustomerActiveRequest(bool IsActive);
+
 // ── Responses ─────────────────────────────────────────────────────────────────
 public sealed record CreateCustomerResponse(Guid CustomerId, string Email, string FullName);
 

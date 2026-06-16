@@ -1,0 +1,182 @@
+/* Self-contained modal styles. Co-located with the Modal/ConfirmDialog components
+   and imported by them, so they work on ANY page regardless of which page-scoped
+   CSS chunk happens to be loaded. (The legacy `.modal*` / `.btn-ghost` classes were
+   not defined in any global stylesheet, so modals rendered unstyled on the admin
+   dashboard.) Class names are namespaced `ui-modal*` to avoid clashing with those. */
+
+.ui-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: ui-modal-fade 0.15s ease both;
+}
+
+.ui-modal {
+    width: 100%;
+    max-width: 440px;
+    max-height: calc(100dvh - 32px);
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    animation: ui-modal-up 0.2s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+    overflow: hidden;
+}
+
+@keyframes ui-modal-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes ui-modal-up {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.ui-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.ui-modal__title {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.ui-modal__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--color-bg-3);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--transition), color var(--transition);
+}
+
+.ui-modal__close:hover {
+    background: var(--color-border);
+    color: var(--color-text);
+}
+
+.ui-modal__body {
+    padding: 22px;
+    overflow-y: auto;
+}
+
+/* Two-column row for paired fields (collapses on narrow screens). */
+.ui-modal__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 480px) {
+    .ui-modal__row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ui-modal__section-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+    margin: 0 0 4px;
+}
+
+.ui-modal__divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 18px 0;
+}
+
+.ui-modal__message {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--color-text);
+    margin: 0;
+}
+
+.ui-modal__error {
+    margin-top: 14px;
+    padding: 11px 14px;
+    background: var(--color-error-bg);
+    border: 1px solid rgba(192, 57, 43, 0.2);
+    border-radius: var(--radius-sm);
+    color: var(--color-error);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.ui-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 22px;
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.ui-modal__btn {
+    padding: 9px 18px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background var(--transition), opacity var(--transition);
+}
+
+.ui-modal__btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ui-modal__btn--ghost {
+    background: transparent;
+    border-color: var(--color-border);
+    color: var(--color-text);
+}
+
+.ui-modal__btn--ghost:hover:not(:disabled) {
+    background: var(--color-bg-3);
+}
+
+.ui-modal__btn--primary {
+    background: var(--color-accent);
+    color: #ffffff;
+}
+
+.ui-modal__btn--primary:hover:not(:disabled) {
+    background: #d4891a;
+}
+
+.ui-modal__btn--danger {
+    background: var(--color-error);
+    color: #ffffff;
+}
+
+.ui-modal__btn--danger:hover:not(:disabled) {
+    filter: brightness(0.94);
+}
