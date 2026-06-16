@@ -12,6 +12,7 @@ import { EditOrderModal } from './EditOrderModal';
 import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
+import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -111,6 +112,32 @@ function isAssignable(o: AdminOrderItem): boolean {
 
 function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+}
+
+// Amount the recipient pays — mirrors the customer dashboard label logic exactly so the
+// printed sticker matches: COD (only when not prepaid) + the company service fee (only
+// when the recipient pays it and it isn't already baked into the COD figure).
+function recipientAmountDue(o: AdminOrderItem): number {
+  const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
+  const fee = (!o.isCompanyServicePriceIncluded && o.whoPaysForCompanyService === 'Recipient')
+    ? (o.companyServicePrice ?? 0) : 0;
+  return cod + fee;
+}
+
+// Build the Georgian parcel-sticker payload from an admin order row.
+function buildAdminLabel(o: AdminOrderItem): ParcelLabelData {
+  const due = recipientAmountDue(o);
+  const city     = o.recipientCityGeo     || o.recipientCity;
+  const district = o.recipientDistrictGeo || o.recipientDistrict;
+  return {
+    storeName:        o.senderBusinessName,
+    senderPhone:      o.senderPhone || o.alternativeSenderPhone || '',
+    recipientName:    o.recipientName,
+    recipientPhone:   o.recipientPhone,
+    recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
+    amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
+    trackingNumber:   o.trackingNumber,
+  };
 }
 
 // ── Courier picker dropdown ───────────────────────────────────────────────────
@@ -415,6 +442,15 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+
+  // Print parcel labels for the currently selected orders (same sticker as the customer side).
+  const handlePrintLabels = () => {
+    const labels = [...selected]
+      .map(id => orders.find(o => o.id === id))
+      .filter((o): o is AdminOrderItem => !!o)
+      .map(buildAdminLabel);
+    printParcelLabels(labels);
+  };
 
   const handleBulkApply = async () => {
     const price  = bulkPrice  ? parseFloat(bulkPrice)  : null;
@@ -724,6 +760,21 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               Set Prices
             </button>
           </div>
+
+          {/* Print labels for the selected orders — third bulk action. */}
+          <button
+            type="button"
+            className="aop-bulk-btn aop-bulk-btn--ghost"
+            onClick={handlePrintLabels}
+            title="Print labels for selected orders"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M4.5 6V2.5h7V6M4.5 11.5h-1A1.5 1.5 0 0 1 2 10V8a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 14 8v2a1.5 1.5 0 0 1-1.5 1.5h-1M4.5 9.5h7v4h-7z"
+                stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Print Labels
+          </button>
 
           <span className="aop-bulk-count">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">

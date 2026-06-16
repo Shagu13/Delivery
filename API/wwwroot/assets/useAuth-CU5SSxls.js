@@ -1,0 +1,1 @@
+import{c as e,i as t}from"./useLanguage-DfYEE2dD.js";var n=e(t(),1),r=(0,n.createContext)(null);function i(){let e=(0,n.useContext)(r);if(!e)throw Error(`useAuth must be used inside <AuthProvider>`);return e}function a(e,t={}){return{...t,headers:{"Content-Type":`application/json`,...t.headers,Authorization:`Bearer ${e}`}}}export{a as n,r,i as t};

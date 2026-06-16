@@ -84,7 +84,7 @@ curl -X POST https://<your-delivery-domain>/api/partner/orders \
       "productPaymentStatus": "NotPaid",
       "whoPaysForCompanyService": "Recipient",
       "amountToCollectForPackage": 45,
-      "externalReference": "LIVO-1023"
+      "externalReference": "YOUR-BUSINESS-1023"
     }]
   }'
 ```
@@ -95,7 +95,7 @@ curl -X POST https://<your-delivery-domain>/api/partner/orders \
 {
   "groupOrderId": "f0a1…",
   "orders": [
-    { "trackingNumber": "TN-00000042-A3F9", "externalReference": "LIVO-1023", "recipientName": "ანა სმიტი" }
+    { "trackingNumber": "TN-00000042-A3F9", "externalReference": "YOUR-BUSINESS-1023", "recipientName": "ანა სმიტი" }
   ]
 }
 ```
@@ -123,7 +123,7 @@ Store the `trackingNumber` against your `externalReference`.
   "total": 128, "page": 1, "pageSize": 50,
   "items": [{
     "trackingNumber": "TN-00000042-A3F9",
-    "externalReference": "LIVO-1023",
+    "externalReference": "YOUR-BUSINESS-1023",
     "status": "OutForDelivery", "statusCode": 6,
     "recipientName": "ანა სმიტი",
     "recipientCity": "Tbilisi", "recipientDistrict": "Vake",
@@ -187,7 +187,7 @@ X-Webhook-Signature: sha256=<hex>
   "event": "order.status_changed",
   "occurredAt": "2026-06-16T09:48:00Z",
   "trackingNumber": "TN-00000042-A3F9",
-  "externalReference": "LIVO-1023",
+  "externalReference": "YOUR-BUSINESS-1023",
   "status": "OutForDelivery",
   "statusCode": 6,
   "previousStatus": "AtWarehouse",
@@ -242,7 +242,7 @@ If unsure which combination fits your business, ask us — we'll confirm the rig
 
 | Action | Method & path |
 |---|---|
-| Place orders | `POST /api/partner/orders` |
+| Place orders | `POST /api/partner/orders` |1
 | List orders | `GET /api/partner/orders` |
 | Get one order | `GET /api/partner/orders/{reference}` |
 | Receive updates | Webhook `POST` to your URL |
