@@ -324,6 +324,7 @@ export function PackageCard({
                 {t.cgoReturnPickupHint ?? 'Enter the address where the courier will collect the parcel from the recipient.'}
               </p>
               <CityDistrictPicker
+                hideDistrictForCapital
                 cityValue={data.returnPickupCity ?? ''}
                 districtValue={data.returnPickupDistrict ?? ''}
                 onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', null); }}
@@ -386,6 +387,7 @@ export function PackageCard({
             </legend>
 
             <CityDistrictPicker
+              hideDistrictForCapital
               cityValue={data.recipientCity}
               districtValue={data.recipientDistrict}
               onCityChange={handleCityChange}

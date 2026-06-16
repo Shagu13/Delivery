@@ -14,6 +14,13 @@ interface Props {
   cityError?: string;
   districtError?: string;
   disabled?: boolean;
+  /**
+   * When true, selecting a capital city (e.g. Tbilisi) hides the district field and
+   * auto-binds a capital-territory district so citywide pricing applies. Only the
+   * group-order creation flow wants this; registration/profile forms keep a normal
+   * district picker. Default false.
+   */
+  hideDistrictForCapital?: boolean;
 }
 
 interface DropdownPortalProps {
@@ -43,7 +50,7 @@ function DropdownPortal({ anchorRef, open, children }: DropdownPortalProps) {
   return createPortal(<div className="cdp-portal" style={style}>{children}</div>, document.body);
 }
 
-export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onDistrictChange, onDistrictSelect, cityError, districtError, disabled = false }: Props) {
+export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onDistrictChange, onDistrictSelect, cityError, districtError, disabled = false, hideDistrictForCapital = false }: Props) {
     const { t, lang } = useLanguage();
 
   const [cities,           setCities]           = useState<City[]>([]);
@@ -120,16 +127,19 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
   // bound automatically so order pricing falls on the capital tier.
   const capitalDistrict = districts.find(d => d.isCapitalTerritory) ?? null;
   const isCapitalCity   = capitalDistrict !== null;
+  // Only collapse the district field for a capital when the caller opts in
+  // (group-order creation). Elsewhere the normal district picker is shown.
+  const collapseDistrict = hideDistrictForCapital && isCapitalCity;
 
   useEffect(() => {
-    if (!isCapitalCity || !capitalDistrict) return;
+    if (!collapseDistrict || !capitalDistrict) return;
     const current = districts.find(d => d.districtName === districtValue);
     if (current?.isCapitalTerritory) return; // already bound to a capital district
     setDistrictSearch(districtLabel(capitalDistrict));
     onDistrictChange(capitalDistrict.districtName);
     onDistrictSelect?.(capitalDistrict);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCapitalCity, capitalDistrict, districts, districtValue, lang]);
+  }, [collapseDistrict, capitalDistrict, districts, districtValue, lang]);
 
   const clearCity = useCallback(() => {
     setCitySearch(''); onCityChange(''); setSelectedCityId(null); setDistrictSearch(''); onDistrictChange(''); onDistrictSelect?.(null);
@@ -190,7 +200,7 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
   );
 
   return (
-    <div className={`cdp-row${isCapitalCity ? ' cdp-row--single' : ''}`}>
+    <div className={`cdp-row${collapseDistrict ? ' cdp-row--single' : ''}`}>
       {/* City */}
       <div className={`cdp-field${cityError ? ' cdp-field--error' : ''}`} ref={cityWrapRef}>
         <label className="cdp-label">{t.city} <span className="cdp-required">*</span></label>
@@ -234,9 +244,10 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
         {cityError && <span className="cdp-error-msg">{cityError}</span>}
       </div>
 
-      {/* District — hidden for the capital (Tbilisi); a capital-territory district
-          is bound automatically and citywide pricing applies. */}
-      {isCapitalCity ? (
+      {/* District — hidden for the capital (Tbilisi) only when the caller opted in
+          (group-order creation); a capital-territory district is bound automatically
+          and citywide pricing applies. */}
+      {collapseDistrict ? (
         <div className="cdp-field cdp-field--capital-note">
           <span className="cdp-capital-note">{t.cdpCapitalNoDistrict}</span>
         </div>

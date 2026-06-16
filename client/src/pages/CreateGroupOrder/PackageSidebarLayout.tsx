@@ -272,6 +272,7 @@ function PackageDetail({
             </div>
             <p className="psl-return-hint">{t.cgoReturnPickupHint ?? 'Address where courier will collect the parcel from the recipient.'}</p>
             <CityDistrictPicker
+              hideDistrictForCapital
               cityValue={pkg.returnPickupCity ?? ''}
               districtValue={pkg.returnPickupDistrict ?? ''}
               onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', null); }}
@@ -320,6 +321,7 @@ function PackageDetail({
             {isReturn ? (t.cgoReturnDeliverBackTo ?? 'Deliver back to (Sender)') : t.cgoDeliveryAddress}
           </div>
           <CityDistrictPicker
+            hideDistrictForCapital
             cityValue={pkg.recipientCity}
             districtValue={pkg.recipientDistrict}
             onCityChange={v => { onChange(index, 'recipientCity', v); onChange(index, 'recipientDistrict', ''); if (!isReturn) { setSelectedDistrict(null); onChange(index, 'companyServicePrice', null); } }}

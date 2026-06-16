@@ -72,6 +72,7 @@ export function PickupAddressModal({ open, initial, onSave, onClose }: Props) {
           <p className="pickup-modal__hint">{t.cgoModalHint}</p>
 
           <CityDistrictPicker
+            hideDistrictForCapital
             cityValue={city}
             districtValue={district}
             onCityChange={v => { setCity(v);     setErrors(e => ({ ...e, city: undefined })); }}

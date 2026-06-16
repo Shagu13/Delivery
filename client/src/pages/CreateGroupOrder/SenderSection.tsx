@@ -165,6 +165,7 @@ export function SenderSection({
           )}
 
           <CityDistrictPicker
+            hideDistrictForCapital
             cityValue={data.pickUpCity}
             districtValue={data.pickUpDistrict}
             onCityChange={cityName => {
