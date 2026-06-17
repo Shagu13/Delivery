@@ -4,9 +4,13 @@ import { useLanguage } from '../../contexts/useLanguage';
 interface SuccessViewProps {
   result: CreateGroupOrderResponse;
   onNewOrder: () => void;
+  /** Optional overrides — used by the add-to-batch (append) flow. */
+  title?: string;
+  subtitle?: string;
+  newOrderLabel?: string;
 }
 
-export function SuccessView({ result, onNewOrder }: SuccessViewProps) {
+export function SuccessView({ result, onNewOrder, title, subtitle, newOrderLabel }: SuccessViewProps) {
   const { t } = useLanguage();
 
   const copyToClipboard = async (text: string) => {
@@ -27,8 +31,8 @@ export function SuccessView({ result, onNewOrder }: SuccessViewProps) {
             />
           </svg>
         </div>
-        <h2 className="success-view__title">{t.cgoSuccessTitle}</h2>
-        <p className="success-view__subtitle">{t.cgoSuccessSubtitle}</p>
+        <h2 className="success-view__title">{title ?? t.cgoSuccessTitle}</h2>
+        <p className="success-view__subtitle">{subtitle ?? t.cgoSuccessSubtitle}</p>
         <div className="success-view__order-id">
           {t.cgoSuccessOrderId}{' '}
           <button
@@ -82,7 +86,7 @@ export function SuccessView({ result, onNewOrder }: SuccessViewProps) {
       </div>
 
       <button type="button" className="btn btn--ghost success-view__new" onClick={onNewOrder}>
-        {t.cgoSuccessNewOrder}
+        {newOrderLabel ?? t.cgoSuccessNewOrder}
       </button>
     </div>
   );

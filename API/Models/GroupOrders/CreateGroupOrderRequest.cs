@@ -13,8 +13,18 @@ public sealed record CreateGroupOrderRequest(
     string PickUpDistrict,
     string PickUpAddress,
     string? Note,
+    IReadOnlyList<OrderItemRequest> Orders,
+    // CustomerId intentionally removed — resolved server-side from JWT claims.
+    /// <summary>
+    /// When true, the customer explicitly wants this to be a separate batch instead of
+    /// merging into today's open batch. Defaults to false → same-day orders are merged.
+    /// </summary>
+    bool ForceNewBatch = false
+);
+
+/// <summary>Body for POST /api/grouporders/{id}/orders — packages to append to an open batch.</summary>
+public sealed record AddOrdersToGroupOrderRequest(
     IReadOnlyList<OrderItemRequest> Orders
-// CustomerId intentionally removed — resolved server-side from JWT claims
 );
 
 public sealed record OrderItemRequest(

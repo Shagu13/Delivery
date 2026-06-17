@@ -50,29 +50,11 @@ public sealed class GroupOrdersController : BaseController
                 PickUpDistrict: request.PickUpDistrict,
                 PickUpAddress: request.PickUpAddress,
                 Note: request.Note,
-                Orders: request.Orders
-                    .Select(o => new CreateOrderDto(
-                        RecipientName:             o.RecipientName,
-                        RecipientPhone:            o.RecipientPhone,
-                        RecipientCity:             o.RecipientCity,
-                        RecipientDistrict:         o.RecipientDistrict,
-                        RecipientAddress:          o.RecipientAddress,
-                        Description:               o.Description,
-                        IsFragile:                 o.IsFragile,
-                        ProductPaymentStatus:      o.ProductPaymentStatus,
-                        WhoPaysForCompanyService:  o.WhoPaysForCompanyService,
-                        OrderType:                 o.OrderType,
-                        ReturnPickupAddress:       o.ReturnPickupAddress,
-                        ReturnPickupCity:          o.ReturnPickupCity,
-                        ReturnPickupDistrict:      o.ReturnPickupDistrict,
-                        AmountToCollectForPackage: o.AmountToCollectForPackage,
-                        CompanyServicePrice:       o.CompanyServicePrice,
-                        WeightPriceTierId:         o.WeightPriceTierId,
-                        Latitude:                  o.Latitude,
-                        Longitude:                 o.Longitude,
-                        IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded))
-                    .ToList(),
-                CustomerId: customerId
+                Orders: MapOrders(request.Orders),
+                CustomerId: customerId,
+                // Merge same-day orders into the customer's open batch unless they
+                // explicitly asked for a separate one.
+                MergeIntoOpenBatch: !request.ForceNewBatch
             )
         );
 
@@ -91,6 +73,66 @@ public sealed class GroupOrdersController : BaseController
 
         return CreatedAtAction(nameof(GetById), new { id = response.GroupOrderId }, response);
     }
+
+    // ── POST /api/grouporders/{id}/orders  (Customer adds packages to an open batch) ──
+    [HttpPost("{id:guid}/orders")]
+    [Authorize(Roles = "Customer")]
+    [ProducesResponseType(typeof(CreateGroupOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> AddOrders(
+        Guid id,
+        [FromBody] AddOrdersToGroupOrderRequest request,
+        CancellationToken ct)
+    {
+        var customerIdClaim = User.FindFirstValue("customerId");
+        if (!Guid.TryParse(customerIdClaim, out var customerId))
+            return Forbid();
+
+        var result = await Sender.Send(
+            new Application.GroupOrders.Commands.AddOrdersToGroupOrder.AddOrdersToGroupOrderCommand(
+                GroupOrderId: id,
+                CustomerId:   customerId,
+                Orders:       MapOrders(request.Orders)),
+            ct);
+
+        var response = new CreateGroupOrderResponse(
+            GroupOrderId: result.GroupOrderId,
+            SenderBusinessName: result.SenderBusinessName,
+            Orders: result.Orders
+                .Select(o => new OrderTrackingResponse(o.OrderId, o.TrackingNumber, o.RecipientName))
+                .ToList()
+        );
+
+        return Ok(response);
+    }
+
+    // Shared mapping: HTTP order items → application CreateOrderDto.
+    private static List<CreateOrderDto> MapOrders(IReadOnlyList<OrderItemRequest> orders) =>
+        orders
+            .Select(o => new CreateOrderDto(
+                RecipientName:             o.RecipientName,
+                RecipientPhone:            o.RecipientPhone,
+                RecipientCity:             o.RecipientCity,
+                RecipientDistrict:         o.RecipientDistrict,
+                RecipientAddress:          o.RecipientAddress,
+                Description:               o.Description,
+                IsFragile:                 o.IsFragile,
+                ProductPaymentStatus:      o.ProductPaymentStatus,
+                WhoPaysForCompanyService:  o.WhoPaysForCompanyService,
+                OrderType:                 o.OrderType,
+                ReturnPickupAddress:       o.ReturnPickupAddress,
+                ReturnPickupCity:          o.ReturnPickupCity,
+                ReturnPickupDistrict:      o.ReturnPickupDistrict,
+                AmountToCollectForPackage: o.AmountToCollectForPackage,
+                CompanyServicePrice:       o.CompanyServicePrice,
+                WeightPriceTierId:         o.WeightPriceTierId,
+                Latitude:                  o.Latitude,
+                Longitude:                 o.Longitude,
+                IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded))
+            .ToList();
 
     // ── GET /api/grouporders ─────────────────────────────────────────────────
     [HttpGet]

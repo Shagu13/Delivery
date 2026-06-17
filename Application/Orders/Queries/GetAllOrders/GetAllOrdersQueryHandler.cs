@@ -99,8 +99,27 @@ public sealed class GetAllOrdersQueryHandler
         // ── Count then page ──────────────────────────────────────────────────
         var totalCount = await query.CountAsync(cancellationToken);
 
+        // ── Ordering ─────────────────────────────────────────────────────────
+        // Packages ready to hand to a courier float to the top: not yet assigned,
+        // in an assignable status for their type, and with the figures the assign
+        // gate requires (a service price and a courier salary). Everything else
+        // falls back to newest-first. Mirrors isAssignable + the price/salary
+        // checks on the Packages page so the top rows are the ones an admin can
+        // assign immediately without a warning.
         var entities = await query
-            .OrderByDescending(o => o.CreatedAt)
+            .OrderByDescending(o =>
+                o.CourierId == null
+                && o.CompanyServicePrice > 0
+                && o.CourierSalary != null
+                && (
+                    ((o.OrderType == OrderType.Send || o.OrderType == OrderType.Exchange)
+                        && (o.Status == OrderStatus.AdminAcceptedOrderInWareHouse
+                            || o.Status == OrderStatus.OrderIsOnItsWayToRecipientsCity))
+                    || (o.OrderType == OrderType.Return
+                        && (o.Status == OrderStatus.Pending
+                            || o.Status == OrderStatus.CourierAssignedToPickUp))
+                ))
+            .ThenByDescending(o => o.CreatedAt)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);

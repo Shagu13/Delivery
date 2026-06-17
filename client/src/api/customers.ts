@@ -80,6 +80,7 @@ export interface CustomerGroupOrder {
   alternativeSenderPhone?: string | null;
   pickUpCity: string; pickUpCityGeo?: string;
   pickUpDistrict: string; pickUpDistrictGeo?: string;
+  pickUpAddress?: string;
   note: string | null; numberOfPackages: number;
   orders: CustomerOrder[];
 }

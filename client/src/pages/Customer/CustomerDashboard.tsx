@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
@@ -102,6 +102,16 @@ function canCustomerCancel(o: CustomerOrder): boolean {
 // don't apply to a Return's deliver-back-to address.
 function canCustomerEdit(o: CustomerOrder): boolean {
   return o.orderType !== 'Return' && CUSTOMER_MODIFIABLE_STATUSES.has(o.status);
+}
+
+// A batch stays open to new packages until a pickup courier is assigned. Mirrors the
+// backend GroupOrderAppendPolicy (Pending / AcceptedGroupOrder). Return-only cards are
+// standalone orders, not real batches, so they can't take added packages.
+const APPENDABLE_GROUP_STATUSES = new Set(['Pending', 'AcceptedGroupOrder']);
+
+function canAddPackages(go: CustomerGroupOrder): boolean {
+  const isReturnCard = go.orders.length > 0 && go.orders.every(o => o.orderType === 'Return');
+  return !isReturnCard && APPENDABLE_GROUP_STATUSES.has(go.status);
 }
 
 // How many individual packages in a group are cancelled — surfaced as a card
@@ -601,6 +611,25 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+              {canAddPackages(go) && (
+                <Link
+                  to={`/send?batch=${go.id}`}
+                  onClick={e => e.stopPropagation()}
+                  title={t.custAddPackage}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--color-accent)', background: 'var(--color-bg-2)',
+                    color: 'var(--color-accent)', fontSize: '0.76rem', fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', textDecoration: 'none',
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  {t.custAddPackage}
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={e => { e.stopPropagation(); void printParcelLabels(go.orders.map(o => buildParcelLabel(go, o))); }}

@@ -672,6 +672,16 @@ const en = {
   cgoSubmit:                'Place Order',
   cgoSubmitting:            'Placing Order…',
   cgoGlobalError:           'An unexpected error occurred. Please try again.',
+  // Same-day batch merging / append-to-batch
+  cgoForceNewBatchLabel:    'Create a separate new batch',
+  cgoForceNewBatchHint:     'Orders you place today are grouped into one batch until a courier picks it up. Tick this to keep this order in its own separate batch.',
+  cgoAppendBanner:          (biz: string): string => `Adding packages to ${biz}'s open batch. Pickup and sender details stay the same as the batch.`,
+  cgoAppendSubmit:          'Add to batch',
+  cgoAppendSubmitting:      'Adding…',
+  cgoAppendClosed:          'This batch has already been picked up and can no longer accept new packages.',
+  cgoAppendSuccessTitle:    'Packages added',
+  cgoAppendSuccessSubtitle: 'The new packages were added to your batch. Share each tracking number with the recipient.',
+  custAddPackage:           'Add package',
   // Success view
   cgoSuccessTitle:          'Order Placed',
   cgoSuccessSubtitle:       'Your group order has been received. Share each tracking number with the recipient.',
@@ -2131,6 +2141,16 @@ const ka: typeof en = {
   cgoSubmit:                'შეკვეთის განთავსება',
   cgoSubmitting:            'შეკვეთა განთავსდება…',
   cgoGlobalError:           'დაფიქსირდა მოულოდნელი შეცდომა. გთხოვთ სცადოთ ხელახლა.',
+  // Same-day batch merging / append-to-batch
+  cgoForceNewBatchLabel:    'ცალკე ახალი პარტიის შექმნა',
+  cgoForceNewBatchHint:     'დღეს განთავსებული შეკვეთები ერთიანდება ერთ პარტიად, სანამ კურიერი არ წაიღებს. მონიშნეთ, თუ გსურთ ეს შეკვეთა ცალკე პარტიად დარჩეს.',
+  cgoAppendBanner:          (biz: string): string => `ემატება ამანათები ${biz}-ის ღია პარტიას. აღების და გამგზავნის მონაცემები რჩება პარტიის მიხედვით.`,
+  cgoAppendSubmit:          'პარტიაში დამატება',
+  cgoAppendSubmitting:      'ემატება…',
+  cgoAppendClosed:          'ეს პარტია უკვე აღებულია და ახალ ამანათებს ვეღარ მიიღებს.',
+  cgoAppendSuccessTitle:    'ამანათები დაემატა',
+  cgoAppendSuccessSubtitle: 'ახალი ამანათები დაემატა თქვენს პარტიას. გაუზიარეთ თითოეული თრექინგ-ნომერი მიმღებს.',
+  custAddPackage:           'ამანათის დამატება',
   // Success view
   cgoSuccessTitle:          'შეკვეთა განთავსდა',
   cgoSuccessSubtitle:       'ჯგუფური შეკვეთა მიღებულია. გაუზიარეთ თითოეული Tracking Number მიმღებს.',

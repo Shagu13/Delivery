@@ -37,6 +37,33 @@ export async function createGroupOrder(
     return response.json() as Promise<CreateGroupOrderResponse>;
 }
 
+/** Appends packages to an existing open batch (GroupOrder) owned by the customer. */
+export async function addOrdersToBatch(
+    batchId: string,
+    orders: OrderItemRequest[],
+    token: string,
+): Promise<CreateGroupOrderResponse> {
+    const response = await fetch(`/api/grouporders/${batchId}/orders`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orders }),
+    });
+
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new ApiError(
+            response.status,
+            body?.title ?? `Request failed with status ${response.status}`,
+            body?.errors,
+        );
+    }
+
+    return response.json() as Promise<CreateGroupOrderResponse>;
+}
+
 /** Triggers a browser download of the blank Excel template in the given language. */
 export async function downloadExcelTemplate(lang: Lang = 'en'): Promise<void> {
     const response = await fetch(`/api/grouporders/excel-template?lang=${lang}`);

@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { createGroupOrder, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
-import { getMyProfile } from '../../api/customers';
-import type { Customer } from '../../api/customers';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { createGroupOrder, addOrdersToBatch, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
+import { getMyProfile, getMyOrders } from '../../api/customers';
+import type { Customer, CustomerGroupOrder } from '../../api/customers';
 import { fetchCities, fetchDistricts, fetchAllDistrictsFlat } from '../../api/cities';
 import type { City, District } from '../../api/cities';
 import { fetchWeightPriceTiers } from '../../api/weightPriceTiers';
@@ -88,6 +89,7 @@ function validate(
     cityDistrictCache: Record<string, Set<string>>,
     t: Translations,
     serviceIncludedForced: boolean,
+    appendMode: boolean,
 ): ValidationErrors {
     const errors: ValidationErrors = {};
 
@@ -95,15 +97,19 @@ function validate(
         if (!val.trim()) errors[key] = errMsg;
     };
 
-    req('senderFirstName',    sender.senderFirstName,    t.cgoErrFirstName);
-    req('senderLastName',     sender.senderLastName,     t.cgoErrLastName);
-    req('senderBusinessName', sender.senderBusinessName, t.cgoErrBusinessName);
-    req('senderPhone',        sender.senderPhone,        t.cgoErrPhone);
-    req('pickUpCity',         sender.pickUpCity,         t.cgoErrCity);
-    req('pickUpDistrict',     sender.pickUpDistrict,     t.cgoErrDistrict);
-    req('pickUpAddress',      sender.pickUpAddress,      t.cgoErrAddress);
+    // In append mode the sender + pickup come from the existing batch, so only the
+    // package fields are validated here.
+    if (!appendMode) {
+        req('senderFirstName',    sender.senderFirstName,    t.cgoErrFirstName);
+        req('senderLastName',     sender.senderLastName,     t.cgoErrLastName);
+        req('senderBusinessName', sender.senderBusinessName, t.cgoErrBusinessName);
+        req('senderPhone',        sender.senderPhone,        t.cgoErrPhone);
+        req('pickUpCity',         sender.pickUpCity,         t.cgoErrCity);
+        req('pickUpDistrict',     sender.pickUpDistrict,     t.cgoErrDistrict);
+        req('pickUpAddress',      sender.pickUpAddress,      t.cgoErrAddress);
 
-    if (sender.note.length > 500) errors.note = t.cgoErrNoteMax;
+        if (sender.note.length > 500) errors.note = t.cgoErrNoteMax;
+    }
 
     packages.forEach((pkg, i) => {
         const p = (field: string, val: string, errMsg: string) => {
@@ -170,6 +176,20 @@ function validate(
 export function CreateGroupOrderPage() {
     const { user, token } = useAuth();
     const { t, lang } = useLanguage();
+    const navigate = useNavigate();
+
+    // ── Append mode ────────────────────────────────────────────────────────────
+    // /send?batch=<id> adds packages to an existing open batch instead of creating a
+    // new one. The sender + pickup are taken from the batch (read-only banner).
+    const [searchParams] = useSearchParams();
+    const batchId   = searchParams.get('batch');
+    const appendMode = !!batchId;
+    const [appendBatch, setAppendBatch] = useState<CustomerGroupOrder | null>(null);
+    const [appendError, setAppendError] = useState<string | null>(null);
+
+    // Escape hatch (normal mode only): force a separate batch instead of merging into
+    // today's open batch.
+    const [forceNewBatch, setForceNewBatch] = useState(false);
 
     const [sender,       setSender]       = useState<SenderFormData>(EMPTY_SENDER);
     const [useOtherAddr, setUseOtherAddr] = useState(false);
@@ -257,6 +277,28 @@ export function CreateGroupOrderPage() {
         })();
         return () => { cancelled = true; };
     }, [user?.role, token]);
+
+    // ── Load the target batch in append mode ───────────────────────────────────
+    useEffect(() => {
+        if (!batchId || !token) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const all = await getMyOrders(token);
+                if (cancelled) return;
+                const found = all.find(g => g.id === batchId) ?? null;
+                const appendable = !!found
+                    && (found.status === 'Pending' || found.status === 'AcceptedGroupOrder')
+                    && !(found.orders.length > 0 && found.orders.every(o => o.orderType === 'Return'));
+                if (!found || !appendable) { setAppendError(t.cgoAppendClosed); return; }
+                setAppendError(null);
+                setAppendBatch(found);
+            } catch {
+                if (!cancelled) setAppendError(t.cgoAppendClosed);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [batchId, token, t]);
 
     const handleUseOtherAddrChange = (checked: boolean) => {
         setUseOtherAddr(checked);
@@ -410,7 +452,7 @@ export function CreateGroupOrderPage() {
         e.preventDefault();
         setGlobalError(null);
 
-        const validationErrors = validate(sender, packages, cities, cityDistrictCache, t, serviceIncludedForced);
+        const validationErrors = validate(sender, packages, cities, cityDistrictCache, t, serviceIncludedForced, appendMode);
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
             scrollToTopError();
@@ -419,35 +461,42 @@ export function CreateGroupOrderPage() {
 
         setSubmitting(true);
         try {
-            const payload: CreateGroupOrderRequest = {
-                senderFirstName:    sender.senderFirstName,
-                senderLastName:     sender.senderLastName,
-                senderIdNumber:     sender.senderIdNumber?.trim() || undefined,
-                senderBusinessName: sender.senderBusinessName,
-                senderPhone:        sender.senderPhone,
-                alternativeSenderPhone: sender.alternativeSenderPhone.trim() || undefined,
-                pickUpCity:         sender.pickUpCity,
-                pickUpDistrict:     sender.pickUpDistrict,
-                pickUpAddress:      sender.pickUpAddress,
-                note:               sender.note.trim() || undefined,
-                orders: packages.map(p => ({
-                    ...p,
-                    description: p.description?.trim() || undefined,
-                    // Unpaid (COD) parcels: the recipient always pays the courier
-                    // fee, so the chooser is hidden — pin the value to Recipient.
-                    whoPaysForCompanyService: p.productPaymentStatus === 'NotPaid' ? 'Recipient' : p.whoPaysForCompanyService,
-                    amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
-                    companyServicePrice: p.companyServicePrice ?? undefined,
-                    isCompanyServicePriceIncluded: serviceIncludedForced || !!p.isCompanyServicePriceIncluded,
-                    weightPriceTierId: p.weightPriceTierId || undefined,
-                    orderType: p.orderType,
-                    returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
-                    returnPickupCity:     p.orderType === 'Return' ? p.returnPickupCity?.trim()     : undefined,
-                    returnPickupDistrict: p.orderType === 'Return' ? p.returnPickupDistrict?.trim() : undefined,
-                })),
-            };
+            const ordersPayload: OrderItemRequest[] = packages.map(p => ({
+                ...p,
+                description: p.description?.trim() || undefined,
+                // Unpaid (COD) parcels: the recipient always pays the courier
+                // fee, so the chooser is hidden — pin the value to Recipient.
+                whoPaysForCompanyService: p.productPaymentStatus === 'NotPaid' ? 'Recipient' : p.whoPaysForCompanyService,
+                amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
+                companyServicePrice: p.companyServicePrice ?? undefined,
+                isCompanyServicePriceIncluded: serviceIncludedForced || !!p.isCompanyServicePriceIncluded,
+                weightPriceTierId: p.weightPriceTierId || undefined,
+                orderType: p.orderType,
+                returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
+                returnPickupCity:     p.orderType === 'Return' ? p.returnPickupCity?.trim()     : undefined,
+                returnPickupDistrict: p.orderType === 'Return' ? p.returnPickupDistrict?.trim() : undefined,
+            }));
 
-            const response = await createGroupOrder(payload, token!);
+            let response: CreateGroupOrderResponse;
+            if (appendMode) {
+                response = await addOrdersToBatch(batchId!, ordersPayload, token!);
+            } else {
+                const payload: CreateGroupOrderRequest = {
+                    senderFirstName:    sender.senderFirstName,
+                    senderLastName:     sender.senderLastName,
+                    senderIdNumber:     sender.senderIdNumber?.trim() || undefined,
+                    senderBusinessName: sender.senderBusinessName,
+                    senderPhone:        sender.senderPhone,
+                    alternativeSenderPhone: sender.alternativeSenderPhone.trim() || undefined,
+                    pickUpCity:         sender.pickUpCity,
+                    pickUpDistrict:     sender.pickUpDistrict,
+                    pickUpAddress:      sender.pickUpAddress,
+                    note:               sender.note.trim() || undefined,
+                    orders:             ordersPayload,
+                    forceNewBatch,
+                };
+                response = await createGroupOrder(payload, token!);
+            }
             setResult(response);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err) {
@@ -506,7 +555,35 @@ export function CreateGroupOrderPage() {
         return (
             <div className="page">
                 <main className="page__main">
-                    <SuccessView result={result} onNewOrder={handleNewOrder} />
+                    <SuccessView
+                        result={result}
+                        onNewOrder={appendMode ? () => navigate('/customer?view=shipments') : handleNewOrder}
+                        title={appendMode ? t.cgoAppendSuccessTitle : undefined}
+                        subtitle={appendMode ? t.cgoAppendSuccessSubtitle : undefined}
+                        newOrderLabel={appendMode ? t.custNavShipments : undefined}
+                    />
+                </main>
+            </div>
+        );
+    }
+
+    // Append target couldn't be loaded (not found, already picked up, or a return).
+    if (appendMode && appendError) {
+        return (
+            <div className="page">
+                <main className="page__main">
+                    <div className="global-error" role="alert" style={{ maxWidth: 520, margin: '40px auto 16px' }}>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+                            <path d="M8 5v4M8 11v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                        {appendError}
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                        <button type="button" className="btn" onClick={() => navigate('/customer?view=shipments')}>
+                            {t.custNavShipments}
+                        </button>
+                    </div>
                 </main>
             </div>
         );
@@ -563,26 +640,53 @@ export function CreateGroupOrderPage() {
                             </ul>
                         </div>
                     )}
-                    <SenderSection
-                        data={sender}
-                        errors={errors}
-                        onChange={handleSenderChange}
-                        prefilled={prefilled}
-                        useOtherAddress={useOtherAddr}
-                        onUseOtherAddressChange={handleUseOtherAddrChange}
-                        onOpenPickupModal={() => setPickupModalOpen(true)}
-                    />
+                    {appendMode ? (
+                        <section className="form-section">
+                            <div className="form-section__body">
+                                <div className="global-error global-error--summary" role="status" style={{ background: 'var(--color-bg-2)', color: 'var(--color-text)' }}>
+                                    <div className="global-error__title" style={{ color: 'var(--color-accent)' }}>
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                            <path d="M8 1L14 4.5V11.5L8 15L2 11.5V4.5L8 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                                            <path d="M8 1v14M2 4.5l6 3.5 6-3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                        {appendBatch ? t.cgoAppendBanner(appendBatch.senderBusinessName) : '…'}
+                                    </div>
+                                    {appendBatch && (
+                                        <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 4 }}>
+                                            {(lang === 'ka' ? appendBatch.pickUpCityGeo : undefined) || appendBatch.pickUpCity}
+                                            {', '}
+                                            {(lang === 'ka' ? appendBatch.pickUpDistrictGeo : undefined) || appendBatch.pickUpDistrict}
+                                            {appendBatch.pickUpAddress ? `, ${appendBatch.pickUpAddress}` : ''}
+                                            {' · '}{t.cgoFooterCount(appendBatch.numberOfPackages)}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </section>
+                    ) : (
+                        <>
+                            <SenderSection
+                                data={sender}
+                                errors={errors}
+                                onChange={handleSenderChange}
+                                prefilled={prefilled}
+                                useOtherAddress={useOtherAddr}
+                                onUseOtherAddressChange={handleUseOtherAddrChange}
+                                onOpenPickupModal={() => setPickupModalOpen(true)}
+                            />
 
-                    <PickupAddressModal
-                        open={pickupModalOpen}
-                        initial={{ city: sender.pickUpCity, district: sender.pickUpDistrict, address: sender.pickUpAddress }}
-                        onSave={addr => {
-                            setSender(prev => ({ ...prev, pickUpCity: addr.city, pickUpDistrict: addr.district, pickUpAddress: addr.address }));
-                            setUseOtherAddr(true);
-                            setPickupModalOpen(false);
-                        }}
-                        onClose={() => setPickupModalOpen(false)}
-                    />
+                            <PickupAddressModal
+                                open={pickupModalOpen}
+                                initial={{ city: sender.pickUpCity, district: sender.pickUpDistrict, address: sender.pickUpAddress }}
+                                onSave={addr => {
+                                    setSender(prev => ({ ...prev, pickUpCity: addr.city, pickUpDistrict: addr.district, pickUpAddress: addr.address }));
+                                    setUseOtherAddr(true);
+                                    setPickupModalOpen(false);
+                                }}
+                                onClose={() => setPickupModalOpen(false)}
+                            />
+                        </>
+                    )}
 
                     <section className="form-section">
                         <div className="form-section__body">
@@ -736,17 +840,40 @@ export function CreateGroupOrderPage() {
                         </button>
                     )}
 
+                    {!appendMode && user?.role === 'Customer' && (
+                        <label style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px',
+                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+                            background: 'var(--color-bg-2)', cursor: 'pointer', marginBottom: 4,
+                        }}>
+                            <input
+                                type="checkbox"
+                                checked={forceNewBatch}
+                                onChange={e => setForceNewBatch(e.target.checked)}
+                                style={{ marginTop: 2, flexShrink: 0 }}
+                            />
+                            <span>
+                                <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--color-text)' }}>
+                                    {t.cgoForceNewBatchLabel}
+                                </span>
+                                <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+                                    {t.cgoForceNewBatchHint}
+                                </span>
+                            </span>
+                        </label>
+                    )}
+
                     <div className="form-footer">
                         <div className="form-footer__summary">
                             <span className="form-footer__count">{t.cgoFooterCount(packages.length)}</span>
                             <span className="form-footer__hint">{t.cgoFooterHint}</span>
                         </div>
-                        <button type="submit" className="btn btn--primary" disabled={submitting}>
+                        <button type="submit" className="btn btn--primary" disabled={submitting || (appendMode && !appendBatch)}>
                             {submitting ? (
-                                <><span className="btn__spinner" />{t.cgoSubmitting}</>
+                                <><span className="btn__spinner" />{appendMode ? t.cgoAppendSubmitting : t.cgoSubmitting}</>
                             ) : (
                                 <>
-                                    {t.cgoSubmit}
+                                    {appendMode ? t.cgoAppendSubmit : t.cgoSubmit}
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
