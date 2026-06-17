@@ -1,11 +1,15 @@
 using Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using System.Data;
 
 namespace Persistence.Services;
 
 public sealed class TrackingNumberGenerator : ITrackingNumberGenerator
 {
+    // Format: "DL" + 5 random alphanumeric characters, e.g. DL123GH.
+    private const string Prefix   = "DL";
+    private const int    BodyLen  = 5;
+    private const string Alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
     private readonly AppDbContext _context;
 
     public TrackingNumberGenerator(AppDbContext context) => _context = context;
@@ -21,33 +25,39 @@ public sealed class TrackingNumberGenerator : ITrackingNumberGenerator
         if (count <= 0)
             throw new ArgumentOutOfRangeException(nameof(count), "Count must be at least 1.");
 
-        var connection = _context.Database.GetDbConnection();
+        var accepted = new HashSet<string>(count);
 
-        var wasOpen = connection.State == ConnectionState.Open;
-        if (!wasOpen)
-            await connection.OpenAsync(cancellationToken);
-
-        try
+        // Random codes are short and have no global uniqueness guarantee, so reject any
+        // that collide within this batch or with a tracking number already in the database.
+        while (accepted.Count < count)
         {
-            var results = new List<string>(count);
+            var needed = count - accepted.Count;
 
-            await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT NEXT VALUE FOR dbo.TrackingNumberSeq";
+            var candidates = new HashSet<string>(needed);
+            while (candidates.Count < needed)
+                candidates.Add(NewCandidate());
+            candidates.ExceptWith(accepted);
 
-            for (int i = 0; i < count; i++)
-            {
-                var result = await command.ExecuteScalarAsync(cancellationToken);
-                var sequence = Convert.ToInt64(result);
-                var suffix = Guid.NewGuid().ToString("N")[..4].ToUpper();
-                results.Add($"{sequence:D6}-{suffix}");
-            }
+            var candidateList = candidates.ToList();
+            var taken = await _context.Orders
+                .AsNoTracking()
+                .Where(o => candidateList.Contains(o.TrackingNumber))
+                .Select(o => o.TrackingNumber)
+                .ToListAsync(cancellationToken);
 
-            return results;
+            foreach (var candidate in candidateList)
+                if (!taken.Contains(candidate))
+                    accepted.Add(candidate);
         }
-        finally
-        {
-            if (!wasOpen)
-                await connection.CloseAsync();
-        }
+
+        return accepted.ToList();
+    }
+
+    private static string NewCandidate()
+    {
+        Span<char> body = stackalloc char[BodyLen];
+        for (int i = 0; i < BodyLen; i++)
+            body[i] = Alphabet[Random.Shared.Next(Alphabet.Length)];
+        return string.Concat(Prefix, new string(body));
     }
 }

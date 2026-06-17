@@ -109,19 +109,18 @@ function renderLabel(d: ParcelLabelData, brand: BrandAssets): string {
     </div>`;
 }
 
-// Selectable paper/label sizes. `a6` is the default. The roll sizes are continuous
-// thermal paper (common phone-connected mini printers) — their print height is measured
-// from the rendered content at print time, since CSS @page can't mix a length with `auto`.
+// Selectable paper/label sizes (all fixed dimensions). `a6` is the default. Each size
+// has its own font/QR/logo scale (CSS below) so the full label fits within its bounds.
 interface SizeDef {
     id: string;
     label: string;   // shown in the on-screen size picker (Georgian)
-    fixed: boolean;   // true → fixed @page height; false → continuous roll (height measured)
+    page: string;    // @page size, e.g. "100mm 150mm"
 }
 const LABEL_SIZES: readonly SizeDef[] = [
-    { id: 'a6',     label: 'A6 — 100×150მმ',  fixed: true  },
-    { id: 'sq100',  label: '100×100მმ',        fixed: true  },
-    { id: 'roll80', label: '80მმ რულონი',      fixed: false },
-    { id: 'roll58', label: '58მმ რულონი',      fixed: false },
+    { id: 'a6',      label: '100×150მმ (A6)', page: '100mm 150mm' },
+    { id: 'l100x74', label: '100×74მმ',       page: '100mm 74mm'  },
+    { id: 'l70x100', label: '70×100მმ',       page: '70mm 100mm'  },
+    { id: 'l58x40',  label: '58×40მმ',        page: '58mm 40mm'   },
 ];
 const DEFAULT_SIZE = LABEL_SIZES[0].id;
 
@@ -193,48 +192,49 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-a6 .qr svg { width: 16mm; height: 16mm; }
     .size-a6 .qr__cap { font-size: 7pt; }
     .size-a6 .track { font-size: 11pt; }
-    .size-a6 .brand__logo { height: 14mm; max-width: 42mm; }
+    .size-a6 .brand__logo { height: 19mm; max-width: 52mm; }
 
-    /* ── Size: 100×100mm square ── */
-    .size-sq100 .label { width: 100mm; height: 100mm; padding: 6mm; }
-    .size-sq100 .store { font-size: 15pt; }
-    .size-sq100 .field { font-size: 10.5pt; }
-    .size-sq100 .lbl { font-size: 8pt; }
-    .size-sq100 .pay { font-size: 11pt; }
-    .size-sq100 .amount { font-size: 15pt; }
-    .size-sq100 .qr svg { width: 12mm; height: 12mm; }
-    .size-sq100 .qr__cap { font-size: 6pt; }
-    .size-sq100 .track { font-size: 9pt; }
-    .size-sq100 .brand__logo { height: 11mm; max-width: 34mm; }
-    .size-sq100 .rule { margin: 2.5mm 0; }
-    .size-sq100 .brand { margin-bottom: 2mm; }
+    /* ── Size: 100×74mm (half-A6 landscape height) ── */
+    .size-l100x74 .label { width: 100mm; height: 74mm; padding: 5mm; }
+    .size-l100x74 .store { font-size: 13pt; margin-bottom: 1mm; }
+    .size-l100x74 .field { font-size: 9.5pt; margin-bottom: 1mm; }
+    .size-l100x74 .lbl { font-size: 7.5pt; }
+    .size-l100x74 .pay { font-size: 10pt; }
+    .size-l100x74 .amount { font-size: 13pt; }
+    .size-l100x74 .qr svg { width: 11mm; height: 11mm; }
+    .size-l100x74 .qr__cap { font-size: 5.5pt; }
+    .size-l100x74 .track { font-size: 8.5pt; padding-top: 1.5mm; }
+    .size-l100x74 .brand__logo { height: 12mm; max-width: 36mm; }
+    .size-l100x74 .rule { margin: 2mm 0; }
+    .size-l100x74 .brand { margin-bottom: 1.5mm; }
 
-    /* ── Size: 80mm continuous roll ── */
-    .size-roll80 .label { width: 80mm; height: auto; padding: 5mm; }
-    .size-roll80 .store { font-size: 15pt; }
-    .size-roll80 .field { font-size: 11pt; }
-    .size-roll80 .lbl { font-size: 8.5pt; }
-    .size-roll80 .pay { font-size: 12pt; }
-    .size-roll80 .amount { font-size: 16pt; }
-    .size-roll80 .qr svg { width: 13mm; height: 13mm; }
-    .size-roll80 .qr__cap { font-size: 6pt; }
-    .size-roll80 .track { font-size: 9.5pt; }
-    .size-roll80 .brand__logo { height: 12mm; max-width: 30mm; }
-    .size-roll80 .rule { margin: 3mm 0; }
+    /* ── Size: 70×100mm ── */
+    .size-l70x100 .label { width: 70mm; height: 100mm; padding: 5mm; }
+    .size-l70x100 .store { font-size: 14pt; margin-bottom: 1.5mm; }
+    .size-l70x100 .field { font-size: 10pt; }
+    .size-l70x100 .lbl { font-size: 8pt; }
+    .size-l70x100 .pay { font-size: 11pt; }
+    .size-l70x100 .amount { font-size: 14pt; }
+    .size-l70x100 .qr svg { width: 11mm; height: 11mm; }
+    .size-l70x100 .qr__cap { font-size: 6pt; }
+    .size-l70x100 .track { font-size: 9pt; padding-top: 2mm; }
+    .size-l70x100 .brand__logo { height: 13mm; max-width: 24mm; }
+    .size-l70x100 .rule { margin: 2.5mm 0; }
+    .size-l70x100 .brand { gap: 2.5mm; margin-bottom: 2mm; }
 
-    /* ── Size: 58mm continuous roll (mini Bluetooth printers) ── */
-    .size-roll58 .label { width: 58mm; height: auto; padding: 4mm; }
-    .size-roll58 .store { font-size: 12pt; }
-    .size-roll58 .field { font-size: 9pt; }
-    .size-roll58 .lbl { font-size: 7pt; }
-    .size-roll58 .pay { font-size: 9.5pt; }
-    .size-roll58 .amount { font-size: 13pt; }
-    .size-roll58 .qr svg { width: 11mm; height: 11mm; }
-    .size-roll58 .qr__cap { font-size: 5.5pt; }
-    .size-roll58 .track { font-size: 8pt; }
-    .size-roll58 .brand__logo { height: 10mm; max-width: 22mm; }
-    .size-roll58 .rule { margin: 2.5mm 0; }
-    .size-roll58 .brand { gap: 2mm; }
+    /* ── Size: 58×40mm (small label sticker) — very compact ── */
+    .size-l58x40 .label { width: 58mm; height: 40mm; padding: 3mm; }
+    .size-l58x40 .store { font-size: 8pt; line-height: 1.05; margin-bottom: 0.5mm; }
+    .size-l58x40 .field { font-size: 6pt; line-height: 1.15; margin-bottom: 0.3mm; }
+    .size-l58x40 .lbl { font-size: 5pt; }
+    .size-l58x40 .pay { font-size: 7pt; margin-top: 0.5mm; }
+    .size-l58x40 .amount { font-size: 9pt; }
+    .size-l58x40 .qr svg { width: 8mm; height: 8mm; }
+    .size-l58x40 .qr__cap { font-size: 3.5pt; margin-top: 0.2mm; }
+    .size-l58x40 .track { font-size: 5.5pt; padding-top: 1mm; }
+    .size-l58x40 .brand__logo { height: 9mm; max-width: 18mm; }
+    .size-l58x40 .rule { margin: 1mm 0; }
+    .size-l58x40 .brand { gap: 1.5mm; margin-bottom: 1mm; }
 </style>
 </head>
 <body class="size-${DEFAULT_SIZE}">
@@ -245,24 +245,11 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
 ${labels.map(l => renderLabel(l, brand)).join('')}
 <script>
 (function () {
-    // Fixed-height pages → static @page; continuous rolls → measure the tallest rendered
-    // label and convert px→mm so the printer cuts at the right length.
-    var FIXED = { a6: '100mm 150mm', sq100: '100mm 100mm' };
-    var ROLL_W = { roll80: '80mm', roll58: '58mm' };
+    var PAGE = ${JSON.stringify(Object.fromEntries(LABEL_SIZES.map(s => [s.id, s.page])))};
     function applySize(id) {
         document.body.className = 'size-' + id;
-        var page;
-        if (ROLL_W[id]) {
-            var max = 0, labels = document.getElementsByClassName('label');
-            for (var i = 0; i < labels.length; i++) {
-                if (labels[i].offsetHeight > max) max = labels[i].offsetHeight;
-            }
-            var mm = Math.ceil(max * 25.4 / 96) + 2; // px → mm + small safety margin
-            page = ROLL_W[id] + ' ' + mm + 'mm';
-        } else {
-            page = FIXED[id] || '100mm 150mm';
-        }
-        document.getElementById('page-style').textContent = '@page { size: ' + page + '; margin: 0; }';
+        document.getElementById('page-style').textContent =
+            '@page { size: ' + (PAGE[id] || '100mm 150mm') + '; margin: 0; }';
     }
     var sel = document.getElementById('size-select');
     sel.addEventListener('change', function () { applySize(sel.value); });
