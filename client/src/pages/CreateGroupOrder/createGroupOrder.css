@@ -313,9 +313,9 @@ body {
     }
 
 .btn--add-package {
-    background: var(--color-accent-dim);
+    background: var(--color-accent);
     border: 2px solid var(--color-accent);
-    color: var(--color-accent);
+    color: #ffffff;
     padding: 15px 22px;
     width: 100%;
     border-radius: var(--radius-lg);
@@ -326,8 +326,6 @@ body {
 }
 
     .btn--add-package:hover {
-        background: var(--color-accent);
-        color: #ffffff;
         box-shadow: 0 4px 14px var(--color-accent-dim);
         transform: translateY(-1px);
     }

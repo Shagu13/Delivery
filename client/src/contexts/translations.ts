@@ -620,7 +620,7 @@ const en = {
   cgoImporting:             'Importing…',
   cgoImported:              (n: number): string => `${n} package${n !== 1 ? 's' : ''} imported`,
   cgoClearReset:            'Clear & reset',
-  cgoAddPackage:            'Add Another Package',
+  cgoAddPackage:            'Add Package',
   // Layout switcher / sidebar
   cgoViewLabel:             'View:',
   cgoViewSidebar:           'Sidebar',
@@ -686,7 +686,7 @@ const en = {
   // Footer
   cgoFooterCount:           (n: number): string => `${n} package${n !== 1 ? 's' : ''}`,
   cgoFooterHint:            'Ready to submit',
-  cgoSubmit:                'Place Order',
+  cgoSubmit:                'Save',
   cgoSubmitting:            'Placing Order…',
   cgoGlobalError:           'An unexpected error occurred. Please try again.',
   // Append-to-batch (add packages to an existing open batch)
@@ -696,7 +696,7 @@ const en = {
   cgoAppendClosed:          'This batch has already been picked up and can no longer accept new packages.',
   cgoAppendSuccessTitle:    'Packages added',
   cgoAppendSuccessSubtitle: 'The new packages were added to your batch. Share each tracking number with the recipient.',
-  custAddPackage:           'Add package',
+  custAddPackage:           'Add Package',
   // Success view
   cgoSuccessTitle:          'Order Placed',
   cgoSuccessSubtitle:       'Your group order has been received. Share each tracking number with the recipient.',
