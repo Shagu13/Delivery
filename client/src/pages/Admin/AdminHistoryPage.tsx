@@ -118,6 +118,7 @@ function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
       amountToCollectForPackage: null,
       amountOfCashCollected: null,
       companyServicePrice: r.companyServicePrice,
+      isCompanyServicePriceIncluded: false,
       courierSalary: r.courierSalary,
       companyRevenue: null,
       courierId: r.courierId,
