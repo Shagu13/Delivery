@@ -2175,7 +2175,7 @@ const ka: typeof en = {
   cgoGlobalError:           'დაფიქსირდა მოულოდნელი შეცდომა. გთხოვთ სცადოთ ხელახლა.',
   // Append-to-batch (add packages to an existing open batch)
   cgoAppendBanner:          (biz: string): string => `ემატება ამანათები ${biz}-ის ღია პარტიას. აღების და გამგზავნის მონაცემები რჩება პარტიის მიხედვით.`,
-  cgoAppendSubmit:          'პარტიაში დამატება',
+  cgoAppendSubmit:          'შენახვა',
   cgoAppendSubmitting:      'ემატება…',
   cgoAppendClosed:          'ეს პარტია უკვე აღებულია და ახალ ამანათებს ვეღარ მიიღებს.',
   cgoAppendSuccessTitle:    'ამანათები დაემატა',
