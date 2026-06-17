@@ -17,6 +17,8 @@ export interface TrackOrderResult {
     createdAt: string;
     pickedUpFromWarehouseAt: string | null;
     deliveredAt: string | null;
+    deliveryDateFrom: string | null;
+    deliveryDateTo: string | null;
     trackingEvents: TrackingEvent[];
 }
 

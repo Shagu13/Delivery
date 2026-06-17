@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { CityDistrictCombo } from '../../components/ui/CityDistrictCombo';
 import { FormField } from '../../components/ui/FormField';
 import { GeorgianPhoneField } from '../../components/ui/GeorgianPhoneField';
-import { AddressAutocomplete } from '../../features/addressAutocomplete';
 import type { District } from '../../api/cities';
 import type { WeightPriceTier } from '../../api/weightPriceTiers';
 import { tierLabel } from '../../api/weightPriceTiers';
@@ -116,7 +115,7 @@ function PackageDetail({
   index, pkg, errors, canRemove, customerPricing, weightTiers,
   senderAddress, districtLookup, serviceIncludedForced, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
 }: DetailProps) {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const fe = (f: string) => errors[`orders[${index}].${f}`];
   const isReturn   = pkg.orderType === 'Return';
   const isExchange = pkg.orderType === 'Exchange';
@@ -271,8 +270,7 @@ function PackageDetail({
               {t.cgoReturnPickupAddress ?? '📍 Return Pickup Address'}
             </div>
             <p className="psl-return-hint">{t.cgoReturnPickupHint ?? 'Address where courier will collect the parcel from the recipient.'}</p>
-            <CityDistrictPicker
-              hideDistrictForCapital
+            <CityDistrictCombo
               cityValue={pkg.returnPickupCity ?? ''}
               districtValue={pkg.returnPickupDistrict ?? ''}
               onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', null); }}
@@ -281,15 +279,13 @@ function PackageDetail({
               cityError={fe('returnPickupCity')}
               districtError={fe('returnPickupDistrict')}
             />
-            <AddressAutocomplete
+            <FormField
               label={t.cgoStreetAddress} required
               value={pkg.returnPickupAddress ?? ''}
-              onValueChange={v => onChange(index, 'returnPickupAddress', v)}
-              onCoordinatesChange={c => { onChange(index, 'latitude', c ? c.lat : null); onChange(index, 'longitude', c ? c.lon : null); }}
+              onChange={e => onChange(index, 'returnPickupAddress', e.target.value)}
               error={fe('returnPickupAddress')}
               placeholder={t.cgoStreetPlaceholder}
               maxLength={250}
-              lang={lang}
             />
           </div>
         )}
@@ -320,8 +316,7 @@ function PackageDetail({
           <div className="psl-section__label">
             {isReturn ? (t.cgoReturnDeliverBackTo ?? 'Deliver back to (Sender)') : t.cgoDeliveryAddress}
           </div>
-          <CityDistrictPicker
-            hideDistrictForCapital
+          <CityDistrictCombo
             cityValue={pkg.recipientCity}
             districtValue={pkg.recipientDistrict}
             onCityChange={v => { onChange(index, 'recipientCity', v); onChange(index, 'recipientDistrict', ''); if (!isReturn) { setSelectedDistrict(null); onChange(index, 'companyServicePrice', null); } }}
@@ -330,15 +325,13 @@ function PackageDetail({
             cityError={fe('recipientCity')}
             districtError={fe('recipientDistrict')}
           />
-          <AddressAutocomplete
+          <FormField
             label={t.cgoStreetAddress} required
             value={pkg.recipientAddress}
-            onValueChange={v => onChange(index, 'recipientAddress', v)}
-            onCoordinatesChange={c => { onChange(index, 'latitude', c ? c.lat : null); onChange(index, 'longitude', c ? c.lon : null); }}
+            onChange={e => onChange(index, 'recipientAddress', e.target.value)}
             error={fe('recipientAddress')}
             placeholder={t.cgoStreetPlaceholder}
             maxLength={250}
-            lang={lang}
           />
           <FormField
             as="textarea" label={`${t.cgoPackageDescription} ${t.cgoDescOptional}`}

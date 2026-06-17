@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FormField } from '../../components/ui/FormField';
-import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { CityDistrictCombo } from '../../components/ui/CityDistrictCombo';
 import { useLanguage } from '../../contexts/useLanguage';
 
 interface PickupAddress {
@@ -71,8 +71,7 @@ export function PickupAddressModal({ open, initial, onSave, onClose }: Props) {
         <div className="pickup-modal__body">
           <p className="pickup-modal__hint">{t.cgoModalHint}</p>
 
-          <CityDistrictPicker
-            hideDistrictForCapital
+          <CityDistrictCombo
             cityValue={city}
             districtValue={district}
             onCityChange={v => { setCity(v);     setErrors(e => ({ ...e, city: undefined })); }}

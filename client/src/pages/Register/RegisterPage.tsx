@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { registerCustomer, CustomerApiError } from '../../api/customers';
 import { FormField } from '../../components/ui/FormField';
 import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
-import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { CityDistrictCombo } from '../../components/ui/CityDistrictCombo';
 import { firstPasswordError } from '../../utils/passwordRules';
 import { useLanguage } from '../../contexts/useLanguage';
 import './register.css';
@@ -186,7 +186,7 @@ export function RegisterPage() {
 
           {/* Pickup address */}
           <p className="register-form__section-label">{t.registerPickup}</p>
-          <CityDistrictPicker
+          <CityDistrictCombo
             cityValue={form.city}
             districtValue={form.district}
             onCityChange={setDirect('city')}

@@ -10,20 +10,6 @@
   .cdp-row { grid-template-columns: 1fr; }
 }
 
-/* Capital city: district field hidden, city takes the full width */
-.cdp-row--single { grid-template-columns: 1fr; }
-
-.cdp-field--capital-note {
-  display: flex;
-  align-items: flex-end;
-  padding-bottom: 0.4rem;
-}
-.cdp-capital-note {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
 /* ─── Field wrapper ──────────────────────────────────────────────────────── */
 
 .cdp-field {
@@ -198,6 +184,15 @@
 }
 
 .cdp-option-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── Combined picker option (city › district) ───────────────────────────── */
+.cdp-combo-city-solo { font-weight: 600; }
+.cdp-combo-city { color: var(--color-text-muted, #6b7280); }
+.cdp-combo-sep  { color: var(--color-text-subtle, #b8b2ab); }
+.cdp-combo-dist { color: var(--color-text, #111827); font-weight: 500; }
+.cdp-option--selected .cdp-combo-city,
+.cdp-option--selected .cdp-combo-sep,
+.cdp-option--selected .cdp-combo-dist { color: inherit; }
 
 /* match highlight — uses <mark> so no extra span nesting */
 .cdp-mark {

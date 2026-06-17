@@ -152,6 +152,7 @@ function buildParcelLabel(go: CustomerGroupOrder, o: CustomerOrder): ParcelLabel
     recipientPhone:   o.recipientPhone,
     recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
     amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
+    description:      o.description ?? undefined,
     trackingNumber:   o.trackingNumber,
   };
 }
@@ -588,7 +589,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
           {/* Group order header */}
           <div className="content-card__header" style={{ cursor: 'pointer' }}
                onClick={() => setExpanded(expanded === go.id ? null : go.id)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+            <div className="cust-go-main" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
               <StatusBadge status={go.status} />
               {specialTypes(go).map(tp => <TypeBadge key={tp} type={tp} />)}
               {/* Whole-group cancellation already shows via StatusBadge; this flags
@@ -610,12 +611,13 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                 {' · '}{cityName(go.pickUpCity, go.pickUpCityGeo)}, {districtName(go.pickUpDistrict, go.pickUpDistrictGeo)}
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+            <div className="cust-go-actions" style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
               {canAddPackages(go) && (
                 <Link
                   to={`/send?batch=${go.id}`}
                   onClick={e => e.stopPropagation()}
                   title={t.custAddPackage}
+                  className="cust-go-actbtn"
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                     padding: '5px 10px', borderRadius: 'var(--radius-sm)',
@@ -634,6 +636,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                 type="button"
                 onClick={e => { e.stopPropagation(); void printParcelLabels(go.orders.map(o => buildParcelLabel(go, o))); }}
                 title={t.custPrintAllLabels}
+                className="cust-go-actbtn"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '5px 10px', borderRadius: 'var(--radius-sm)',
@@ -645,13 +648,15 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                 {printIcon}
                 {t.custPrintAllLabels}
               </button>
-              <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
-                {new Date(go.createdAt).toLocaleDateString()}
-              </span>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-                   style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
-                <path d="M3 6l5 5 5-5" stroke="var(--color-text-subtle)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <div className="cust-go-meta" style={{ display: 'inline-flex', alignItems: 'center', gap: 16 }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
+                  {new Date(go.createdAt).toLocaleDateString()}
+                </span>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                     style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
+                  <path d="M3 6l5 5 5-5" stroke="var(--color-text-subtle)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
             </div>
           </div>
 

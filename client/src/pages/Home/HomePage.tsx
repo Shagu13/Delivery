@@ -4,6 +4,7 @@ import { trackParcel, type TrackOrderResult } from '../../services/tracking';
 import { UpdateAppButton } from '../../components/UpdateAppButton';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
+import { getTrackProgress, type TrackStageKey } from '../../utils/trackingStages';
 import { type AllDistrictEntry } from '../../api/cities';
 import { prefetchCalcData, isCacheValid, _cachedDistricts } from './calcDataCache';
 import { PriceCalculatorModal } from './PriceCalculatorModal';
@@ -14,6 +15,14 @@ function formatDate(iso: string, lang: string) {
     return new Intl.DateTimeFormat(lang === 'ka' ? 'ka-GE' : 'en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
+    }).format(new Date(iso));
+}
+
+/** Compact numeric date (dd.MM.yyyy), optionally with HH:mm — for the date row under the stepper. */
+function formatDateShort(iso: string, lang: string, withTime = false) {
+    return new Intl.DateTimeFormat(lang === 'ka' ? 'ka-GE' : 'en-GB', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
     }).format(new Date(iso));
 }
 
@@ -49,6 +58,128 @@ function PriceFigure({ value, lang, from }: { value: number | null; lang: string
         <div className="home__tariff-price">
             <span className="home__tariff-from">{from}</span>
             <span className="home__tariff-num">{num === '—' ? num : `${num}₾`}</span>
+        </div>
+    );
+}
+
+// ── Tracking progress stepper ─────────────────────────────────────────────────
+const STAGE_ICON: Record<TrackStageKey, React.ReactNode> = {
+    registered: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <rect x="6" y="3" width="12" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M9 3h6v3H9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d="M9 11h6M9 15h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+    ),
+    pickedUp: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M21 8l-9-5-9 5 9 5 9-5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d="M3 8v8l9 5 9-5V8M12 13v8" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+    ),
+    atWarehouse: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M3 21V9l9-5 9 5v12" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d="M8 21v-6h8v6M3 21h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    ),
+    outForDelivery: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M3 6h11v9H3zM14 9h4l3 3v3h-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <circle cx="7" cy="18" r="1.8" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="17" cy="18" r="1.8" stroke="currentColor" strokeWidth="1.8" />
+        </svg>
+    ),
+    delivered: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+    ),
+    returnPickedUp: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M21 8l-9-5-9 5 9 5 9-5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d="M3 8v8l9 5 9-5V8" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+    ),
+    returned: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M9 14L4 9l5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5H8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    ),
+};
+
+const CheckIcon = () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+        <path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+);
+
+function TrackingStepper({ status }: { status: string }) {
+    const { t } = useLanguage();
+    const { stageKeys, activeIndex, cancelled } = getTrackProgress(status);
+
+    const labelFor = (k: TrackStageKey): string => ({
+        registered:     t.trackStageRegistered,
+        pickedUp:       t.trackStagePickedUp,
+        atWarehouse:    t.trackStageAtWarehouse,
+        outForDelivery: t.trackStageOutForDelivery,
+        delivered:      t.trackStageDelivered,
+        returnPickedUp: t.trackStageReturnPickedUp,
+        returned:       t.trackStageReturned,
+    }[k]);
+
+    if (cancelled) {
+        return (
+            <div className="track-cancelled">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                {t.trackCancelledLabel}
+            </div>
+        );
+    }
+
+    return (
+        <div className="track-stepper" role="list" aria-label={t.trackProgressLabel}>
+            {stageKeys.map((key, i) => {
+                const state = i < activeIndex ? 'done' : i === activeIndex ? 'current' : 'todo';
+                return (
+                    <div key={key} className={`track-stepper__item track-stepper__item--${state}`} role="listitem">
+                        <span className="track-stepper__icon">{state === 'done' ? <CheckIcon /> : STAGE_ICON[key]}</span>
+                        <span className="track-stepper__label">{labelFor(key)}</span>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+function TrackingDates({ result }: { result: TrackOrderResult }) {
+    const { t, lang } = useLanguage();
+
+    const deliveredText = result.deliveredAt ? formatDateShort(result.deliveredAt, lang, true) : null;
+    let expectedText: string | null = null;
+    if (!deliveredText) {
+        const from = result.deliveryDateFrom ? formatDateShort(result.deliveryDateFrom, lang) : null;
+        const to   = result.deliveryDateTo   ? formatDateShort(result.deliveryDateTo,   lang) : null;
+        if (from && to) expectedText = from === to ? from : `${from} – ${to}`;
+        else            expectedText = from ?? to;
+    }
+
+    return (
+        <div className="track-dates">
+            <div className="track-dates__item">
+                <span className="track-dates__label">{t.trackDateRegistered}</span>
+                <span className="track-dates__value">{formatDateShort(result.createdAt, lang, true)}</span>
+            </div>
+            {(deliveredText || expectedText) && (
+                <div className="track-dates__item">
+                    <span className="track-dates__label">{deliveredText ? t.trackDateDelivered : t.trackDateExpected}</span>
+                    <span className="track-dates__value">{deliveredText ?? expectedText}</span>
+                </div>
+            )}
         </div>
     );
 }
@@ -425,13 +556,13 @@ export function HomePage() {
                         )}
                         {!loading && result && (
                             <div className="track-modal__body">
-                                <div className="track-modal__status-row">
-                                    <div className="track-badge-wrapper">
-
-                                        {badgeMeta?.description && (
-                                            <p className="track-badge__description">{badgeMeta.description}</p>
-                                        )}
-                                    </div>
+                                <div className="track-modal__progress">
+                                    <p className="track-modal__progress-label">{t.trackProgressLabel}</p>
+                                    <TrackingStepper status={result.status} />
+                                    <TrackingDates result={result} />
+                                    {badgeMeta?.description && (
+                                        <p className="track-badge__description">{badgeMeta.description}</p>
+                                    )}
                                 </div>
                                 <div className="track-modal__info">
                                     <div className="track-modal__info-item">

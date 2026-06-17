@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { FormField } from '../../components/ui/FormField';
 import { GeorgianPhoneField } from '../../components/ui/GeorgianPhoneField';
-import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
-import { AddressAutocomplete } from '../../features/addressAutocomplete';
+import { CityDistrictCombo } from '../../components/ui/CityDistrictCombo';
 import type { District } from '../../api/cities';
 import type { WeightPriceTier } from '../../api/weightPriceTiers';
 import { tierLabel } from '../../api/weightPriceTiers';
@@ -95,7 +94,7 @@ export function PackageCard({
   onChange,
   onRemove,
 }: PackageCardProps) {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(true);
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null);
   const [selectedReturnDistrict, setSelectedReturnDistrict] = useState<District | null>(null);
@@ -323,8 +322,7 @@ export function PackageCard({
               <p className="package-card__return-hint">
                 {t.cgoReturnPickupHint ?? 'Enter the address where the courier will collect the parcel from the recipient.'}
               </p>
-              <CityDistrictPicker
-                hideDistrictForCapital
+              <CityDistrictCombo
                 cityValue={data.returnPickupCity ?? ''}
                 districtValue={data.returnPickupDistrict ?? ''}
                 onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', null); }}
@@ -333,16 +331,14 @@ export function PackageCard({
                 cityError={fieldError('returnPickupCity')}
                 districtError={fieldError('returnPickupDistrict')}
               />
-              <AddressAutocomplete
+              <FormField
                 label={t.cgoStreetAddress}
                 required
                 value={data.returnPickupAddress ?? ''}
-                onValueChange={v => onChange(index, 'returnPickupAddress', v)}
-                onCoordinatesChange={c => { onChange(index, 'latitude', c ? c.lat : null); onChange(index, 'longitude', c ? c.lon : null); }}
+                onChange={e => onChange(index, 'returnPickupAddress', e.target.value)}
                 error={fieldError('returnPickupAddress')}
                 placeholder={t.cgoStreetPlaceholder}
                 maxLength={250}
-                lang={lang}
               />
             </fieldset>
           )}
@@ -386,8 +382,7 @@ export function PackageCard({
               {isReturn ? (t.cgoReturnDeliverBackTo ?? 'Deliver Back To (Sender)') : t.cgoDeliveryAddress}
             </legend>
 
-            <CityDistrictPicker
-              hideDistrictForCapital
+            <CityDistrictCombo
               cityValue={data.recipientCity}
               districtValue={data.recipientDistrict}
               onCityChange={handleCityChange}
@@ -397,16 +392,14 @@ export function PackageCard({
               districtError={fieldError('recipientDistrict')}
             />
 
-            <AddressAutocomplete
+            <FormField
               label={t.cgoStreetAddress}
               required
               value={data.recipientAddress}
-              onValueChange={v => onChange(index, 'recipientAddress', v)}
-              onCoordinatesChange={c => { onChange(index, 'latitude', c ? c.lat : null); onChange(index, 'longitude', c ? c.lon : null); }}
+              onChange={e => onChange(index, 'recipientAddress', e.target.value)}
               error={fieldError('recipientAddress')}
               placeholder={t.cgoStreetPlaceholder}
               maxLength={250}
-              lang={lang}
             />
             <FormField
               as="textarea"

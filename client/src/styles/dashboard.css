@@ -1468,4 +1468,25 @@
   .profile-grid-2 {
     grid-template-columns: 1fr !important;
   }
+
+  /* Group-order header: stack into rows so the action buttons don't
+     overflow/collide with the header text on narrow screens.
+     Row 1: badges + business name. Row 2: action buttons (equal share).
+     Row 3: date + chevron. */
+  .cust-go-main {
+    width: 100%;
+  }
+  .cust-go-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 10px !important;
+  }
+  .cust-go-actbtn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .cust-go-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
 }

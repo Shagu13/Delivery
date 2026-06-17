@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FormField } from '../../components/ui/FormField';
-import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { CityDistrictCombo } from '../../components/ui/CityDistrictCombo';
 import type { ValidationErrors } from '../../types/groupOrder';
 import { useLanguage } from '../../contexts/useLanguage';
 
@@ -164,8 +164,7 @@ export function SenderSection({
             </div>
           )}
 
-          <CityDistrictPicker
-            hideDistrictForCapital
+          <CityDistrictCombo
             cityValue={data.pickUpCity}
             districtValue={data.pickUpDistrict}
             onCityChange={cityName => {

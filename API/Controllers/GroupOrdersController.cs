@@ -51,10 +51,7 @@ public sealed class GroupOrdersController : BaseController
                 PickUpAddress: request.PickUpAddress,
                 Note: request.Note,
                 Orders: MapOrders(request.Orders),
-                CustomerId: customerId,
-                // Merge same-day orders into the customer's open batch unless they
-                // explicitly asked for a separate one.
-                MergeIntoOpenBatch: !request.ForceNewBatch
+                CustomerId: customerId
             )
         );
 

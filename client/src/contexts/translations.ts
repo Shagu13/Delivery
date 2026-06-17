@@ -155,6 +155,19 @@ const en = {
   trackRecipientAddr:  'Recipient Address',
   trackDelivered:      'Delivered',
   trackEventHistory:   'Event History',
+  // ── Tracking progress stepper ─────────────────────────────────────────────
+  trackProgressLabel:        'Parcel journey',
+  trackStageRegistered:      'Registered',
+  trackStagePickedUp:        'Picked up',
+  trackStageAtWarehouse:     'At warehouse',
+  trackStageOutForDelivery:  'Out for delivery',
+  trackStageDelivered:       'Delivered',
+  trackStageReturnPickedUp:  'Collected',
+  trackStageReturned:        'Returned',
+  trackCancelledLabel:       'Cancelled',
+  trackDateRegistered:       'Registered',
+  trackDateDelivered:        'Delivered',
+  trackDateExpected:         'Expected delivery',
 
   // ── Tracking statuses ─────────────────────────────────────────────────────
   statusPending:              'Order Placed',
@@ -247,6 +260,10 @@ const en = {
   cdpNoDistricts:      'No districts available',
   cdpLoadingDistricts: 'Loading districts…',
   cdpCapitalNoDistrict: 'District not required for the capital — citywide pricing applies.',
+  cdpComboLabel:        'City / District',
+  cdpComboPlaceholder:  'Search city, district or village…',
+  cdpComboNoMatch:      (q: string) => `No match for "${q}"`,
+  cdpComboLoading:      'Loading…',
 
   // ── Admin Orders Page ─────────────────────────────────────────────────────
   aopSearchPh:         'Search by TN, recipient, sender, phone…',
@@ -672,9 +689,7 @@ const en = {
   cgoSubmit:                'Place Order',
   cgoSubmitting:            'Placing Order…',
   cgoGlobalError:           'An unexpected error occurred. Please try again.',
-  // Same-day batch merging / append-to-batch
-  cgoForceNewBatchLabel:    'Create a separate new batch',
-  cgoForceNewBatchHint:     'Orders you place today are grouped into one batch until a courier picks it up. Tick this to keep this order in its own separate batch.',
+  // Append-to-batch (add packages to an existing open batch)
   cgoAppendBanner:          (biz: string): string => `Adding packages to ${biz}'s open batch. Pickup and sender details stay the same as the batch.`,
   cgoAppendSubmit:          'Add to batch',
   cgoAppendSubmitting:      'Adding…',
@@ -1624,6 +1639,19 @@ const ka: typeof en = {
   trackRecipientAddr:  'მიმღების მისამართი',
   trackDelivered:      'ჩაბარდა',
   trackEventHistory:   'მოვლენათა ისტორია',
+  // ── Tracking progress stepper ─────────────────────────────────────────────
+  trackProgressLabel:        'ამანათის გზა',
+  trackStageRegistered:      'რეგისტრირებული',
+  trackStagePickedUp:        'აღებულია',
+  trackStageAtWarehouse:     'საწყობში',
+  trackStageOutForDelivery:  'მიტანის პროცესში',
+  trackStageDelivered:       'ჩაბარდა',
+  trackStageReturnPickedUp:  'აღებულია',
+  trackStageReturned:        'დაბრუნდა',
+  trackCancelledLabel:       'გაუქმებულია',
+  trackDateRegistered:       'რეგისტრაციის თარიღი',
+  trackDateDelivered:        'ჩაბარების თარიღი',
+  trackDateExpected:         'სავარაუდო ჩაბარება',
 
   // ── Tracking statuses ─────────────────────────────────────────────────────
   statusPending:              'შეკვეთა განთავსებულია',
@@ -1716,6 +1744,10 @@ const ka: typeof en = {
   cdpNoDistricts:      'რაიონები არ არის',
   cdpLoadingDistricts: 'რაიონების ჩატვირთვა…',
   cdpCapitalNoDistrict: 'დედაქალაქისთვის რაიონი არ არის საჭირო — მოქმედებს ერთიანი ფასი.',
+  cdpComboLabel:        'ქალაქი / რაიონი',
+  cdpComboPlaceholder:  'ქალაქი, რაიონი ან სოფელი…',
+  cdpComboNoMatch:      (q: string) => `"${q}" — შედეგი ვერ მოიძებნა`,
+  cdpComboLoading:      'იტვირთება…',
 
   // ── Admin Orders Page ─────────────────────────────────────────────────────
   aopSearchPh:         'ძებნა TN-ით, მიმღებით, გამგზავნით, ტელ…',
@@ -2072,7 +2104,7 @@ const ka: typeof en = {
   cgoImporting:             'იმპორტირება…',
   cgoImported:              (n: number): string => `${n} ამანათი შემოტანილია`,
   cgoClearReset:            'გასუფთავება და განახლება',
-  cgoAddPackage:            'სხვა ამანათის დამატება',
+  cgoAddPackage:            'ამანათის დამატება',
   // Layout switcher / sidebar
   cgoViewLabel:             'ხედი:',
   cgoViewSidebar:           'გვერდითა პანელი',
@@ -2138,12 +2170,10 @@ const ka: typeof en = {
   // Footer
   cgoFooterCount:           (n: number): string => `${n} ამანათი`,
   cgoFooterHint:            'გაგზავნისთვის მზადაა',
-  cgoSubmit:                'შეკვეთის განთავსება',
+  cgoSubmit:                'შენახვა',
   cgoSubmitting:            'შეკვეთა განთავსდება…',
   cgoGlobalError:           'დაფიქსირდა მოულოდნელი შეცდომა. გთხოვთ სცადოთ ხელახლა.',
-  // Same-day batch merging / append-to-batch
-  cgoForceNewBatchLabel:    'ცალკე ახალი პარტიის შექმნა',
-  cgoForceNewBatchHint:     'დღეს განთავსებული შეკვეთები ერთიანდება ერთ პარტიად, სანამ კურიერი არ წაიღებს. მონიშნეთ, თუ გსურთ ეს შეკვეთა ცალკე პარტიად დარჩეს.',
+  // Append-to-batch (add packages to an existing open batch)
   cgoAppendBanner:          (biz: string): string => `ემატება ამანათები ${biz}-ის ღია პარტიას. აღების და გამგზავნის მონაცემები რჩება პარტიის მიხედვით.`,
   cgoAppendSubmit:          'პარტიაში დამატება',
   cgoAppendSubmitting:      'ემატება…',

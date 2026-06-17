@@ -263,7 +263,16 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
 
     const base = allDistricts.filter(d => entryMatchesQuery(d, q));
 
-    if (!q) return base;
+    // No query: group by city, with the city itself (eponymous row) first,
+    // then its districts alphabetically.
+    if (!q) return [...base].sort((a, b) => {
+      const c = a.cityName.localeCompare(b.cityName);
+      if (c !== 0) return c;
+      const aEpo = isEponymous(a), bEpo = isEponymous(b);
+      if (aEpo && !bEpo) return -1;
+      if (!aEpo && bEpo) return 1;
+      return a.districtName.localeCompare(b.districtName);
+    });
 
     return [...base].sort((a, b) => {
       // 1. Eponymous district comes first (Zugdidi › Zugdidi before Zugdidi › Mestia)
@@ -309,7 +318,11 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
 
   function selectEntry(d: AllDistrictEntry) {
     setSelectedEntry(d);
-    setToSearch(`${displayName(d.cityName, d.cityNameGeo)} › ${displayName(d.districtName, d.districtNameGeo)}`);
+    setToSearch(
+      isEponymous(d)
+        ? displayName(d.cityName, d.cityNameGeo)
+        : `${displayName(d.cityName, d.cityNameGeo)} › ${displayName(d.districtName, d.districtNameGeo)}`
+    );
     setToOpen(false);
     setSelectedTierId(null); // reset tier on new destination
   }
@@ -405,13 +418,15 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
                       style={{ ...OPTION, background: sel ? C.accentDim : hov ? C.bg3 : C.bg }}
                     >
                       <span style={{ fontSize: '0.88rem', color: C.text, fontFamily: "'Plus Jakarta Sans', sans-serif", display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                        <span style={{ color: C.textSubtle, fontSize: '0.82rem' }}>{city}</span>
-                        <span style={{ color: C.textSubtle, margin: '0 2px' }}>›</span>
-                        <span style={{ fontWeight: eponym ? 700 : 500, color: eponym ? C.accent : C.text }}>{dist}</span>
-                        {eponym && (
-                          <span style={{ fontSize: '0.68rem', background: C.accentDim, color: C.accent, borderRadius: 4, padding: '1px 5px', fontWeight: 600, marginLeft: 3 }}>
-                            {lang === 'ka' ? 'ქ.' : 'city'}
-                          </span>
+                        {eponym ? (
+                          /* The city itself — shown first in its group as the bare city name. */
+                          <span style={{ fontWeight: 600, color: C.text }}>{city}</span>
+                        ) : (
+                          <>
+                            <span style={{ color: C.textSubtle, fontSize: '0.82rem' }}>{city}</span>
+                            <span style={{ color: C.textSubtle, margin: '0 2px' }}>›</span>
+                            <span style={{ fontWeight: 500, color: C.text }}>{dist}</span>
+                          </>
                         )}
                       </span>
                       {sel && <Tick />}

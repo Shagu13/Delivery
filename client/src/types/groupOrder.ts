@@ -47,8 +47,6 @@ export interface CreateGroupOrderRequest {
     note?: string;
     orders: OrderItemRequest[];
     customerId?: string;
-    /** When true, force a brand-new batch instead of merging into today's open batch. */
-    forceNewBatch?: boolean;
 }
 
 export interface OrderTrackingResponse {

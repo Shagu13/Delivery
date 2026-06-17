@@ -135,6 +135,7 @@ function buildAdminLabel(o: AdminOrderItem): ParcelLabelData {
     recipientPhone:   o.recipientPhone,
     recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
     amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
+    description:      o.description ?? undefined,
     trackingNumber:   o.trackingNumber,
   };
 }

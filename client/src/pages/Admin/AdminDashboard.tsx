@@ -1126,7 +1126,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                         })()}
                       </td>
                       <td>
-                        <AdminOrderRowActions order={o} couriers={couriers} token={token ?? ''}
+                        <AdminOrderRowActions order={o} storeName={o._go.senderBusinessName} couriers={couriers} token={token ?? ''}
                           onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
                           onRefresh={() => load(search)} />
                       </td>
@@ -1252,7 +1252,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                         })()}
                                       </td>
                                       <td>
-                                        <AdminOrderRowActions order={o} couriers={couriers} token={token ?? ''}
+                                        <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
                                           onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
                                           onRefresh={() => load(search)} />
                                       </td>

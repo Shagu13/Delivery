@@ -187,10 +187,6 @@ export function CreateGroupOrderPage() {
     const [appendBatch, setAppendBatch] = useState<CustomerGroupOrder | null>(null);
     const [appendError, setAppendError] = useState<string | null>(null);
 
-    // Escape hatch (normal mode only): force a separate batch instead of merging into
-    // today's open batch.
-    const [forceNewBatch, setForceNewBatch] = useState(false);
-
     const [sender,       setSender]       = useState<SenderFormData>(EMPTY_SENDER);
     const [useOtherAddr, setUseOtherAddr] = useState(false);
     const [packages,     setPackages]     = useState<OrderItemRequest[]>([{ ...EMPTY_PACKAGE }]);
@@ -493,7 +489,6 @@ export function CreateGroupOrderPage() {
                     pickUpAddress:      sender.pickUpAddress,
                     note:               sender.note.trim() || undefined,
                     orders:             ordersPayload,
-                    forceNewBatch,
                 };
                 response = await createGroupOrder(payload, token!);
             }
@@ -838,29 +833,6 @@ export function CreateGroupOrderPage() {
                             </svg>
                             {t.cgoAddPackage}
                         </button>
-                    )}
-
-                    {!appendMode && user?.role === 'Customer' && (
-                        <label style={{
-                            display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px',
-                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                            background: 'var(--color-bg-2)', cursor: 'pointer', marginBottom: 4,
-                        }}>
-                            <input
-                                type="checkbox"
-                                checked={forceNewBatch}
-                                onChange={e => setForceNewBatch(e.target.checked)}
-                                style={{ marginTop: 2, flexShrink: 0 }}
-                            />
-                            <span>
-                                <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--color-text)' }}>
-                                    {t.cgoForceNewBatchLabel}
-                                </span>
-                                <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
-                                    {t.cgoForceNewBatchHint}
-                                </span>
-                            </span>
-                        </label>
                     )}
 
                     <div className="form-footer">

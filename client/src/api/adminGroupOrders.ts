@@ -49,6 +49,7 @@ export interface AdminOrder {
     amountToCollectForPackage: number | null;
     amountOfCashCollected: number | null;
     companyServicePrice: number;
+    isCompanyServicePriceIncluded: boolean;
     courierSalary: number | null;
     companyRevenue: number | null;
     courierId: string | null;

@@ -1,5 +1,4 @@
 using Application.Common.Interfaces;
-using Infrastructure.Geocoding;
 using Infrastructure.Services;
 using Infrastructure.Sms;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -92,9 +91,6 @@ public static class DependencyInjectionInfrastructure
         services.AddScoped<IAdminNotificationSmsService,     AdminNotificationSmsService>();
         services.AddScoped<IRecipientNotificationSmsService, RecipientNotificationSmsService>();
         services.AddScoped<IPasswordResetSmsService,         PasswordResetSmsService>();
-
-        // ── Address autocomplete (Geoapify) ────────────────────────────────────
-        services.AddHttpClient<IAddressAutocompleteService, GeoapifyAddressService>();
 
         return services;
     }
