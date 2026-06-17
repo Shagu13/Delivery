@@ -115,7 +115,7 @@ function validate(
         const p = (field: string, val: string, errMsg: string) => {
             if (!val.trim()) errors[`orders[${i}].${field}`] = errMsg;
         };
-        p('recipientName', pkg.recipientName, t.cgoErrRecipientName);
+        // Recipient name is optional — blank stores "" and renders as "Unknown"/"უცნობი".
         if (!pkg.recipientPhone.trim()) {
             errors[`orders[${i}].recipientPhone`] = t.cgoErrPhone;
         } else if (!isValidGeorgianMobile(pkg.recipientPhone)) {

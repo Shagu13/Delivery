@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, OrderStatus } from '../../api/adminGroupOrders';
 import { fetchReturnExchangeOrders } from '../../api/returnExchange';
@@ -421,7 +422,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                               <tr key={o.id}>
                                 <td><span className="tn-badge">{o.trackingNumber}</span></td>
                                 <td>
-                                  <div style={{ fontWeight: 600 }}>{o.recipientName}</div>
+                                  <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
                                   <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>
                                     {o.recipientPhone}
                                   </div>

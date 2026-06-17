@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import {
@@ -558,7 +559,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                         <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--color-text)' }}>{o.trackingNumber}</span>
                                         <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>{o.orderType}</span>
                                     </div>
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{o.recipientName} · {o.recipientCity}</div>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)} · {o.recipientCity}</div>
                                 </div>
 
                                 {/* Service — customer → company (sender-pays only) */}

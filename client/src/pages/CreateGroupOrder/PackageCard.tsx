@@ -359,7 +359,6 @@ export function PackageCard({
             <legend className="fieldset__legend">{t.cgoRecipientInfo}</legend>
             <FormField
               label={t.cgoRecipientName}
-              required
               value={data.recipientName}
               onChange={e => onChange(index, 'recipientName', e.target.value)}
               error={fieldError('recipientName')}

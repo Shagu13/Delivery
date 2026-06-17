@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 import { fetchMyDeliveryHistory } from '../../api/orders';
 import { fetchMyPickupHistory } from '../../api/adminGroupOrders';
 import type { CourierOrderHistory } from '../../api/orders';
@@ -101,7 +102,7 @@ function DeliveryHistoryTab({ token }: { token: string }) {
             onRetry={retry} hasItems={items.length > 0}>
             {items.map(order => (
                 <HistoryCard key={order.id}
-                    title={<>{order.isFragile ? '🥚' : '📦'} {order.recipientName}</>}
+                    title={<>{order.isFragile ? '🥚' : '📦'} {recipientDisplayName(order.recipientName, t.recipientUnknown)}</>}
                     status={order.status}
                     location={`${order.recipientCity}, ${order.recipientDistrict}`}
                     address={order.recipientAddress}

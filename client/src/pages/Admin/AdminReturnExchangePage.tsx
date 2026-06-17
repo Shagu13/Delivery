@@ -11,6 +11,8 @@ import type { Courier } from '../../api/couriers';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
+import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -141,6 +143,7 @@ function OrderRow({
     token: string;
     onRefresh: () => void;
 }) {
+    const { t } = useLanguage();
     const [assigning, setAssigning]         = useState(false);
     const [completing, setCompleting]       = useState(false);
     const [selectedCourier, setSelected]    = useState('');
@@ -239,7 +242,7 @@ function OrderRow({
             </td>
             <td>
                 <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                    {order.recipientName}
+                    {recipientDisplayName(order.recipientName, t.recipientUnknown)}
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', fontFamily: 'monospace' }}>
                     {order.recipientPhone}

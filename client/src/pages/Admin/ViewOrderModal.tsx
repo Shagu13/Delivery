@@ -4,6 +4,7 @@ import type { AdminOrderItem } from './AdminOrdersPage';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 
 interface Props {
     order: AdminOrderItem | null;
@@ -116,7 +117,7 @@ export function ViewOrderModal({ order, open, onClose }: Props) {
                     </Section>
 
                     <Section title={t.vomSecRecipient}>
-                        <Row label={t.vomLblName}     value={order.recipientName} />
+                        <Row label={t.vomLblName}     value={recipientDisplayName(order.recipientName, t.recipientUnknown)} />
                         <Row label={t.vomLblPhone}    value={order.recipientPhone} />
                         <Row label={t.vomLblCity}     value={city} />
                         <Row label={t.vomLblDistrict} value={district} />

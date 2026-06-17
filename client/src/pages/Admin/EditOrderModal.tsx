@@ -152,8 +152,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
     const validate = (): boolean => {
         const e: Record<string, string> = {};
 
-        // Recipient (delivery tab)
-        if (!name.trim()) e.name = t.cgoErrRecipientName;
+        // Recipient (delivery tab) — name is optional (blank shows "Unknown"/"უცნობი").
         if (!phone.trim())     e.phone     = t.errPhoneRequired;
         else if (!isValidGeorgianMobile(phone)) e.phone = t.cgoErrInvalidPhone;
         if (!city.trim())      e.city      = t.errCityRequired;
@@ -314,7 +313,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                             <legend className="modal__legend">{t.eomLegendRecipient}</legend>
                             <div className="eom-grid">
                                 <div className="eom-col-2">
-                                    <Field label={t.cgoRecipientName} required error={errors.name}>
+                                    <Field label={t.cgoRecipientName} error={errors.name}>
                                         <input className="eom-input" value={name} onChange={e => { setName(e.target.value); clearErr('name'); }} />
                                     </Field>
                                 </div>

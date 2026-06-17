@@ -13,6 +13,7 @@ import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
+import { recipientDisplayName } from '../../utils/recipientName';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ function buildAdminLabel(o: AdminOrderItem): ParcelLabelData {
   const district = o.recipientDistrictGeo || o.recipientDistrict;
   return {
     storeName:        o.senderBusinessName,
-    recipientName:    o.recipientName,
+    recipientName:    recipientDisplayName(o.recipientName, 'უცნობი'),
     recipientPhone:   o.recipientPhone,
     recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
     amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
@@ -1143,7 +1144,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                       <div className="aop-sender-name">{order.senderFirstName} {order.senderLastName}</div>
                     </td>
                     <td className="aop-td">
-                      <div className="aop-name">{order.recipientName}</div>
+                      <div className="aop-name">{recipientDisplayName(order.recipientName, t.recipientUnknown)}</div>
                       <div className="aop-addr">{order.recipientAddress}</div>
                     </td>
                     <td className="aop-td aop-td--mono">{order.recipientPhone}</td>

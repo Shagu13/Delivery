@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 import { fetchMyOrderFinance } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -78,7 +79,7 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
             <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>{index + 1}</td>
             <td style={{ ...cell, fontWeight: 700 }}>{line.trackingNumber}</td>
             <td style={cell}>
-                {line.recipientName}
+                {recipientDisplayName(line.recipientName, t.recipientUnknown)}
                 <span style={{ color: 'var(--color-text-subtle)' }}> · {line.recipientCity}</span>
             </td>
             <td style={cell}>{line.orderType}</td>

@@ -18,6 +18,7 @@ import { CustomerEditOrderModal } from './CustomerEditOrderModal';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
+import { recipientDisplayName } from '../../utils/recipientName';
 import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
 import { CustomerFinancePage } from './CustomerFinancePage';
 import { CustomerStatisticsPage } from './CustomerStatisticsPage';
@@ -148,7 +149,7 @@ function buildParcelLabel(go: CustomerGroupOrder, o: CustomerOrder): ParcelLabel
   const district = o.recipientDistrictGeo || o.recipientDistrict;
   return {
     storeName:        go.senderBusinessName,
-    recipientName:    o.recipientName,
+    recipientName:    recipientDisplayName(o.recipientName, 'უცნობი'),
     recipientPhone:   o.recipientPhone,
     recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
     amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
@@ -700,7 +701,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                         </div>
                       </td>
                       <td style={{ padding: '10px 16px' }}>
-                        <div style={{ fontWeight: 500 }}>{o.recipientName}</div>
+                        <div style={{ fontWeight: 500 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientPhone}</div>
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 import { fetchMySettlements } from '../../api/settlements';
 import type { CourierSettlementItem } from '../../api/settlements';
 import { fetchCourierOrderFinance } from '../../api/orderFinance';
@@ -186,7 +187,7 @@ function CourierOrdersByDay({ token }: { token: string }) {
                                         <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)' }}>{line.orderType}</span>
                                     </div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                                        {line.recipientName} · {line.recipientCity}
+                                        {recipientDisplayName(line.recipientName, t.recipientUnknown)} · {line.recipientCity}
                                     </div>
                                 </div>
                                 <div style={{ textAlign: 'right', minWidth: 90 }}>

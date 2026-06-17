@@ -66,7 +66,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
-    if (!name.trim())      e.recipientName      = t.cgoErrRecipientName;
+    // Recipient name is optional — blank stores "" and renders as "Unknown"/"უცნობი".
     if (!phone.trim())     e.recipientPhone     = t.errPhoneRequired;
     else if (!isValidGeorgianMobile(phone)) e.recipientPhone = t.cgoErrInvalidPhone;
     if (!address.trim())   e.recipientAddress   = t.errAddressRequired;
@@ -133,7 +133,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
           </div>
 
           <FormField
-            label={t.cgoRecipientName} required
+            label={t.cgoRecipientName}
             value={name}
             onChange={e => { setName(e.target.value); clearErr('recipientName'); }}
             error={errors.recipientName}

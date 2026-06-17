@@ -37,7 +37,9 @@ public sealed class CreateOrderDtoValidator : AbstractValidator<CreateOrderDto>
     {
         _context = context;
 
-        RuleFor(x => x.RecipientName).NotEmpty().MaximumLength(201);
+        // Recipient name is optional — when left blank the UI shows a localized
+        // "Unknown"/"უცნობი" placeholder. The phone stays required (delivery identifier).
+        RuleFor(x => x.RecipientName).MaximumLength(201);
         RuleFor(x => x.RecipientPhone).NotEmpty().MaximumLength(20);
 
         RuleFor(x => x.RecipientCity)

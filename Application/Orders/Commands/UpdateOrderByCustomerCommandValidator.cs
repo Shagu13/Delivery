@@ -13,7 +13,7 @@ public sealed class UpdateOrderByCustomerCommandValidator : AbstractValidator<Up
     {
         _context = context;
 
-        RuleFor(x => x.RecipientName)     .NotEmpty().MaximumLength(201);
+        RuleFor(x => x.RecipientName)     .MaximumLength(201);   // optional — blank shows "Unknown"/"უცნობი"
         RuleFor(x => x.RecipientPhone)    .NotEmpty().MaximumLength(20);
         RuleFor(x => x.RecipientAddress)  .NotEmpty().MaximumLength(250);
         RuleFor(x => x.AmountToCollectForPackage)

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { trackParcel, type TrackOrderResult } from '../../services/tracking';
 import { UpdateAppButton } from '../../components/UpdateAppButton';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { getTrackProgress, type TrackStageKey } from '../../utils/trackingStages';
 import { type AllDistrictEntry } from '../../api/cities';
@@ -567,7 +568,7 @@ export function HomePage() {
                                 <div className="track-modal__info">
                                     <div className="track-modal__info-item">
                                         <span className="track-modal__info-label">{t.trackRecipient}</span>
-                                        <span className="track-modal__info-value">{result.recipientName}</span>
+                                        <span className="track-modal__info-value">{recipientDisplayName(result.recipientName, t.recipientUnknown)}</span>
                                     </div>
                                     <div className="track-modal__info-item">
                                         <span className="track-modal__info-label">{t.trackDestination}</span>

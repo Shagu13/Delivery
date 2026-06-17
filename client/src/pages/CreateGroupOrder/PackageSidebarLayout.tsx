@@ -295,7 +295,6 @@ function PackageDetail({
           <div className="psl-section__label">{t.cgoRecipientInfo}</div>
           <FormField
             label={t.cgoRecipientName}
-            required
             value={pkg.recipientName}
             onChange={e => onChange(index, 'recipientName', e.target.value)}
             error={fe('recipientName')}

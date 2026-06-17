@@ -1,5 +1,6 @@
 import type { CreateGroupOrderResponse } from '../../types/groupOrder';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 
 interface SuccessViewProps {
   result: CreateGroupOrderResponse;
@@ -54,7 +55,7 @@ export function SuccessView({ result, onNewOrder, title, subtitle, newOrderLabel
           {result.orders.map(order => (
             <div key={order.orderId} className="tracking-item">
               <div className="tracking-item__recipient">
-                {order.recipientName}
+                {recipientDisplayName(order.recipientName, t.recipientUnknown)}
               </div>
               <button
                 type="button"

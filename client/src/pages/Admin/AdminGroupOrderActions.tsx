@@ -12,6 +12,7 @@ import { sendOrderToCity, cancelOrderByAdmin } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
 import { useLanguage } from '../../contexts/useLanguage';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
+import { recipientDisplayName } from '../../utils/recipientName';
 
 // Print icon shared by the label buttons.
 const printIcon = (
@@ -38,7 +39,7 @@ function buildLabel(storeName: string, o: AdminOrder): ParcelLabelData {
     const district = o.recipientDistrictGeo || o.recipientDistrict;
     return {
         storeName,
-        recipientName:    o.recipientName,
+        recipientName:    recipientDisplayName(o.recipientName, 'უცნობი'),
         recipientPhone:   o.recipientPhone,
         recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
         amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',

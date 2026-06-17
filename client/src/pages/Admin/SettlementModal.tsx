@@ -8,6 +8,7 @@ import {
 } from '../../api/settlements';
 import type { SettlementPreview } from '../../api/settlements';
 import { useLanguage } from '../../contexts/useLanguage';
+import { recipientDisplayName } from '../../utils/recipientName';
 
 interface Props {
     open: boolean;
@@ -398,7 +399,7 @@ export function SettlementModal({
                                                                     <span style={{ marginLeft: 6, color: '#ef4444', fontSize: '0.7rem', fontWeight: 700 }}>⚠</span>
                                                                 )}
                                                             </td>
-                                                            <td style={{ fontWeight: 600 }}>{o.recipientName}</td>
+                                                            <td style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</td>
                                                             <td style={{ color: 'var(--color-text-subtle)', fontSize: '0.8rem' }}>{o.recipientCity}</td>
                                                             <td>
                                                                 <span className={`stl-payer-badge stl-payer-badge--${o.whoPaysForCompanyService.toLowerCase()}`}>
