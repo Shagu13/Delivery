@@ -25,23 +25,30 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
     {
         var dto = request.Dto;
 
-        // 1. Check phone number uniqueness before touching Identity.
-        //    The DB has a unique index on Customer.PhoneNumber, but we surface a
-        //    clean validation error rather than letting a constraint violation bubble up.
-        var phoneExists = await _context.Customers
-            .AnyAsync(c => c.PhoneNumber == dto.PhoneNumber, cancellationToken);
+        // Phone is no longer unique — one owner may run several businesses on the same
+        // number. Uniqueness now lives on email and business name instead.
 
-        if (phoneExists)
+        // 1. Business name must be unique. It isn't an Identity field, so check it
+        //    explicitly and surface a clean, translatable error (keyed by a sentinel
+        //    code the client maps) rather than letting the unique index throw.
+        var businessNameExists = await _context.Customers
+            .AnyAsync(c => c.BusinessName == dto.BusinessName, cancellationToken);
+
+        if (businessNameExists)
         {
             throw new ValidationException(new[]
             {
                 new ValidationFailure(
-                    nameof(dto.PhoneNumber),
-                    "This phone number is already registered to another account.")
+                    "DuplicateBusinessName",
+                    "This business name is already registered.")
             });
         }
 
-        // 2. Create the Identity user — email is used as UserName so login works with email
+        // 2. Email uniqueness is enforced natively by Identity below (RequireUniqueEmail
+        //    + UserName == Email); a duplicate surfaces as a DuplicateUserName/
+        //    DuplicateEmail code that the client maps to a friendly, translated message.
+
+        // Create the Identity user — email is used as UserName so login works with email
         var user = new ApplicationUser
         {
             Email         = dto.Email,
@@ -61,7 +68,7 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
 
         await _userManager.AddToRoleAsync(user, "Customer");
 
-        // 3. Create the domain Customer entity
+        // Create the domain Customer entity
         var customer = new Customer
         {
             FirstName         = dto.FirstName,

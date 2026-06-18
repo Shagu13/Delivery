@@ -2,9 +2,12 @@ import { useState, useCallback, useEffect } from 'react';
 import { createCourier, CourierApiError } from '../../api/couriers';
 import type { CreateCourierResponse } from '../../api/couriers';
 import { FormField } from '../../components/ui/FormField';
+import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { firstPasswordError } from '../../utils/passwordRules';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
+import type { Translations } from '../../contexts/translations';
 
 interface Props {
   open: boolean;
@@ -20,6 +23,45 @@ interface FormData {
 type FieldErrors = Partial<Record<keyof FormData, string>>;
 
 const EMPTY: FormData = { firstName: '', lastName: '', idNumber: '', phoneNumber: '', assignedCity: '', assignedDistrict: '', username: '', password: '' };
+
+// Translates backend validation errors into friendly, localized field messages.
+// The API returns two kinds of keys: FluentValidation property names ("Dto.Username")
+// and ASP.NET Identity codes ("DuplicateUserName", "PasswordRequiresDigit"). Neither
+// matches a form field as-is, so without this mapping the user only ever saw the raw
+// generic "One or more validation errors occurred." title.
+function mapServerErrors(errors: Record<string, string[]>, t: Translations): FieldErrors {
+  const out: FieldErrors = {};
+  const setOnce = (field: keyof FormData, msg: string) => { if (!out[field]) out[field] = msg; };
+
+  for (const [rawKey, msgs] of Object.entries(errors)) {
+    // ── ASP.NET Identity codes ──
+    switch (rawKey) {
+      case 'DuplicateUserName':
+      case 'DuplicateEmail':
+        setOnce('username', t.errUsernameTaken); continue;
+      case 'InvalidUserName':
+      case 'InvalidEmail':
+        setOnce('username', t.errUsernameChars); continue;
+      case 'PasswordTooShort':
+        setOnce('password', t.errPasswordShort); continue;
+      case 'PasswordRequiresUpper':
+        setOnce('password', t.errPasswordUppercase); continue;
+      case 'PasswordRequiresLower':
+        setOnce('password', t.errPasswordLowercase); continue;
+      case 'PasswordRequiresDigit':
+        setOnce('password', t.errPasswordNumber); continue;
+      case 'PasswordRequiresNonAlphanumeric':
+        setOnce('password', t.errPasswordSymbol); continue;
+    }
+    if (rawKey.startsWith('Password')) { setOnce('password', t.errPasswordWeak); continue; }
+
+    // ── FluentValidation property names: "Dto.Username" → "username" ──
+    const bare = rawKey.includes('.') ? rawKey.slice(rawKey.lastIndexOf('.') + 1) : rawKey;
+    const field = (bare.charAt(0).toLowerCase() + bare.slice(1)) as keyof FormData;
+    if (field in EMPTY) setOnce(field, msgs?.[0] ?? t.errGenericValidation);
+  }
+  return out;
+}
 
 export function CreateCourierModal({ open, onClose, onCreated }: Props) {
   const { token } = useAuth();
@@ -61,7 +103,12 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
     if (!form.username.trim())        e.username        = t.errUsernameRequired;
     else if (!/^[a-zA-Z0-9_.-]+$/.test(form.username)) e.username = t.errUsernameChars;
     if (!form.password)               e.password        = t.errPasswordRequired;
-    else if (form.password.length < 8) e.password       = t.errPasswordShort;
+    else {
+      // Mirror ASP.NET Identity's full password policy so every unmet rule surfaces
+      // here as a clear warning instead of an opaque server error (see passwordRules.ts).
+      const pwdErr = firstPasswordError(form.password, t);
+      if (pwdErr) e.password = pwdErr;
+    }
     return e;
   };
 
@@ -82,17 +129,18 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
       onCreated(result);
     } catch (err) {
       if (err instanceof CourierApiError) {
-        if (err.errors) {
-          const mapped: FieldErrors = {};
-          Object.entries(err.errors).forEach(([key, msgs]) => {
-            const k = key.charAt(0).toLowerCase() + key.slice(1) as keyof FormData;
-            mapped[k] = msgs[0];
-          });
+        const mapped = err.errors ? mapServerErrors(err.errors, t) : {};
+        if (Object.keys(mapped).length > 0) {
+          // Field-level errors are shown inline under each input; don't also show the
+          // generic server title at the top.
           setErrors(mapped);
+          setGlobalError(null);
+        } else {
+          // Nothing mapped to a field (e.g. a conflict) — show a friendly message.
+          setGlobalError(err.status === 422 ? t.errGenericValidation : err.message);
         }
-        setGlobalError(err.message);
       } else {
-        setGlobalError('An unexpected error occurred. Please try again.');
+        setGlobalError(t.errUnexpected);
       }
     } finally {
       setSubmitting(false);
@@ -165,6 +213,7 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
                 </button>
               </div>
               {errors.password && <span className="form-field__error">{errors.password}</span>}
+              <PasswordRequirements value={form.password} />
             </div>
           </fieldset>
 

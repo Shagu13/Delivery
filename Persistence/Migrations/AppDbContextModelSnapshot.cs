@@ -324,12 +324,14 @@ namespace Persistence.Migrations
                     b.HasIndex("ApplicationUserId")
                         .IsUnique();
 
+                    b.HasIndex("BusinessName")
+                        .IsUnique();
+
                     b.HasIndex("City");
 
                     b.HasIndex("CreatedAt");
 
-                    b.HasIndex("PhoneNumber")
-                        .IsUnique();
+                    b.HasIndex("PhoneNumber");
 
                     b.ToTable("Customers");
                 });

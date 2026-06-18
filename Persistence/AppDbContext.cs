@@ -55,7 +55,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
         modelBuilder.Entity<Customer>(e =>
         {
             e.HasKey(c => c.Id);
-            e.HasIndex(c => c.PhoneNumber).IsUnique();
+            // Phone is no longer unique — one owner may run several businesses on the same
+            // number. Email (via Identity) and business name are the unique account keys.
+            e.HasIndex(c => c.PhoneNumber);
+            e.HasIndex(c => c.BusinessName).IsUnique();
             e.HasIndex(c => c.City);
             e.HasIndex(c => c.CreatedAt);
             e.HasOne(c => c.ApplicationUser).WithOne()

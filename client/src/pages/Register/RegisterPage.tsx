@@ -106,7 +106,18 @@ export function RegisterPage() {
         // appear inline (e.g. duplicate phone → red hint under the phone input).
         const fieldMap: Partial<Record<keyof FormState, string>> = {};
         for (const [key, messages] of Object.entries(err.errors)) {
-          const field = (key.charAt(0).toLowerCase() + key.slice(1)) as keyof FormState;
+          // ASP.NET Identity reports a reused email as a code, not a field name.
+          if (key === 'DuplicateUserName' || key === 'DuplicateEmail') {
+            fieldMap.email = t.errEmailTaken;
+            continue;
+          }
+          if (key === 'DuplicateBusinessName') {
+            fieldMap.businessName = t.errBusinessNameTaken;
+            continue;
+          }
+          // FluentValidation property names may carry a "Dto." prefix.
+          const bare = key.includes('.') ? key.slice(key.lastIndexOf('.') + 1) : key;
+          const field = (bare.charAt(0).toLowerCase() + bare.slice(1)) as keyof FormState;
           if (field in EMPTY) fieldMap[field] = messages[0];
         }
         if (Object.keys(fieldMap).length > 0) {

@@ -41,7 +41,7 @@ public sealed class AuthController : BaseController
         [FromBody] ForgotPasswordRequest request, CancellationToken ct)
     {
         var baseUrl = $"{Request.Scheme}://{Request.Host}/reset-password";
-        await Sender.Send(new RequestPasswordResetCommand(request.PhoneNumber, baseUrl), ct);
+        await Sender.Send(new RequestPasswordResetCommand(request.Email, request.PhoneNumber, baseUrl), ct);
         return Ok();
     }
 

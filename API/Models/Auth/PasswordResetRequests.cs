@@ -1,7 +1,7 @@
 namespace API.Models.Auth;
 
 /// <summary>Request body for POST /api/auth/forgot-password</summary>
-public sealed record ForgotPasswordRequest(string PhoneNumber);
+public sealed record ForgotPasswordRequest(string Email, string PhoneNumber);
 
 /// <summary>
 /// Request body for POST /api/auth/reset-password.

@@ -29,14 +29,14 @@ export async function login(data: LoginRequest): Promise<AuthUser> {
 }
 
 /**
- * Sends a password-reset SMS to the given phone number.
- * Always resolves — never rejects for unknown numbers.
+ * Sends a password-reset SMS for the account matching the given email + phone.
+ * Always resolves — never rejects for unknown accounts.
  */
-export async function forgotPassword(phoneNumber: string): Promise<void> {
+export async function forgotPassword(email: string, phoneNumber: string): Promise<void> {
   const response = await fetch('/api/auth/forgot-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phoneNumber }),
+    body: JSON.stringify({ email, phoneNumber }),
   });
 
   if (!response.ok) {

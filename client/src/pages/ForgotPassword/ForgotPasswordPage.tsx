@@ -7,6 +7,7 @@ import '../Login/login.css';
 export function ForgotPasswordPage() {
   const { t } = useLanguage();
 
+  const [email,   setEmail]   = useState('');
   const [phone,   setPhone]   = useState('');
   const [error,   setError]   = useState<string | null>(null);
   const [sent,    setSent]    = useState(false);
@@ -16,6 +17,11 @@ export function ForgotPasswordPage() {
     e.preventDefault();
     setError(null);
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError(t.errEmailInvalid);
+      return;
+    }
+
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 9) {
       setError(t.errPhoneLength);
@@ -24,7 +30,7 @@ export function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      await forgotPassword(digits);
+      await forgotPassword(email.trim(), digits);
       setSent(true);
     } catch (err) {
       setError(err instanceof AuthError ? err.message : t.forgotPwdFailed);
@@ -74,6 +80,23 @@ export function ForgotPasswordPage() {
               )}
 
               <div className="login-form__field">
+                <label className="login-form__label" htmlFor="email">
+                  {t.emailAddress}
+                </label>
+                <input
+                  id="email"
+                  className="login-form__input"
+                  type="email"
+                  autoComplete="email"
+                  placeholder={t.phEmail}
+                  value={email}
+                  onChange={e => { setError(null); setEmail(e.target.value); }}
+                  maxLength={256}
+                  autoFocus
+                />
+              </div>
+
+              <div className="login-form__field">
                 <label className="login-form__label" htmlFor="phone">
                   {t.phoneNumber}
                 </label>
@@ -92,7 +115,6 @@ export function ForgotPasswordPage() {
                       setPhone(e.target.value.replace(/[^\d\s]/g, ''));
                     }}
                     maxLength={13}
-                    autoFocus
                   />
                 </div>
               </div>

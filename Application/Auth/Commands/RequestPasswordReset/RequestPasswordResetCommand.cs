@@ -10,6 +10,7 @@ namespace Application.Auth.Commands.RequestPasswordReset;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 public sealed record RequestPasswordResetCommand(
+    string Email,
     string PhoneNumber,
     string ResetBaseUrl
 ) : IRequest;
@@ -21,6 +22,10 @@ public sealed class RequestPasswordResetCommandValidator
 {
     public RequestPasswordResetCommandValidator()
     {
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("Invalid email format.");
+
         RuleFor(x => x.PhoneNumber)
             .NotEmpty().WithMessage("Phone number is required.")
             .Matches(@"^\d{9,13}$").WithMessage("Invalid phone number format.");
@@ -53,16 +58,22 @@ public sealed class RequestPasswordResetCommandHandler
         CancellationToken cancellationToken)
     {
         var phone = request.PhoneNumber.Trim().TrimStart('+');
+        var email = request.Email.Trim();
 
-        // Phone lives on Customer, not ApplicationUser
-        var customer = await _context.Customers
-            .FirstOrDefaultAsync(c => c.PhoneNumber == phone, cancellationToken);
+        // Email is the unique account key (Identity UserName). Since a phone number can
+        // now be shared across several business accounts, we resolve the account by email
+        // and use the phone as an extra confirmation that it matches the one on file.
+        var user = await _userManager.FindByEmailAsync(email);
 
-        // Silent return — never reveal whether the number is registered
-        if (customer is null) return;
-
-        var user = await _userManager.FindByIdAsync(customer.ApplicationUserId);
+        // Silent return — never reveal whether the account exists
         if (user is null) return;
+
+        // Phone lives on Customer, not ApplicationUser — confirm it matches this account.
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.ApplicationUserId == user.Id
+                                   && c.PhoneNumber == phone, cancellationToken);
+
+        if (customer is null) return;
 
         // Invalidate any previous unused tokens for this user to keep the table clean
         var oldTokens = await _context.PasswordResetTokens

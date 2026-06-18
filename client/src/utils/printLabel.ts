@@ -81,20 +81,26 @@ const L = {
 const esc = (s: string) =>
     (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-function renderBrand(b: BrandAssets): string {
+// Company logo, centered in a header row at the top of the label (fills what would
+// otherwise be dead white space above the store name).
+function renderLogo(b: BrandAssets): string {
+    return b.logo ? `<div class="brand-top"><img class="brand__logo" src="${b.logo}" alt="DILO" /></div>` : '';
+}
+
+// Social QR codes, side by side at the bottom of the label.
+function renderSocial(b: BrandAssets): string {
     const qr = (svg: string, cap: string) =>
         svg ? `<div class="qr">${svg}<div class="qr__cap">${cap}</div></div>` : '';
-    const logo = b.logo ? `<img class="brand__logo" src="${b.logo}" alt="DILO" />` : '';
     const ig = qr(b.igQr, 'Instagram');
     const fb = qr(b.fbQr, 'Facebook');
-    if (!logo && !ig && !fb) return '';
-    // Logo sits centered between the two social QR codes.
-    return `<div class="brand">${ig}${logo}${fb}</div>`;
+    if (!ig && !fb) return '';
+    return `<div class="brand">${ig}${fb}</div>`;
 }
 
 function renderLabel(d: ParcelLabelData, brand: BrandAssets): string {
     return `
     <div class="label">
+        ${renderLogo(brand)}
         <div class="store">${esc(d.storeName)}</div>
         <div class="rule"></div>
         <div class="field"><span class="lbl">${L.recipient}:</span> <span class="strong">${esc(d.recipientName)}</span></div>
@@ -104,7 +110,7 @@ function renderLabel(d: ParcelLabelData, brand: BrandAssets): string {
         <div class="rule"></div>
         <div class="pay"><span class="lbl">${L.toPay}:</span> <span class="amount">${esc(d.amountText)}</span></div>
         <div class="spacer"></div>
-        ${renderBrand(brand)}
+        ${renderSocial(brand)}
         <div class="track">${L.tracking}: ${esc(d.trackingNumber)}</div>
     </div>`;
 }
@@ -121,6 +127,7 @@ const LABEL_SIZES: readonly SizeDef[] = [
     { id: 'l100x74', label: '100×74მმ',       page: '100mm 74mm'  },
     { id: 'l70x100', label: '70×100მმ',       page: '70mm 100mm'  },
     { id: 'l58x40',  label: '58×40მმ',        page: '58mm 40mm'   },
+    { id: 'l40x58',  label: '40×58მმ',        page: '40mm 58mm'   },
 ];
 const DEFAULT_SIZE = LABEL_SIZES[0].id;
 
@@ -166,21 +173,23 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     /* ── Shared structure (sizes only override dimensions/fonts below) ── */
     .label { page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
     .label:last-child { page-break-after: auto; }
-    .store { font-weight: 800; line-height: 1.15; margin-bottom: 2mm; word-break: break-word; }
+    .store { font-weight: 800; line-height: 1.15; margin-bottom: 2mm; word-break: break-word; overflow-wrap: anywhere; }
     .rule { border-top: 1.5px dashed #999; margin: 4mm 0; }
-    .field { line-height: 1.4; margin-bottom: 1.5mm; word-break: break-word; }
+    .field { line-height: 1.4; margin-bottom: 1.5mm; word-break: break-word; overflow-wrap: anywhere; }
     .lbl { color: #555; }
     .strong { font-weight: 700; }
-    .pay { margin-top: 1mm; }
+    .pay { margin-top: 1mm; overflow-wrap: anywhere; }
     .amount { font-weight: 800; }
     .spacer { flex: 1; }
-    /* Branding block: company logo centered between the social QR codes. */
-    .brand { display: flex; align-items: center; justify-content: space-between; gap: 4mm; margin-bottom: 3mm; }
+    /* Company logo header — centered above the store name. */
+    .brand-top { display: flex; align-items: center; justify-content: center; margin-bottom: 3mm; }
+    /* Social QR codes, centered side by side at the bottom. */
+    .brand { display: flex; align-items: center; justify-content: center; gap: 6mm; margin-bottom: 3mm; }
     .brand__logo { width: auto; object-fit: contain; }
     .qr { text-align: center; }
     .qr svg { display: block; }
     .qr__cap { color: #555; margin-top: 0.5mm; letter-spacing: 0.3px; }
-    .track { letter-spacing: 0.5px; border-top: 1px solid #ddd; padding-top: 3mm; }
+    .track { letter-spacing: 0.5px; border-top: 1px solid #ddd; padding-top: 3mm; overflow-wrap: anywhere; }
 
     /* ── Size: A6 100×150mm (default) ── */
     .size-a6 .label { width: 100mm; height: 150mm; padding: 8mm; }
@@ -207,6 +216,7 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l100x74 .brand__logo { height: 12mm; max-width: 36mm; }
     .size-l100x74 .rule { margin: 2mm 0; }
     .size-l100x74 .brand { margin-bottom: 1.5mm; }
+    .size-l100x74 .brand-top { margin-bottom: 1.5mm; }
 
     /* ── Size: 70×100mm ── */
     .size-l70x100 .label { width: 70mm; height: 100mm; padding: 5mm; }
@@ -220,21 +230,38 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l70x100 .track { font-size: 9pt; padding-top: 2mm; }
     .size-l70x100 .brand__logo { height: 13mm; max-width: 24mm; }
     .size-l70x100 .rule { margin: 2.5mm 0; }
-    .size-l70x100 .brand { gap: 2.5mm; margin-bottom: 2mm; }
+    .size-l70x100 .brand { gap: 5mm; margin-bottom: 2mm; }
+    .size-l70x100 .brand-top { margin-bottom: 2mm; }
 
     /* ── Size: 58×40mm (small label sticker) — very compact ── */
-    .size-l58x40 .label { width: 58mm; height: 40mm; padding: 3mm; }
-    .size-l58x40 .store { font-size: 8pt; line-height: 1.05; margin-bottom: 0.5mm; }
-    .size-l58x40 .field { font-size: 6pt; line-height: 1.15; margin-bottom: 0.3mm; }
-    .size-l58x40 .lbl { font-size: 5pt; }
+    .size-l58x40 .label { width: 58mm; height: 40mm; padding: 2.5mm; }
+    .size-l58x40 .store { font-size: 7.5pt; line-height: 1.05; margin-bottom: 0.5mm; }
+    .size-l58x40 .field { font-size: 5.5pt; line-height: 1.15; margin-bottom: 0.3mm; }
+    .size-l58x40 .lbl { font-size: 4.5pt; }
     .size-l58x40 .pay { font-size: 7pt; margin-top: 0.5mm; }
     .size-l58x40 .amount { font-size: 9pt; }
-    .size-l58x40 .qr svg { width: 8mm; height: 8mm; }
+    .size-l58x40 .qr svg { width: 7mm; height: 7mm; }
     .size-l58x40 .qr__cap { font-size: 3.5pt; margin-top: 0.2mm; }
-    .size-l58x40 .track { font-size: 5.5pt; padding-top: 1mm; }
-    .size-l58x40 .brand__logo { height: 9mm; max-width: 18mm; }
-    .size-l58x40 .rule { margin: 1mm 0; }
-    .size-l58x40 .brand { gap: 1.5mm; margin-bottom: 1mm; }
+    .size-l58x40 .track { font-size: 5pt; padding-top: 1mm; }
+    .size-l58x40 .brand__logo { height: 6mm; max-width: 24mm; }
+    .size-l58x40 .rule { margin: 0.8mm 0; }
+    .size-l58x40 .brand { gap: 4mm; margin-bottom: 0.8mm; }
+    .size-l58x40 .brand-top { margin-bottom: 0.8mm; }
+
+    /* ── Size: 40×58mm (small label sticker, portrait) — very compact ── */
+    .size-l40x58 .label { width: 40mm; height: 58mm; padding: 2.5mm; }
+    .size-l40x58 .store { font-size: 8pt; line-height: 1.1; margin-bottom: 0.8mm; }
+    .size-l40x58 .field { font-size: 6pt; line-height: 1.2; margin-bottom: 0.5mm; }
+    .size-l40x58 .lbl { font-size: 4.5pt; }
+    .size-l40x58 .pay { font-size: 7.5pt; margin-top: 0.8mm; }
+    .size-l40x58 .amount { font-size: 10pt; }
+    .size-l40x58 .qr svg { width: 8mm; height: 8mm; }
+    .size-l40x58 .qr__cap { font-size: 3.5pt; margin-top: 0.2mm; }
+    .size-l40x58 .track { font-size: 5.5pt; padding-top: 1.2mm; }
+    .size-l40x58 .brand__logo { height: 7mm; max-width: 30mm; }
+    .size-l40x58 .rule { margin: 1.2mm 0; }
+    .size-l40x58 .brand { gap: 4mm; margin-bottom: 1.2mm; }
+    .size-l40x58 .brand-top { margin-bottom: 1.5mm; }
 </style>
 </head>
 <body class="size-${DEFAULT_SIZE}">
