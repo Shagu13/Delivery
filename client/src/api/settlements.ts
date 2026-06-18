@@ -126,6 +126,27 @@ export async function fetchSettlementPreview(
     return res.json() as Promise<SettlementPreview>;
 }
 
+/**
+ * Admin: returns the IDs of couriers who delivered at least one order on the given
+ * date (YYYY-MM-DD). Used to narrow the settlement courier list to those active that day.
+ */
+export async function fetchCouriersWithDeliveries(
+    date: string,
+    token: string,
+): Promise<string[]> {
+    const res = await fetch(`/api/settlements/active-couriers?date=${date}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new SettlementApiError(
+            res.status,
+            body?.title ?? `Failed to load active couriers (${res.status})`,
+        );
+    }
+    return res.json() as Promise<string[]>;
+}
+
 export async function createSettlement(
     data: CreateSettlementRequest,
     token: string,

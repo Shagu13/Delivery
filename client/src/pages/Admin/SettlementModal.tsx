@@ -17,6 +17,8 @@ interface Props {
     courierId: string;
     courierFullName: string;
     token: string;
+    /** Date the modal should open on (YYYY-MM-DD). Defaults to today. */
+    initialDate?: string;
 }
 
 function todayIso(): string {
@@ -38,9 +40,10 @@ export function SettlementModal({
     courierId,
     courierFullName,
     token,
+    initialDate,
 }: Props) {
     const { t } = useLanguage();
-    const [date,          setDate]          = useState(todayIso());
+    const [date,          setDate]          = useState(initialDate ?? todayIso());
     const [preview,       setPreview]       = useState<SettlementPreview | null>(null);
     const [loading,       setLoading]       = useState(false);
     const [saving,        setSaving]        = useState(false);
@@ -69,7 +72,13 @@ export function SettlementModal({
     }, [courierId, token]);
 
     useEffect(() => {
-        if (open) loadPreview(date);
+        // Each time the modal opens, start on the caller's chosen date (the date the
+        // admin filtered couriers by) so the preview matches the list they picked from.
+        if (open) {
+            const start = initialDate ?? todayIso();
+            setDate(start);
+            loadPreview(start);
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 

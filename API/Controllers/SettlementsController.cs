@@ -22,6 +22,22 @@ public sealed class SettlementsController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/settlements/active-couriers  (Admin) ─────────────────────────
+    /// <summary>
+    /// Returns the IDs of couriers who delivered at least one order on the given date,
+    /// so the admin can narrow the settlement courier list to those active that day.
+    /// </summary>
+    [HttpGet("active-couriers")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<Guid>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetActiveCouriers(
+        [FromQuery] DateOnly date,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCouriersWithDeliveriesOnDateQuery(date), ct);
+        return Ok(result);
+    }
+
     // ── GET /api/settlements/my  (Courier) ────────────────────────────────────
     [HttpGet("my")]
     [Authorize(Roles = "Courier")]

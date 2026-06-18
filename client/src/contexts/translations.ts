@@ -1401,6 +1401,9 @@ const en = {
     finOutLegendCustomer:'Customer owes company (service fees)',
     finCourierOpen:      'Open settlement',
     finCourierPrompt:    'Select a courier to create or update their daily settlement.',
+    finCourierDateLabel: 'Delivered on',
+    finCourierDateHint:  'Pick a date to show only couriers who delivered that day. Leave empty for all couriers.',
+    finCourierNoneForDate: 'No couriers delivered orders on this date.',
     finCourierSavedToast: (name: string) => `Settlement saved for ${name}`,
 
     // Admin Finance — History tab
@@ -2891,6 +2894,9 @@ const ka: typeof en = {
     finOutLegendCustomer:'მომხმარებელი უხდის კომპანიას (მომსახურება)',
     finCourierOpen:      'ანგარიშსწორების გახსნა',
     finCourierPrompt:    'აირჩიეთ კურიერი მისი დღიური ანგარიშსწორების შესაქმნელად ან განსაახლებლად.',
+    finCourierDateLabel: 'ჩაბარების თარიღი',
+    finCourierDateHint:  'აირჩიეთ თარიღი, რომ გამოჩნდნენ მხოლოდ ის კურიერები, რომლებმაც იმ დღეს ჩააბარეს. დატოვეთ ცარიელი ყველა კურიერისთვის.',
+    finCourierNoneForDate: 'ამ თარიღში არცერთ კურიერს არ ჩაუბარებია შეკვეთა.',
     finCourierSavedToast: (name: string) => `ანგარიშსწორება შენახულია — ${name}`,
 
     // Admin Finance — History tab
