@@ -410,14 +410,19 @@ export function AdminDashboard() {
         .go-list { display: flex; flex-direction: column; }
         .go-row { border-bottom: 1px solid var(--color-border); }
         .go-row:last-child { border-bottom: none; }
-        .go-row-header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; cursor: pointer; transition: background var(--transition); user-select: none; }
+        /* The header wraps based on the actual available width (which shrinks/grows with the
+           sidebar), so on narrower screens the meta/actions drop to a new line instead of
+           squeezing the sender column down to a truncated store name. */
+        .go-row-header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; cursor: pointer; transition: background var(--transition); user-select: none; flex-wrap: wrap; }
         .go-row-header:hover { background: var(--color-bg-3); }
         .go-chevron { color: var(--color-text-subtle); flex-shrink: 0; transition: transform 0.18s ease; }
         .go-chevron--open { transform: rotate(90deg); }
-        .go-sender { flex: 1; min-width: 0; }
-        .go-sender__biz { font-weight: 600; font-size: 0.9rem; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .go-sender { flex: 1 1 220px; min-width: 180px; }
+        /* Store name stays fully visible — it wraps to a second line on tight widths
+           rather than ellipsizing to its first word or nothing. */
+        .go-sender__biz { font-weight: 600; font-size: 0.9rem; color: var(--color-text); overflow-wrap: anywhere; }
         .go-sender__name { font-size: 0.775rem; color: var(--color-text-subtle); margin-top: 1px; }
-        .go-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+        .go-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
         .go-meta__phone { font-size: 0.78rem; color: var(--color-text-subtle); font-family: 'Courier New', monospace; }
         .go-meta__city { font-size: 0.78rem; color: var(--color-text-subtle); }
         .go-meta__pkgs { font-size: 0.75rem; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: 100px; padding: 2px 9px; color: var(--color-text-muted); white-space: nowrap; }
@@ -1235,7 +1240,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                           {go.alternativeSenderPhone && (
                             <span className="go-meta__phone">{go.alternativeSenderPhone}</span>
                           )}
-                          <span className="go-meta__city">{locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}</span>
+                          <span className="go-meta__city">{locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}{go.pickUpAddress ? `, ${go.pickUpAddress}` : ''}</span>
                           <StatusBadge status={go.status} />
                           <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
                           <span className="go-meta__date">{formatDate(go.createdAt)}</span>

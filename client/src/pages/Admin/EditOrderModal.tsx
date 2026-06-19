@@ -104,13 +104,11 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         setIsFragile(order.isFragile);
         setPayer(order.whoPaysForCompanyService);
         setPayStatus(order.productPaymentStatus);
-        // For "service included" orders the admin works with the all-in price: show
-        // product COD + service fee in the COD field (the backend re-splits on save).
+        // The COD field always shows the product-only amount; the company service fee is
+        // edited separately on the Financials tab (re-bundled on save when included).
         setCodAmount(
             order.amountToCollectForPackage != null
-                ? String(order.isCompanyServicePriceIncluded
-                    ? order.amountToCollectForPackage + order.companyServicePrice
-                    : order.amountToCollectForPackage)
+                ? String(order.amountToCollectForPackage)
                 : ''
         );
         setSvcPrice(String(order.companyServicePrice));
@@ -183,11 +181,10 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         if (!address.trim())   e.address   = t.errAddressRequired;
 
         // COD amount — only relevant for unpaid parcels; optional but must be valid.
+        // This is the product-only price; the service fee is validated on its own field.
         if (payStatus === 'NotPaid' && codAmount.trim()) {
             const n = parseFloat(codAmount);
             if (isNaN(n) || n < 0) e.codAmount = t.eomErrInvalidAmount;
-            // All-in price must cover the service fee that the backend deducts.
-            else if (svcIncluded && n < (parseFloat(svcPrice) || 0)) e.codAmount = t.cgoErrPriceBelowFee;
         }
 
         // Company service price (financials tab) — required, non-negative.
@@ -243,7 +240,11 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                 isFragile,
                 whoPaysForCompanyService:  payer,
                 productPaymentStatus:      payStatus,
-                amountToCollectForPackage: codAmount ? parseFloat(codAmount) : null,
+                // COD is entered product-only; re-bundle the fee when the price is all-in so
+                // the backend (which subtracts the fee for included orders) stores it correctly.
+                amountToCollectForPackage: codAmount
+                    ? (svcIncluded ? parseFloat(codAmount) + (parseFloat(svcPrice) || 0) : parseFloat(codAmount))
+                    : null,
                 companyServicePrice:       parseFloat(svcPrice) || 0,
                 isCompanyServicePriceIncluded: svcIncluded,
                 courierSalary:             salary ? parseFloat(salary) : null,
@@ -388,7 +389,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                     </select>
                                 </Field>
                                 {payStatus === 'NotPaid' && (
-                                    <Field label={svcIncluded ? t.cgoPriceAllIn : t.eomCodAmount} className="eom-col-2" error={errors.codAmount}>
+                                    <Field label={t.eomCodAmount} className="eom-col-2" error={errors.codAmount}>
                                         <div className="eom-currency-wrap">
                                             <span className="eom-currency">₾</span>
                                             <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={codAmount} onChange={e => { setCodAmount(e.target.value); clearErr('codAmount'); }} placeholder="0.00" />
@@ -512,15 +513,9 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                             type="checkbox"
                                             checked={svcIncluded}
                                             onChange={e => {
-                                                const on = e.target.checked;
-                                                setSvcIncluded(on);
-                                                // Keep the COD field meaningful: convert between net and all-in
-                                                // using the current service fee so the displayed number is correct.
-                                                const fee = parseFloat(svcPrice) || 0;
-                                                const cur = parseFloat(codAmount);
-                                                if (!isNaN(cur) && fee > 0) {
-                                                    setCodAmount(String(on ? cur + fee : Math.max(0, cur - fee)));
-                                                }
+                                                // The COD field stays product-only regardless; this flag only controls
+                                                // whether the fee is bundled into the price shown to the recipient.
+                                                setSvcIncluded(e.target.checked);
                                                 clearErr('codAmount');
                                             }}
                                         />

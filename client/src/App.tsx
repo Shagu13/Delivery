@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthProvider';
 import { LanguageProvider } from './contexts/LanguageProvider';
@@ -36,6 +36,19 @@ function RouteFallback() {
 }
 
 export default function App() {
+    // Stop the mouse wheel from changing a focused number input's value (a browser
+    // default that silently edits amount fields while the user scrolls the page).
+    useEffect(() => {
+        const onWheel = (e: WheelEvent) => {
+            const el = document.activeElement;
+            if (el instanceof HTMLInputElement && el.type === 'number' && el === e.target) {
+                el.blur();
+            }
+        };
+        document.addEventListener('wheel', onWheel, { passive: true });
+        return () => document.removeEventListener('wheel', onWheel);
+    }, []);
+
     return (
         <LanguageProvider>
             <AuthProvider>
