@@ -15,6 +15,21 @@ import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { useRefreshOnResume } from '../../hooks/useRefreshOnResume';
 
+// Mobile bottom-tab label: split the leading emoji (icon) from the word so the
+// icon sits on its own line above a single-line, non-wrapping label. Keeps all
+// four tabs aligned even when the localized word is long (e.g. Georgian "ფინანსები").
+function MobileTabLabel({ raw }: { raw: string }) {
+    const sp = raw.indexOf(' ');
+    const icon = sp === -1 ? '' : raw.slice(0, sp);
+    const text = sp === -1 ? raw : raw.slice(sp + 1);
+    return (
+        <>
+            {icon && <span className="mobile-tab__icon" aria-hidden="true">{icon}</span>}
+            <span className="mobile-tab__label">{text}</span>
+        </>
+    );
+}
+
 // ── Media query hook ───────────────────────────────────────────────────────────
 function useIsMobile(breakpoint = 768) {
     const [isMobile, setIsMobile] = useState(
@@ -133,10 +148,10 @@ export function CourierDashboard() {
                 <main className="mobile-content">
                     {toast && <div className="dashboard__toast">{toast}</div>}
                     <div className="mobile-tabs">
-                        <button className={`mobile-tab${view === 'pickups'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('pickups')}>{t.cdTabPickups}</button>
-                        <button className={`mobile-tab${view === 'deliveries'  ? ' mobile-tab--active' : ''}`} onClick={() => setView('deliveries')}>{t.cdTabDeliveries}</button>
-                        <button className={`mobile-tab${view === 'history'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('history')}>{t.cdTabHistory}</button>
-                        <button className={`mobile-tab${view === 'settlements' ? ' mobile-tab--active' : ''}`} onClick={() => setView('settlements')}>{t.cdTabPay}</button>
+                        <button className={`mobile-tab${view === 'pickups'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('pickups')}><MobileTabLabel raw={t.cdTabPickups} /></button>
+                        <button className={`mobile-tab${view === 'deliveries'  ? ' mobile-tab--active' : ''}`} onClick={() => setView('deliveries')}><MobileTabLabel raw={t.cdTabDeliveries} /></button>
+                        <button className={`mobile-tab${view === 'history'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('history')}><MobileTabLabel raw={t.cdTabHistory} /></button>
+                        <button className={`mobile-tab${view === 'settlements' ? ' mobile-tab--active' : ''}`} onClick={() => setView('settlements')}><MobileTabLabel raw={t.cdTabPay} /></button>
                     </div>
                     {view === 'pickups'     && <PickupsPanel    {...pickupProps} />}
                     {view === 'deliveries'  && <DeliveriesPanel {...deliveryProps} />}

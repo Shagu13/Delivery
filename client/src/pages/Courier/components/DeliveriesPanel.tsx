@@ -6,7 +6,7 @@ import {
 } from '../../../api/orders';
 import type { CourierOrder } from '../../../api/orders';
 import { SwipeButton } from './SwipeButton';
-import { mapUrl } from './mapUtils';
+import { AddressMapLink } from './AddressMapLink';
 import { RouteToolbar } from './RouteToolbar';
 import { CollectConfirmModal } from './CollectConfirmModal';
 import { PostponeModal } from './PostponeModal';
@@ -167,9 +167,13 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         </div>
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelAddress}</span>
-                                            <a href={mapUrl(order.recipientCity, order.recipientDistrict, order.recipientAddress, order.latitude, order.longitude)} target="_blank" rel="noopener noreferrer" className="courier-card__map-link">
-                                                📍 {order.recipientAddress}
-                                            </a>
+                                            <AddressMapLink
+                                                city={order.recipientCity}
+                                                district={order.recipientDistrict}
+                                                address={order.recipientAddress}
+                                                lat={order.latitude}
+                                                lon={order.longitude}
+                                            />
                                         </div>
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelPayment}</span>

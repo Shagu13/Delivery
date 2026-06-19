@@ -5,7 +5,7 @@ import {
 } from '../../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../../api/adminGroupOrders';
 import { SwipeButton } from './SwipeButton';
-import { mapUrl } from './mapUtils';
+import { AddressMapLink } from './AddressMapLink';
 import { useGeoSort, distanceToAddress } from './useGeoSort';
 import { RouteToolbar } from './RouteToolbar';
 
@@ -198,9 +198,11 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                         </div>
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelAddress}</span>
-                                            <a href={mapUrl(go.pickUpCity, go.pickUpDistrict, go.pickUpAddress)} target="_blank" rel="noopener noreferrer" className="courier-card__map-link">
-                                                📍 {go.pickUpAddress}
-                                            </a>
+                                            <AddressMapLink
+                                                city={go.pickUpCity}
+                                                district={go.pickUpDistrict}
+                                                address={go.pickUpAddress}
+                                            />
                                         </div>
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelPackages}</span>

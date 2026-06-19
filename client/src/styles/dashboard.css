@@ -751,15 +751,66 @@
     font-weight: 600;
     color: #0ea5e9;
     text-decoration: none;
+    text-align: left;
     padding: 3px 10px;
     border-radius: 20px;
     border: 1.5px solid #0ea5e9;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
     transition: background 0.15s, color 0.15s;
 }
 
 .courier-card__map-link:active {
     background: #0ea5e9;
     color: #fff;
+}
+
+/* ── Address map chooser (Google / Yandex / Yandex Navi) ─────────────────────── */
+/* Rendered in a portal with inline fixed positioning, so it escapes the courier
+   card's overflow:hidden; only visual styling lives here. */
+.address-map-link__menu {
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    background: var(--color-bg-2, #fff);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+    animation: fade-up 0.14s ease both;
+}
+
+.address-map-link__heading {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-subtle, #6b7280);
+    padding: 4px 10px 6px;
+}
+
+.address-map-link__item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--color-text, #111);
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.address-map-link__item:hover,
+.address-map-link__item:active {
+    background: var(--color-bg-3, #f3f4f6);
 }
 
 .courier-card--selected {
@@ -999,6 +1050,28 @@
 
 .mobile-tab--active svg {
     opacity: 1;
+}
+
+/* Icon (emoji) on its own line above a single-line label, so all four tabs stay
+   aligned regardless of the localized word length (e.g. Georgian "ფინანსები"). */
+.mobile-tab {
+    min-width: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+.mobile-tab__icon {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+
+.mobile-tab__label {
+    max-width: 100%;
+    font-size: clamp(0.58rem, 2.5vw, 0.68rem);
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ── Mobile card tweaks ── */

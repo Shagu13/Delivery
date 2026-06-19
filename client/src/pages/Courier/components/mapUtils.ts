@@ -95,6 +95,37 @@ export function mapUrl(
     return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
+// Single-destination Yandex Maps link — drops a pin on the exact coordinates when
+// known (Yandex uses lon,lat order for ll/pt), else searches the text address.
+export function mapUrlYandex(
+    city: string,
+    district: string,
+    address: string,
+    lat?: number | null,
+    lon?: number | null,
+) {
+    if (lat != null && lon != null) {
+        return `https://yandex.com/maps/?ll=${lon},${lat}&z=17&pt=${lon},${lat}`;
+    }
+    const q = encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
+    return `https://yandex.com/maps/?mode=search&text=${q}`;
+}
+
+// Single-destination Yandex Navi link — builds a driving route from the courier's
+// current location (empty origin via the leading ~) to the address/coordinates.
+export function mapUrlYandexNavi(
+    city: string,
+    district: string,
+    address: string,
+    lat?: number | null,
+    lon?: number | null,
+) {
+    const dest = lat != null && lon != null
+        ? `${lat},${lon}`
+        : encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
+    return `https://yandex.com/navi/?rtext=~${dest}&rtt=auto`;
+}
+
 export function buildGoogleRouteUrl(stops: Stop[], origin?: string, cache?: GeocodeCache) {
     const dest = routePoint(stops[stops.length - 1], cache);
     const orig = origin ?? routePoint(stops[0], cache);
