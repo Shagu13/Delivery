@@ -1,0 +1,1 @@
+function e(e,t){return e&&e.trim()?e:t}export{e as t};

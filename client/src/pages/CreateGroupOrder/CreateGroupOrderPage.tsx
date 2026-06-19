@@ -18,15 +18,12 @@ import { useLanguage } from '../../contexts/useLanguage';
 import type { Translations } from '../../contexts/translations';
 import { isValidGeorgianMobile, sanitizeGeorgianMobile } from '../../components/ui/GeorgianPhoneField';
 import { SenderSection } from './SenderSection';
-import { PackageCard } from './PackageCard';
 import { PackageSidebarLayout } from './PackageSidebarLayout';
 import { SuccessView } from './SuccessView';
 import { PickupAddressModal } from './PickupAddressModal';
 import './createGroupOrder.css';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type PackageLayout = 'cards' | 'sidebar';
 
 interface SenderFormData {
     senderFirstName:    string;
@@ -205,10 +202,6 @@ export function CreateGroupOrderPage() {
 
     const [prefilled,       setPrefilled]       = useState(false);
     const [pickupModalOpen, setPickupModalOpen] = useState(false);
-
-    // ── Layout switcher ────────────────────────────────────────────────────────
-    // Sidebar (left list of packages, right detail panel) is the default view.
-    const [layout, setLayout] = useState<PackageLayout>('sidebar');
 
     // ── Weight price tiers ─────────────────────────────────────────────────────
     const [weightTiers, setWeightTiers] = useState<WeightPriceTier[]>([]);
@@ -746,73 +739,18 @@ export function CreateGroupOrderPage() {
                                 )}
                             </div>
 
-                            {/* ── Layout switcher ── */}
-                            <div className="layout-switcher">
-                                <span className="layout-switcher__label">{t.cgoViewLabel}</span>
-                                <div className="layout-switcher__tabs">
-                                    <button
-                                        type="button"
-                                        className={`layout-tab${layout === 'sidebar' ? ' layout-tab--active' : ''}`}
-                                        onClick={() => setLayout('sidebar')}
-                                        title="Sidebar navigator view (default)"
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                            <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.3"/>
-                                            <path d="M5 1v14" stroke="currentColor" strokeWidth="1.3"/>
-                                        </svg>
-                                        {t.cgoViewSidebar}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`layout-tab${layout === 'cards' ? ' layout-tab--active' : ''}`}
-                                        onClick={() => setLayout('cards')}
-                                        title="Accordion cards view"
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                                            <rect x="1" y="2" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
-                                            <rect x="1" y="7" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
-                                            <rect x="1" y="12" width="14" height="3" rx="1" stroke="currentColor" strokeWidth="1.3"/>
-                                        </svg>
-                                        {t.cgoViewCards}
-                                    </button>
-                                </div>
-                            </div>
-
                             {/* ── Package editors ── */}
-                            {layout === 'cards' && (
-                                <div className="package-list">
-                                    {packages.map((pkg, i) => (
-                                        <PackageCard
-                                            key={i}
-                                            index={i}
-                                            data={pkg}
-                                            errors={errors}
-                                            canRemove={packages.length > 1}
-                                            customerPricing={customerPricing}
-                                            weightTiers={weightTiers}
-                                            senderAddress={senderAddress}
-                                            districtLookup={districtLookup}
-                                            serviceIncludedForced={serviceIncludedForced}
-                                            onChange={handlePackageChange}
-                                            onRemove={removePackage}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-
-                            {layout === 'sidebar' && (
-                                <PackageSidebarLayout
-                                    packages={packages}
-                                    errors={errors}
-                                    customerPricing={customerPricing}
-                                    weightTiers={weightTiers}
-                                    senderAddress={senderAddress}
-                                    districtLookup={districtLookup}
-                                    serviceIncludedForced={serviceIncludedForced}
-                                    onChange={handlePackageChange}
-                                    onRemove={removePackage}
-                                />
-                            )}
+                            <PackageSidebarLayout
+                                packages={packages}
+                                errors={errors}
+                                customerPricing={customerPricing}
+                                weightTiers={weightTiers}
+                                senderAddress={senderAddress}
+                                districtLookup={districtLookup}
+                                serviceIncludedForced={serviceIncludedForced}
+                                onChange={handlePackageChange}
+                                onRemove={removePackage}
+                            />
                         </div>
                     </section>
 

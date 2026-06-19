@@ -99,6 +99,9 @@ function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
     whenPackagePickedUpDate: null,
     courierId: r.courierId,
     courierFullName: r.courierFullName,
+    companyServiceCapitalPrice: null,
+    companyServiceCityPrice: null,
+    companyServiceDistrictPrice: null,
     orders: [{
       id: r.id,
       trackingNumber: r.trackingNumber,

@@ -18,6 +18,7 @@ public sealed class GetAllGroupOrdersQueryHandler
         var query = _context.GroupOrders
             .Include(go => go.Orders)
             .Include(go => go.Courier)
+            .Include(go => go.Customer)
             .AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
@@ -73,6 +74,9 @@ public sealed class GetAllGroupOrdersQueryHandler
             CourierFullName:         go.Courier is null
                 ? null
                 : $"{go.Courier.FirstName} {go.Courier.LastName}",
+            CompanyServiceCapitalPrice:  go.Customer?.CompanyServiceCapitalPrice,
+            CompanyServiceCityPrice:     go.Customer?.CompanyServiceCityPrice,
+            CompanyServiceDistrictPrice: go.Customer?.CompanyServiceDistrictPrice,
             Orders: go.Orders
                 .OrderBy(o => o.CreatedAt)
                 .Select(o => new AdminOrderDto(

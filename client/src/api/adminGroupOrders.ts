@@ -79,6 +79,10 @@ export interface AdminGroupOrder {
     whenPackagePickedUpDate: string | null;
     courierId: string | null;
     courierFullName: string | null;
+    // Customer-specific service pricing (null when no linked customer / tier unset).
+    companyServiceCapitalPrice: number | null;
+    companyServiceCityPrice: number | null;
+    companyServiceDistrictPrice: number | null;
     orders: AdminOrder[];
 }
 

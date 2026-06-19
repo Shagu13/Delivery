@@ -132,13 +132,13 @@ function orderMatchesSearch(o: CustomerOrder, q: string): boolean {
 }
 
 // Amount the recipient pays = COD (only when the product isn't prepaid) + the company
-// service fee (only when the recipient pays it). When the price is all-in, the fee is
-// already inside the COD figure, so it is not added again. Returns 0 when nothing is
+// service fee whenever the recipient pays it. The fee is added even on all-in prices,
+// because the backend stores amountToCollectForPackage as the product-only portion
+// (gross − fee), so the fee must be added back for the total. Returns 0 when nothing is
 // collectible (e.g. prepaid product whose service fee the sender covers).
 function recipientAmountDue(o: CustomerOrder): number {
   const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-  const fee = (!o.isCompanyServicePriceIncluded && o.whoPaysForCompanyService === 'Recipient')
-    ? (o.companyServicePrice ?? 0) : 0;
+  const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
   return cod + fee;
 }
 

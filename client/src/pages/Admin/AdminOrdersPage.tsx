@@ -115,13 +115,13 @@ function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
 }
 
-// Amount the recipient pays — mirrors the customer dashboard label logic exactly so the
-// printed sticker matches: COD (only when not prepaid) + the company service fee (only
-// when the recipient pays it and it isn't already baked into the COD figure).
+// Amount the recipient pays — matches what the courier actually collects: COD (only when
+// not prepaid) + the company service fee whenever the recipient pays it. The fee is added
+// even when the price was entered all-in, because the backend stores amountToCollectForPackage
+// as the product-only portion (gross − fee), so the fee must be added back for the total.
 function recipientAmountDue(o: AdminOrderItem): number {
   const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-  const fee = (!o.isCompanyServicePriceIncluded && o.whoPaysForCompanyService === 'Recipient')
-    ? (o.companyServicePrice ?? 0) : 0;
+  const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
   return cod + fee;
 }
 

@@ -22,13 +22,13 @@ const printIcon = (
     </svg>
 );
 
-// Amount the recipient pays — mirrors the customer dashboard / packages-page label logic
-// so the printed sticker matches: COD (only when not prepaid) + the company service fee
-// (only when the recipient pays it and it isn't already baked into the COD figure).
+// Amount the recipient pays — matches what the courier actually collects: COD (only when
+// not prepaid) + the company service fee whenever the recipient pays it. The fee is added
+// even when the price was entered all-in, because the backend stores amountToCollectForPackage
+// as the product-only portion (gross − fee), so the fee must be added back for the total.
 function recipientAmountDue(o: AdminOrder): number {
     const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-    const fee = (!o.isCompanyServicePriceIncluded && o.whoPaysForCompanyService === 'Recipient')
-        ? (o.companyServicePrice ?? 0) : 0;
+    const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
     return cod + fee;
 }
 
@@ -236,9 +236,10 @@ interface OrderActionProps {
     onSuccess: (msg: string) => void;
     onError: (msg: string) => void;
     onRefresh: () => void;
+    onEdit?: () => void;
 }
 
-export function AdminOrderRowActions({ order, storeName, token, onSuccess, onError, onRefresh }: OrderActionProps) {
+export function AdminOrderRowActions({ order, storeName, token, onSuccess, onError, onRefresh, onEdit }: OrderActionProps) {
     const [busy, setBusy] = useState(false);
     const { t } = useLanguage();
 
@@ -271,6 +272,21 @@ export function AdminOrderRowActions({ order, storeName, token, onSuccess, onErr
                 {printIcon}
                 {t.custLabelBtn}
             </button>
+
+            {/* Edit this package — opens the full order edit modal. */}
+            {onEdit && (
+                <button
+                    type="button"
+                    className="go-action-btn go-action-btn--ghost"
+                    title={t.eomEyebrow}
+                    onClick={onEdit}
+                >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10l7.5-7.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {t.edit}
+                </button>
+            )}
 
             {/* Step 7: non-Tbilisi → Send to City */}
             {status === 'AdminAcceptedOrderInWareHouse' && !isTbilisi && (

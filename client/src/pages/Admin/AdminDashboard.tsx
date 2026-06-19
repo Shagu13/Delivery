@@ -6,7 +6,9 @@ import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
-import type { AdminGroupOrder } from '../../api/adminGroupOrders';
+import type { AdminGroupOrder, AdminOrder } from '../../api/adminGroupOrders';
+import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
+import type { AdminOrderItem } from './AdminOrdersPage';
 import { fetchCouriers, fetchAssignedForRange, fetchAssignedPickupsForRange, setCourierActiveStatus } from '../../api/couriers';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import { recipientDisplayName } from '../../utils/recipientName';
@@ -791,7 +793,57 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const [filterStatus,   setFilterStatus]   = useState(initialStatus);
   const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
   const [actionToast,    setActionToast]    = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  // Order being edited from a group order's package row, with its customer's pricing.
+  const [editing, setEditing] = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Map a group order's package + its parent into the shape EditOrderModal expects.
+  // Sender fields come from the group order; fields the modal doesn't read are stubbed.
+  const openEditOrder = (o: AdminOrder, go: AdminGroupOrder) => {
+    const item: AdminOrderItem = {
+      id: o.id,
+      trackingNumber: o.trackingNumber,
+      senderBusinessName: go.senderBusinessName,
+      senderFirstName: go.senderFirstName,
+      senderLastName: go.senderLastName,
+      senderPhone: go.senderPhone,
+      alternativeSenderPhone: go.alternativeSenderPhone ?? null,
+      recipientName: o.recipientName,
+      recipientPhone: o.recipientPhone,
+      recipientCity: o.recipientCity,
+      recipientCityGeo: o.recipientCityGeo,
+      recipientDistrict: o.recipientDistrict,
+      recipientDistrictGeo: o.recipientDistrictGeo,
+      recipientAddress: o.recipientAddress,
+      description: o.description,
+      isFragile: o.isFragile,
+      orderType: o.orderType,
+      status: o.status,
+      productPaymentStatus: o.productPaymentStatus,
+      whoPaysForCompanyService: o.whoPaysForCompanyService,
+      companyServicePrice: o.companyServicePrice,
+      isCompanyServicePriceIncluded: o.isCompanyServicePriceIncluded,
+      courierSalary: o.courierSalary,
+      companyRevenue: o.companyRevenue,
+      amountToCollectForPackage: o.amountToCollectForPackage,
+      returnPickupCity: o.returnPickupCity ?? null,
+      returnPickupDistrict: o.returnPickupDistrict ?? null,
+      returnPickupAddress: o.returnPickupAddress ?? null,
+      courierId: o.courierId,
+      courierFullName: go.courierFullName,
+      createdAt: o.createdAt,
+      deliveredAt: o.deliveredAt,
+      postponeReason: null,
+    };
+    setEditing({
+      item,
+      pricing: {
+        capital:  go.companyServiceCapitalPrice,
+        city:     go.companyServiceCityPrice,
+        district: go.companyServiceDistrictPrice,
+      },
+    });
+  };
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setActionToast({ msg, type });
@@ -1129,7 +1181,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                       <td>
                         <AdminOrderRowActions order={o} storeName={o._go.senderBusinessName} couriers={couriers} token={token ?? ''}
                           onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                          onRefresh={() => load(search)} />
+                          onRefresh={() => load(search)}
+                          onEdit={() => openEditOrder(o, o._go)} />
                       </td>
                     </tr>
                   ))}
@@ -1255,7 +1308,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                       <td>
                                         <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
                                           onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                                          onRefresh={() => load(search)} />
+                                          onRefresh={() => load(search)}
+                                          onEdit={() => openEditOrder(o, go)} />
                                       </td>
                                     </tr>
                                   ))}
@@ -1281,6 +1335,17 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
           {actionToast.msg}
         </div>
       )}
+
+      {/* Edit a single package from a group order */}
+      <EditOrderModal
+        order={editing?.item ?? null}
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); load(search); }}
+        token={token ?? ''}
+        couriers={couriers}
+        customerPricing={editing?.pricing ?? null}
+      />
     </div>
   );
 }

@@ -172,7 +172,10 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
 
     /* ── Shared structure (sizes only override dimensions/fonts below) ── */
     .label { page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
-    .label:last-child { page-break-after: auto; }
+    /* Suppress the trailing break on the final label. Use :last-of-type, not :last-child:
+       the <script> tag is the last child of <body>, so the last label never matches
+       :last-child — which left page-break-after:always on it and printed a blank page. */
+    .label:last-of-type { page-break-after: auto; }
     .store { font-weight: 800; line-height: 1.15; margin-bottom: 2mm; word-break: break-word; overflow-wrap: anywhere; }
     .rule { border-top: 1.5px dashed #999; margin: 4mm 0; }
     .field { line-height: 1.4; margin-bottom: 1.5mm; word-break: break-word; overflow-wrap: anywhere; }

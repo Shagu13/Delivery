@@ -406,7 +406,7 @@ function PackageDetail({
                 type="number" min={0} step="0.01"
                 className="form-field__input"
                 value={pkg.amountToCollectForPackage ?? ''}
-                onChange={e => { const v = parseFloat(e.target.value); onChange(index, 'amountToCollectForPackage', isNaN(v) ? 0 : v); }}
+                onChange={e => { const v = parseFloat(e.target.value); onChange(index, 'amountToCollectForPackage', isNaN(v) ? null : v); }}
                 placeholder="e.g. 100.00"
               />
               {fe('amountToCollectForPackage') && <p className="form-field__error">{fe('amountToCollectForPackage')}</p>}
@@ -422,7 +422,7 @@ function PackageDetail({
                   type="number" min={0} step="0.01"
                   className="form-field__input"
                   value={pkg.amountToCollectForPackage ?? ''}
-                  onChange={e => { const v = parseFloat(e.target.value); onChange(index, 'amountToCollectForPackage', isNaN(v) ? 0 : v); }}
+                  onChange={e => { const v = parseFloat(e.target.value); onChange(index, 'amountToCollectForPackage', isNaN(v) ? null : v); }}
                   placeholder="e.g. 45.00"
                 />
                 {fe('amountToCollectForPackage') && <p className="form-field__error">{fe('amountToCollectForPackage')}</p>}

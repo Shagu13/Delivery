@@ -26,6 +26,12 @@ public sealed record AdminGroupOrderDto(
     // Assigned pickup courier (null until assigned)
     Guid?   CourierId,
     string? CourierFullName,
+    // Customer-specific service pricing (null when the batch has no linked customer
+    // or that tier isn't configured). Used by the admin edit modal to auto-fill the
+    // company service price by the recipient district's territory.
+    decimal? CompanyServiceCapitalPrice,
+    decimal? CompanyServiceCityPrice,
+    decimal? CompanyServiceDistrictPrice,
     // Child orders
     IReadOnlyList<AdminOrderDto> Orders
 );

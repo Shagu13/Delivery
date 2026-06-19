@@ -808,6 +808,9 @@ public sealed class GroupOrdersController : BaseController
             WhenPackagePickedUpDate: go.WhenPackagePickedUpDate,
             CourierId:               go.CourierId,
             CourierFullName:         go.CourierFullName,
+            CompanyServiceCapitalPrice:  go.CompanyServiceCapitalPrice,
+            CompanyServiceCityPrice:     go.CompanyServiceCityPrice,
+            CompanyServiceDistrictPrice: go.CompanyServiceDistrictPrice,
             Orders: go.Orders.Select(o => new AdminOrderResponse(
                 Id:                               o.Id,
                 TrackingNumber:                   o.TrackingNumber,

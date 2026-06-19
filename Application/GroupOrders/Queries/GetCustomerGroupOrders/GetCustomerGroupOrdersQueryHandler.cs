@@ -102,6 +102,9 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             CourierFullName:         go.Courier is null
                 ? null
                 : $"{go.Courier.FirstName} {go.Courier.LastName}",
+            CompanyServiceCapitalPrice:  null,
+            CompanyServiceCityPrice:     null,
+            CompanyServiceDistrictPrice: null,
             Orders:                  go.Orders.OrderBy(o => o.CreatedAt).Select(MapOrder).ToList()
         ));
 
@@ -128,6 +131,9 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             WhenPackagePickedUpDate: null,
             CourierId:               o.CourierId,
             CourierFullName:         null,
+            CompanyServiceCapitalPrice:  null,
+            CompanyServiceCityPrice:     null,
+            CompanyServiceDistrictPrice: null,
             Orders:                  new List<AdminOrderDto> { MapOrder(o) }
         ));
 

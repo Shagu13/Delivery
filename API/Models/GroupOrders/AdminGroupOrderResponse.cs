@@ -24,6 +24,10 @@ public sealed record AdminGroupOrderResponse(
     // Pickup courier (null until assigned by admin)
     Guid?   CourierId,
     string? CourierFullName,
+    // Customer-specific service pricing (null when no linked customer / tier unset).
+    decimal? CompanyServiceCapitalPrice,
+    decimal? CompanyServiceCityPrice,
+    decimal? CompanyServiceDistrictPrice,
     IReadOnlyList<AdminOrderResponse> Orders
 );
 

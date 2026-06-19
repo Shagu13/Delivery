@@ -628,10 +628,7 @@ const en = {
   cgoImported:              (n: number): string => `${n} package${n !== 1 ? 's' : ''} imported`,
   cgoClearReset:            'Clear & reset',
   cgoAddPackage:            'Add Package',
-  // Layout switcher / sidebar
-  cgoViewLabel:             'View:',
-  cgoViewSidebar:           'Sidebar',
-  cgoViewCards:             'Cards',
+  // Sidebar
   cgoSidebarCount:          (n: number): string => `${n} package${n !== 1 ? 's' : ''}`,
   cgoEmptyPackage:          'Empty package',
   cgoMissingFields:         'missing required fields',
@@ -1231,7 +1228,7 @@ const en = {
   goHistoryNoOrders:         'No completed orders yet.',
     goHistoryNoMatch: 'No completed orders match your filters.',
 
-    // Order type (PackageCard / CreateGroupOrderPage)
+    // Order type (CreateGroupOrderPage)
     cgoOrderTypeLabel: 'Order Type',
     cgoOrderTypeSend: 'Send',
     cgoOrderTypeReturn: 'Return',
@@ -2123,10 +2120,7 @@ const ka: typeof en = {
   cgoImported:              (n: number): string => `${n} ამანათი შემოტანილია`,
   cgoClearReset:            'გასუფთავება და განახლება',
   cgoAddPackage:            'ამანათის დამატება',
-  // Layout switcher / sidebar
-  cgoViewLabel:             'ხედი:',
-  cgoViewSidebar:           'გვერდითა პანელი',
-  cgoViewCards:             'ბარათები',
+  // Sidebar
   cgoSidebarCount:          (n: number): string => `${n} ამანათი`,
   cgoEmptyPackage:          'ცარიელი ამანათი',
   cgoMissingFields:         'შესავსები ველები',
