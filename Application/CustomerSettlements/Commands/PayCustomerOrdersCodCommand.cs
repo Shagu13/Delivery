@@ -4,6 +4,7 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.CustomerSettlements.Commands;
 
 /// <summary>A payment amount allocated to a single order.</summary>
@@ -43,7 +44,7 @@ public sealed class PayCustomerOrdersCommandHandler
             .ToListAsync(ct);
 
         var byId = orders.ToDictionary(o => o.Id);
-        var now  = DateTime.UtcNow;
+        var now  = CustomTime.Now;
 
         foreach (var alloc in request.Allocations)
         {

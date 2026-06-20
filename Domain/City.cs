@@ -15,7 +15,7 @@ public class City
     /// <summary>Georgian script name — used for display when language = "ka".</summary>
     public string?  CityNameGeo  { get; set; }
 
-    public DateTime  CreatedAt   { get; set; } = DateTime.UtcNow;
+    public DateTime  CreatedAt   { get; set; } = CustomTime.Now;
     public DateTime? DateDeleted { get; set; }
 
     // Navigation

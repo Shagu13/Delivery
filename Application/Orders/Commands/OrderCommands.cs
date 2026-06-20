@@ -15,11 +15,28 @@ public sealed record MarkOrderDeliveringCommand(Guid OrderId, string CourierUser
 /// <summary>Courier confirms delivery to recipient. Order → DeliveredToRecipient.</summary>
 public sealed record MarkOrderDeliveredCommand(Guid OrderId, string CourierUserId) : IRequest;
 
+/// <summary>
+/// Courier confirms delivery for an order whose recipient had already paid the SENDER
+/// directly. The product COD is zeroed (the company collected nothing, so it owes the
+/// sender nothing for it). When <paramref name="ServiceFeeAlsoPaidToSender"/> is true the
+/// service fee flips to Sender-owed (a customer receivable); otherwise the courier collected
+/// the fee in cash.
+/// </summary>
+public sealed record MarkOrderDeliveredPaidToSenderCommand(
+    Guid OrderId, string CourierUserId, bool ServiceFeeAlsoPaidToSender) : IRequest;
+
 /// <summary>Courier marks a delivery attempt as failed. Order → DeliveryPostponed.</summary>
 public sealed record PostponeOrderCommand(Guid OrderId, string CourierUserId, PostponeReason Reason) : IRequest;
 
 /// <summary>Courier retries a postponed delivery. Order → CourierDeliveringTheOrderToRecipient.</summary>
 public sealed record RetryDeliveryCommand(Guid OrderId, string CourierUserId) : IRequest;
+
+/// <summary>
+/// Courier cancels a delivery because the recipient declined the parcel. Order → OrderNotAccepted.
+/// Comment is only kept for the "Other" reason.
+/// </summary>
+public sealed record CancelOrderByCourierCommand(
+    Guid OrderId, string CourierUserId, CancellationReason Reason, string? Comment) : IRequest;
 
 /// <summary>Admin cancels any single order at any stage. Order → CancelledByAdmin.</summary>
 public sealed record CancelOrderByAdminCommand(Guid OrderId) : IRequest;

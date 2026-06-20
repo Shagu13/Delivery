@@ -4,6 +4,7 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.GroupOrders.Commands.AcceptGroupOrder;
 
 public sealed class AcceptGroupOrderCommandHandler : IRequestHandler<AcceptGroupOrderCommand>
@@ -23,7 +24,7 @@ public sealed class AcceptGroupOrderCommandHandler : IRequestHandler<AcceptGroup
             throw new ConflictException($"Only Pending group orders can be accepted. Current status: {groupOrder.Status}.");
 
         groupOrder.Status     = OrderStatus.AcceptedGroupOrder;
-        groupOrder.AcceptedAt = DateTime.UtcNow;
+        groupOrder.AcceptedAt = CustomTime.Now;
 
         foreach (var order in groupOrder.Orders)
             order.Status = OrderStatus.AcceptedOrder;

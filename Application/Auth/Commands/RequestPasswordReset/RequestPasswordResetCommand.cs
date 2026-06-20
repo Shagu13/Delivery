@@ -77,7 +77,7 @@ public sealed class RequestPasswordResetCommandHandler
 
         // Invalidate any previous unused tokens for this user to keep the table clean
         var oldTokens = await _context.PasswordResetTokens
-            .Where(t => t.UserId == user.Id && !t.IsUsed && t.ExpiresAt > DateTime.UtcNow)
+            .Where(t => t.UserId == user.Id && !t.IsUsed && t.ExpiresAt > CustomTime.Now)
             .ToListAsync(cancellationToken);
         foreach (var old in oldTokens)
             old.IsUsed = true;
@@ -94,7 +94,7 @@ public sealed class RequestPasswordResetCommandHandler
             Code          = shortCode,
             UserId        = user.Id,
             IdentityToken = identityToken,
-            ExpiresAt     = DateTime.UtcNow.AddHours(2)
+            ExpiresAt     = CustomTime.Now.AddHours(2)
         });
 
         await _context.SaveChangesAsync(cancellationToken);

@@ -56,6 +56,7 @@ public sealed class GetAllGroupOrdersQueryHandler
             Id:                      go.Id,
             CreatedAt:               go.CreatedAt,
             Status:                  go.Status,
+            CustomerId:              go.CustomerId,
             SenderFirstName:         go.SenderFirstName,
             SenderLastName:          go.SenderLastName,
             SenderIdNumber:          go.SenderIdNumber,

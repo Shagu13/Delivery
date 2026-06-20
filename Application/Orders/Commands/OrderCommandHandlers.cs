@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using Domain;
 namespace Application.Orders.Commands;
 
 // ── SendOrderToCity ───────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         var previousCourierId = order.CourierId;
 
         order.CourierId = courier.Id;
-        order.AssignedToCourierAt = DateTime.UtcNow;
+        order.AssignedToCourierAt = CustomTime.Now;
         order.Status = OrderStatus.CourierAssignedToDeliver;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -152,7 +153,7 @@ public sealed class MarkOrderDeliveringCommandHandler : IRequestHandler<MarkOrde
         if (order.Status != OrderStatus.CourierAssignedToDeliver)
             throw new ConflictException($"Expected CourierAssignedToDeliver. Current: {order.Status}.");
 
-        var pickedUpAt = DateTime.UtcNow;
+        var pickedUpAt = CustomTime.Now;
 
         order.Status = OrderStatus.CourierDeliveringTheOrderToRecipient;
         order.PickedUpFromWarehouseAt = pickedUpAt;
@@ -219,7 +220,7 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
             order.AmountOfCashCollected = order.AmountToCollectForPackage.Value;
         }
 
-        order.DeliveredAt = DateTime.UtcNow;
+        order.DeliveredAt = CustomTime.Now;
         order.PostponeReason = null;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -227,6 +228,63 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
 
         // Auto-close the parent GroupOrder when all packages are done
         // (standalone Return orders have no GroupOrderId — skip)
+        if (order.GroupOrderId.HasValue)
+            await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
+    }
+}
+
+// ── MarkOrderDeliveredPaidToSender ────────────────────────────────────────────
+// Delivery done, but the recipient had already paid the sender directly.
+public sealed class MarkOrderDeliveredPaidToSenderCommandHandler
+    : IRequestHandler<MarkOrderDeliveredPaidToSenderCommand>
+{
+    private readonly IAppDbContext _context;
+    public MarkOrderDeliveredPaidToSenderCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(MarkOrderDeliveredPaidToSenderCommand request, CancellationToken cancellationToken)
+    {
+        var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
+            _context, request.OrderId, request.CourierUserId, cancellationToken);
+
+        if (order.Status != OrderStatus.CourierDeliveringTheOrderToRecipient)
+            throw new ConflictException($"Expected CourierDeliveringTheOrderToRecipient. Current: {order.Status}.");
+
+        order.Status = OrderStatus.DeliveredToRecipient;
+
+        // Product was paid straight to the sender → the company collected nothing for it,
+        // so it owes the sender nothing. Zero the COD and mark the product paid.
+        order.ProductPaymentStatus      = PaymentStatus.Paid;
+        order.AmountToCollectForPackage = 0;
+
+        if (order.WhoPaysForCompanyService == ServicePayer.Recipient && order.CompanyServicePrice > 0)
+        {
+            if (request.ServiceFeeAlsoPaidToSender)
+            {
+                // The recipient gave the fee to the sender too → the sender now owes the
+                // company the fee (a customer receivable). No cash through the courier.
+                order.WhoPaysForCompanyService    = ServicePayer.Sender;
+                order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Unpaid;
+                order.AmountOfCashCollected       = 0;
+            }
+            else
+            {
+                // Recipient still handed the service fee to the courier in cash.
+                order.AmountOfCashCollected       = order.CompanyServicePrice;
+                order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+            }
+        }
+        else
+        {
+            // Sender already pays the fee (or there is none) → nothing collected in cash.
+            order.AmountOfCashCollected = 0;
+        }
+
+        order.DeliveredAt    = CustomTime.Now;
+        order.PostponeReason = null;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
+
         if (order.GroupOrderId.HasValue)
             await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
     }
@@ -248,7 +306,7 @@ public sealed class PostponeOrderCommandHandler : IRequestHandler<PostponeOrderC
 
         order.Status = OrderStatus.DeliveryPostponed;
         order.PostponeReason = request.Reason;
-        order.PostponedAt = DateTime.UtcNow;
+        order.PostponedAt = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
@@ -271,6 +329,50 @@ public sealed class RetryDeliveryCommandHandler : IRequestHandler<RetryDeliveryC
         order.PostponeReason = null;
         order.PostponedAt = null;
         await _context.SaveChangesAsync(cancellationToken);
+    }
+}
+
+// ── CancelOrderByCourier ──────────────────────────────────────────────────────
+// Courier cancels a delivery because the recipient declined the parcel.
+public sealed class CancelOrderByCourierCommandHandler : IRequestHandler<CancelOrderByCourierCommand>
+{
+    private readonly IAppDbContext _context;
+    private readonly IRealtimeNotifier _notifier;
+    public CancelOrderByCourierCommandHandler(IAppDbContext context, IRealtimeNotifier notifier)
+    {
+        _context  = context;
+        _notifier = notifier;
+    }
+
+    public async Task Handle(CancelOrderByCourierCommand request, CancellationToken cancellationToken)
+    {
+        var (order, courier) = await OrderCourierGuard.LoadAndVerifyAsync(
+            _context, request.OrderId, request.CourierUserId, cancellationToken);
+
+        if (order.Status is not (OrderStatus.CourierDeliveringTheOrderToRecipient or OrderStatus.DeliveryPostponed))
+            throw new ConflictException($"Cannot cancel from status {order.Status}.");
+
+        order.Status              = OrderStatus.OrderNotAccepted;
+        order.CancellationReason  = request.Reason;
+        order.CancellationComment = request.Reason == CancellationReason.Other
+            ? (string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim())
+            : null;
+        order.CancelledAt         = CustomTime.Now;
+        // Clear any postpone state — this is now terminal.
+        order.PostponeReason      = null;
+        order.PostponedAt         = null;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // A cancelled (not-accepted) order drops out of its batch invoice.
+        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
+
+        // Close the parent batch if every package is now done (skip standalone Returns).
+        if (order.GroupOrderId.HasValue)
+            await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
+
+        _notifier.NotifyCourierOrdersChanged(courier.Id);
+        _notifier.NotifyAdminsOrdersChanged();
     }
 }
 
@@ -524,7 +626,7 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
             order.AmountOfCashCollected = order.AmountToCollectForPackage.Value;
         }
 
-        order.DeliveredAt    = DateTime.UtcNow;
+        order.DeliveredAt    = CustomTime.Now;
         order.PostponeReason = null;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -562,7 +664,7 @@ public sealed class AdminMarkReturnDeliveredToWarehouseCommandHandler
             throw new ConflictException($"Order is already in a terminal status: {order.Status}.");
 
         order.Status                 = OrderStatus.DeliveredReturnOrderToWarehouse;
-        order.DeliveredToWarehouseAt = DateTime.UtcNow;
+        order.DeliveredToWarehouseAt = CustomTime.Now;
 
         // Recipient-paid return: the courier collected the company service fee in cash.
         // Mirror MarkReturnDeliveredToWarehouse so the cash position reconciles.

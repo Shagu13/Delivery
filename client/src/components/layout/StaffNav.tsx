@@ -1,12 +1,17 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
+import { useCart } from '../../contexts/useCart';
+import { useLanguage } from '../../contexts/useLanguage';
 import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { LanguageToggle } from '../ui/LanguageToggle';
 
 export function StaffNav() {
     const { user, token } = useAuth();
+    const { t } = useLanguage();
+    const { count: cartCount } = useCart();
     const navigate = useNavigate();
     const isAdmin = user?.role === 'Admin';
+    const isCustomer = user?.role === 'Customer';
     const { pendingGroupOrders: pendingCount, returnExchange: returnExchangeCount } =
         useAdminPendingCounts(token ?? null, isAdmin);
 
@@ -57,6 +62,25 @@ export function StaffNav() {
                             </span>
                         </button>
                     )}
+                    {isCustomer && (
+                        <button
+                            className="nav__pending-btn"
+                            onClick={() => navigate('/cart')}
+                            aria-label={`${t.cartTitle}: ${cartCount}`}
+                            title={t.cartTitle}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="9" cy="21" r="1" />
+                                <circle cx="20" cy="21" r="1" />
+                                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                            </svg>
+                            {cartCount > 0 && (
+                                <span className="nav__pending-badge nav__cart-badge">
+                                    {cartCount > 99 ? '99+' : cartCount}
+                                </span>
+                            )}
+                        </button>
+                    )}
                     {user?.role !== 'Courier' && <span className="nav__user">{user?.username}</span>}
                 </nav>
             </div>
@@ -78,6 +102,9 @@ export function StaffNav() {
                 .nav__pending-btn:hover {
                     color: var(--color-text);
                     background: var(--color-bg-3);
+                }
+                .nav__cart-badge {
+                    background: var(--color-accent) !important;
                 }
                 .nav__pending-badge {
                     position: absolute;

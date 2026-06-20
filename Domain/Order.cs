@@ -136,7 +136,7 @@ public class Order
     public string? ExternalReference { get; set; }
 
     // ── Timestamps ───────────────────────────────────────────────────────────
-    public DateTime  CreatedAt                { get; set; } = DateTime.UtcNow;
+    public DateTime  CreatedAt                { get; set; } = CustomTime.Now;
 
     /// <summary>
     /// When a courier was assigned to this order (last-mile delivery for Send/
@@ -154,6 +154,13 @@ public class Order
     // ── Postpone info ─────────────────────────────────────────────────────────
     public PostponeReason? PostponeReason { get; set; }
     public DateTime? PostponedAt          { get; set; }
+
+    // ── Cancellation info (courier-cancelled at delivery) ─────────────────────
+    /// <summary>Why the courier cancelled the delivery. Null unless cancelled by a courier.</summary>
+    public CancellationReason? CancellationReason { get; set; }
+    /// <summary>Free-text note captured when the reason is "Other". Null otherwise.</summary>
+    public string?   CancellationComment { get; set; }
+    public DateTime? CancelledAt         { get; set; }
 
     // ── Navigation ───────────────────────────────────────────────────────────
     public ICollection<TrackingEvent> TrackingEvents { get; set; } = new List<TrackingEvent>();

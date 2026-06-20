@@ -5,6 +5,7 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.CustomerStatistics.Queries;
 
 /// <summary>
@@ -56,7 +57,7 @@ public sealed class GetMyCustomerStatisticsQueryHandler
             .ToList();
 
         int year = request.Year
-            ?? (availableYears.Count > 0 ? availableYears[0] : DateTime.UtcNow.Year);
+            ?? (availableYears.Count > 0 ? availableYears[0] : CustomTime.Now.Year);
 
         var inYear = orders.Where(o => o.CreatedAt.Year == year).ToList();
 

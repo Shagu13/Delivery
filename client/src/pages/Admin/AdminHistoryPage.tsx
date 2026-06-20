@@ -86,6 +86,7 @@ function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
     id: r.id,
     createdAt: r.createdAt,
     status: r.status as OrderStatus,
+    customerId: null,
     senderFirstName: '',
     senderLastName: '',
     senderIdNumber: null,

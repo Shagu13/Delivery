@@ -28,7 +28,7 @@ public sealed class DeleteWeightPriceTierCommandHandler
             .FirstOrDefaultAsync(t => t.Id == request.Id && t.DateDeleted == null, cancellationToken)
             ?? throw new NotFoundException(nameof(WeightPriceTier), request.Id);
 
-        tier.DateDeleted = DateTime.UtcNow;
+        tier.DateDeleted = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

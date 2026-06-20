@@ -1,5 +1,6 @@
 using FluentValidation;
 
+using Domain;
 namespace Application.Settlements.Commands;
 
 public sealed class CreateCourierSettlementCommandValidator
@@ -12,7 +13,7 @@ public sealed class CreateCourierSettlementCommandValidator
 
         RuleFor(x => x.Date)
             .NotEmpty().WithMessage("Date is required.")
-            .LessThanOrEqualTo(DateOnly.FromDateTime(DateTime.UtcNow))
+            .LessThanOrEqualTo(DateOnly.FromDateTime(CustomTime.Now))
             .WithMessage("Date cannot be in the future.");
 
         // When a partial amount is supplied it must be non-negative.

@@ -4,6 +4,7 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.GroupOrders.Commands.CourierGroupOrderActions;
 
 // ── Helper ────────────────────────────────────────────────────────────────────
@@ -68,7 +69,7 @@ public sealed class MarkPickedUpCommandHandler : IRequestHandler<MarkPickedUpCom
             throw new ConflictException($"Expected CourierOnTheWayToPickUp. Current: {go.Status}.");
 
         go.Status      = OrderStatus.CourierDeliveringToWarehouse;
-        go.PickedUpAt  = DateTime.UtcNow;
+        go.PickedUpAt  = CustomTime.Now;
         foreach (var o in go.Orders) o.Status = OrderStatus.CourierDeliveringToWarehouse;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -91,7 +92,7 @@ public sealed class MarkDeliveredToWarehouseCommandHandler
             throw new ConflictException($"Expected CourierDeliveringToWarehouse. Current: {go.Status}.");
 
         go.Status                  = OrderStatus.DeliveredToWarehouse;
-        go.DeliveredToWarehouseAt  = DateTime.UtcNow;
+        go.DeliveredToWarehouseAt  = CustomTime.Now;
         foreach (var o in go.Orders) o.Status = OrderStatus.DeliveredToWarehouse;
 
         await _context.SaveChangesAsync(cancellationToken);

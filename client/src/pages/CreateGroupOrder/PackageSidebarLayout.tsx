@@ -489,6 +489,7 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
   const [activeIndex, setActiveIndex] = useState(0);
   const [listCollapsed, setListCollapsed] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // Keep activeIndex in bounds when packages shrink
   useEffect(() => {
@@ -516,21 +517,34 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
     setActiveIndex(i => Math.min(i, packages.length - 2));
   };
 
-  // When a package is added (length grows), jump to and reveal the new one
+  // When a package is added (length grows), jump to the new one and scroll the
+  // editor's first fields into view (the "+ Add package" button sits at the bottom
+  // of the page, so otherwise the new package's fields stay below the fold).
   const prevLen = useRef(packages.length);
   useEffect(() => {
     if (packages.length > prevLen.current) {
       setActiveIndex(packages.length - 1);
       setListCollapsed(false);
+      setTimeout(() => {
+        const el = rootRef.current;
+        if (!el) return;
+        const top = el.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      }, 50);
     }
     prevLen.current = packages.length;
   }, [packages.length]);
+
+  // Clamp at render time: when packages shrink (e.g. the form resets to one package
+  // after "Add to cart") activeIndex can briefly point past the end. The bounds effect
+  // above only fixes it on the next render, so guard here to avoid indexing undefined.
+  const safeIndex = Math.min(activeIndex, Math.max(0, packages.length - 1));
 
   const readyCount = packages.filter((p, i) => pkgStatus(p, errors, i) === 'ok').length;
   const errorCount = packages.filter((p, i) => pkgStatus(p, errors, i) === 'error').length;
 
   return (
-    <div className="psl-root">
+    <div className="psl-root" ref={rootRef}>
       {/* ── Sidebar ── */}
       <div className={`psl-sidebar${listCollapsed ? ' psl-sidebar--collapsed' : ''}`} ref={sidebarRef}>
         <div className="psl-sidebar__header">
@@ -560,7 +574,7 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
           {packages.map((pkg, i) => {
             const status  = pkgStatus(pkg, errors, i);
             const summary = pkgSummary(pkg);
-            const isActive = i === activeIndex;
+            const isActive = i === safeIndex;
             return (
               <button
                 key={i}
@@ -604,11 +618,11 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
       </div>
 
       {/* ── Detail panel ── */}
-      {packages.length > 0 && (
+      {packages.length > 0 && packages[safeIndex] && (
         <PackageDetail
-          key={activeIndex}
-          index={activeIndex}
-          pkg={packages[activeIndex]}
+          key={safeIndex}
+          index={safeIndex}
+          pkg={packages[safeIndex]}
           errors={errors}
           canRemove={packages.length > 1}
           customerPricing={customerPricing}
@@ -618,10 +632,10 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
           serviceIncludedForced={serviceIncludedForced}
           onChange={onChange}
           onRemove={handleRemove}
-          onPrev={() => setActiveIndex(i => i - 1)}
-          onNext={() => setActiveIndex(i => i + 1)}
-          hasPrev={activeIndex > 0}
-          hasNext={activeIndex < packages.length - 1}
+          onPrev={() => setActiveIndex(safeIndex - 1)}
+          onNext={() => setActiveIndex(safeIndex + 1)}
+          hasPrev={safeIndex > 0}
+          hasNext={safeIndex < packages.length - 1}
           total={packages.length}
         />
       )}

@@ -64,7 +64,7 @@ public sealed class ResetPasswordCommandHandler
         var record = await _context.PasswordResetTokens
             .FirstOrDefaultAsync(t => t.Code == request.Code, cancellationToken);
 
-        if (record is null || record.IsUsed || record.ExpiresAt <= DateTime.UtcNow)
+        if (record is null || record.IsUsed || record.ExpiresAt <= CustomTime.Now)
             throw new ValidationException(new[]
             {
                 new ValidationFailure("Code",

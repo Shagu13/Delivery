@@ -23,7 +23,7 @@ public sealed class DeletePartnerWebhookCommandHandler
             return;
 
         webhook.IsActive      = false;
-        webhook.DeactivatedAt = DateTime.UtcNow;
+        webhook.DeactivatedAt = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

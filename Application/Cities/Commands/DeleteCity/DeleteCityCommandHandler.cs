@@ -3,6 +3,7 @@ using Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.Cities.Commands.DeleteCity;
 
 public sealed class DeleteCityCommandHandler : IRequestHandler<DeleteCityCommand>
@@ -17,7 +18,7 @@ public sealed class DeleteCityCommandHandler : IRequestHandler<DeleteCityCommand
             .FirstOrDefaultAsync(c => c.Id == request.Id && c.DateDeleted == null, cancellationToken)
             ?? throw new NotFoundException("City", request.Id);
 
-        city.DateDeleted = DateTime.Now;
+        city.DateDeleted = CustomTime.Now;
 
         // soft-delete all districts belonging to this city
         var districts = await _context.Districts
@@ -25,7 +26,7 @@ public sealed class DeleteCityCommandHandler : IRequestHandler<DeleteCityCommand
             .ToListAsync(cancellationToken);
 
         foreach (var d in districts)
-            d.DateDeleted = DateTime.Now;
+            d.DateDeleted = CustomTime.Now;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

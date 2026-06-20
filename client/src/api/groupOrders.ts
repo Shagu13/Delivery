@@ -37,6 +37,35 @@ export async function createGroupOrder(
     return response.json() as Promise<CreateGroupOrderResponse>;
 }
 
+/**
+ * Places the customer's cart. The backend creates a single standalone order when the
+ * cart holds one package, or one group order when it holds several.
+ */
+export async function checkoutCart(
+    data: CreateGroupOrderRequest,
+    token: string,
+): Promise<CreateGroupOrderResponse> {
+    const response = await fetch('/api/grouporders/checkout', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new ApiError(
+            response.status,
+            body?.title ?? `Request failed with status ${response.status}`,
+            body?.errors,
+        );
+    }
+
+    return response.json() as Promise<CreateGroupOrderResponse>;
+}
+
 /** Appends packages to an existing open batch (GroupOrder) owned by the customer. */
 export async function addOrdersToBatch(
     batchId: string,

@@ -2,6 +2,7 @@ using Application.Common.Interfaces;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.Settlements;
 
 /// <summary>
@@ -71,7 +72,7 @@ internal static class CourierSettlementService
         settlement.TotalCourierSalary            = totalCourierSalary;
         settlement.TotalCourierTransferToCompany = totalCashCollected - totalCourierSalary;
         settlement.TotalCompanyNetIncome         = totalServiceRevenue - totalCourierSalary;
-        settlement.UpdatedAt                     = DateTime.UtcNow;
+        settlement.UpdatedAt                     = CustomTime.Now;
 
         await context.SaveChangesAsync(ct);
     }

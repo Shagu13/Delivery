@@ -127,7 +127,7 @@ public sealed class UpdateCourierSettlementCommandHandler
         settlement.AmountCourierWasPaid          = amountCourierWasPaid;
         settlement.TotalCourierTransferToCompany = totalTransferToCompany;
         settlement.TotalCompanyNetIncome         = totalNetIncome;
-        settlement.UpdatedAt                     = DateTime.UtcNow;
+        settlement.UpdatedAt                     = CustomTime.Now;
 
         await _context.SaveChangesAsync(cancellationToken);
         return settlement.Id;

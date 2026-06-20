@@ -96,7 +96,7 @@ public class CourierSettlement
     public decimal TotalCompanyNetIncome { get; set; } = 0;
 
     // ── Meta ─────────────────────────────────────────────────────────────────
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = CustomTime.Now;
 
     /// <summary>
     /// When the settlement was last recomputed/updated. Null until first update.

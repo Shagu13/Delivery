@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
-    markOrderDelivering, markOrderDelivered, postponeOrder, retryDelivery,
+    markOrderDelivering, markOrderDelivered, markOrderDeliveredPaidToSender,
+    postponeOrder, retryDelivery, cancelDelivery,
     markReturnPickedUp, markReturnDeliveredWarehouse,
 } from '../../../api/orders';
 import type { CourierOrder } from '../../../api/orders';
@@ -10,6 +11,7 @@ import { AddressMapLink } from './AddressMapLink';
 import { RouteToolbar } from './RouteToolbar';
 import { CollectConfirmModal } from './CollectConfirmModal';
 import { PostponeModal } from './PostponeModal';
+import { CancelModal } from './CancelModal';
 import { useGeoSort, distanceToAddress } from './useGeoSort';
 
 export interface DeliveriesPanelProps {
@@ -26,6 +28,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [postponingId, setPostponingId] = useState<string | null>(null);
+    const [cancellingId, setCancellingId] = useState<string | null>(null);
     const [collectConfirmOrderId, setCollectConfirmOrderId] = useState<string | null>(null);
 
     const addresses = useMemo(
@@ -233,6 +236,10 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                                     style={{ padding: '10px', borderRadius: '8px', border: '1px solid #f97316', background: 'transparent', color: '#f97316', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
                                                     {t.cdDeliveryBtnPostpone}
                                                 </button>
+                                                <button disabled={isBusy} onClick={() => setCancellingId(order.id)}
+                                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #dc2626', background: 'transparent', color: '#dc2626', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
+                                                    {t.cdDeliveryBtnCancel}
+                                                </button>
                                             </div>
                                         )}
                                         {order.status === 'DeliveryPostponed' && (
@@ -251,12 +258,18 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                     {collectConfirmOrderId === order.id && (
                                         <CollectConfirmModal order={order} isBusy={isBusy}
                                             onCancel={() => setCollectConfirmOrderId(null)}
-                                            onConfirm={() => { setCollectConfirmOrderId(null); handleAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); }} />
+                                            onConfirm={() => { setCollectConfirmOrderId(null); handleAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); }}
+                                            onPaidToSender={(feeAlsoToSender) => { setCollectConfirmOrderId(null); handleAct(order.id, () => markOrderDeliveredPaidToSender(token, order.id, feeAlsoToSender), t.cdDeliveryToastDelivered); }} />
                                     )}
                                     {postponingId === order.id && (
                                         <PostponeModal isBusy={isBusy}
                                             onCancel={() => setPostponingId(null)}
                                             onConfirm={(reason) => { setPostponingId(null); handleAct(order.id, () => postponeOrder(token, order.id, reason), t.cdDeliveryToastPostponed); }} />
+                                    )}
+                                    {cancellingId === order.id && (
+                                        <CancelModal isBusy={isBusy}
+                                            onCancel={() => setCancellingId(null)}
+                                            onConfirm={(reason, comment) => { setCancellingId(null); handleAct(order.id, () => cancelDelivery(token, order.id, reason, comment), t.cdDeliveryToastCancelled); }} />
                                     )}
                                 </>
                             )}

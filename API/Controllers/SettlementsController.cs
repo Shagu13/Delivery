@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
+using Domain;
 namespace API.Controllers;
 
 public sealed class SettlementsController : BaseController
@@ -48,7 +49,7 @@ public sealed class SettlementsController : BaseController
         [FromQuery] int? month,
         CancellationToken ct)
     {
-        var now    = DateTime.UtcNow;
+        var now    = CustomTime.Now;
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var result = await Sender.Send(new GetMyCourierSettlementsQuery(
             CourierUserId: userId,

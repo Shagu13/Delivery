@@ -136,7 +136,7 @@ public sealed class WebhookOutboxInterceptor : SaveChangesInterceptor
 
         if (webhooksByCustomer.Count == 0) return;
 
-        var now = DateTime.UtcNow;
+        var now = CustomTime.Now;
         var added = false;
 
         foreach (var (e, cid) in resolved)

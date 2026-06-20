@@ -4,6 +4,7 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.CustomerSettlements.Commands;
 
 /// <summary>
@@ -44,7 +45,7 @@ public sealed class SetOrderSettlementPaymentCommandHandler
             {
                 order.IsCollectedCodPaidToCustomer = true;
                 order.CodPaidToCustomerAmount      = request.CodPaidAmount ?? order.AmountToCollectForPackage ?? 0m;
-                order.CodPaidToCustomerAt          = DateTime.UtcNow;
+                order.CodPaidToCustomerAt          = CustomTime.Now;
             }
             else
             {
@@ -64,7 +65,7 @@ public sealed class SetOrderSettlementPaymentCommandHandler
             {
                 order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
                 order.ServicePaidByCustomerAmount = request.ServicePaidAmount ?? order.CompanyServicePrice;
-                order.ServicePaidByCustomerAt     = DateTime.UtcNow;
+                order.ServicePaidByCustomerAt     = CustomTime.Now;
             }
             else
             {

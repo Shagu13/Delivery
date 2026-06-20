@@ -295,6 +295,30 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/{id}/delivered-paid-to-sender  (Courier) ──────────────
+    [HttpPut("{id:guid}/delivered-paid-to-sender")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeliveredPaidToSender(Guid id, [FromBody] DeliveredPaidToSenderRequest request, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await Sender.Send(new MarkOrderDeliveredPaidToSenderCommand(id, userId, request.ServiceFeeAlsoPaidToSender), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/orders/{id}/cancel-delivery  (Courier) ───────────────────────
+    [HttpPut("{id:guid}/cancel-delivery")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelDelivery(Guid id, [FromBody] CancelDeliveryRequest request, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await Sender.Send(new CancelOrderByCourierCommand(id, userId, request.Reason, request.Comment), ct);
+        return NoContent();
+    }
+
     // ── PUT /api/orders/{id}/retry-delivery  (Courier) ────────────────────────
     [HttpPut("{id:guid}/retry-delivery")]
     [Authorize(Roles = "Courier")]
@@ -376,6 +400,8 @@ public sealed class OrdersController : BaseController
 public sealed record SetCourierSalaryRequest(decimal Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);
+public sealed record CancelDeliveryRequest(Domain.Enums.CancellationReason Reason, string? Comment);
+public sealed record DeliveredPaidToSenderRequest(bool ServiceFeeAlsoPaidToSender);
 
 public sealed record UpdateOrderRequest(
     string   RecipientName,

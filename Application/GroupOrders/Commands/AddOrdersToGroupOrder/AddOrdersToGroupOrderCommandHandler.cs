@@ -38,7 +38,7 @@ public sealed class AddOrdersToGroupOrderCommandHandler
 
         if (!GroupOrderAppendPolicy.Appendable.Contains(groupOrder.Status))
             throw new ConflictException(
-                "This batch can no longer accept new packages — a courier has already been assigned to pick it up.");
+                "This batch can no longer accept new packages — the courier has already picked it up.");
 
         // Price against the batch owner's negotiated tiers / all-in pricing flag.
         var customer = await _context.Customers

@@ -23,7 +23,7 @@ public sealed class RevokePartnerApiKeyCommandHandler
             return;
 
         key.IsActive  = false;
-        key.RevokedAt = DateTime.UtcNow;
+        key.RevokedAt = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

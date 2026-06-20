@@ -47,7 +47,7 @@ public class WeightPriceTier
     /// </summary>
     public decimal? DistrictPrice { get; set; }
 
-    public DateTime  CreatedAt  { get; set; } = DateTime.UtcNow;
+    public DateTime  CreatedAt  { get; set; } = CustomTime.Now;
 
     /// <summary>Soft-delete: non-null means the tier has been removed from active use.</summary>
     public DateTime? DateDeleted { get; set; }

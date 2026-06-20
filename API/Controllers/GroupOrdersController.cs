@@ -71,6 +71,51 @@ public sealed class GroupOrdersController : BaseController
         return CreatedAtAction(nameof(GetById), new { id = response.GroupOrderId }, response);
     }
 
+    // ── POST /api/grouporders/checkout  (Customer places their cart) ──────────
+    [HttpPost("checkout")]
+    [Authorize(Roles = "Customer")]
+    [ProducesResponseType(typeof(CreateGroupOrderResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Checkout(
+        [FromBody] CreateGroupOrderRequest request,
+        CancellationToken ct)
+    {
+        var customerIdClaim = User.FindFirstValue("customerId");
+        if (!Guid.TryParse(customerIdClaim, out var customerId))
+            return Forbid();
+
+        var command = new Application.GroupOrders.Commands.CheckoutCart.CheckoutCartCommand(
+            new CreateGroupOrderDto(
+                SenderFirstName: request.SenderFirstName,
+                SenderLastName: request.SenderLastName,
+                SenderIdNumber: request.SenderIdNumber,
+                SenderBusinessName: request.SenderBusinessName,
+                SenderPhone: request.SenderPhone,
+                AlternativeSenderPhone: request.AlternativeSenderPhone,
+                PickUpCity: request.PickUpCity,
+                PickUpDistrict: request.PickUpDistrict,
+                PickUpAddress: request.PickUpAddress,
+                Note: request.Note,
+                Orders: MapOrders(request.Orders),
+                CustomerId: customerId
+            ));
+
+        var result = await Sender.Send(command, ct);
+
+        var response = new CreateGroupOrderResponse(
+            GroupOrderId: result.GroupOrderId,
+            SenderBusinessName: result.SenderBusinessName,
+            Orders: result.Orders
+                .Select(o => new OrderTrackingResponse(o.OrderId, o.TrackingNumber, o.RecipientName))
+                .ToList()
+        );
+
+        // GroupOrderId is Guid.Empty for a single standalone order — no batch to point at.
+        return result.GroupOrderId == Guid.Empty
+            ? Ok(response)
+            : CreatedAtAction(nameof(GetById), new { id = response.GroupOrderId }, response);
+    }
+
     // ── POST /api/grouporders/{id}/orders  (Customer adds packages to an open batch) ──
     [HttpPost("{id:guid}/orders")]
     [Authorize(Roles = "Customer")]
@@ -139,6 +184,95 @@ public sealed class GroupOrdersController : BaseController
     {
         var result = await Sender.Send(new GetAllGroupOrdersQuery(search), ct);
         return Ok(result.Select(go => MapToAdminResponse(go)).ToList());
+    }
+
+    // ── GET /api/grouporders/pickup-day?date=  (Admin Pick-Up page summary) ───
+    [HttpGet("pickup-day")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<Application.GroupOrders.DTOs.PickupDayCustomerDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPickupDay([FromQuery] DateTime date, CancellationToken ct)
+    {
+        var result = await Sender.Send(
+            new Application.GroupOrders.Queries.GetPickupDay.GetPickupDayQuery(date), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/grouporders/customer-unattached?customerId=&date=  (grouping modal) ──
+    [HttpGet("customer-unattached")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<AdminOrderDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCustomerUnattached(
+        [FromQuery] Guid customerId, [FromQuery] DateTime date, CancellationToken ct)
+    {
+        var result = await Sender.Send(
+            new Application.GroupOrders.Queries.GetCustomerUnattachedOrders.GetCustomerUnattachedOrdersQuery(
+                customerId, date), ct);
+        return Ok(result);
+    }
+
+    // ── PUT /api/grouporders/attach  (Admin links unattached orders to a batch) ──
+    [HttpPut("attach")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CreateGroupOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AttachOrders(
+        [FromBody] AttachOrdersRequest request, CancellationToken ct)
+    {
+        var result = await Sender.Send(
+            new Application.GroupOrders.Commands.AttachOrdersToGroupOrder.AttachOrdersToGroupOrderCommand(
+                CustomerId:         request.CustomerId,
+                Date:               request.Date,
+                OrderIds:           request.OrderIds,
+                TargetGroupOrderId: request.TargetGroupOrderId), ct);
+
+        var response = new CreateGroupOrderResponse(
+            GroupOrderId: result.GroupOrderId,
+            SenderBusinessName: result.SenderBusinessName,
+            Orders: result.Orders
+                .Select(o => new OrderTrackingResponse(o.OrderId, o.TrackingNumber, o.RecipientName))
+                .ToList());
+
+        return Ok(response);
+    }
+
+    // ── PUT /api/grouporders/merge  (Admin unites a customer's same-day batches) ──
+    [HttpPut("merge")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CreateGroupOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> MergeGroupOrders(
+        [FromBody] MergeGroupOrdersRequest request, CancellationToken ct)
+    {
+        var result = await Sender.Send(
+            new Application.GroupOrders.Commands.MergeGroupOrders.MergeGroupOrdersCommand(
+                TargetGroupOrderId:  request.TargetGroupOrderId,
+                SourceGroupOrderIds: request.SourceGroupOrderIds), ct);
+
+        var response = new CreateGroupOrderResponse(
+            GroupOrderId: result.GroupOrderId,
+            SenderBusinessName: result.SenderBusinessName,
+            Orders: result.Orders
+                .Select(o => new OrderTrackingResponse(o.OrderId, o.TrackingNumber, o.RecipientName))
+                .ToList());
+
+        return Ok(response);
+    }
+
+    // ── PUT /api/grouporders/move-order  (Admin moves one order between batches) ──
+    [HttpPut("move-order")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> MoveOrder(
+        [FromBody] MoveOrderRequest request, CancellationToken ct)
+    {
+        await Sender.Send(
+            new Application.GroupOrders.Commands.MoveOrderToGroupOrder.MoveOrderToGroupOrderCommand(
+                OrderId:            request.OrderId,
+                TargetGroupOrderId: request.TargetGroupOrderId), ct);
+        return NoContent();
     }
 
     // ── GET /api/grouporders/{id} ────────────────────────────────────────────
@@ -792,6 +926,7 @@ public sealed class GroupOrdersController : BaseController
             Id:                      go.Id,
             CreatedAt:               go.CreatedAt,
             Status:                  go.Status.ToString(),
+            CustomerId:              go.CustomerId,
             SenderFirstName:         go.SenderFirstName,
             SenderLastName:          go.SenderLastName,
             SenderIdNumber:          go.SenderIdNumber,
@@ -847,6 +982,26 @@ public sealed class GroupOrdersController : BaseController
 
 // ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetPickupDateRequest(DateTime PickupDate);
+
+/// <summary>Body for PUT /api/grouporders/attach — group a customer's unattached orders.</summary>
+public sealed record AttachOrdersRequest(
+    Guid CustomerId,
+    DateTime Date,
+    IReadOnlyList<Guid> OrderIds,
+    Guid? TargetGroupOrderId = null
+);
+
+/// <summary>Body for PUT /api/grouporders/move-order — move one order to another batch.</summary>
+public sealed record MoveOrderRequest(
+    Guid OrderId,
+    Guid TargetGroupOrderId
+);
+
+/// <summary>Body for PUT /api/grouporders/merge — merge chosen source batches into a target.</summary>
+public sealed record MergeGroupOrdersRequest(
+    Guid TargetGroupOrderId,
+    IReadOnlyList<Guid> SourceGroupOrderIds
+);
 
 public sealed record UpdateGroupOrderRequest(
     string  SenderFirstName,

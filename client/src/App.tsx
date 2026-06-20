@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthProvider';
+import { CartProvider } from './contexts/CartProvider';
 import { LanguageProvider } from './contexts/LanguageProvider';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
@@ -16,6 +17,7 @@ const ContactPage          = lazy(() => import('./pages/Contact/ContactPage').th
 const ForgotPasswordPage   = lazy(() => import('./pages/ForgotPassword/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage    = lazy(() => import('./pages/ResetPassword/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 const CreateGroupOrderPage = lazy(() => import('./pages/CreateGroupOrder/CreateGroupOrderPage').then(m => ({ default: m.CreateGroupOrderPage })));
+const CartPage             = lazy(() => import('./pages/Cart/CartPage').then(m => ({ default: m.CartPage })));
 const AdminDashboard       = lazy(() => import('./pages/Admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const CourierDashboard     = lazy(() => import('./pages/Courier/CourierDashboard').then(m => ({ default: m.CourierDashboard })));
 const CustomerDashboard    = lazy(() => import('./pages/Customer/CustomerDashboard').then(m => ({ default: m.CustomerDashboard })));
@@ -52,6 +54,7 @@ export default function App() {
     return (
         <LanguageProvider>
             <AuthProvider>
+                <CartProvider>
                 <BrowserRouter>
                     <AppLayout>
                         <Suspense fallback={<RouteFallback />}>
@@ -71,6 +74,16 @@ export default function App() {
                                     element={
                                         <ProtectedRoute role="Customer">
                                             <CreateGroupOrderPage />
+                                        </ProtectedRoute>
+                                    }
+                                />
+
+                                {/* Cart — Customer only */}
+                                <Route
+                                    path="/cart"
+                                    element={
+                                        <ProtectedRoute role="Customer">
+                                            <CartPage />
                                         </ProtectedRoute>
                                     }
                                 />
@@ -111,6 +124,7 @@ export default function App() {
                         </Suspense>
                     </AppLayout>
                 </BrowserRouter>
+                </CartProvider>
             </AuthProvider>
         </LanguageProvider>
     );

@@ -5,8 +5,9 @@ import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
-import { fetchGroupOrders } from '../../api/adminGroupOrders';
-import type { AdminGroupOrder, AdminOrder } from '../../api/adminGroupOrders';
+import { fetchGroupOrders,
+    fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup, mergeGroupOrders, moveOrderToGroup } from '../../api/adminGroupOrders';
+import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/adminGroupOrders';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import type { AdminOrderItem } from './AdminOrdersPage';
 import { fetchCouriers, fetchAssignedForRange, fetchAssignedPickupsForRange, setCourierActiveStatus } from '../../api/couriers';
@@ -28,6 +29,7 @@ import AdminReturnExchangePage from './AdminReturnExchangePage';
 import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
+import { georgianToday, georgianDateKeyOf } from '../../utils/georgianTime';
 
 // Terminal order statuses — these orders are hidden from the active Group Orders page
 // and shown only in the History page.
@@ -40,6 +42,33 @@ const ACTIVE_ORDER_STATUSES_ONLY = new Set([
   'ExchangeCompleted',
 ]);
 
+
+// ── Pick-up phase ordering ───────────────────────────────────────────────────
+// Within a customer card, packages sort by their parent batch's pickup phase:
+//   0 = still needs pickup, 1 = assigned / on the way to warehouse, 2 = at warehouse & beyond.
+// Ties break by creation time (oldest first) — the first order of the day on top.
+const PICKUP_BUCKET: Record<string, number> = {
+  Pending:                      0,
+  AcceptedGroupOrder:           0,
+  CourierAssignedToPickUp:      1,
+  CourierOnTheWayToPickUp:      1,
+  CourierDeliveringToWarehouse: 1,
+};
+const pickupBucket = (groupStatus: string) => PICKUP_BUCKET[groupStatus] ?? 2;
+
+// Batches a pickup courier can still be (re)assigned to — mirrors the backend's
+// AssignCourierToGroupOrder precondition (Accepted, or re-assign while awaiting pickup).
+// Pending is included because the assign flow accepts the batch first.
+const PICKUP_ELIGIBLE = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp']);
+
+// Batches still open enough to be merged — mirrors the backend GroupOrderAppendPolicy
+// (anything before the courier marks the batch picked up).
+const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp']);
+
+// Unite a customer's same-day batches: same customer + same physical pickup address.
+// Falls back to the sender phone when there's no linked customer (legacy/guest batches).
+const customerGroupKey = (go: AdminGroupOrder) =>
+  `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
 type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'history' | 'returnExchange' | 'finance';
 
@@ -143,20 +172,20 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.sidebarOverview}</span>
           </button>
-          <button className={`sidebar__link ${activeView === 'orders' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('orders')} title={t.sidebarGroupOrders}>
+          <button className={`sidebar__link ${activeView === 'orders' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('orders')} title={t.navPickUp}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
               <path d="M4.5 5.5h7M4.5 8h5M4.5 10.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-            <span className="sidebar__link-text">{t.sidebarGroupOrders}</span>
+            <span className="sidebar__link-text">{t.navPickUp}</span>
           </button>
-          <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')} title={t.topbarPackages}>
+          <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')} title={t.navDelivery}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               <path d="M1 8h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
-            <span className="sidebar__link-text">{t.topbarPackages}</span>
+            <span className="sidebar__link-text">{t.navDelivery}</span>
           </button>
           <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')} title={t.sidebarCouriers}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -265,8 +294,8 @@ export function AdminDashboard() {
         <div className="dashboard__topbar">
           <span className="dashboard__topbar-title">
             {activeView === 'overview'  && t.topbarOverview}
-            {activeView === 'orders'    && t.topbarOrders}
-            {activeView === 'packages'  && t.topbarPackages}
+            {activeView === 'orders'    && t.navPickUp}
+            {activeView === 'packages'  && t.navDelivery}
             {activeView === 'couriers'  && t.topbarCouriers}
             {activeView === 'customers' && t.topbarCustomers}
             {activeView === 'cities' && t.topbarCities}
@@ -410,22 +439,46 @@ export function AdminDashboard() {
         .go-list { display: flex; flex-direction: column; }
         .go-row { border-bottom: 1px solid var(--color-border); }
         .go-row:last-child { border-bottom: none; }
-        /* The header wraps based on the actual available width (which shrinks/grows with the
-           sidebar), so on narrower screens the meta/actions drop to a new line instead of
-           squeezing the sender column down to a truncated store name. */
-        .go-row-header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; cursor: pointer; transition: background var(--transition); user-select: none; flex-wrap: wrap; }
+        .go-row-header { display: flex; align-items: center; gap: 14px; padding: 14px 20px; cursor: pointer; transition: background var(--transition); user-select: none; }
         .go-row-header:hover { background: var(--color-bg-3); }
         .go-chevron { color: var(--color-text-subtle); flex-shrink: 0; transition: transform 0.18s ease; }
         .go-chevron--open { transform: rotate(90deg); }
+
+        /* Customer/sender details laid out as fixed, labeled columns so each field
+           (store, phone, pickup location, status, packages, date) always sits in the
+           same place. The grid scrolls horizontally on its own when the row is too
+           narrow, keeping the chevron and action buttons fixed and always reachable. */
+        .go-details-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+        .go-details {
+          display: grid;
+          grid-template-columns:
+            minmax(150px, 1.6fr)
+            minmax(110px, 0.9fr)
+            minmax(180px, 2fr)
+            minmax(96px, auto)
+            minmax(60px, auto)
+            minmax(84px, auto);
+          align-items: start;
+          gap: 6px 22px;
+          min-width: 660px;
+        }
+        .go-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+        .go-cell--center { justify-content: center; }
+        .go-cell__label { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-subtle); opacity: 0.85; }
+        .go-cell__value { font-size: 0.82rem; color: var(--color-text); font-weight: 600; overflow-wrap: anywhere; }
+        .go-cell__value--strong { font-weight: 700; }
+        .go-cell__value--mono { font-family: 'Courier New', monospace; font-weight: 500; font-size: 0.78rem; }
+        .go-cell__sub { font-size: 0.74rem; color: var(--color-text-subtle); overflow-wrap: anywhere; }
+        .go-cell__sub--muted { opacity: 0.85; }
+
+        /* Legacy meta classes — still used by the history page accordion. */
         .go-sender { flex: 1 1 220px; min-width: 180px; }
-        /* Store name stays fully visible — it wraps to a second line on tight widths
-           rather than ellipsizing to its first word or nothing. */
         .go-sender__biz { font-weight: 600; font-size: 0.9rem; color: var(--color-text); overflow-wrap: anywhere; }
         .go-sender__name { font-size: 0.775rem; color: var(--color-text-subtle); margin-top: 1px; }
         .go-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
         .go-meta__phone { font-size: 0.78rem; color: var(--color-text-subtle); font-family: 'Courier New', monospace; }
         .go-meta__city { font-size: 0.78rem; color: var(--color-text-subtle); }
-        .go-meta__pkgs { font-size: 0.75rem; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: 100px; padding: 2px 9px; color: var(--color-text-muted); white-space: nowrap; }
+        .go-meta__pkgs { font-size: 0.75rem; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: 100px; padding: 2px 9px; color: var(--color-text-muted); white-space: nowrap; display: inline-block; width: fit-content; }
         .go-meta__date { font-size: 0.75rem; color: var(--color-text-subtle); white-space: nowrap; }
         .status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; border-radius: 100px; padding: 3px 10px; white-space: nowrap; }
         .status-badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
@@ -465,6 +518,53 @@ export function AdminDashboard() {
         .go-select--inline { min-width: 200px; padding: 6px 28px 6px 10px; font-size: 0.8rem; }
         .action-toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; align-items: center; gap: 9px; background: var(--color-text); color: var(--color-bg); border-radius: var(--radius-md); padding: 12px 20px; font-size: 0.875rem; font-weight: 500; box-shadow: 0 8px 32px rgba(0,0,0,0.2); animation: toast-in 0.25s ease both; white-space: nowrap; }
         .action-toast--err { background: #ef4444; color: #fff; }
+
+        /* Pick-Up day navigator */
+        .pickup-daynav { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); }
+        .pickup-daynav__arrow { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer; transition: all var(--transition); }
+        .pickup-daynav__arrow:hover { background: var(--color-bg-3); border-color: var(--color-text-subtle); }
+        .pickup-daynav__label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; font-weight: 700; color: var(--color-text); }
+        .pickup-daynav__today { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent); background: var(--color-accent-dim); border-radius: 100px; padding: 2px 8px; }
+        .pickup-daynav__jump { margin-left: 4px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.76rem; font-weight: 600; padding: 6px 12px; cursor: pointer; transition: all var(--transition); }
+        .pickup-daynav__jump:hover { background: var(--color-bg-3); color: var(--color-text); }
+        .pickup-modes { margin-left: auto; display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radius-sm); overflow: hidden; }
+        .pickup-mode { background: none; border: none; color: var(--color-text-subtle); font-size: 0.8rem; font-weight: 600; padding: 7px 16px; cursor: pointer; transition: all var(--transition); white-space: nowrap; }
+        .pickup-mode:not(:last-child) { border-right: 1px solid var(--color-border); }
+        .pickup-mode:hover:not(.pickup-mode--active) { background: var(--color-bg-3); color: var(--color-text); }
+        .pickup-mode--active { background: var(--color-accent-dim); color: var(--color-accent); }
+        .pickup-controls { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); flex-wrap: wrap; }
+        .pickup-ungrouped-bar { margin-bottom: 10px; }
+
+        /* Pick-Up per-customer summary */
+        .pickup-summary { padding: 12px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); }
+        .pickup-summary__head { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); margin-bottom: 8px; }
+        .pickup-summary__empty { font-size: 0.82rem; color: var(--color-text-subtle); }
+        .pickup-summary__list { display: flex; flex-direction: column; gap: 6px; }
+        .pickup-cust { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px 12px; }
+        .pickup-cust__name { font-weight: 700; font-size: 0.86rem; color: var(--color-text); flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pickup-cust__stat { font-size: 0.78rem; color: var(--color-text-subtle); white-space: nowrap; }
+        .pickup-cust__stat b { color: var(--color-text); }
+        .pickup-cust__stat--warn b { color: var(--color-accent); }
+        .pickup-cust__group { background: var(--color-accent); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.76rem; font-weight: 700; padding: 6px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+        .pickup-cust__group:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pickup-cust__merge { background: #8b5cf6; color: #fff; border: none; border-radius: var(--radius-sm); font-size: 0.76rem; font-weight: 700; padding: 6px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+        .pickup-cust__merge:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Grouping modal */
+        .pickup-modal__overlay { position: fixed; inset: 0; background: rgba(26,23,20,0.55); backdrop-filter: blur(4px); z-index: 220; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .pickup-modal { width: min(720px, 100%); max-height: 86vh; display: flex; flex-direction: column; background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgba(0,0,0,0.28); overflow: hidden; }
+        .pickup-modal__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--color-border); }
+        .pickup-modal__title { margin: 0; font-family: var(--font-display); font-size: 1.02rem; font-weight: 800; color: var(--color-text); }
+        .pickup-modal__subtitle { margin: 4px 0 0; font-size: 0.8rem; color: var(--color-text-subtle); }
+        .pickup-modal__close { background: none; border: none; color: var(--color-text-subtle); cursor: pointer; padding: 4px; border-radius: var(--radius-sm); }
+        .pickup-modal__close:hover { color: var(--color-text); background: var(--color-bg-3); }
+        .pickup-modal__body { padding: 12px 20px; overflow-y: auto; }
+        .pickup-modal__target { display: flex; align-items: center; gap: 10px; padding: 4px 0 12px; font-size: 0.82rem; font-weight: 600; color: var(--color-text); flex-wrap: wrap; }
+        .pickup-modal__target select { min-width: 200px; }
+        .pickup-modal__selectall { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 600; color: var(--color-text); padding: 6px 0 10px; cursor: pointer; }
+        .pickup-modal__selcount { margin-left: auto; font-size: 0.76rem; font-weight: 600; color: var(--color-accent); }
+        .pickup-modal__error { margin-top: 12px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: var(--radius-sm); color: #ef4444; font-size: 0.82rem; padding: 10px 14px; }
+        .pickup-modal__footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--color-border); }
       `}</style>
     </div>
   );
@@ -478,6 +578,15 @@ function formatDate(iso: string) {
     hour: '2-digit', minute: '2-digit',
   });
 }
+
+// Local YYYY-MM-DD for the pickup-day query param (avoids UTC date drift).
+function toDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 
 function StatusBadge({ status }: { status: string }) {
   const { lang } = useLanguage();
@@ -802,6 +911,19 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   const [editing, setEditing] = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Pick-Up day navigation + grouping ──────────────────────────────────────
+  // The page always shows one day (today by default) and steps with the arrows.
+  const [selectedDate,     setSelectedDate]     = useState<Date>(() => georgianToday());
+  const [daySummary,       setDaySummary]       = useState<PickupDayCustomer[]>([]);
+  const [groupingCustomer, setGroupingCustomer] = useState<PickupDayCustomer | null>(null);
+  const shiftDay = (delta: number) => setSelectedDate(prev => { const d = new Date(prev); d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d; });
+  const isToday = toDateKey(selectedDate) === toDateKey(georgianToday());
+  const [mergingCustomer, setMergingCustomer] = useState<{ name: string; batches: AdminGroupOrder[] } | null>(null);
+  // Grouped (batches) vs Non-grouped (customers with un-grouped orders) view.
+  const [pickupMode,      setPickupMode]      = useState<'grouped' | 'ungrouped'>('grouped');
+  const [customerFilter,  setCustomerFilter]  = useState<string>('');   // '' = all customers
+  const [ungroupedSearch, setUngroupedSearch] = useState('');
+
   // Map a group order's package + its parent into the shape EditOrderModal expects.
   // Sender fields come from the group order; fields the modal doesn't read are stubbed.
   const openEditOrder = (o: AdminOrder, go: AdminGroupOrder) => {
@@ -867,6 +989,13 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     }
   }, [token]);
 
+  const loadSummary = useCallback(async () => {
+    try { setDaySummary(await fetchPickupDay(token ?? '', toDateKey(selectedDate))); }
+    catch { setDaySummary([]); }
+  }, [token, selectedDate]);
+
+  useEffect(() => { void loadSummary(); }, [loadSummary]);
+
   useEffect(() => {
     void (async () => { setLoading(true); await load(''); })();
   }, [load]);
@@ -883,7 +1012,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   // search term, no spinner) so new customer orders appear without a manual refresh.
   const searchRef = useRef(search);
   useEffect(() => { searchRef.current = search; });
-  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(searchRef.current); });
+  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(searchRef.current); void loadSummary(); });
 
   useEffect(() => {
     fetchCouriers(token ?? '').then(setCouriers).catch(() => {});
@@ -956,6 +1085,53 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     });
   }, [groupOrders, filterStatus, filterCity, filterDistricts, filterParty]);
 
+  // Only the selected day's batches (Pick-Up page is single-day, by Georgian created date).
+  const dayKey = toDateKey(selectedDate);
+  const dayOrders = useMemo(
+    () => visibleOrders.filter(go => georgianDateKeyOf(go.createdAt) === dayKey),
+    [visibleOrders, dayKey],
+  );
+
+  // The still-open batches each customer has that day — drives the Merge chooser.
+  const mergeableByCustomer = useMemo(() => {
+    const m = new Map<string, AdminGroupOrder[]>();
+    for (const go of groupOrders) {
+      if (!go.customerId) continue;
+      if (georgianDateKeyOf(go.createdAt) !== dayKey) continue;
+      if (!MERGEABLE_STATUSES.has(go.status)) continue;
+      const arr = m.get(go.customerId);
+      if (arr) arr.push(go); else m.set(go.customerId, [go]);
+    }
+    // Earliest first, so the chooser defaults the target to the first batch.
+    for (const arr of m.values())
+      arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return m;
+  }, [groupOrders, dayKey]);
+
+  // Customers that have batches on the selected day (for the Grouped-view dropdown).
+  const groupedCustomers = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const go of dayOrders) if (go.customerId) m.set(go.customerId, go.senderBusinessName);
+    return [...m.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [dayOrders]);
+
+  // The batches shown in the Grouped list, narrowed to one customer when chosen.
+  const listOrders = useMemo(
+    () => (customerFilter ? dayOrders.filter(go => go.customerId === customerFilter) : dayOrders),
+    [dayOrders, customerFilter],
+  );
+
+  // Non-grouped view = customers whose day isn't already one batch: they still have
+  // standalone (un-grouped) orders and/or more than one open batch to consolidate.
+  const ungroupedCustomers = useMemo(() => {
+    const q = ungroupedSearch.trim().toLowerCase();
+    return daySummary.filter(c => {
+      const batchCount = mergeableByCustomer.get(c.customerId)?.length ?? 0;
+      const needsAttention = c.unattachedOrders > 0 || batchCount > 1;
+      return needsAttention && (!q || c.businessName.toLowerCase().includes(q));
+    });
+  }, [daySummary, ungroupedSearch, mergeableByCustomer]);
+
   const hasLocationFilter = filterCity || filterDistricts.length > 0;
   const hasFilters        = search || hasLocationFilter || filterStatus;
   const clearAll          = () => { setSearch(''); setFilterCity(''); setFilterDistricts([]); setFilterStatus(''); };
@@ -999,8 +1175,162 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     return sections;
   };
 
+  // ── Customer uniting (within a day) ───────────────────────────────────────
+  // Unite all of one customer's same-day batches into a single card. Packages are
+  // flattened across the batches and ordered by pickup phase (needs-pickup first,
+  // warehouse last), oldest-first within a phase.
+  const buildCustomerGroups = useCallback((items: AdminGroupOrder[]) => {
+    const map = new Map<string, AdminGroupOrder[]>();
+    for (const go of items) {
+      const k = customerGroupKey(go);
+      const arr = map.get(k);
+      if (arr) arr.push(go); else map.set(k, [go]);
+    }
+    return [...map.entries()].map(([key, gos]) => {
+      const head = gos[0];
+      const flat = gos.flatMap(go => visibleOrdersFor(go).map(o => ({ o, go })));
+      flat.sort((a, b) => {
+        const ba = pickupBucket(a.go.status), bb = pickupBucket(b.go.status);
+        if (ba !== bb) return ba - bb;
+        return new Date(a.o.createdAt).getTime() - new Date(b.o.createdAt).getTime();
+      });
+      // First row of each batch carries the batch-level lifecycle buttons (decline /
+      // accept-in-warehouse), so they don't repeat for multi-package batches.
+      const seen = new Set<string>();
+      const rows = flat.map(r => {
+        const firstOfBatch = !seen.has(r.go.id);
+        seen.add(r.go.id);
+        return { ...r, firstOfBatch };
+      });
+      const counts = { needs: 0, assigned: 0, warehouse: 0 };
+      for (const r of flat) {
+        const b = pickupBucket(r.go.status);
+        if (b === 0) counts.needs++; else if (b === 1) counts.assigned++; else counts.warehouse++;
+      }
+      const eligibleGoIds = [...new Set(flat.filter(r => PICKUP_ELIGIBLE.has(r.go.status)).map(r => r.go.id))];
+      const earliest = flat.length ? Math.min(...flat.map(r => new Date(r.o.createdAt).getTime())) : new Date(head.createdAt).getTime();
+      return { key, head, rows, counts, eligibleGoIds, earliest };
+    })
+    .filter(c => c.rows.length > 0)
+    .sort((a, b) => a.earliest - b.earliest);
+  }, [visibleOrdersFor]);
+
   return (
     <div className="content-card" style={{ overflow: 'hidden' }}>
+      {/* Day navigator — always one day, today by default */}
+      <div className="pickup-daynav">
+        <button className="pickup-daynav__arrow" onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        <div className="pickup-daynav__label">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+          <span>{selectedDate.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>
+          {isToday && <span className="pickup-daynav__today">{t.pickupToday}</span>}
+        </div>
+        <button className="pickup-daynav__arrow" onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        {!isToday && (
+          <button className="pickup-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>
+            {t.pickupToday}
+          </button>
+        )}
+        <div className="pickup-modes">
+          <button
+            className={`pickup-mode ${pickupMode === 'grouped' ? 'pickup-mode--active' : ''}`}
+            onClick={() => setPickupMode('grouped')}
+          >
+            {t.pickupTabGrouped}
+          </button>
+          <button
+            className={`pickup-mode ${pickupMode === 'ungrouped' ? 'pickup-mode--active' : ''}`}
+            onClick={() => setPickupMode('ungrouped')}
+          >
+            {t.pickupTabUngrouped}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Non-grouped view: customers still holding un-grouped orders ── */}
+      {pickupMode === 'ungrouped' && (
+        <div className="pickup-summary">
+          <div className="pickup-ungrouped-bar">
+            <div className="go-search" style={{ maxWidth: 340 }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+              <input
+                type="text"
+                placeholder={t.pickupSearchCustomer}
+                value={ungroupedSearch}
+                onChange={e => setUngroupedSearch(e.target.value)}
+                autoComplete="off"
+              />
+              {ungroupedSearch && (
+                <button onClick={() => setUngroupedSearch('')} className="go-search-clear" aria-label="Clear search">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                </button>
+              )}
+            </div>
+          </div>
+          {ungroupedCustomers.length === 0 ? (
+            <div className="pickup-summary__empty">{t.pickupNoUngrouped}</div>
+          ) : (
+            <div className="pickup-summary__list">
+              {ungroupedCustomers.map(c => {
+                const batchCount = mergeableByCustomer.get(c.customerId)?.length ?? 0;
+                return (
+                <div className="pickup-cust" key={c.customerId}>
+                  <span className="pickup-cust__name" title={c.businessName}>{c.businessName}</span>
+                  {c.unattachedOrders > 0 && (
+                    <span className="pickup-cust__stat pickup-cust__stat--warn">{t.pickupUngrouped}: <b>{c.unattachedOrders}</b></span>
+                  )}
+                  {batchCount > 1 && (
+                    <span className="pickup-cust__stat pickup-cust__stat--warn">{t.pickupBatches}: <b>{batchCount}</b></span>
+                  )}
+                  <span className="pickup-cust__stat">{t.pickupOrdersPlaced}: <b>{c.ordersPlaced}</b></span>
+                  {c.unattachedOrders > 0 && (
+                    <button className="pickup-cust__group" onClick={() => setGroupingCustomer(c)}>
+                      {t.pickupGroupOrdersBtn}
+                    </button>
+                  )}
+                  {batchCount >= 2 && (
+                    <button
+                      className="pickup-cust__merge"
+                      onClick={() => setMergingCustomer({ name: c.businessName, batches: mergeableByCustomer.get(c.customerId) ?? [] })}
+                    >
+                      {t.pickupMergeBtn}
+                    </button>
+                  )}
+                </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Grouped view: customer filter + (conditional) merge ── */}
+      {pickupMode === 'grouped' && (
+        <div className="pickup-controls">
+          <div className="go-select-wrap">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon">
+              <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.3"/><path d="M3 14c0-2.5 2.2-4 5-4s5 1.5 5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            <select className="go-select" value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}>
+              <option value="">{t.pickupAllCustomers}</option>
+              {groupedCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+        </div>
+      )}
+
+      {pickupMode === 'grouped' && (<>
       {/* Search + Location filter (combined row) */}
       <div className="go-toolbar go-toolbar--search" style={{ flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
         {/* Search */}
@@ -1112,7 +1442,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
       {/* States */}
       {loading && <div className="go-loading"><div className="go-spinner" />{t.goLoadingOrders}</div>}
       {!loading && error && <div className="go-error">{error}</div>}
-      {!loading && !error && visibleOrders.length === 0 && (
+      {!loading && !error && listOrders.length === 0 && (
         <div className="empty-state" style={{ padding: '48px 20px' }}>
           <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
             <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
@@ -1123,12 +1453,12 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
       )}
 
       {/* Group order list — date-sectioned accordion */}
-      {!loading && !error && visibleOrders.length > 0 && (() => {
+      {!loading && !error && listOrders.length > 0 && (() => {
         // ── Flat view: recipient party + location filter active ──────────────
         const showFlat = filterParty === 'recipient' && hasLocationFilter;
 
         if (showFlat) {
-          const flatOrders = visibleOrders.flatMap(go =>
+          const flatOrders = listOrders.flatMap(go =>
             visibleOrdersFor(go).map(o => ({ ...o, _go: go }))
           );
           return (
@@ -1198,10 +1528,12 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
         }
 
         // ── Default: date-sectioned accordion ────────────────────────────────
-        const sections = groupByDate(visibleOrders);
+        const sections = groupByDate(listOrders);
         return (
           <div className="go-list">
-            {sections.map(({ label, items }) => (
+            {sections.map(({ label, items }) => {
+              const customers = buildCustomerGroups(items);
+              return (
               <div key={label}>
                 {/* Date section header */}
                 <div style={{
@@ -1219,31 +1551,55 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                   </svg>
                   {label}
                   <span style={{ marginLeft: 4, fontWeight: 500, textTransform: 'none', letterSpacing: 0, fontSize: '0.72rem' }}>
-                    — {items.length} group order{items.length !== 1 ? 's' : ''}
+                    — {customers.length} customer{customers.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 {items.map(go => {
                   const expanded = expandedIds.has(go.id);
                   const filteredOrders = visibleOrdersFor(go);
+                  // Other open batches of this customer an order could be moved into.
+                  const custBatches = go.customerId ? (mergeableByCustomer.get(go.customerId) ?? []) : [];
+                  const moveDestinations = custBatches.some(b => b.id === go.id)
+                    ? custBatches.filter(b => b.id !== go.id)
+                    : [];
                   return (
                     <div className="go-row" key={go.id}>
                       <div className="go-row-header" onClick={() => toggleExpand(go.id)}>
                         <svg className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`} width="14" height="14" viewBox="0 0 16 16" fill="none">
                           <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <div className="go-sender">
-                          <div className="go-sender__biz">{go.senderBusinessName}</div>
-                          <div className="go-sender__name">{go.senderFirstName} {go.senderLastName}</div>
-                        </div>
-                        <div className="go-meta">
-                          <span className="go-meta__phone">{go.senderPhone}</span>
-                          {go.alternativeSenderPhone && (
-                            <span className="go-meta__phone">{go.alternativeSenderPhone}</span>
-                          )}
-                          <span className="go-meta__city">{locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}{go.pickUpAddress ? `, ${go.pickUpAddress}` : ''}</span>
-                          <StatusBadge status={go.status} />
-                          <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
-                          <span className="go-meta__date">{formatDate(go.createdAt)}</span>
+                        <div className="go-details-scroll">
+                          <div className="go-details">
+                            <div className="go-cell">
+                              <span className="go-cell__label">{t.goSender}</span>
+                              <span className="go-cell__value go-cell__value--strong">{go.senderBusinessName || '—'}</span>
+                              <span className="go-cell__sub">{go.senderFirstName} {go.senderLastName}</span>
+                            </div>
+                            <div className="go-cell">
+                              <span className="go-cell__label">{t.goThPhone}</span>
+                              <span className="go-cell__value go-cell__value--mono">{go.senderPhone}</span>
+                              {go.alternativeSenderPhone && (
+                                <span className="go-cell__sub go-cell__value--mono">{go.alternativeSenderPhone}</span>
+                              )}
+                            </div>
+                            <div className="go-cell">
+                              <span className="go-cell__label">{t.cgoPickupLocation}</span>
+                              <span className="go-cell__value">{locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}</span>
+                              {go.pickUpAddress && <span className="go-cell__sub">{go.pickUpAddress}</span>}
+                            </div>
+                            <div className="go-cell go-cell--center">
+                              <span className="go-cell__label">{t.goColStatus}</span>
+                              <StatusBadge status={go.status} />
+                            </div>
+                            <div className="go-cell go-cell--center">
+                              <span className="go-cell__label">{t.goColPackages}</span>
+                              <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
+                            </div>
+                            <div className="go-cell go-cell--center">
+                              <span className="go-cell__label">{t.goColDate}</span>
+                              <span className="go-cell__sub go-cell__sub--muted">{formatDate(go.createdAt)}</span>
+                            </div>
+                          </div>
                         </div>
                         <AdminGroupOrderActions
                           groupOrder={go} couriers={couriers} token={token ?? ''}
@@ -1311,10 +1667,21 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                         })()}
                                       </td>
                                       <td>
-                                        <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
-                                          onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                                          onRefresh={() => load(search)}
-                                          onEdit={() => openEditOrder(o, go)} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                          <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
+                                            onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
+                                            onRefresh={() => load(search)}
+                                            onEdit={() => openEditOrder(o, go)} />
+                                          {moveDestinations.length > 0 && (
+                                            <MoveOrderControl
+                                              orderId={o.id}
+                                              destinations={moveDestinations}
+                                              token={token ?? ''}
+                                              onMoved={() => { void load(search); void loadSummary(); showToast(t.pickupMovedToast); }}
+                                              onError={msg => showToast(msg, 'err')}
+                                            />
+                                          )}
+                                        </div>
                                       </td>
                                     </tr>
                                   ))}
@@ -1329,10 +1696,12 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                   );
                 })}
               </div>
-            ))}
+              );
+            })}
           </div>
         );
       })()}
+      </>)}
 
       {/* Action toast */}
       {actionToast && (
@@ -1351,7 +1720,317 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
         couriers={couriers}
         customerPricing={editing?.pricing ?? null}
       />
+
+      {/* Group a customer's unattached orders for the day */}
+      {groupingCustomer && (
+        <GroupingModal
+          customer={groupingCustomer}
+          date={selectedDate}
+          batches={mergeableByCustomer.get(groupingCustomer.customerId) ?? []}
+          token={token ?? ''}
+          onClose={() => setGroupingCustomer(null)}
+          onGrouped={n => {
+            setGroupingCustomer(null);
+            showToast(t.pickupGroupedToast(n));
+            void load(search);
+            void loadSummary();
+          }}
+        />
+      )}
+
+      {/* Merge a customer's same-day batches into one chosen batch */}
+      {mergingCustomer && (
+        <MergeModal
+          customerName={mergingCustomer.name}
+          batches={mergingCustomer.batches}
+          token={token ?? ''}
+          onClose={() => setMergingCustomer(null)}
+          onMerged={() => {
+            setMergingCustomer(null);
+            showToast(t.pickupMergedToast);
+            void load(search);
+            void loadSummary();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Merge modal ───────────────────────────────────────────────────────────────
+// Lists a customer's still-open batches for the day. The admin picks one to keep
+// (target) and ticks the others to fold into it.
+function MergeModal({
+  customerName, batches, token, onClose, onMerged,
+}: {
+  customerName: string;
+  batches: AdminGroupOrder[];
+  token: string;
+  onClose: () => void;
+  onMerged: () => void;
+}) {
+  const { t, lang } = useLanguage();
+  const locCity = (en: string, geo?: string | null) => (lang === 'ka' && geo ? geo : en);
+  const [targetId,  setTargetId]  = useState(batches[0]?.id ?? '');
+  const [sourceIds, setSourceIds] = useState<Set<string>>(() => new Set(batches.slice(1).map(b => b.id)));
+  const [busy,      setBusy]      = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+
+  const chooseTarget = (id: string) => {
+    setTargetId(id);
+    setSourceIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+  };
+  const toggleSource = (id: string) => {
+    if (id === targetId) return;
+    setSourceIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+
+  const selectedSources = [...sourceIds].filter(id => id !== targetId);
+
+  const handleMerge = async () => {
+    if (!targetId || selectedSources.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await mergeGroupOrders(token, targetId, selectedSources);
+      onMerged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.pickupMergeError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return createPortal(
+    <div className="pickup-modal__overlay" onClick={() => { if (!busy) onClose(); }}>
+      <div className="pickup-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+        <div className="pickup-modal__header">
+          <div>
+            <h3 className="pickup-modal__title">{t.pickupMergeBtn} — {customerName}</h3>
+            <p className="pickup-modal__subtitle">{t.pickupMergeModalSubtitle}</p>
+          </div>
+          <button className="pickup-modal__close" onClick={onClose} disabled={busy} aria-label={t.close}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+          </button>
+        </div>
+
+        <div className="pickup-modal__body">
+          <table className="go-orders-table" style={{ minWidth: 0 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 48, textAlign: 'center' }}>{t.pickupMergeKeep}</th>
+                <th style={{ width: 60, textAlign: 'center' }}>{t.pickupMergeInto}</th>
+                <th>{t.goColPackages}</th>
+                <th>{t.goColStatus}</th>
+                <th>{t.cgoPickupLocation}</th>
+                <th>{t.goColDate}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {batches.map(b => (
+                <tr key={b.id}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input type="radio" name="merge-target" checked={targetId === b.id} onChange={() => chooseTarget(b.id)} />
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <input type="checkbox" disabled={targetId === b.id} checked={targetId !== b.id && sourceIds.has(b.id)} onChange={() => toggleSource(b.id)} />
+                  </td>
+                  <td>{t.goPkgs(b.numberOfPackages)}</td>
+                  <td><StatusBadge status={b.status} /></td>
+                  <td>{locCity(b.pickUpCity, b.pickUpCityGeo)}{b.pickUpAddress ? `, ${b.pickUpAddress}` : ''}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{formatDate(b.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {error && <div className="pickup-modal__error">{error}</div>}
+        </div>
+
+        <div className="pickup-modal__footer">
+          <button className="go-action-btn go-action-btn--ghost" onClick={onClose} disabled={busy}>{t.cancel}</button>
+          <button className="go-action-btn go-action-btn--city" onClick={handleMerge} disabled={busy || selectedSources.length === 0}>
+            {busy ? t.pickupMerging : t.pickupMergeBtn}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ── Move-order control ──────────────────────────────────────────────────────────
+// A compact "Move to…" dropdown shown on an order row to move it into another of the
+// customer's open batches.
+function MoveOrderControl({
+  orderId, destinations, token, onMoved, onError,
+}: {
+  orderId: string;
+  destinations: AdminGroupOrder[];
+  token: string;
+  onMoved: () => void;
+  onError: (msg: string) => void;
+}) {
+  const { t } = useLanguage();
+  const [busy, setBusy] = useState(false);
+
+  const handle = async (targetId: string) => {
+    if (!targetId) return;
+    setBusy(true);
+    try { await moveOrderToGroup(token, orderId, targetId); onMoved(); }
+    catch (e) { onError(e instanceof Error ? e.message : t.pickupMoveError); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <select
+      className="go-select go-select--inline"
+      style={{ minWidth: 120 }}
+      value=""
+      disabled={busy}
+      onChange={e => void handle(e.target.value)}
+      title={t.pickupMoveTo}
+    >
+      <option value="">{busy ? t.pickupMoving : t.pickupMoveTo}</option>
+      {destinations.map(b => (
+        <option key={b.id} value={b.id}>
+          {new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {b.numberOfPackages}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ── Grouping modal ──────────────────────────────────────────────────────────────
+// Lists a customer's unattached orders for the chosen day; ticked orders are linked
+// to a chosen batch (an existing one or a brand-new batch).
+function GroupingModal({
+  customer, date, batches, token, onClose, onGrouped,
+}: {
+  customer: PickupDayCustomer;
+  date: Date;
+  batches: AdminGroupOrder[];
+  token: string;
+  onClose: () => void;
+  onGrouped: (count: number) => void;
+}) {
+  const { t, lang } = useLanguage();
+  const locCity = (en: string, geo?: string | null) => (lang === 'ka' && geo ? geo : en);
+  const [orders,   setOrders]   = useState<AdminOrder[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy,     setBusy]     = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+  // '' = create a new batch; otherwise append to the chosen existing batch.
+  const [targetBatchId, setTargetBatchId] = useState(batches[0]?.id ?? '');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchCustomerUnattached(token, customer.customerId, toDateKey(date))
+      .then(data => { if (!cancelled) { setOrders(data); setSelected(new Set(data.map(o => o.id))); } })
+      .catch(() => { if (!cancelled) setError(t.pickupGroupError); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, customer.customerId, date, t.pickupGroupError]);
+
+  const toggle = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allSelected = orders.length > 0 && selected.size === orders.length;
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(orders.map(o => o.id)));
+
+  const handleGroup = async () => {
+    if (selected.size === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await attachOrdersToGroup(token, customer.customerId, toDateKey(date), [...selected], targetBatchId || undefined);
+      onGrouped(selected.size);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.pickupGroupError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return createPortal(
+    <div className="pickup-modal__overlay" onClick={() => { if (!busy) onClose(); }}>
+      <div className="pickup-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+        <div className="pickup-modal__header">
+          <div>
+            <h3 className="pickup-modal__title">{t.pickupModalTitle(customer.businessName)}</h3>
+            <p className="pickup-modal__subtitle">{t.pickupModalSubtitle}</p>
+          </div>
+          <button className="pickup-modal__close" onClick={onClose} disabled={busy} aria-label={t.close}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+          </button>
+        </div>
+
+        <div className="pickup-modal__body">
+          {loading ? (
+            <div className="go-loading"><div className="go-spinner" /></div>
+          ) : orders.length === 0 ? (
+            <div className="pickup-summary__empty" style={{ padding: 24 }}>{t.pickupModalEmpty}</div>
+          ) : (
+            <>
+              {batches.length > 0 && (
+                <label className="pickup-modal__target">
+                  <span>{t.pickupGroupTarget}</span>
+                  <select className="go-select" value={targetBatchId} onChange={e => setTargetBatchId(e.target.value)}>
+                    {batches.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {t.goPkgs(b.numberOfPackages)}
+                      </option>
+                    ))}
+                    <option value="">{t.pickupGroupNewBatch}</option>
+                  </select>
+                </label>
+              )}
+              <label className="pickup-modal__selectall">
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                {t.pickupSelectAll}
+                <span className="pickup-modal__selcount">{t.pickupModalSelected(selected.size)}</span>
+              </label>
+              <table className="go-orders-table" style={{ minWidth: 0 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 34 }} />
+                    <th>{t.goThTracking}</th>
+                    <th>{t.goThRecipient}</th>
+                    <th>{t.goThCityDistrict}</th>
+                    <th>{t.goThCollect}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map(o => (
+                    <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => toggle(o.id)}>
+                      <td><input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} onClick={e => e.stopPropagation()} /></td>
+                      <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                      <td>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</td>
+                      <td>{locCity(o.recipientCity, o.recipientCityGeo)}, {o.recipientDistrict}</td>
+                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          {error && <div className="pickup-modal__error">{error}</div>}
+        </div>
+
+        <div className="pickup-modal__footer">
+          <button className="go-action-btn go-action-btn--ghost" onClick={onClose} disabled={busy}>{t.cancel}</button>
+          <button className="go-action-btn go-action-btn--assign" onClick={handleGroup} disabled={busy || selected.size === 0}>
+            {busy ? t.pickupModalGrouping : t.pickupModalGroup}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

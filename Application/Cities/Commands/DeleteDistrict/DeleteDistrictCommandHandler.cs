@@ -3,6 +3,7 @@ using Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.Cities.Commands.DeleteDistrict;
 
 public sealed class DeleteDistrictCommandHandler : IRequestHandler<DeleteDistrictCommand>
@@ -17,7 +18,7 @@ public sealed class DeleteDistrictCommandHandler : IRequestHandler<DeleteDistric
             .FirstOrDefaultAsync(d => d.Id == request.Id && d.DateDeleted == null, cancellationToken)
             ?? throw new NotFoundException("District", request.Id);
 
-        district.DateDeleted = DateTime.Now;
+        district.DateDeleted = CustomTime.Now;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

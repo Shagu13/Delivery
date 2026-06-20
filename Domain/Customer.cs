@@ -52,7 +52,7 @@ public class Customer
 
     // ── Account status ───────────────────────────────────────────────────────
     public bool     IsActive  { get; set; } = true;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = CustomTime.Now;
 
     // ── Identity link ────────────────────────────────────────────────────────
     public required string ApplicationUserId { get; set; }

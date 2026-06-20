@@ -25,5 +25,5 @@ public class PasswordResetToken
 
     public DateTime ExpiresAt  { get; set; }
     public bool     IsUsed     { get; set; } = false;
-    public DateTime CreatedAt  { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt  { get; set; } = CustomTime.Now;
 }

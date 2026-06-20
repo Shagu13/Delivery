@@ -212,11 +212,11 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
 
         // Surface the first offending tab so the highlighted fields are visible.
         if (Object.keys(e).length > 0) {
-            if (e.name || e.phone || e.city || e.district || e.address || e.codAmount) {
+            if (e.name || e.phone || e.city || e.district || e.address || e.codAmount || e.svcPrice) {
                 setActiveTab('delivery');
             } else if (e.returnCity || e.returnDistrict || e.returnAddress) {
                 setActiveTab('type');
-            } else if (e.svcPrice || e.salary) {
+            } else if (e.salary) {
                 setActiveTab('financials');
             }
             setError(t.eomFixErrors);
@@ -388,14 +388,23 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         <option value="Recipient">{t.eomPayerRecipient}</option>
                                     </select>
                                 </Field>
+                                {/* COD (package price) and company service price shown side by side
+                                    so the admin can tell which to fix — a customer COD mistake vs. a
+                                    wrong service fee. Both are independent values. */}
                                 {payStatus === 'NotPaid' && (
-                                    <Field label={t.eomCodAmount} className="eom-col-2" error={errors.codAmount}>
+                                    <Field label={t.eomCodAmount} error={errors.codAmount}>
                                         <div className="eom-currency-wrap">
                                             <span className="eom-currency">₾</span>
                                             <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={codAmount} onChange={e => { setCodAmount(e.target.value); clearErr('codAmount'); }} placeholder="0.00" />
                                         </div>
                                     </Field>
                                 )}
+                                <Field label={t.eomSvcPrice} required error={errors.svcPrice}>
+                                    <div className="eom-currency-wrap">
+                                        <span className="eom-currency">₾</span>
+                                        <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={svcPrice} onChange={e => { setSvcPrice(e.target.value); clearErr('svcPrice'); }} placeholder="0.00" />
+                                    </div>
+                                </Field>
                                 <Field label={t.eomFragile} className="eom-col-2">
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                                         <input type="checkbox" checked={isFragile} onChange={e => setIsFragile(e.target.checked)} />
@@ -486,12 +495,8 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                         <fieldset className="modal__fieldset">
                             <legend className="modal__legend">{t.eomLegendFinancials}</legend>
                             <div className="eom-grid">
-                                <Field label={t.eomSvcPrice} required error={errors.svcPrice}>
-                                    <div className="eom-currency-wrap">
-                                        <span className="eom-currency">₾</span>
-                                        <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={svcPrice} onChange={e => { setSvcPrice(e.target.value); clearErr('svcPrice'); }} />
-                                    </div>
-                                </Field>
+                                {/* Company service price is edited on the Delivery tab, alongside the
+                                    COD, so the two are clearly separate. Salary/revenue stay here. */}
                                 <Field label={t.eomCourierSalary} error={errors.salary}>
                                     <div className="eom-currency-wrap">
                                         <span className="eom-currency">₾</span>

@@ -47,7 +47,7 @@ public class GroupOrder
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
 
     // ── Timestamps ───────────────────────────────────────────────────────────
-    public DateTime  CreatedAt              { get; set; } = DateTime.UtcNow;
+    public DateTime  CreatedAt              { get; set; } = CustomTime.Now;
     public DateTime? AcceptedAt             { get; set; }
     public DateTime? PickedUpAt             { get; set; }
     public DateTime? DeliveredToWarehouseAt { get; set; }

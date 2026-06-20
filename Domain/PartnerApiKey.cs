@@ -34,7 +34,7 @@ public class PartnerApiKey
 
     public bool IsActive { get; set; } = true;
 
-    public DateTime  CreatedAt  { get; set; } = DateTime.UtcNow;
+    public DateTime  CreatedAt  { get; set; } = CustomTime.Now;
     public DateTime? RevokedAt  { get; set; }
     public DateTime? LastUsedAt { get; set; }
 }

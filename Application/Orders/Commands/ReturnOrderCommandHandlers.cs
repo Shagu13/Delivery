@@ -4,6 +4,7 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.Orders.Commands;
 
 // ── AssignCourierToReturnOrder ────────────────────────────────────────────────
@@ -27,7 +28,7 @@ public sealed class AssignCourierToReturnOrderCommandHandler
             ?? throw new NotFoundException("Courier", request.CourierId);
 
         order.CourierId = courier.Id;
-        order.AssignedToCourierAt = DateTime.UtcNow;
+        order.AssignedToCourierAt = CustomTime.Now;
         order.Status    = OrderStatus.CourierAssignedToPickUp;
 
         await _context.SaveChangesAsync(ct);
@@ -61,7 +62,7 @@ public sealed class MarkReturnPickedUpCommandHandler
             throw new ConflictException($"Expected CourierAssignedToPickUp. Current: {order.Status}.");
 
         order.Status                  = OrderStatus.PickedUpFromRecipient;
-        order.PickedUpFromRecipientAt = DateTime.UtcNow;
+        order.PickedUpFromRecipientAt = CustomTime.Now;
 
         await _context.SaveChangesAsync(ct);
     }
@@ -94,7 +95,7 @@ public sealed class MarkReturnDeliveredToWarehouseCommandHandler
             throw new ConflictException($"Expected PickedUpFromRecipient. Current: {order.Status}.");
 
         order.Status                 = OrderStatus.DeliveredReturnOrderToWarehouse;
-        order.DeliveredToWarehouseAt = DateTime.UtcNow;
+        order.DeliveredToWarehouseAt = CustomTime.Now;
 
         // Recipient-paid return: the courier collected the company service fee in cash
         // from the recipient. Record it so it flows into the courier's cash settlement
@@ -129,7 +130,7 @@ public sealed class MarkReturnedToSenderCommandHandler
             throw new ConflictException("Only Return orders can be marked ReturnedToSender via this endpoint.");
 
         order.Status      = OrderStatus.ReturnedToSender;
-        order.DeliveredAt = DateTime.UtcNow;
+        order.DeliveredAt = CustomTime.Now;
 
         await _context.SaveChangesAsync(ct);
 

@@ -26,8 +26,8 @@ public class WebhookDelivery
     public WebhookDeliveryStatus Status { get; set; } = WebhookDeliveryStatus.Pending;
 
     public int       AttemptCount       { get; set; }
-    public DateTime  NextAttemptAt      { get; set; } = DateTime.UtcNow;
-    public DateTime  CreatedAt          { get; set; } = DateTime.UtcNow;
+    public DateTime  NextAttemptAt      { get; set; } = CustomTime.Now;
+    public DateTime  CreatedAt          { get; set; } = CustomTime.Now;
     public DateTime? LastAttemptAt      { get; set; }
     public int?      ResponseStatusCode { get; set; }
     public string?   LastError          { get; set; }

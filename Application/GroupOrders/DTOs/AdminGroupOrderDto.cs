@@ -7,6 +7,9 @@ public sealed record AdminGroupOrderDto(
     Guid   Id,
     DateTime CreatedAt,
     OrderStatus Status,
+    // Customer link (null for legacy/guest batches) — used by the admin Pick-ups
+    // view to unite all of one customer's same-day batches under a single card.
+    Guid?  CustomerId,
     // Sender
     string  SenderFirstName,
     string  SenderLastName,

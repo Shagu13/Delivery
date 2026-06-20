@@ -70,7 +70,7 @@ public class CustomerSettlement
 
     // ── Meta ─────────────────────────────────────────────────────────────────
     /// <summary>The batch's placement date (copied from GroupOrder/Order CreatedAt).</summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = CustomTime.Now;
 
     /// <summary>When the invoice was last recomputed or had a payment recorded. Null until first update.</summary>
     public DateTime? UpdatedAt { get; set; }

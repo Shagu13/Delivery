@@ -70,7 +70,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
         }
 
         // 6. Generate token
-        var expiresAt = DateTime.UtcNow.AddMinutes(480);
+        var expiresAt = CustomTime.Now.AddMinutes(480);
         var token = _jwtGenerator.GenerateToken(user, role, courierId, customerId);
 
         return new LoginResultDto(

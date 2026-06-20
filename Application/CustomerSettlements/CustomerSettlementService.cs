@@ -103,7 +103,7 @@ internal static class CustomerSettlementService
                 TotalCompanyServicePriceOwedToCompany     = figures.CompanyServicePriceOwed,
                 TotalAmountOfCollectedCodPaidByCompany    = figures.CodPaidToCustomer,
                 TotalAmountPaidToCompanyForCompanyService = figures.ServicePaidByCustomer,
-                DateDeleted                               = figures.OrdersPlaced == 0 ? DateTime.UtcNow : null,
+                DateDeleted                               = figures.OrdersPlaced == 0 ? CustomTime.Now : null,
             };
             context.CustomerSettlements.Add(settlement);
         }
@@ -135,8 +135,8 @@ internal static class CustomerSettlementService
         {
             if (existing is { DateDeleted: null })
             {
-                existing.DateDeleted = DateTime.UtcNow;
-                existing.UpdatedAt   = DateTime.UtcNow;
+                existing.DateDeleted = CustomTime.Now;
+                existing.UpdatedAt   = CustomTime.Now;
                 await context.SaveChangesAsync(ct);
             }
             return;
@@ -177,9 +177,9 @@ internal static class CustomerSettlementService
         existing.TotalCompanyServicePriceOwedToCompany     = figures.CompanyServicePriceOwed;
         existing.TotalAmountOfCollectedCodPaidByCompany    = figures.CodPaidToCustomer;
         existing.TotalAmountPaidToCompanyForCompanyService = figures.ServicePaidByCustomer;
-        existing.UpdatedAt                                 = DateTime.UtcNow;
+        existing.UpdatedAt                                 = CustomTime.Now;
         existing.DateDeleted                               = figures.OrdersPlaced == 0
-            ? existing.DateDeleted ?? DateTime.UtcNow
+            ? existing.DateDeleted ?? CustomTime.Now
             : null;
     }
 

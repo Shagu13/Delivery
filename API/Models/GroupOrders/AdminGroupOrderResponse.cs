@@ -5,6 +5,8 @@ public sealed record AdminGroupOrderResponse(
     Guid    Id,
     DateTime CreatedAt,
     string  Status,
+    // Customer link (null for legacy/guest batches) — used to unite a customer's same-day batches.
+    Guid?   CustomerId,
     // Sender
     string  SenderFirstName,
     string  SenderLastName,

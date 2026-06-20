@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
+import { useCart } from '../../contexts/useCart';
 import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
 import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
@@ -112,7 +113,10 @@ const APPENDABLE_GROUP_STATUSES = new Set(['Pending', 'AcceptedGroupOrder']);
 
 function canAddPackages(go: CustomerGroupOrder): boolean {
   const isReturnCard = go.orders.length > 0 && go.orders.every(o => o.orderType === 'Return');
-  return !isReturnCard && APPENDABLE_GROUP_STATUSES.has(go.status);
+  // Standalone single-order cards (awaiting admin grouping) carry no sender phone and
+  // have no real batch id, so "Add package" (which appends to a batch) can't target them.
+  const isStandaloneCard = !go.senderPhone;
+  return !isReturnCard && !isStandaloneCard && APPENDABLE_GROUP_STATUSES.has(go.status);
 }
 
 // How many individual packages in a group are cancelled — surfaced as a card
@@ -162,6 +166,7 @@ function buildParcelLabel(go: CustomerGroupOrder, o: CustomerOrder): ParcelLabel
 
 export function CustomerDashboard() {
   const { user, token, signOut } = useAuth();
+  const { count: cartCount } = useCart();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useLanguage();
@@ -284,6 +289,27 @@ export function CustomerDashboard() {
           </div>
           <div className="cust-mobile-topbar__right">
             <a
+              href="/cart"
+              className="cust-mobile-new"
+              aria-label={`${t.cartTitle}: ${cartCount}`}
+              style={{ position: 'relative' }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
+              {cartCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -4, right: -4, background: 'var(--color-accent)', color: '#fff',
+                  fontSize: '0.58rem', fontWeight: 800, lineHeight: 1, padding: '2px 4px', borderRadius: 100,
+                  minWidth: 15, textAlign: 'center',
+                }}>
+                  {cartCount > 99 ? '99+' : cartCount}
+                </span>
+              )}
+            </a>
+            <a
               href="/send"
               className="cust-mobile-new"
               aria-label={t.custNewShipment}
@@ -366,14 +392,38 @@ export function CustomerDashboard() {
             {view === 'profile'     && t.custNavProfile}
             {view === 'password'    && t.custTopbarPassword}
           </span>
-          {view === 'shipments' && (
-            <a href="/send" className="btn-primary">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <a
+              href="/cart"
+              className="btn-ghost"
+              aria-label={`${t.cartTitle}: ${cartCount}`}
+              title={t.cartTitle}
+              style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
               </svg>
-              {t.custNewShipment}
+              {t.cartNavLabel}
+              {cartCount > 0 && (
+                <span style={{
+                  background: 'var(--color-accent)', color: '#fff', fontSize: '0.62rem', fontWeight: 800,
+                  lineHeight: 1, padding: '2px 5px', borderRadius: 100, minWidth: 16, textAlign: 'center',
+                }}>
+                  {cartCount > 99 ? '99+' : cartCount}
+                </span>
+              )}
             </a>
-          )}
+            {view === 'shipments' && (
+              <a href="/send" className="btn-primary">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                {t.custNewShipment}
+              </a>
+            )}
+          </div>
         </div>
 
         <main className="dashboard__content">

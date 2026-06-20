@@ -4,6 +4,7 @@ using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using Domain;
 namespace Application.Orders.Commands;
 
 public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderCommand>
@@ -120,7 +121,7 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
                 if (request.StatusOverride.Value is OrderStatus.ReturnedToSender
                                                  or OrderStatus.ExchangeCompleted)
                 {
-                    order.DeliveredAt ??= DateTime.UtcNow;
+                    order.DeliveredAt ??= CustomTime.Now;
                 }
             }
         }

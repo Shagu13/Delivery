@@ -63,6 +63,8 @@ export interface AdminGroupOrder {
     id: string;
     createdAt: string;
     status: OrderStatus;
+    /** Customer link (null for legacy/guest batches). Used to unite a customer's same-day batches. */
+    customerId: string | null;
     senderFirstName: string;
     senderLastName: string;
     senderIdNumber: string | null;
@@ -95,6 +97,85 @@ export async function fetchGroupOrders(token: string, search?: string): Promise<
     });
     if (!res.ok) throw new Error('Failed to fetch group orders');
     return res.json();
+}
+
+// ── Pick-Up day summary + grouping (admin) ──────────────────────────────────────
+
+export interface PickupDayCustomer {
+    customerId: string;
+    businessName: string;
+    ordersPlaced: number;
+    unattachedOrders: number;
+}
+
+/** Per-customer order/unattached counts for a given day (YYYY-MM-DD). */
+export async function fetchPickupDay(token: string, date: string): Promise<PickupDayCustomer[]> {
+    const res = await fetch(`${BASE}/pickup-day?date=${encodeURIComponent(date)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch pickup day');
+    return res.json();
+}
+
+/** A customer's still-unattached orders for a given day, for the grouping modal. */
+export async function fetchCustomerUnattached(
+    token: string, customerId: string, date: string,
+): Promise<AdminOrder[]> {
+    const res = await fetch(
+        `${BASE}/customer-unattached?customerId=${encodeURIComponent(customerId)}&date=${encodeURIComponent(date)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) throw new Error('Failed to fetch unattached orders');
+    return res.json();
+}
+
+/**
+ * Links the chosen unattached orders to a batch. Pass targetGroupOrderId to append to a
+ * specific existing batch; omit it to reuse the customer's open same-day batch or create one.
+ */
+export async function attachOrdersToGroup(
+    token: string, customerId: string, date: string, orderIds: string[],
+    targetGroupOrderId?: string,
+): Promise<void> {
+    const res = await fetch(`${BASE}/attach`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId, date, orderIds, targetGroupOrderId: targetGroupOrderId ?? null }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Request failed' }));
+        throw new Error(err.title ?? 'Request failed');
+    }
+}
+
+/** Moves a single order from its current batch into another batch of the same customer. */
+export async function moveOrderToGroup(
+    token: string, orderId: string, targetGroupOrderId: string,
+): Promise<void> {
+    const res = await fetch(`${BASE}/move-order`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, targetGroupOrderId }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Request failed' }));
+        throw new Error(err.title ?? 'Request failed');
+    }
+}
+
+/** Merges the chosen source batches into the target batch. */
+export async function mergeGroupOrders(
+    token: string, targetGroupOrderId: string, sourceGroupOrderIds: string[],
+): Promise<void> {
+    const res = await fetch(`${BASE}/merge`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetGroupOrderId, sourceGroupOrderIds }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Request failed' }));
+        throw new Error(err.title ?? 'Request failed');
+    }
 }
 
 export async function fetchMyPickups(token: string): Promise<AdminGroupOrder[]> {

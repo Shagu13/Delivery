@@ -556,6 +556,15 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("AssignedToCourierAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CancellationComment")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("CancellationReason")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal?>("CodPaidToCustomerAmount")
                         .HasColumnType("decimal(18,2)");
 

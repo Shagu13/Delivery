@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
+using Domain;
 namespace API.Auth;
 
 /// <summary>
@@ -52,7 +53,7 @@ public sealed class ApiKeyAuthenticationHandler
         // Best-effort "last used" stamp; never fail the request over it.
         try
         {
-            key.LastUsedAt = DateTime.UtcNow;
+            key.LastUsedAt = CustomTime.Now;
             await _db.SaveChangesAsync();
         }
         catch

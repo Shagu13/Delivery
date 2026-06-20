@@ -38,6 +38,6 @@ public class District
     /// </summary>
     public bool IsCityTerritory { get; set; } = false;
 
-    public DateTime  CreatedAt       { get; set; } = DateTime.UtcNow;
+    public DateTime  CreatedAt       { get; set; } = CustomTime.Now;
     public DateTime? DateDeleted     { get; set; }
 }

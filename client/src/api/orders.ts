@@ -17,6 +17,15 @@ export const POSTPONE_REASON_LABELS: Record<PostponeReason, string> = {
     AddressNotFound:               'Address could not be found',
 };
 
+export type CancellationReason = 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other';
+
+export const CANCELLATION_REASON_LABELS: Record<CancellationReason, string> = {
+    DidNotLike: 'Did not like',
+    DidNotWant: 'Did not want',
+    WrongSize:  'Wrong size',
+    Other:      'Other',
+};
+
 export interface CourierOrder {
     id: string;
     trackingNumber: string;
@@ -121,8 +130,13 @@ export async function updateOrder(token: string, id: string, data: UpdateOrderRe
 // ── Courier ───────────────────────────────────────────────────────────────────
 export const markOrderDelivering = (token: string, id: string) => orderAction(token, id, 'delivering');
 export const markOrderDelivered  = (token: string, id: string) => orderAction(token, id, 'delivered');
+/** Delivered, but the recipient had already paid the sender directly (COD zeroed). */
+export const markOrderDeliveredPaidToSender = (token: string, id: string, serviceFeeAlsoPaidToSender: boolean) =>
+    orderAction(token, id, 'delivered-paid-to-sender', { serviceFeeAlsoPaidToSender });
 export const postponeOrder       = (token: string, id: string, reason: PostponeReason) =>
     orderAction(token, id, 'postpone', { reason });
+export const cancelDelivery      = (token: string, id: string, reason: CancellationReason, comment?: string) =>
+    orderAction(token, id, 'cancel-delivery', { reason, comment: comment ?? null });
 export const retryDelivery       = (token: string, id: string) => orderAction(token, id, 'retry-delivery');
 export const markReturnPickedUp           = (token: string, id: string) => orderAction(token, id, 'return-picked-up');
 export const markReturnDeliveredWarehouse = (token: string, id: string) => orderAction(token, id, 'return-delivered-warehouse');

@@ -4,6 +4,7 @@ using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Persistence;
 
+using Domain;
 namespace API.Webhooks;
 
 /// <summary>
@@ -78,7 +79,7 @@ public sealed class WebhookSenderService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var now = DateTime.UtcNow;
+        var now = CustomTime.Now;
 
         var due = await db.WebhookDeliveries
             .Include(d => d.Webhook)
@@ -115,7 +116,7 @@ public sealed class WebhookSenderService : BackgroundService
         CancellationToken ct)
     {
         delivery.AttemptCount++;
-        delivery.LastAttemptAt = DateTime.UtcNow;
+        delivery.LastAttemptAt = CustomTime.Now;
 
         try
         {
@@ -159,6 +160,6 @@ public sealed class WebhookSenderService : BackgroundService
 
         var backoff = Backoff[Math.Min(delivery.AttemptCount - 1, Backoff.Length - 1)];
         delivery.Status = WebhookDeliveryStatus.Pending;
-        delivery.NextAttemptAt = DateTime.UtcNow.Add(backoff);
+        delivery.NextAttemptAt = CustomTime.Now.Add(backoff);
     }
 }

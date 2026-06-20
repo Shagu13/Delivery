@@ -1,14 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { createGroupOrder, addOrdersToBatch, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { addOrdersToBatch, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
 import { getMyProfile, getMyOrders } from '../../api/customers';
 import type { Customer, CustomerGroupOrder } from '../../api/customers';
+import { useCart } from '../../contexts/useCart';
 import { fetchCities, fetchDistricts, fetchAllDistrictsFlat } from '../../api/cities';
 import type { City, District } from '../../api/cities';
 import { fetchWeightPriceTiers } from '../../api/weightPriceTiers';
 import type { WeightPriceTier } from '../../api/weightPriceTiers';
 import type {
-    CreateGroupOrderRequest,
     CreateGroupOrderResponse,
     OrderItemRequest,
     ValidationErrors,
@@ -174,6 +174,7 @@ export function CreateGroupOrderPage() {
     const { user, token } = useAuth();
     const { t, lang } = useLanguage();
     const navigate = useNavigate();
+    const { addItems } = useCart();
 
     // ── Append mode ────────────────────────────────────────────────────────────
     // /send?batch=<id> adds packages to an existing open batch instead of creating a
@@ -189,6 +190,10 @@ export function CreateGroupOrderPage() {
     const [packages,     setPackages]     = useState<OrderItemRequest[]>([{ ...EMPTY_PACKAGE }]);
     const [errors,       setErrors]       = useState<ValidationErrors>({});
     const [submitting,   setSubmitting]   = useState(false);
+    // Brief "added to cart" confirmation shown after stashing packages (stays on page).
+    const [justAdded,    setJustAdded]    = useState<number | null>(null);
+    const addedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (addedTimerRef.current) clearTimeout(addedTimerRef.current); }, []);
     const [globalError,  setGlobalError]  = useState<string | null>(null);
     const [result,       setResult]       = useState<CreateGroupOrderResponse | null>(null);
     const [customerPricing, setCustomerPricing] = useState<Pick<Customer, 'companyServiceCapitalPrice' | 'companyServiceCityPrice' | 'companyServiceDistrictPrice'> | null>(null);
@@ -448,43 +453,54 @@ export function CreateGroupOrderPage() {
             return;
         }
 
+        const ordersPayload: OrderItemRequest[] = packages.map(p => ({
+            ...p,
+            description: p.description?.trim() || undefined,
+            // Unpaid (COD) parcels: the recipient always pays the courier
+            // fee, so the chooser is hidden — pin the value to Recipient.
+            whoPaysForCompanyService: p.productPaymentStatus === 'NotPaid' ? 'Recipient' : p.whoPaysForCompanyService,
+            amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
+            companyServicePrice: p.companyServicePrice ?? undefined,
+            isCompanyServicePriceIncluded: serviceIncludedForced || !!p.isCompanyServicePriceIncluded,
+            weightPriceTierId: p.weightPriceTierId || undefined,
+            orderType: p.orderType,
+            returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
+            returnPickupCity:     p.orderType === 'Return' ? p.returnPickupCity?.trim()     : undefined,
+            returnPickupDistrict: p.orderType === 'Return' ? p.returnPickupDistrict?.trim() : undefined,
+        }));
+
+        // ── New orders → cart ─────────────────────────────────────────────────
+        // Brand-new orders are stashed in the cart. The customer stays on the page so
+        // they can add more packages; they place everything later from the cart.
+        if (!appendMode) {
+            addItems(ordersPayload, {
+                senderFirstName:        sender.senderFirstName,
+                senderLastName:         sender.senderLastName,
+                senderIdNumber:         sender.senderIdNumber?.trim() || undefined,
+                senderBusinessName:     sender.senderBusinessName,
+                senderPhone:            sender.senderPhone,
+                alternativeSenderPhone: sender.alternativeSenderPhone.trim() || undefined,
+                pickUpCity:             sender.pickUpCity,
+                pickUpDistrict:         sender.pickUpDistrict,
+                pickUpAddress:          sender.pickUpAddress,
+                note:                   sender.note.trim() || undefined,
+            });
+            // Reset just the package editors (keep sender/pickup) for the next package.
+            setPackages([{ ...EMPTY_PACKAGE }]);
+            setErrors({});
+            setGlobalError(null);
+            setImportedCount(null);
+            setJustAdded(ordersPayload.length);
+            if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+            addedTimerRef.current = setTimeout(() => setJustAdded(null), 4000);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+
+        // ── Append mode → straight into the existing open batch ───────────────
         setSubmitting(true);
         try {
-            const ordersPayload: OrderItemRequest[] = packages.map(p => ({
-                ...p,
-                description: p.description?.trim() || undefined,
-                // Unpaid (COD) parcels: the recipient always pays the courier
-                // fee, so the chooser is hidden — pin the value to Recipient.
-                whoPaysForCompanyService: p.productPaymentStatus === 'NotPaid' ? 'Recipient' : p.whoPaysForCompanyService,
-                amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
-                companyServicePrice: p.companyServicePrice ?? undefined,
-                isCompanyServicePriceIncluded: serviceIncludedForced || !!p.isCompanyServicePriceIncluded,
-                weightPriceTierId: p.weightPriceTierId || undefined,
-                orderType: p.orderType,
-                returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
-                returnPickupCity:     p.orderType === 'Return' ? p.returnPickupCity?.trim()     : undefined,
-                returnPickupDistrict: p.orderType === 'Return' ? p.returnPickupDistrict?.trim() : undefined,
-            }));
-
-            let response: CreateGroupOrderResponse;
-            if (appendMode) {
-                response = await addOrdersToBatch(batchId!, ordersPayload, token!);
-            } else {
-                const payload: CreateGroupOrderRequest = {
-                    senderFirstName:    sender.senderFirstName,
-                    senderLastName:     sender.senderLastName,
-                    senderIdNumber:     sender.senderIdNumber?.trim() || undefined,
-                    senderBusinessName: sender.senderBusinessName,
-                    senderPhone:        sender.senderPhone,
-                    alternativeSenderPhone: sender.alternativeSenderPhone.trim() || undefined,
-                    pickUpCity:         sender.pickUpCity,
-                    pickUpDistrict:     sender.pickUpDistrict,
-                    pickUpAddress:      sender.pickUpAddress,
-                    note:               sender.note.trim() || undefined,
-                    orders:             ordersPayload,
-                };
-                response = await createGroupOrder(payload, token!);
-            }
+            const response = await addOrdersToBatch(batchId!, ordersPayload, token!);
             setResult(response);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err) {
@@ -599,6 +615,23 @@ export function CreateGroupOrderPage() {
 
     return (
         <div className="page">
+            {justAdded !== null && (
+                <div role="status" style={{
+                    position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 200,
+                    display: 'flex', alignItems: 'center', gap: 12, background: 'var(--color-text)', color: 'var(--color-bg)',
+                    borderRadius: 'var(--radius-md)', padding: '12px 18px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                    fontSize: '0.875rem', fontWeight: 600,
+                }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
+                        <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {t.cartAddedToast(justAdded)}
+                    <Link to="/cart" style={{ color: 'var(--color-accent)', fontWeight: 700, textDecoration: 'underline' }}>
+                        {t.cartGoToCart}
+                    </Link>
+                </div>
+            )}
             <main className="page__main">
                 <div className="page__intro">
                     <p className="page__eyebrow">{t.cgoEyebrow}</p>
@@ -781,12 +814,21 @@ export function CreateGroupOrderPage() {
                         <button type="submit" className="btn btn--primary" disabled={submitting || (appendMode && !appendBatch)}>
                             {submitting ? (
                                 <><span className="btn__spinner" />{appendMode ? t.cgoAppendSubmitting : t.cgoSubmitting}</>
-                            ) : (
+                            ) : appendMode ? (
                                 <>
-                                    {appendMode ? t.cgoAppendSubmit : t.cgoSubmit}
+                                    {t.cgoAppendSubmit}
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                         <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
+                                </>
+                            ) : (
+                                <>
+                                    <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+                                        <circle cx="7" cy="15.5" r="1" fill="currentColor" />
+                                        <circle cx="14" cy="15.5" r="1" fill="currentColor" />
+                                        <path d="M1 1.5h2.2l1.9 9.4a1.4 1.4 0 0 0 1.4 1.1h6.8a1.4 1.4 0 0 0 1.4-1.1L16.5 4.5H4.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                    {t.cgoAddToCart}
                                 </>
                             )}
                         </button>
