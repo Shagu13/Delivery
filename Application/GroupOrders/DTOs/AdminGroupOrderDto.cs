@@ -76,5 +76,8 @@ public sealed record AdminOrderDto(
     DateTime CreatedAt,
     DateTime? DeliveryDateFrom,
     DateTime? DeliveryDateTo,
-    DateTime? DeliveredAt
+    DateTime? DeliveredAt,
+    // Why a courier cancelled the delivery (null unless cancelled by courier).
+    CancellationReason? CancellationReason = null,
+    string?             CancellationComment = null
 );

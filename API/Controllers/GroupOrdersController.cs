@@ -975,7 +975,9 @@ public sealed class GroupOrdersController : BaseController
                 CreatedAt:                        o.CreatedAt,
                 DeliveryDateFrom:                 o.DeliveryDateFrom,
                 DeliveryDateTo:                   o.DeliveryDateTo,
-                DeliveredAt:                      o.DeliveredAt
+                DeliveredAt:                      o.DeliveredAt,
+                CancellationReason:               o.CancellationReason?.ToString(),
+                CancellationComment:              o.CancellationComment
             )).ToList()
         );
 }

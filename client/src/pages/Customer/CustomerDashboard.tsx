@@ -762,6 +762,12 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                       </td>
                       <td style={{ padding: '10px 16px' }}>
                         <StatusBadge status={o.status} />
+                        {CANCELLED_STATUSES.has(o.status) && o.cancellationReason && (
+                          <div style={{ marginTop: 4, fontSize: '0.72rem', color: '#ef4444', maxWidth: 200, lineHeight: 1.35 }}>
+                            {t.cdCancelReasons[o.cancellationReason]}
+                            {o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text)', fontSize: '0.82rem', fontWeight: 600 }}>
                         {o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : '—'}

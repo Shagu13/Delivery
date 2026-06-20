@@ -57,6 +57,8 @@ export interface AdminOrder {
     deliveryDateFrom: string | null;
     deliveryDateTo: string | null;
     deliveredAt: string | null;
+    cancellationReason?: 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other' | null;
+    cancellationComment?: string | null;
 }
 
 export interface AdminGroupOrder {

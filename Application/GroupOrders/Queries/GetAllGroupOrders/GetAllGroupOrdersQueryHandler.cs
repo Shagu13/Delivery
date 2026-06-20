@@ -109,7 +109,9 @@ public sealed class GetAllGroupOrdersQueryHandler
                     CreatedAt:                        o.CreatedAt,
                     DeliveryDateFrom:                 o.DeliveryDateFrom,
                     DeliveryDateTo:                   o.DeliveryDateTo,
-                    DeliveredAt:                      o.DeliveredAt))
+                    DeliveredAt:                      o.DeliveredAt,
+                    CancellationReason:               o.CancellationReason,
+                    CancellationComment:              o.CancellationComment))
                 .ToList()
         )).ToList();
     }

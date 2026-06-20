@@ -71,6 +71,10 @@ export interface CustomerOrder {
   /** True when amountToCollectForPackage is the all-in price (product + service fee bundled). */
   isCompanyServicePriceIncluded?: boolean;
   amountToCollectForPackage?: number | null;
+  /** Why a courier cancelled the delivery (null unless cancelled). */
+  cancellationReason?: 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other' | null;
+  /** Free-text note captured for the "Other" reason. */
+  cancellationComment?: string | null;
 }
 
 export interface CustomerGroupOrder {

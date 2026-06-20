@@ -71,5 +71,8 @@ public sealed record AdminOrderResponse(
     DateTime CreatedAt,
     DateTime? DeliveryDateFrom,
     DateTime? DeliveryDateTo,
-    DateTime? DeliveredAt
+    DateTime? DeliveredAt,
+    // Courier cancellation reason ("DidNotLike" | "DidNotWant" | "WrongSize" | "Other") + optional note.
+    string? CancellationReason = null,
+    string? CancellationComment = null
 );
