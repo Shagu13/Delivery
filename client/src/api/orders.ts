@@ -105,7 +105,19 @@ export const sendOrderToCity        = (token: string, id: string) => orderAction
 export const assignCourierToOrder   = (token: string, id: string, courierId: string) =>
     orderAction(token, id, 'assign-courier', { courierId });
 export const cancelOrderByAdmin          = (token: string, id: string) => orderAction(token, id, 'cancel-by-admin');
-export const adminMarkOrderDelivered     = (token: string, id: string) => orderAction(token, id, 'admin-mark-delivered');
+/**
+ * Admin force-marks a Send/Exchange order delivered to recipient. Optionally assigns a
+ * courier (only applied when the order has none, so the delivery is attributed for
+ * courier settlement) and/or sets the courier salary — both atomic with the delivery.
+ */
+export const adminMarkOrderDelivered     = (
+    token: string, id: string, opts?: { courierId?: string; salary?: number },
+) => orderAction(
+    token, id, 'admin-mark-delivered',
+    opts && (opts.courierId != null || opts.salary != null)
+        ? { courierId: opts.courierId ?? null, salary: opts.salary ?? null }
+        : undefined,
+);
 export const adminMarkReturnAtWarehouse  = (token: string, id: string) => orderAction(token, id, 'admin-mark-at-warehouse');
 export const setCourierSalary       = (token: string, id: string, salary: number) =>
     orderAction(token, id, 'courier-salary', { salary });

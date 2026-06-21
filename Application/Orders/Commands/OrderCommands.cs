@@ -44,8 +44,12 @@ public sealed record CancelOrderByAdminCommand(Guid OrderId) : IRequest;
 /// <summary>
 /// Admin force-marks a Send/Exchange order as delivered to recipient from any active status.
 /// Applies the same cash-collection logic as the courier version.
+/// Optionally assigns a courier (only when the order has none — so the delivery is
+/// attributed for courier settlement) and/or sets the courier salary, both atomically
+/// with the delivery so the finance flow stays intact.
 /// </summary>
-public sealed record AdminMarkOrderDeliveredCommand(Guid OrderId) : IRequest;
+public sealed record AdminMarkOrderDeliveredCommand(
+    Guid OrderId, Guid? CourierId = null, decimal? Salary = null) : IRequest;
 
 /// <summary>
 /// Admin force-marks a Return order as delivered to warehouse from any active status.

@@ -594,6 +594,9 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
 
+        if (order.OrderType == OrderType.Return)
+            throw new ConflictException("Return orders are delivered to the warehouse, not the recipient.");
+
         var terminalStatuses = new[]
         {
             OrderStatus.DeliveredToRecipient,
@@ -604,6 +607,32 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
         };
         if (terminalStatuses.Contains(order.Status))
             throw new ConflictException($"Order is already in a terminal status: {order.Status}.");
+
+        // Attribute the delivery to a courier when none is assigned yet, so the order
+        // is picked up live by that courier's daily settlement. Never overrides an
+        // existing assignee.
+        if (order.CourierId is null && request.CourierId is Guid courierId)
+        {
+            var courierExists = await _context.Couriers
+                .AnyAsync(c => c.Id == courierId, cancellationToken);
+            if (!courierExists)
+                throw new NotFoundException("Courier", courierId);
+
+            order.CourierId = courierId;
+        }
+
+        // Set/refresh the courier salary atomically with the delivery and recompute
+        // CompanyRevenue, mirroring SetCourierSalaryCommand, so the settlement is complete.
+        if (request.Salary is decimal salary)
+        {
+            if (salary < 0)
+                throw new ValidationException(new[] {
+                    new FluentValidation.Results.ValidationFailure("Salary", "Courier salary must be a non-negative value.")
+                });
+
+            order.CourierSalary  = salary;
+            order.CompanyRevenue = order.CompanyServicePrice - salary;
+        }
 
         var wasNotPaid = order.ProductPaymentStatus == PaymentStatus.NotPaid;
 

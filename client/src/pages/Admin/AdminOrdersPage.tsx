@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder } from '../../api/orders';
+import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMarkOrderDelivered } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
@@ -107,6 +107,20 @@ function isAssignable(o: AdminOrderItem): boolean {
       || o.status === 'OrderIsOnItsWayToRecipientsCity'
       || o.status === 'CourierAssignedToDeliver'
       || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
+}
+
+// Terminal statuses an order can no longer move past — shared by the deliver guard.
+const DELIVERED_TERMINAL_STATUSES = [
+  'DeliveredToRecipient', 'ExchangeCompleted',
+  'DeliveredReturnOrderToWarehouse', 'ReturnedToSender',
+  'CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted', 'AllDelivered',
+];
+
+// Orders the admin can force-mark "delivered to recipient" from the Packages page:
+// any non-terminal Send/Exchange order. Return orders are excluded — their final leg
+// is a warehouse drop-off, not a recipient delivery.
+function isDeliverable(o: AdminOrderItem): boolean {
+  return o.orderType !== 'Return' && !DELIVERED_TERMINAL_STATUSES.includes(o.status);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -320,11 +334,12 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [editingOrder,  setEditingOrder]  = useState<AdminOrderItem | null>(null);
   const [viewingOrder,  setViewingOrder]  = useState<AdminOrderItem | null>(null);
 
-  // ── Mode toggle: 'assign' | 'prices' ────────────────────────────────────────
-  type BulkMode = 'assign' | 'prices';
+  // ── Mode toggle: 'assign' | 'prices' | 'deliver' ────────────────────────────
+  type BulkMode = 'assign' | 'prices' | 'deliver';
   const [bulkMode,       setBulkMode]       = useState<BulkMode>('assign');
   const [bulkCourierId,  setBulkCourierId]  = useState('');
   const [bulkAssigning,  setBulkAssigning]  = useState(false);
+  const [bulkDelivering, setBulkDelivering] = useState(false);
   // Salary warning/modal (moved from Group Orders)
   const [showSalaryWarning, setShowSalaryWarning] = useState(false);
   const [showSalaryModal,   setShowSalaryModal]   = useState(false);
@@ -432,7 +447,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const orders = data?.items ?? [];
 
   const selectableOrders = useMemo(() =>
-    bulkMode === 'assign' ? orders.filter(isAssignable) : orders,
+    bulkMode === 'assign'  ? orders.filter(isAssignable)  :
+    bulkMode === 'deliver' ? orders.filter(isDeliverable) :
+    orders,
   [orders, bulkMode]);
 
   const allSelected  = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id));
@@ -490,20 +507,34 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const cancelBulk = () => { setShowBulkModal(false); setBulkPrice(''); setBulkSalary(''); };
 
-  // ── Assign courier ───────────────────────────────────────────────────────────
-  const missingSalaryOrders = useMemo(() =>
-    [...selected]
+  // ── Assign courier / Mark delivered ──────────────────────────────────────────
+  // The pool of selected orders the current bulk action actually operates on —
+  // scoped to the same orders the action will touch so the price/salary prompts
+  // never list rows the action would skip.
+  const actionPool = useMemo(() => {
+    const picked = [...selected]
       .map(id => orders.find(o => o.id === id))
-      .filter((o): o is AdminOrderItem => !!o && o.courierSalary == null),
-  [selected, orders]);
+      .filter((o): o is AdminOrderItem => !!o);
+    if (bulkMode === 'assign')  return picked.filter(isAssignable);
+    if (bulkMode === 'deliver') return picked.filter(isDeliverable);
+    return picked;
+  }, [selected, orders, bulkMode]);
+
+  const missingSalaryOrders = useMemo(() =>
+    actionPool.filter(o => o.courierSalary == null),
+  [actionPool]);
 
   // Orders with no company service price set (0 / null) — must be priced before
-  // assigning, mirroring the salary requirement.
+  // assigning or delivering, mirroring the salary requirement.
   const missingPriceOrders = useMemo(() =>
-    [...selected]
-      .map(id => orders.find(o => o.id === id))
-      .filter((o): o is AdminOrderItem => !!o && !o.companyServicePrice),
-  [selected, orders]);
+    actionPool.filter(o => !o.companyServicePrice),
+  [actionPool]);
+
+  // Deliverable selected orders with no courier yet — they need one chosen so the
+  // delivery is attributed to a courier for settlement.
+  const missingCourierOrders = useMemo(() =>
+    actionPool.filter(o => !o.courierId),
+  [actionPool]);
 
   const handleBulkAssign = async () => {
     if (!bulkCourierId || selected.size === 0) return;
@@ -554,6 +585,63 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     await Promise.all([load(reloadParams), refreshUnpricedCount()]);
     showToast(fail === 0 ? `Assigned courier to ${ok} order${ok !== 1 ? 's' : ''}.`
                          : `Assigned ${ok}, failed ${fail}.`, fail > 0 ? 'err' : 'ok');
+  };
+
+  // ── Mark delivered ─────────────────────────────────────────────────────────
+  // Same gating as Assign (price + salary must be set), plus a courier requirement:
+  // any unassigned order needs a courier chosen so the delivery is attributed for
+  // settlement. Delegates the actual cash/COD/service-fee handling to the backend,
+  // which mirrors the courier's own "delivered to recipient" action.
+  const handleBulkDeliver = async () => {
+    if (actionPool.length === 0) { showToast('No deliverable orders selected.', 'err'); return; }
+    if (missingPriceOrders.length > 0) {
+      const drafts: Record<string, string> = {};
+      const checked = new Set<string>();
+      missingPriceOrders.forEach(o => { drafts[o.id] = ''; checked.add(o.id); });
+      setPriceDrafts(drafts);
+      setPriceChecked(checked);
+      setShowPriceWarning(true);
+      return;
+    }
+    if (missingSalaryOrders.length > 0) {
+      const drafts: Record<string, string> = {};
+      const checked = new Set<string>();
+      missingSalaryOrders.forEach(o => { drafts[o.id] = ''; checked.add(o.id); });
+      setSalaryDrafts(drafts);
+      setSalaryChecked(checked);
+      setShowSalaryWarning(true);
+      return;
+    }
+    if (missingCourierOrders.length > 0 && !bulkCourierId) {
+      showToast('Choose a courier for the unassigned order(s) first.', 'err');
+      return;
+    }
+    await doDeliver();
+  };
+
+  const doDeliver = async () => {
+    setBulkDelivering(true);
+    const targets = [...selected]
+      .map(id => orders.find(o => o.id === id))
+      .filter((o): o is AdminOrderItem => !!o && isDeliverable(o));
+    let ok = 0; let fail = 0;
+    await Promise.all(targets.map(async o => {
+      try {
+        // Assign the chosen courier only when the order has none — never override an
+        // existing assignee. Salary is already persisted by the salary modal above.
+        await adminMarkOrderDelivered(token, o.id,
+          !o.courierId && bulkCourierId ? { courierId: bulkCourierId } : undefined);
+        ok++;
+      }
+      catch { fail++; }
+    }));
+    setBulkDelivering(false);
+    setBulkCourierId('');
+    setSelected(new Set());
+    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
+    await Promise.all([load(reloadParams), refreshUnpricedCount()]);
+    showToast(fail === 0 ? `Marked ${ok} order${ok !== 1 ? 's' : ''} delivered.`
+                         : `Delivered ${ok}, failed ${fail}.`, fail > 0 ? 'err' : 'ok');
   };
 
   const handleSalarySave = async () => {
@@ -760,6 +848,15 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               </svg>
               Set Prices
             </button>
+            <button
+              className={`go-seg__btn${bulkMode === 'deliver' ? ' go-seg__btn--active' : ''}`}
+              onClick={() => setBulkMode('deliver')}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8.5l3.5 3.5L14 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Mark Delivered
+            </button>
           </div>
 
           {/* Print labels for the selected orders — third bulk action. */}
@@ -861,6 +958,46 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                   </button>
                 </div>
               )}
+            </>
+          )}
+
+          {/* Mark Delivered mode */}
+          {bulkMode === 'deliver' && (
+            <>
+              {/* Courier picker — only needed when a selected order has no courier yet. */}
+              {missingCourierOrders.length > 0 && (
+                <div className="go-select-wrap">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon">
+                    <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                  <select
+                    className="go-select"
+                    value={bulkCourierId}
+                    onChange={e => setBulkCourierId(e.target.value)}
+                    style={{ minWidth: 220 }}
+                  >
+                    <option value="">Courier for unassigned…</option>
+                    {couriers.map(c => (
+                      <option key={c.courierId} value={c.courierId}>
+                        {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
+                      </option>
+                    ))}
+                  </select>
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron">
+                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              )}
+              <button
+                className="aop-bulk-btn aop-bulk-btn--deliver"
+                disabled={bulkDelivering || actionPool.length === 0}
+                onClick={handleBulkDeliver}
+              >
+                {bulkDelivering
+                  ? 'Marking…'
+                  : `Mark ${actionPool.length} delivered`}
+              </button>
             </>
           )}
 
@@ -1122,7 +1259,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 const statusMeta      = getStatusMeta(order.status, lang);
                 const missingPrice    = order.companyServicePrice === 0;
                 const missingSalary   = order.courierSalary == null || order.courierSalary === 0;
-                const selectable      = bulkMode === 'assign' ? isAssignable(order) : true;
+                const selectable      = bulkMode === 'assign'  ? isAssignable(order)
+                                      : bulkMode === 'deliver' ? isDeliverable(order)
+                                      : true;
                 return (
                   <tr key={order.id}
                     className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}${!selectable ? ' aop-tr--disabled' : ''}`}
@@ -1454,6 +1593,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         .aop-bulk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .aop-bulk-btn--price  { background: #8b5cf6; color: #fff; }
         .aop-bulk-btn--salary { background: #10b981; color: #fff; }
+        .aop-bulk-btn--deliver { background: #16a34a; color: #fff; }
         .aop-bulk-btn--apply  { background: var(--color-accent); color: #fff; }
         .aop-bulk-btn--ghost  { background: var(--color-bg-3); border: 1px solid var(--color-border); color: var(--color-text); }
         .aop-bulk-input-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

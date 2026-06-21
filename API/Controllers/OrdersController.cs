@@ -10,6 +10,7 @@ using Application.Orders.Queries;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System.Security.Claims;
 
 namespace API.Controllers;
@@ -195,9 +196,12 @@ public sealed class OrdersController : BaseController
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> AdminMarkDelivered(Guid id, CancellationToken ct)
+    public async Task<IActionResult> AdminMarkDelivered(
+        Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] AdminMarkDeliveredRequest? request,
+        CancellationToken ct)
     {
-        await Sender.Send(new AdminMarkOrderDeliveredCommand(id), ct);
+        await Sender.Send(new AdminMarkOrderDeliveredCommand(id, request?.CourierId, request?.Salary), ct);
         return NoContent();
     }
 
@@ -398,6 +402,8 @@ public sealed class OrdersController : BaseController
 
 // ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetCourierSalaryRequest(decimal Salary);
+/// <summary>Optional body for admin-mark-delivered: assign a courier when unassigned and/or set salary.</summary>
+public sealed record AdminMarkDeliveredRequest(Guid? CourierId, decimal? Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);
 public sealed record CancelDeliveryRequest(Domain.Enums.CancellationReason Reason, string? Comment);
