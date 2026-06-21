@@ -60,7 +60,19 @@ Controllers derive from `BaseController` (`API/Controllers/BaseController.cs`), 
 - `CurrentUserId` — `ApplicationUser.Id` from the JWT `sub` claim
 - `CurrentCourierId` — domain `Courier.Id` from the JWT `courierId` claim (Courier endpoints only)
 
+### Time
+All server timestamps come from `Domain.CustomTime.Now` / `.Today` (Georgian Standard Time, UTC+4, no DST) — never `DateTime.Now`/`UtcNow` (the host runs in UTC). Values are persisted and serialized as Georgian wall-clock **without an offset**, so a plain `.Date` comparison against a Georgian day is correct in EF queries. The frontend reasons about the Georgian calendar day via `client/src/utils/georgianTime.ts` (`georgianToday`, `toDateKey`, `georgianDateKeyOf`).
+
+### Realtime (SignalR)
+`Persistence/Interceptors/RealtimeDashboardInterceptor.cs` is an EF `SaveChanges` interceptor that, after any commit touching orders, pushes "refetch" pings over SignalR (`API/Realtime/NotificationsHub.cs`): to all admins when the order set changes, and to a specific courier when something is assigned to/away from them. Handlers may also ping explicitly via `IRealtimeNotifier` (`NotifyAdminsOrdersChanged` / `NotifyCourierOrdersChanged`). The frontend subscribes with the `useOrdersChangedSignal` hook (`adminOrdersChanged` / `courierOrdersChanged`) to silently refetch instead of polling.
+
 ### Key domain concepts
+
+**Order lifecycle & status flow** (`Domain/Enums/OrderStatus.cs` — one enum shared by `GroupOrder` and `Order`)
+- A customer places a **GroupOrder** (batch). Its child **Order** records exist from creation and mirror the GroupOrder's status through the **pickup flow**: `Pending → AcceptedGroupOrder → CourierAssignedToPickUp → CourierOnTheWayToPickUp → CourierDeliveringToWarehouse → DeliveredToWarehouse → AdminAcceptedOrderInWareHouse`.
+- At `AdminAcceptedOrderInWareHouse` each Order begins its **own last-mile flow**: `[non-Tbilisi: OrderIsOnItsWayToRecipientsCity →] CourierAssignedToDeliver → CourierDeliveringTheOrderToRecipient → DeliveredToRecipient`, with a `DeliveryPostponed` retry loop. Order pricing (`CompanyServicePrice`) is set at creation, not at warehouse acceptance.
+- Standalone **Return** orders skip the batch and run their own flow: `Pending → CourierAssignedToPickUp → PickedUpFromRecipient → DeliveredReturnOrderToWarehouse → ReturnedToSender`.
+- The **GroupOrder pickup courier** (`GroupOrder.CourierId`, drives `PickedUpAt`) is distinct from each Order's **last-mile delivery courier** (`Order.CourierId`); settlement attribution keys off `Order.CourierId` + the delivery timestamp.
 
 **Order types** (`Domain/Enums/OrderType.cs`)
 - `Send` — standard delivery from warehouse to recipient
@@ -105,6 +117,7 @@ Controllers derive from `BaseController` (`API/Controllers/BaseController.cs`), 
 - `client/src/contexts/` — `AuthProvider` (JWT stored in `localStorage` as `delivery_auth`), `LanguageProvider`
 - Auth token is read from `AuthContext` (`useAuth()` hook) and passed as `Authorization: Bearer <token>` header in every API call
 - Roles: `Admin`, `Courier`, `Customer` — enforced both in `ProtectedRoute` (frontend) and controller `[Authorize(Roles = "...")]` attributes (backend)
+- **Admin page naming is offset from its routes/views**: the **Pick-Up** page (`AdminDashboard`, `activeView === 'orders'`) drives the **GroupOrder/pickup** flow (accept batch, assign pickup courier, accept-in-warehouse, group/merge same-day batches); the **Delivery / Packages** page (`AdminOrdersPage`, `activeView === 'packages'`) drives the per-**Order** last-mile flow (assign delivery courier, set prices/salary, mark delivered). Both are single-day, navigated by a Georgian-day selector.
 
 ### Production migration policy
 Migrations run automatically in development. In production they only run when `RUN_MIGRATIONS=true` environment variable is set. The startup code logs a warning if pending migrations exist but the flag is absent.
