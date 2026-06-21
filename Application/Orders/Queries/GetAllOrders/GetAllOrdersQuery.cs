@@ -14,5 +14,6 @@ public sealed record GetAllOrdersQuery(
     bool    Postponed  = false,  // when true, show only DeliveryPostponed orders
     int     Page       = 1,
     int     PageSize   = 50,
-    bool?   Assigned   = null    // null = all, true = courier assigned, false = unassigned
+    bool?   Assigned   = null,   // null = all, true = courier assigned, false = unassigned
+    DateTime? Date     = null    // when set, only orders created on this Georgian day
 ) : IRequest<PagedResult<AdminOrderListDto>>;

@@ -14,6 +14,7 @@ import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { georgianToday, toDateKey } from '../../utils/georgianTime';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ async function fetchAllOrders(
   params: {
     city?: string; district?: string; search?: string;
     courierId?: string; unpriced?: boolean; assigned?: boolean;
-    page?: number; pageSize?: number;
+    date?: string; page?: number; pageSize?: number;
   }
 ): Promise<PagedResult> {
   const qs = new URLSearchParams();
@@ -78,6 +79,7 @@ async function fetchAllOrders(
   if (params.courierId)  qs.set('courierId', params.courierId);
   if (params.unpriced)   qs.set('unpriced',  'true');
   if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
+  if (params.date)       qs.set('date',      params.date);
   if (params.page)       qs.set('page',      String(params.page));
   if (params.pageSize)   qs.set('pageSize',  String(params.pageSize));
   const res = await fetch(`/api/orders?${qs}`, {
@@ -87,9 +89,10 @@ async function fetchAllOrders(
   return res.json();
 }
 
-async function fetchUnpricedCount(token: string, courierId?: string): Promise<number> {
+async function fetchUnpricedCount(token: string, courierId?: string, date?: string): Promise<number> {
   const qs = new URLSearchParams({ unpriced: 'true', pageSize: '1', page: '1' });
   if (courierId) qs.set('courierId', courierId);
+  if (date)      qs.set('date', date);
   const res = await fetch(`/api/orders?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -319,6 +322,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [filterCourier,   setFilterCourier]   = useState<Courier | null>(null);
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
   const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
+  // Day navigator — mirrors the Pick-Up page; filters by Order.CreatedAt (Georgian day).
+  const [selectedDate,    setSelectedDate]    = useState<Date>(() => georgianToday());
   const [couriers,        setCouriers]        = useState<Courier[]>([]);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
@@ -354,7 +359,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [priceSaving,       setPriceSaving]       = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false });
+  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: toDateKey(georgianToday()) });
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
@@ -366,9 +371,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   }, [token]);
 
   const refreshUnpricedCount = useCallback(async () => {
-    const count = await fetchUnpricedCount(token, filterCourier?.courierId);
+    const count = await fetchUnpricedCount(token, filterCourier?.courierId, toDateKey(selectedDate));
     setUnpricedCount(count);
-  }, [token, filterCourier]);
+  }, [token, filterCourier, selectedDate]);
 
   useEffect(() => { void refreshUnpricedCount(); }, [refreshUnpricedCount]);
 
@@ -379,14 +384,16 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchAllOrders(token, { ...params, pageSize: PAGE_SIZE });
+      // Always scope to the selected Georgian day (day navigator), so every reload
+      // path stays on the chosen day without threading it through each call site.
+      const result = await fetchAllOrders(token, { ...params, date: toDateKey(selectedDate), pageSize: PAGE_SIZE });
       setData(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : t.aopFailedLoad);
     } finally {
       setLoading(false);
     }
-  }, [token, t]);
+  }, [token, t, selectedDate]);
 
   useEffect(() => {
     const prev = filterRef.current;
@@ -397,6 +404,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       courierId: filterCourier?.courierId ?? '',
       unpriced:  filterUnpriced,
       assigned:  assignTab === 'assigned',
+      date:      toDateKey(selectedDate),
     };
 
     const filterChanged =
@@ -405,7 +413,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       prev.search    !== next.search    ||
       prev.courierId !== next.courierId ||
       prev.unpriced  !== next.unpriced  ||
-      prev.assigned  !== next.assigned;
+      prev.assigned  !== next.assigned  ||
+      prev.date      !== next.date;
 
     filterRef.current = next;
 
@@ -430,7 +439,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, page, load]);
+  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, selectedDate, page, load]);
 
   const cities = useMemo(() => {
     if (!data) return [];
@@ -684,10 +693,39 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setFilterCourier(null); setFilterUnpriced(false);
   };
 
+  // ── Day navigator (mirrors the Pick-Up page) ─────────────────────────────────
+  const shiftDay = (delta: number) => setSelectedDate(prev => {
+    const d = new Date(prev); d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d;
+  });
+  const isToday = toDateKey(selectedDate) === toDateKey(georgianToday());
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="aop-root">
+
+      {/* Day navigator — filters packages by the day they were placed (Order.CreatedAt) */}
+      <div className="aop-daynav">
+        <button className="aop-daynav__arrow" onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        <div className="aop-daynav__label">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+          <span>{selectedDate.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>
+          {isToday && <span className="aop-daynav__today">{t.pickupToday}</span>}
+        </div>
+        <button className="aop-daynav__arrow" onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        {!isToday && (
+          <button className="aop-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>
+            {t.pickupToday}
+          </button>
+        )}
+      </div>
 
       {/* Pending Assign / Assigned tabs + column toggles */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, alignSelf: 'flex-start', marginBottom: 12, flexWrap: 'wrap' }}>
@@ -1429,6 +1467,15 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
       <style>{`
         .aop-root { display: flex; flex-direction: column; min-height: 0; }
+
+        /* ── Day navigator (mirrors Pick-Up page) ── */
+        .aop-daynav { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
+        .aop-daynav__arrow { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer; transition: all var(--transition); }
+        .aop-daynav__arrow:hover { background: var(--color-bg-3); border-color: var(--color-text-subtle); }
+        .aop-daynav__label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; font-weight: 700; color: var(--color-text); }
+        .aop-daynav__today { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent); background: var(--color-accent-dim); border-radius: 100px; padding: 2px 8px; }
+        .aop-daynav__jump { margin-left: 4px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.76rem; font-weight: 600; padding: 6px 12px; cursor: pointer; transition: all var(--transition); }
+        .aop-daynav__jump:hover { background: var(--color-bg-3); color: var(--color-text); }
 
         /* ── Column toggles ── */
         .aop-col-toggle {
