@@ -196,6 +196,24 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 </div>
             )}
 
+            {/* Admin shortcut: force a batch straight to the warehouse from any earlier
+                pickup stage (e.g. the sender dropped the packages off in person, no courier
+                pickup). Skips the remaining steps; each package becomes ready for last-mile
+                delivery. The normal DeliveredToWarehouse → Accept step keeps its own button. */}
+            {(status === 'Pending' || status === 'AcceptedGroupOrder' ||
+              status === 'CourierAssignedToPickUp' || status === 'CourierOnTheWayToPickUp' ||
+              status === 'CourierDeliveringToWarehouse') &&
+              !showCourierPicker && !showPickupDate && (
+                <button className="go-action-btn go-action-btn--warehouse" disabled={busy}
+                    title={t.goForceWarehouseConfirm}
+                    onClick={() => {
+                        if (!window.confirm(t.goForceWarehouseConfirm)) return;
+                        run(() => acceptGroupOrderInWarehouse(token, groupOrder.id), t.goAcceptedInWarehouse);
+                    }}>
+                    {t.goForceWarehouse}
+                </button>
+            )}
+
             {/* Step 6: Accept batch in warehouse */}
             {status === 'DeliveredToWarehouse' && (
                 <button className="go-action-btn go-action-btn--warehouse" disabled={busy}

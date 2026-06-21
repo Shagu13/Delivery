@@ -20,8 +20,24 @@ public sealed class AcceptGroupOrderInWarehouseCommandHandler
             .FirstOrDefaultAsync(go => go.Id == request.GroupOrderId, cancellationToken)
             ?? throw new NotFoundException("GroupOrder", request.GroupOrderId);
 
-        if (groupOrder.Status != OrderStatus.DeliveredToWarehouse)
-            throw new ConflictException($"Expected DeliveredToWarehouse. Current: {groupOrder.Status}.");
+        // Normally reached from DeliveredToWarehouse (courier dropped the batch off),
+        // but admins can also force a batch straight to the warehouse from any earlier
+        // pickup-flow stage — e.g. the sender brought the packages in themselves and no
+        // courier pickup happened. Pricing is set at creation, so skipping the in-between
+        // steps only forgoes the pickup timestamps; nothing financial is lost.
+        var forceable = new[]
+        {
+            OrderStatus.Pending,
+            OrderStatus.AcceptedGroupOrder,
+            OrderStatus.CourierAssignedToPickUp,
+            OrderStatus.CourierOnTheWayToPickUp,
+            OrderStatus.CourierDeliveringToWarehouse,
+            OrderStatus.DeliveredToWarehouse,
+        };
+        if (!forceable.Contains(groupOrder.Status))
+            throw new ConflictException(
+                $"Cannot accept in warehouse from status {groupOrder.Status}. " +
+                "The batch is already in/past the warehouse or in a terminal status.");
 
         groupOrder.Status = OrderStatus.AdminAcceptedOrderInWareHouse;
 
