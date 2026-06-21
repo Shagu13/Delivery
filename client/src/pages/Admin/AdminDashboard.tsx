@@ -922,7 +922,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   // Grouped (batches) vs Non-grouped (customers with un-grouped orders) view.
   const [pickupMode,      setPickupMode]      = useState<'grouped' | 'ungrouped'>('grouped');
   const [customerFilter,  setCustomerFilter]  = useState<string>('');   // '' = all customers
-  const [ungroupedSearch, setUngroupedSearch] = useState('');
+  // Non-grouped view: optional customer narrowing among customers with 2+ batches.
+  const [ungroupedCustomerFilter, setUngroupedCustomerFilter] = useState<string>('');
 
   // Map a group order's package + its parent into the shape EditOrderModal expects.
   // Sender fields come from the group order; fields the modal doesn't read are stubbed.
@@ -1121,16 +1122,39 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
     [dayOrders, customerFilter],
   );
 
-  // Non-grouped view = customers whose day isn't already one batch: they still have
-  // standalone (un-grouped) orders and/or more than one open batch to consolidate.
-  const ungroupedCustomers = useMemo(() => {
-    const q = ungroupedSearch.trim().toLowerCase();
-    return daySummary.filter(c => {
-      const batchCount = mergeableByCustomer.get(c.customerId)?.length ?? 0;
-      const needsAttention = c.unattachedOrders > 0 || batchCount > 1;
-      return needsAttention && (!q || c.businessName.toLowerCase().includes(q));
-    });
-  }, [daySummary, ungroupedSearch, mergeableByCustomer]);
+  // Non-grouped view = customers who placed 2+ separate group orders on the selected
+  // day, counted regardless of each batch's status or package count.
+  const multiBatchCustomers = useMemo(() => {
+    const counts = new Map<string, { name: string; n: number }>();
+    for (const go of groupOrders) {
+      if (!go.customerId) continue;
+      if (georgianDateKeyOf(go.createdAt) !== dayKey) continue;
+      const e = counts.get(go.customerId);
+      if (e) e.n += 1; else counts.set(go.customerId, { name: go.senderBusinessName, n: 1 });
+    }
+    return [...counts.entries()]
+      .filter(([, v]) => v.n >= 2)
+      .map(([id, v]) => ({ id, name: v.name, count: v.n }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [groupOrders, dayKey]);
+
+  // The batches shown in the Non-grouped list: every batch belonging to a multi-batch
+  // customer that day, optionally narrowed to one customer, same-customer batches grouped.
+  const ungroupedListOrders = useMemo(() => {
+    const ids = new Set(multiBatchCustomers.map(c => c.id));
+    return groupOrders
+      .filter(go => !!go.customerId
+                 && ids.has(go.customerId)
+                 && georgianDateKeyOf(go.createdAt) === dayKey
+                 && (!ungroupedCustomerFilter || go.customerId === ungroupedCustomerFilter))
+      .sort((a, b) =>
+        a.customerId !== b.customerId
+          ? a.senderBusinessName.localeCompare(b.senderBusinessName)
+          : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [groupOrders, dayKey, multiBatchCustomers, ungroupedCustomerFilter]);
+
+  // The list the shared batch renderer draws, depending on the active toggle.
+  const displayList = pickupMode === 'ungrouped' ? ungroupedListOrders : listOrders;
 
   const hasLocationFilter = filterCity || filterDistricts.length > 0;
   const hasFilters        = search || hasLocationFilter || filterStatus;
@@ -1140,13 +1164,14 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
   // AND are not in a terminal status (delivered/cancelled orders shown in History only).
   const visibleOrdersFor = useCallback((go: AdminGroupOrder) => {
     const orders = go.orders.filter(o => !ACTIVE_ORDER_STATUSES_ONLY.has(o.status));
-    if (filterParty !== 'recipient' || (!filterCity && filterDistricts.length === 0)) return orders;
+    // The Non-grouped view has no location filter — always show every active package.
+    if (pickupMode === 'ungrouped' || filterParty !== 'recipient' || (!filterCity && filterDistricts.length === 0)) return orders;
     return orders.filter(o => {
       if (filterCity                && o.recipientCity     !== filterCity)     return false;
       if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
       return true;
     });
-  }, [filterParty, filterCity, filterDistricts]);
+  }, [pickupMode, filterParty, filterCity, filterDistricts]);
 
   // ── Date section grouping ─────────────────────────────────────────────────
   const groupByDate = (orders: AdminGroupOrder[]) => {
@@ -1254,62 +1279,44 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
         </div>
       </div>
 
-      {/* ── Non-grouped view: customers still holding un-grouped orders ── */}
+      {/* ── Non-grouped view: customers with 2+ batches for the day ── */}
       {pickupMode === 'ungrouped' && (
-        <div className="pickup-summary">
-          <div className="pickup-ungrouped-bar">
-            <div className="go-search" style={{ maxWidth: 340 }}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
-                <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-              </svg>
-              <input
-                type="text"
-                placeholder={t.pickupSearchCustomer}
-                value={ungroupedSearch}
-                onChange={e => setUngroupedSearch(e.target.value)}
-                autoComplete="off"
-              />
-              {ungroupedSearch && (
-                <button onClick={() => setUngroupedSearch('')} className="go-search-clear" aria-label="Clear search">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                </button>
-              )}
-            </div>
+        <div className="pickup-controls">
+          <div className="go-select-wrap">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon">
+              <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.3"/><path d="M3 14c0-2.5 2.2-4 5-4s5 1.5 5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            <select className="go-select" value={ungroupedCustomerFilter} onChange={e => setUngroupedCustomerFilter(e.target.value)}>
+              <option value="">{t.pickupAllCustomers}</option>
+              {multiBatchCustomers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.count})</option>)}
+            </select>
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
-          {ungroupedCustomers.length === 0 ? (
-            <div className="pickup-summary__empty">{t.pickupNoUngrouped}</div>
-          ) : (
-            <div className="pickup-summary__list">
-              {ungroupedCustomers.map(c => {
-                const batchCount = mergeableByCustomer.get(c.customerId)?.length ?? 0;
-                return (
-                <div className="pickup-cust" key={c.customerId}>
-                  <span className="pickup-cust__name" title={c.businessName}>{c.businessName}</span>
-                  {c.unattachedOrders > 0 && (
-                    <span className="pickup-cust__stat pickup-cust__stat--warn">{t.pickupUngrouped}: <b>{c.unattachedOrders}</b></span>
-                  )}
-                  {batchCount > 1 && (
-                    <span className="pickup-cust__stat pickup-cust__stat--warn">{t.pickupBatches}: <b>{batchCount}</b></span>
-                  )}
-                  <span className="pickup-cust__stat">{t.pickupOrdersPlaced}: <b>{c.ordersPlaced}</b></span>
-                  {c.unattachedOrders > 0 && (
-                    <button className="pickup-cust__group" onClick={() => setGroupingCustomer(c)}>
-                      {t.pickupGroupOrdersBtn}
-                    </button>
-                  )}
-                  {batchCount >= 2 && (
-                    <button
-                      className="pickup-cust__merge"
-                      onClick={() => setMergingCustomer({ name: c.businessName, batches: mergeableByCustomer.get(c.customerId) ?? [] })}
-                    >
-                      {t.pickupMergeBtn}
-                    </button>
-                  )}
-                </div>
-                );
-              })}
-            </div>
+
+          {/* Per-customer actions when one is selected: merge the day's open batches,
+              or group any still-standalone orders into a batch. */}
+          {ungroupedCustomerFilter && (() => {
+            const mergeable = mergeableByCustomer.get(ungroupedCustomerFilter) ?? [];
+            const summary   = daySummary.find(c => c.customerId === ungroupedCustomerFilter);
+            const name      = multiBatchCustomers.find(c => c.id === ungroupedCustomerFilter)?.name ?? summary?.businessName ?? '';
+            return (
+              <>
+                {mergeable.length >= 2 && (
+                  <button className="pickup-cust__merge" onClick={() => setMergingCustomer({ name, batches: mergeable })}>
+                    {t.pickupMergeBtn}
+                  </button>
+                )}
+                {summary && summary.unattachedOrders > 0 && (
+                  <button className="pickup-cust__group" onClick={() => setGroupingCustomer(summary ?? null)}>
+                    {t.pickupGroupOrdersBtn}
+                  </button>
+                )}
+              </>
+            );
+          })()}
+
+          {multiBatchCustomers.length === 0 && (
+            <span className="go-count">{t.pickupNoUngrouped}</span>
           )}
         </div>
       )}
@@ -1438,24 +1445,25 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
           </button>
         ))}
       </div>
+      </>)}
 
       {/* States */}
       {loading && <div className="go-loading"><div className="go-spinner" />{t.goLoadingOrders}</div>}
       {!loading && error && <div className="go-error">{error}</div>}
-      {!loading && !error && listOrders.length === 0 && (
+      {!loading && !error && displayList.length === 0 && (
         <div className="empty-state" style={{ padding: '48px 20px' }}>
           <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
             <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
             <path d="M12 16h16M12 22h10M12 28h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <span className="empty-state__text">{hasFilters ? t.goNoOrdersFilters : t.goNoOrders}</span>
+          <span className="empty-state__text">{pickupMode === 'ungrouped' ? t.pickupNoUngrouped : hasFilters ? t.goNoOrdersFilters : t.goNoOrders}</span>
         </div>
       )}
 
       {/* Group order list — date-sectioned accordion */}
-      {!loading && !error && listOrders.length > 0 && (() => {
-        // ── Flat view: recipient party + location filter active ──────────────
-        const showFlat = filterParty === 'recipient' && hasLocationFilter;
+      {!loading && !error && displayList.length > 0 && (() => {
+        // ── Flat view: recipient party + location filter active (Grouped only) ──
+        const showFlat = pickupMode === 'grouped' && filterParty === 'recipient' && hasLocationFilter;
 
         if (showFlat) {
           const flatOrders = listOrders.flatMap(go =>
@@ -1528,7 +1536,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
         }
 
         // ── Default: date-sectioned accordion ────────────────────────────────
-        const sections = groupByDate(listOrders);
+        const sections = groupByDate(displayList);
         return (
           <div className="go-list">
             {sections.map(({ label, items }) => {
@@ -1701,7 +1709,6 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
           </div>
         );
       })()}
-      </>)}
 
       {/* Action toast */}
       {actionToast && (
