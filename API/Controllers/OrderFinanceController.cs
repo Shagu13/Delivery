@@ -32,9 +32,10 @@ public sealed class OrderFinanceController : BaseController
     [ProducesResponseType(typeof(IReadOnlyList<OrderFinanceLineDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetForCustomer(
-        [FromQuery] Guid customerId, [FromQuery] DateOnly? date, CancellationToken ct)
+        [FromQuery] Guid customerId, [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        CancellationToken ct)
     {
-        var result = await Sender.Send(new GetCustomerOrderFinanceLinesQuery(customerId, date), ct);
+        var result = await Sender.Send(new GetCustomerOrderFinanceLinesQuery(customerId, date, monthly), ct);
         return Ok(result);
     }
 

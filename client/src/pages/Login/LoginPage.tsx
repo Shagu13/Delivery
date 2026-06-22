@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { login, AuthError } from '../../api/auth';
 import { useAuth } from '../../contexts/useAuth';
 import { FormField } from '../../components/ui/FormField';
+import { homeFor } from '../../components/ProtectedRoute';
 import { useLanguage } from '../../contexts/useLanguage';
 import './login.css';
 
@@ -15,10 +16,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
-    const dest =
-      user.role === 'Admin'    ? '/admin'    :
-      user.role === 'Customer' ? '/customer' : '/courier';
-    navigate(dest, { replace: true });
+    navigate(homeFor(user.role), { replace: true });
   }, [isAuthenticated, user, navigate]);
 
   const registered    = (location.state as { registered?:    boolean })?.registered    === true;
@@ -43,10 +41,7 @@ export function LoginPage() {
       if (from && from !== '/login') {
         navigate(from, { replace: true });
       } else {
-        const dest =
-          userData.role === 'Admin'    ? '/admin'    :
-          userData.role === 'Customer' ? '/customer' : '/courier';
-        navigate(dest, { replace: true });
+        navigate(homeFor(userData.role), { replace: true });
       }
     } catch (err) {
       setError(err instanceof AuthError ? err.message : 'An unexpected error occurred. Please try again.');

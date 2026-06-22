@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { formatGeorgianDateTime } from '../../utils/georgianTime';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import {
@@ -271,7 +272,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () => void }) {
     const { t } = useLanguage();
     const [customer, setCustomer] = useState<AdminCustomer | null>(null);
-    const [date, setDate] = useState(isoDate(new Date())); // defaults to today; '' = all dates
+    const [mode, setMode] = useState<'daily' | 'monthly'>('daily');
+    const [date, setDate] = useState(isoDate(new Date())); // daily: a day; monthly: any day in the month; '' = all dates
     const [lines, setLines] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -282,21 +284,29 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     const load = useCallback(() => {
         if (!customer) { setLines([]); return; }
         setLoading(true); setError(null);
-        fetchCustomerOrderFinance(customer.id, token, date || undefined)
+        fetchCustomerOrderFinance(customer.id, token, date || undefined, mode === 'monthly')
             .then(setLines)
             .catch(e => setError(e instanceof OrderFinanceApiError ? e.message : t.ofinErrLoad))
             .finally(() => setLoading(false));
-    }, [customer, date, token, t.ofinErrLoad]);
+    }, [customer, date, mode, token, t.ofinErrLoad]);
 
     useEffect(() => { load(); }, [load]);
 
     const todayStr = isoDate(new Date());
+    const monthStr = todayStr.slice(0, 7);
     const shiftDay = (delta: number) => setDate(prev => {
         const base = prev ? new Date(prev + 'T00:00:00') : new Date();
         base.setDate(base.getDate() + delta);
         return isoDate(base);
     });
-    const atToday = date !== '' && date >= todayStr;
+    const shiftMonth = (delta: number) => setDate(prev => {
+        const base = prev ? new Date(prev + 'T00:00:00') : new Date();
+        base.setDate(1);
+        base.setMonth(base.getMonth() + delta);
+        return isoDate(base);
+    });
+    // Disable "next" once we're at (or past) the current day / month.
+    const atToday = date !== '' && (mode === 'monthly' ? date.slice(0, 7) >= monthStr : date >= todayStr);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -309,12 +319,29 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                         onSelect={setCustomer}
                         onClear={() => { setCustomer(null); setLines([]); setError(null); }}
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                        {/* Daily / Monthly toggle */}
+                        <div className="go-seg" style={{ display: 'inline-flex' }}>
+                            <button className={`go-seg__btn ${mode === 'daily' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('daily')}>{t.ofinViewDaily}</button>
+                            <button className={`go-seg__btn ${mode === 'monthly' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('monthly')}>{t.ofinViewMonthly}</button>
+                        </div>
                         <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.ofinFilterDelivered}</span>
-                        <button onClick={() => shiftDay(-1)} title={t.statPrevDay} style={dateNavBtn}>‹</button>
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
-                        <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay}
-                            style={{ ...dateNavBtn, opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
+                        {mode === 'daily' ? (
+                            <>
+                                <button onClick={() => shiftDay(-1)} title={t.statPrevDay} style={dateNavBtn}>‹</button>
+                                <input type="date" value={date} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
+                                <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay}
+                                    style={{ ...dateNavBtn, opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
+                            </>
+                        ) : (
+                            <>
+                                <button onClick={() => shiftMonth(-1)} title={t.ofinPrevMonth} style={dateNavBtn}>‹</button>
+                                <input type="month" value={date ? date.slice(0, 7) : ''} max={monthStr}
+                                    onChange={e => setDate(e.target.value ? e.target.value + '-01' : '')} style={dateInputStyle} />
+                                <button onClick={() => !atToday && shiftMonth(1)} disabled={atToday} title={t.ofinNextMonth}
+                                    style={{ ...dateNavBtn, opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
+                            </>
+                        )}
                         {date && (
                             <button onClick={() => setDate('')} title={t.finAllDates}
                                 style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)', width: 28, height: 28, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
@@ -339,11 +366,11 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                 </div>
             ) : lines.length === 0 ? (
                 <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                    {date ? t.ofinNoneDay : t.ofinNoneAll}
+                    {!date ? t.ofinNoneAll : mode === 'monthly' ? t.ofinNoneMonth : t.ofinNoneDay}
                 </div>
             ) : (
                 <CustomerSettleCard
-                    key={customer.id + '|' + date}
+                    key={customer.id + '|' + mode + '|' + date}
                     customerId={customer.id}
                     lines={lines}
                     token={token}
@@ -559,7 +586,18 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                         <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--color-text)' }}>{o.trackingNumber}</span>
                                         <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>{o.orderType}</span>
                                     </div>
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)} · {o.recipientCity}</div>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+                                        {recipientDisplayName(o.recipientName, t.recipientUnknown)}
+                                    </div>
+                                    {/* Full delivery address: city, district, street */}
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 1 }}>
+                                        {[o.recipientCity, o.recipientDistrict, o.recipientAddress].filter(Boolean).join(', ')}
+                                    </div>
+                                    {/* Placement + delivery timestamps (Georgian wall-clock) */}
+                                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.68rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+                                        <span>{t.ofinColPlaced}: <strong style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{formatGeorgianDateTime(o.createdAt)}</strong></span>
+                                        <span>{t.ofinColDelivered}: <strong style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{o.deliveredAt ? formatGeorgianDateTime(o.deliveredAt) : t.ofinNotDelivered}</strong></span>
+                                    </div>
                                 </div>
 
                                 {/* Service — customer → company (sender-pays only) */}

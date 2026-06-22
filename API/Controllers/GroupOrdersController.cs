@@ -178,17 +178,19 @@ public sealed class GroupOrdersController : BaseController
 
     // ── GET /api/grouporders ─────────────────────────────────────────────────
     [HttpGet]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(IReadOnlyList<AdminGroupOrderResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll([FromQuery] string? search, CancellationToken ct)
     {
         var result = await Sender.Send(new GetAllGroupOrdersQuery(search), ct);
-        return Ok(result.Select(go => MapToAdminResponse(go)).ToList());
+        // Operators run the pick-up flow but must not see internal company revenue.
+        bool includeRevenue = !User.IsInRole("Operator");
+        return Ok(result.Select(go => MapToAdminResponse(go, includeRevenue)).ToList());
     }
 
-    // ── GET /api/grouporders/pickup-day?date=  (Admin Pick-Up page summary) ───
+    // ── GET /api/grouporders/pickup-day?date=  (Admin/Operator Pick-Up page summary) ───
     [HttpGet("pickup-day")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(IReadOnlyList<Application.GroupOrders.DTOs.PickupDayCustomerDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPickupDay([FromQuery] DateTime date, CancellationToken ct)
     {
@@ -319,7 +321,7 @@ public sealed class GroupOrdersController : BaseController
     // ══════════════════════════════════════════════════════════════════════════
 
     [HttpPut("{id:guid}/accept")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Accept(Guid id, CancellationToken ct)
     {

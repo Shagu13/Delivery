@@ -26,6 +26,7 @@ import AdminPartnersPage from './AdminPartnersPage';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
+import AdminOperatorsPage from './AdminOperatorsPage';
 import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
@@ -70,9 +71,12 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'history' | 'returnExchange' | 'finance';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'history' | 'returnExchange' | 'finance' | 'operators';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'history', 'returnExchange', 'finance'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'history', 'returnExchange', 'finance', 'operators'];
+
+// Views an Operator (partial-admin role) may open. Everything else is Admin-only.
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders'];
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -84,11 +88,17 @@ export function AdminDashboard() {
   const statusParam = searchParams.get('status') ?? '';
   const viewParam   = searchParams.get('view') ?? '';
 
+  // Operators are a partial-admin role: same dashboard, restricted to Overview + Pick-Up.
+  const isOperator = user?.role === 'Operator';
+
   // Seed the active view from the URL so a page refresh stays on the current page.
   const [sidebarView, setSidebarView] = useState<AdminView>(
     (ADMIN_VIEWS as readonly string[]).includes(viewParam) ? (viewParam as AdminView) : 'overview'
   );
-  const activeView: AdminView = tabParam === 'orders' ? 'orders' : sidebarView;
+  const requestedView: AdminView = tabParam === 'orders' ? 'orders' : sidebarView;
+  // Clamp Operators to their allowed views even if they hand-edit the URL.
+  const activeView: AdminView =
+    isOperator && !OPERATOR_VIEWS.includes(requestedView) ? 'overview' : requestedView;
 
   const goTo = (view: AdminView) => {
     // Persist the view in the URL (replace, no history spam) so refresh restores it.
@@ -103,7 +113,7 @@ export function AdminDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Live return/exchange badge count (SignalR) — shared with the staff nav.
-  const { returnExchange: returnExchangeCount } = useAdminPendingCounts(token ?? null, true);
+  const { returnExchange: returnExchangeCount } = useAdminPendingCounts(token ?? null, !isOperator);
 
   useEffect(() => {
     if (!token) return;
@@ -159,7 +169,7 @@ export function AdminDashboard() {
             }
           </svg>
         </button>
-        <span className="sidebar__role-badge">Admin</span>
+        <span className="sidebar__role-badge">{isOperator ? 'Operator' : 'Admin'}</span>
         <div className="sidebar__divider" />
         <p className="sidebar__section-label">{t.sidebarManagement}</p>
         <nav className="sidebar__nav">
@@ -179,6 +189,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.navPickUp}</span>
           </button>
+          {!isOperator && (<>
           <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')} title={t.navDelivery}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
@@ -271,6 +282,19 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.navFinance}</span>
           </button>
+          <button
+            className={`sidebar__link ${activeView === 'operators' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('operators')}
+            title={t.sidebarOperators}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="5" r="2.6" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M3 14c0-2.8 2.2-4.4 5-4.4s5 1.6 5 4.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M12.5 3.5l1 1 2-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="sidebar__link-text">{t.sidebarOperators}</span>
+          </button>
+          </>)}
         </nav>
         <div className="sidebar__footer">
           <LanguageToggle className="sidebar__lang-toggle" />
@@ -304,6 +328,7 @@ export function AdminDashboard() {
             {activeView === 'history' && t.topbarHistory}
             {activeView === 'returnExchange' && t.navReturnExchange}
             {activeView === 'finance' && t.navFinance}
+            {activeView === 'operators' && t.topbarOperators}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
@@ -315,8 +340,9 @@ export function AdminDashboard() {
           )}
         </div>
         <main className="dashboard__content">
-          {activeView === 'overview'  && <AdminOverview token={token ?? ''} />}
-          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} />}
+          {activeView === 'overview'  && <AdminOverview token={token ?? ''} isOperator={isOperator} />}
+          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isOperator} />}
+          {activeView === 'operators' && !isOperator && <AdminOperatorsPage token={token ?? ''} />}
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} />}
@@ -622,7 +648,7 @@ const STATUS_CLASS_MAP: Record<string, string> = {
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
 
-function AdminOverview({ token }: { token: string }) {
+function AdminOverview({ token, isOperator = false }: { token: string; isOperator?: boolean }) {
     const { t } = useLanguage();
     const [groupOrders, setGroupOrders] = useState<AdminGroupOrder[]>([]);
     const [couriers, setCouriersLocal] = useState<Courier[]>([]);
@@ -634,8 +660,9 @@ function AdminOverview({ token }: { token: string }) {
         let cancelled = false;
         Promise.all([
             fetchGroupOrders(token).catch(() => [] as AdminGroupOrder[]),
-            fetchCouriers(token).catch(() => [] as Courier[]),
-            fetchSmsBalance(token).catch(() => null as number | null),
+            // Operators have no access to courier/SMS data — skip those fetches.
+            isOperator ? Promise.resolve([] as Courier[]) : fetchCouriers(token).catch(() => [] as Courier[]),
+            isOperator ? Promise.resolve(null as number | null) : fetchSmsBalance(token).catch(() => null as number | null),
         ]).then(([go, co, sms]) => {
             if (cancelled) return;
             setGroupOrders(go);
@@ -644,7 +671,7 @@ function AdminOverview({ token }: { token: string }) {
             setLoading(false);
         });
         return () => { cancelled = true; };
-    }, [token]);
+    }, [token, isOperator]);
 
     const totalOrders = groupOrders.reduce((sum, go) => sum + go.orders.length, 0);
     const pendingPickup = groupOrders.filter(go =>
@@ -672,17 +699,20 @@ function AdminOverview({ token }: { token: string }) {
     // Low balance warning threshold
     const smsLow = smsBalance !== null && smsBalance < 50;
 
-    const stats = [
+    const stats: { label: string; value: string; sub: string; low?: boolean }[] = [
         { label: t.overviewTotalOrders ?? 'Total Orders', value: loading ? '…' : String(totalOrders), sub: t.overviewAllTime ?? 'All time' },
         { label: t.overviewPendingPickup ?? 'Pending Pickup', value: loading ? '…' : String(pendingPickup), sub: t.overviewAwaitingCourier ?? 'Awaiting courier' },
         { label: t.overviewInTransit ?? 'In Transit', value: loading ? '…' : String(inTransit), sub: t.overviewActiveDeliveries ?? 'Active deliveries' },
-        { label: t.overviewActiveCouriers ?? 'Active Couriers', value: loading ? '…' : String(activeCouriers), sub: t.overviewAvailableNow ?? 'Available now' },
-        {
-            label: 'SMS Credits',
-            value: smsBalanceDisplay,
-            sub: smsLow ? '⚠️ Low balance' : 'UBill balance',
-            low: smsLow,
-        },
+        // Courier roster + SMS credits are admin-only; operators don't see them.
+        ...(isOperator ? [] : [
+            { label: t.overviewActiveCouriers ?? 'Active Couriers', value: loading ? '…' : String(activeCouriers), sub: t.overviewAvailableNow ?? 'Available now' },
+            {
+                label: 'SMS Credits',
+                value: smsBalanceDisplay,
+                sub: smsLow ? '⚠️ Low balance' : 'UBill balance',
+                low: smsLow,
+            },
+        ]),
     ];
 
     return (
@@ -891,7 +921,7 @@ function DistrictMultiPicker({
   );
 }
 
-function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
+function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?: string; canManage?: boolean }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -1263,6 +1293,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
             {t.pickupToday}
           </button>
         )}
+        {canManage && (
         <div className="pickup-modes">
           <button
             className={`pickup-mode ${pickupMode === 'grouped' ? 'pickup-mode--active' : ''}`}
@@ -1277,6 +1308,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
             {t.pickupTabUngrouped}
           </button>
         </div>
+        )}
       </div>
 
       {/* ── Non-grouped view: customers with 2+ batches for the day ── */}
@@ -1525,7 +1557,8 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                         <AdminOrderRowActions order={o} storeName={o._go.senderBusinessName} couriers={couriers} token={token ?? ''}
                           onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
                           onRefresh={() => load(search)}
-                          onEdit={() => openEditOrder(o, o._go)} />
+                          canManage={canManage}
+                          onEdit={canManage ? () => openEditOrder(o, o._go) : undefined} />
                       </td>
                     </tr>
                   ))}
@@ -1613,6 +1646,7 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                           groupOrder={go} couriers={couriers} token={token ?? ''}
                           onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
                           onRefresh={() => load(search)}
+                          canManage={canManage}
                         />
                       </div>
 
@@ -1679,8 +1713,9 @@ function AdminOrders({ initialStatus = '' }: { initialStatus?: string }) {
                                           <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
                                             onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
                                             onRefresh={() => load(search)}
-                                            onEdit={() => openEditOrder(o, go)} />
-                                          {moveDestinations.length > 0 && (
+                                            canManage={canManage}
+                                            onEdit={canManage ? () => openEditOrder(o, go) : undefined} />
+                                          {canManage && moveDestinations.length > 0 && (
                                             <MoveOrderControl
                                               orderId={o.id}
                                               destinations={moveDestinations}

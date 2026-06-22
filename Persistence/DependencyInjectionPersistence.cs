@@ -75,7 +75,7 @@ public static class DependencyInjectionPersistence
         var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
         var config      = sp.GetRequiredService<IConfiguration>();
 
-        foreach (var role in new[] { "Admin", "Courier", "Customer" })
+        foreach (var role in new[] { "Admin", "Operator", "Courier", "Customer" })
         {
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));

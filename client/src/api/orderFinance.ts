@@ -6,6 +6,8 @@ export interface OrderFinanceLine {
     trackingNumber: string;
     recipientName: string;
     recipientCity: string;
+    recipientDistrict: string;
+    recipientAddress: string;
     orderType: string;
     status: string;
     productPaymentStatus: string; // "Paid" | "NotPaid"
@@ -84,11 +86,14 @@ export async function fetchMyOrderFinance(
 }
 
 // ── Admin — a customer's orders by delivery date ─────────────────────────────────
+// `monthly` widens the `date` filter to its whole calendar month (day ignored).
 export async function fetchCustomerOrderFinance(
-    customerId: string, token: string, date?: string,
+    customerId: string, token: string, date?: string, monthly = false,
 ): Promise<OrderFinanceLine[]> {
-    const q = date ? `&date=${date}` : '';
-    const res = await fetch(`/api/orderfinance/customer?customerId=${customerId}${q}`, {
+    const params = new URLSearchParams({ customerId });
+    if (date) params.set('date', date);
+    if (monthly) params.set('monthly', 'true');
+    const res = await fetch(`/api/orderfinance/customer?${params}`, {
         headers: authHeaders(token), cache: 'no-store',
     });
     return handle<OrderFinanceLine[]>(res, 'Failed to load orders');

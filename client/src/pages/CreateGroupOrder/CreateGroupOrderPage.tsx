@@ -157,11 +157,11 @@ function validate(
 
         if (pkg.orderType === 'Return') {
             if (!pkg.returnPickupCity?.trim())
-                errors[`orders[${i}].returnPickupCity`] = t.cgoErrCity;
+                errors[`orders[${i}].returnPickupCity`] = t.cgoErrReturnPickupCity;
             if (!pkg.returnPickupDistrict?.trim())
-                errors[`orders[${i}].returnPickupDistrict`] = t.cgoErrDistrict;
+                errors[`orders[${i}].returnPickupDistrict`] = t.cgoErrReturnPickupDistrict;
             if (!pkg.returnPickupAddress?.trim())
-                errors[`orders[${i}].returnPickupAddress`] = t.cgoErrAddress;
+                errors[`orders[${i}].returnPickupAddress`] = t.cgoErrReturnPickupAddress;
         }
     });
 

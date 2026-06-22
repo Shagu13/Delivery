@@ -4,7 +4,19 @@ import type { UserRole } from '../types/auth';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  role?: UserRole;
+  /** Single role or any-of list. Omit to allow any authenticated user. */
+  role?: UserRole | UserRole[];
+}
+
+// Where each role's dashboard lives. Admin and Operator share the /admin app
+// (Operator sees a restricted subset of it).
+export function homeFor(role?: UserRole): string {
+  switch (role) {
+    case 'Admin':
+    case 'Operator': return '/admin';
+    case 'Customer': return '/customer';
+    default:         return '/courier';
+  }
 }
 
 export function ProtectedRoute({ children, role }: ProtectedRouteProps) {
@@ -16,10 +28,12 @@ export function ProtectedRoute({ children, role }: ProtectedRouteProps) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (role && user?.role !== role) {
+  const allowed = role === undefined
+    || (Array.isArray(role) ? role.includes(user!.role) : user!.role === role);
+
+  if (!allowed) {
     // Authenticated but wrong role — send to their own dashboard
-    const home = user?.role === 'Admin' ? '/admin' : '/courier';
-    return <Navigate to={home} replace />;
+    return <Navigate to={homeFor(user?.role)} replace />;
   }
 
   return <>{children}</>;

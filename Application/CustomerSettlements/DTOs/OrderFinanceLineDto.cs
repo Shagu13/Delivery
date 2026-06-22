@@ -11,6 +11,8 @@ public sealed record OrderFinanceLineDto(
     string  TrackingNumber,
     string  RecipientName,
     string  RecipientCity,
+    string  RecipientDistrict,
+    string  RecipientAddress,
     string  OrderType,
     string  Status,
     string  ProductPaymentStatus,

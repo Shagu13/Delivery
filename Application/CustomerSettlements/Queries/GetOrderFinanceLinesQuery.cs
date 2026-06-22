@@ -51,7 +51,8 @@ public sealed class GetMyOrderFinanceLinesQueryHandler
 // ── Admin: a customer's order lines, dated by delivery ────────────────────────────
 public sealed record GetCustomerOrderFinanceLinesQuery(
     Guid      CustomerId,
-    DateOnly? Date
+    DateOnly? Date,
+    bool      Monthly = false
 ) : IRequest<IReadOnlyList<OrderFinanceLineDto>>;
 
 public sealed class GetCustomerOrderFinanceLinesQueryHandler
@@ -69,7 +70,9 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
             ?? throw new NotFoundException("Customer", request.CustomerId);
 
         var query = OrderFinanceQueries.ForCustomer(_context, request.CustomerId);
-        query = OrderFinanceQueries.FilterByDeliveredAt(query, request.Date);
+        query = request.Monthly
+            ? OrderFinanceQueries.FilterByDeliveredMonth(query, request.Date)
+            : OrderFinanceQueries.FilterByDeliveredAt(query, request.Date);
         // Drop orders with no company↔customer settlement: the recipient pays the
         // service fee (nothing invoiced to the sender) and there is no package COD
         // for the company to pay back.
@@ -169,6 +172,21 @@ internal static class OrderFinanceQueries
                              && (o.DeliveredAt ?? o.DeliveredToWarehouseAt) <  end);
     }
 
+    /// <summary>
+    /// Like <see cref="FilterByDeliveredAt"/> but narrows to the whole calendar month
+    /// of the given date (its day component is ignored). No date → all delivered orders.
+    /// </summary>
+    public static IQueryable<Order> FilterByDeliveredMonth(IQueryable<Order> query, DateOnly? date)
+    {
+        query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null);
+
+        if (date is not DateOnly d) return query;
+        var start = new DateTime(d.Year, d.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end   = start.AddMonths(1);
+        return query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt) >= start
+                             && (o.DeliveredAt ?? o.DeliveredToWarehouseAt) <  end);
+    }
+
     public static OrderFinanceLineDto ToDto(Order o)
     {
         bool     isReturn   = o.GroupOrderId is null;
@@ -180,6 +198,8 @@ internal static class OrderFinanceQueries
             TrackingNumber:               o.TrackingNumber,
             RecipientName:                o.RecipientName,
             RecipientCity:                o.RecipientCity,
+            RecipientDistrict:            o.RecipientDistrict,
+            RecipientAddress:             o.RecipientAddress,
             OrderType:                    o.OrderType.ToString(),
             Status:                       o.Status.ToString(),
             ProductPaymentStatus:         o.ProductPaymentStatus.ToString(),

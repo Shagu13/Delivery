@@ -48,3 +48,25 @@ export function georgianDateKeyOf(iso: string): string {
     const get = (t: string) => parts.find(p => p.type === t)?.value ?? '01';
     return `${get('year')}-${get('month')}-${get('day')}`;
 }
+
+/**
+ * Display a backend timestamp as Georgian wall-clock "DD.MM.YYYY HH:MM".
+ * New rows have no offset → read the literal parts; legacy Z/±offset rows are
+ * converted into Georgian time first. Empty/undefined → "".
+ */
+export function formatGeorgianDateTime(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const hasOffset = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso);
+    if (!hasOffset) {
+        const [date, time = ''] = iso.split('T');
+        const [y, mo, d] = date.split('-');
+        const [h = '00', mi = '00'] = time.split(':');
+        return `${d}.${mo}.${y} ${h}:${mi}`;
+    }
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date(iso));
+    const get = (t: string) => parts.find(p => p.type === t)?.value ?? '';
+    return `${get('day')}.${get('month')}.${get('year')} ${get('hour')}:${get('minute')}`;
+}

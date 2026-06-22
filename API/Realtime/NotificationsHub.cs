@@ -24,7 +24,9 @@ public sealed class NotificationsHub : Hub
     {
         var user = Context.User;
 
-        if (user?.IsInRole("Admin") == true)
+        // Operators share the admins' realtime channel so their Overview / Pick-Up
+        // pages refetch live (they simply ignore the pending-badge pings they can't see).
+        if (user?.IsInRole("Admin") == true || user?.IsInRole("Operator") == true)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, AdminsGroup);
             await base.OnConnectedAsync();

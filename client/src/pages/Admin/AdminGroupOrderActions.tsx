@@ -56,9 +56,12 @@ interface Props {
     onSuccess: (message: string) => void;
     onError: (message: string) => void;
     onRefresh: () => void;
+    // Operators get a restricted view: they may only accept a pending batch.
+    // Every other lifecycle action (assign, warehouse, decline, cancel…) is hidden.
+    canManage?: boolean;
 }
 
-export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh }: Props) {
+export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh, canManage = true }: Props) {
     const [busy, setBusy] = useState(false);
     const [showCourierPicker, setShowCourierPicker] = useState(false);
     const [selectedCourierId, setSelectedCourierId] = useState('');
@@ -123,23 +126,25 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 </button>
             )}
 
-            {/* Step 1: Accept or Decline pending order */}
+            {/* Step 1: Accept or Decline pending order. Operators may only Accept. */}
             {status === 'Pending' && (
                 <>
                     <button className="go-action-btn go-action-btn--accept" disabled={busy}
                         onClick={() => run(() => acceptGroupOrder(token, groupOrder.id), t.goGroupAccepted)}>
                         {t.goAccept}
                     </button>
-                    <button className="go-action-btn go-action-btn--decline" disabled={busy}
-                        onClick={() => run(() => declineGroupOrder(token, groupOrder.id), t.goGroupDeclined)}>
-                        {t.goDecline}
-                    </button>
+                    {canManage && (
+                        <button className="go-action-btn go-action-btn--decline" disabled={busy}
+                            onClick={() => run(() => declineGroupOrder(token, groupOrder.id), t.goGroupDeclined)}>
+                            {t.goDecline}
+                        </button>
+                    )}
                 </>
             )}
 
             {/* Step 1b: Assign courier / set pickup date. Shown while awaiting pickup —
                 AcceptedGroupOrder (first assignment) and CourierAssignedToPickUp (re-assign). */}
-            {(status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && !showCourierPicker && !showPickupDate && (
+            {canManage && (status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && !showCourierPicker && !showPickupDate && (
                 <>
                     <button className="go-action-btn go-action-btn--assign" disabled={busy}
                         onClick={() => setShowCourierPicker(true)}>
@@ -153,7 +158,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
             )}
 
             {/* Courier picker */}
-            {(status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && showCourierPicker && (
+            {canManage && (status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && showCourierPicker && (
                 <div className="go-courier-picker" onClick={e => e.stopPropagation()}>
                     <select className="go-select go-select--inline" value={selectedCourierId}
                         onChange={e => setSelectedCourierId(e.target.value)}>
@@ -176,7 +181,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
             )}
 
             {/* Pickup date picker */}
-            {showPickupDate && (
+            {canManage && showPickupDate && (
                 <div className="go-courier-picker" onClick={e => e.stopPropagation()}>
                     <input
                         type="date"
@@ -200,7 +205,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 pickup stage (e.g. the sender dropped the packages off in person, no courier
                 pickup). Skips the remaining steps; each package becomes ready for last-mile
                 delivery. The normal DeliveredToWarehouse → Accept step keeps its own button. */}
-            {(status === 'Pending' || status === 'AcceptedGroupOrder' ||
+            {canManage && (status === 'Pending' || status === 'AcceptedGroupOrder' ||
               status === 'CourierAssignedToPickUp' || status === 'CourierOnTheWayToPickUp' ||
               status === 'CourierDeliveringToWarehouse') &&
               !showCourierPicker && !showPickupDate && (
@@ -215,19 +220,19 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
             )}
 
             {/* Step 6: Accept batch in warehouse */}
-            {status === 'DeliveredToWarehouse' && (
+            {canManage && status === 'DeliveredToWarehouse' && (
                 <button className="go-action-btn go-action-btn--warehouse" disabled={busy}
                     onClick={() => run(() => acceptGroupOrderInWarehouse(token, groupOrder.id), t.goAcceptedInWarehouse)}>
                     {t.goAcceptInWarehouse}
                 </button>
             )}
 
-            {status === 'AdminAcceptedOrderInWareHouse' && (
+            {canManage && status === 'AdminAcceptedOrderInWareHouse' && (
                 <span className="go-action-hint">{t.goAssignPackagesHint}</span>
             )}
 
             {/* Cancel by Admin — always visible unless already terminal */}
-            {!isCancelledOrDone && (
+            {canManage && !isCancelledOrDone && (
                 <button
                     className="go-action-btn go-action-btn--cancel-admin"
                     disabled={busy}
@@ -255,9 +260,11 @@ interface OrderActionProps {
     onError: (msg: string) => void;
     onRefresh: () => void;
     onEdit?: () => void;
+    // Operators may only print the label; edit / send-to-city / cancel are hidden.
+    canManage?: boolean;
 }
 
-export function AdminOrderRowActions({ order, storeName, token, onSuccess, onError, onRefresh, onEdit }: OrderActionProps) {
+export function AdminOrderRowActions({ order, storeName, token, onSuccess, onError, onRefresh, onEdit, canManage = true }: OrderActionProps) {
     const [busy, setBusy] = useState(false);
     const { t } = useLanguage();
 
@@ -292,7 +299,7 @@ export function AdminOrderRowActions({ order, storeName, token, onSuccess, onErr
             </button>
 
             {/* Edit this package — opens the full order edit modal. */}
-            {onEdit && (
+            {canManage && onEdit && (
                 <button
                     type="button"
                     className="go-action-btn go-action-btn--ghost"
@@ -307,7 +314,7 @@ export function AdminOrderRowActions({ order, storeName, token, onSuccess, onErr
             )}
 
             {/* Step 7: non-Tbilisi → Send to City */}
-            {status === 'AdminAcceptedOrderInWareHouse' && !isTbilisi && (
+            {canManage && status === 'AdminAcceptedOrderInWareHouse' && !isTbilisi && (
                 <button className="go-action-btn go-action-btn--city" disabled={busy}
                     onClick={() => run(() => sendOrderToCity(token, order.id), t.goSentToCity(recipientCity))}>
                     {t.goSendToCity(recipientCity)}
@@ -315,7 +322,7 @@ export function AdminOrderRowActions({ order, storeName, token, onSuccess, onErr
             )}
 
             {/* Cancel single order by Admin — always available unless terminal */}
-            {!isTerminal && (
+            {canManage && !isTerminal && (
                 <button
                     className="go-action-btn go-action-btn--cancel-admin"
                     disabled={busy}
