@@ -145,6 +145,8 @@ export function CustomerFinancePage() {
 
     // Totals across the listed orders
     const codOutstanding = items.reduce((s, i) => s + ((i.codAmount ?? 0) - (i.codPaidToCustomerAmount ?? 0)), 0);
+    // COD the company has already paid out to the customer.
+    const codPaid = items.reduce((s, i) => s + (i.codPaidToCustomerAmount ?? 0), 0);
     const serviceOutstanding = items.reduce(
         (s, i) => i.whoPaysForCompanyService === 'Sender'
             ? s + (i.companyServicePrice - (i.servicePaidByCustomerAmount ?? 0))
@@ -192,10 +194,11 @@ export function CustomerFinancePage() {
                 </div>
             ) : (
                 <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
                         {[
                             { label: t.ofinSumOrders,     value: items.length.toString(), accent: false },
                             { label: t.ofinSumCodOut,     value: gel(codOutstanding),     accent: true  },
+                            { label: t.ofinSumCodPaidOut, value: gel(codPaid),            accent: false },
                             { label: t.ofinSumServiceOut, value: gel(serviceOutstanding), accent: false },
                         ].map(({ label, value, accent }) => (
                             <div key={label} style={{ background: accent ? 'var(--color-accent-dim)' : 'var(--color-bg-2)', border: `1px solid ${accent ? 'rgba(196,127,23,0.25)' : 'var(--color-border)'}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>

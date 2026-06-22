@@ -16,19 +16,6 @@ import { recipientDisplayName } from '../../utils/recipientName';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<string, string> = {
-    Pending:                             'Pending',
-    CourierAssignedToPickUp:             'Courier Assigned',
-    PickedUpFromRecipient:               'Picked Up',
-    DeliveredReturnOrderToWarehouse:     'At Warehouse',
-    ReturnedToSender:                    '✓ Returned',
-    CourierAssignedToDeliver:            'Courier Assigned',
-    CourierDeliveringTheOrderToRecipient:'Delivering',
-    DeliveredToRecipient:                '✓ Delivered',
-    ExchangeCompleted:                   '✓ Completed',
-    CancelledByAdmin:                    '✗ Cancelled',
-};
-
 const STATUS_COLOR: Record<string, string> = {
     Pending:                             '#f59e0b',
     CourierAssignedToPickUp:             '#3b82f6',
@@ -60,16 +47,30 @@ function matchesStatusFilter(o: ReturnExchangeOrder, f: FilterStatus): boolean {
     return true;
 }
 
-function fmt(iso: string | null) {
+function fmt(iso: string | null, lang: 'en' | 'ka') {
     if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    return new Date(iso).toLocaleDateString(lang === 'ka' ? 'ka-GE' : 'en-GB',
+        { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
+    const { t } = useLanguage();
+    const labelMap: Record<string, string> = {
+        Pending:                              t.reStPending,
+        CourierAssignedToPickUp:              t.reStCourierAssigned,
+        PickedUpFromRecipient:                t.reStPickedUp,
+        DeliveredReturnOrderToWarehouse:      t.reStAtWarehouse,
+        ReturnedToSender:                     t.reStReturned,
+        CourierAssignedToDeliver:             t.reStCourierAssigned,
+        CourierDeliveringTheOrderToRecipient: t.reStDelivering,
+        DeliveredToRecipient:                 t.reStDelivered,
+        ExchangeCompleted:                    t.reStCompleted,
+        CancelledByAdmin:                     t.reStCancelled,
+    };
     const color = STATUS_COLOR[status] ?? 'var(--color-text-subtle)';
-    const label = STATUS_LABEL[status] ?? status;
+    const label = labelMap[status] ?? status;
     return (
         <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -86,6 +87,7 @@ function StatusBadge({ status }: { status: string }) {
 // ── Type badge ────────────────────────────────────────────────────────────────
 
 function TypeBadge({ type }: { type: 'Return' | 'Exchange' }) {
+    const { t } = useLanguage();
     const color = type === 'Return' ? '#ef4444' : '#3b82f6';
     return (
         <span style={{
@@ -94,7 +96,7 @@ function TypeBadge({ type }: { type: 'Return' | 'Exchange' }) {
             textTransform: 'uppercase', background: `${color}15`,
             color, border: `1px solid ${color}40`,
         }}>
-            {type}
+            {type === 'Return' ? t.reTypeReturn : t.reTypeExchange}
         </span>
     );
 }
@@ -143,7 +145,7 @@ function OrderRow({
     token: string;
     onRefresh: () => void;
 }) {
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
     const [assigning, setAssigning]         = useState(false);
     const [completing, setCompleting]       = useState(false);
     const [selectedCourier, setSelected]    = useState('');
@@ -163,7 +165,7 @@ function OrderRow({
             await assignReturnCourier(token, order.id, selectedCourier);
             onRefresh();
         } catch (e) {
-            setRowError(e instanceof Error ? e.message : 'Failed');
+            setRowError(e instanceof Error ? e.message : t.reActionFailed);
         } finally { setAssigning(false); }
     };
 
@@ -216,7 +218,7 @@ function OrderRow({
             await markReturnedToSender(token, order.id);
             onRefresh();
         } catch (e) {
-            setRowError(e instanceof Error ? e.message : 'Failed');
+            setRowError(e instanceof Error ? e.message : t.reActionFailed);
         } finally { setCompleting(false); }
     };
 
@@ -272,10 +274,10 @@ function OrderRow({
             <td style={{ fontSize: '0.8rem' }}>
                 {order.courierFullName
                     ? <div style={{ fontWeight: 600 }}>{order.courierFullName}</div>
-                    : <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', fontSize: '0.75rem' }}>Unassigned</span>}
+                    : <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', fontSize: '0.75rem' }}>{t.reUnassigned}</span>}
             </td>
             <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
-                {fmt(order.createdAt)}
+                {fmt(order.createdAt, lang)}
             </td>
             <td>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 180 }}>
@@ -293,7 +295,7 @@ function OrderRow({
                                     minWidth: 120,
                                 }}
                             >
-                                <option value="">Pick courier…</option>
+                                <option value="">{t.rePickCourier}</option>
                                 {couriers.filter(c => !c.isDeleted).map(c => (
                                     <option key={c.courierId} value={c.courierId}>{c.fullName}</option>
                                 ))}
@@ -304,7 +306,7 @@ function OrderRow({
                                 disabled={!selectedCourier || assigning}
                                 style={{ fontSize: '0.75rem', padding: '4px 10px' }}
                             >
-                                {assigning ? '…' : 'Assign'}
+                                {assigning ? '…' : t.reAssign}
                             </button>
                         </>
                     )}
@@ -320,7 +322,7 @@ function OrderRow({
                                 border: '1px solid rgba(16,185,129,0.3)',
                             }}
                         >
-                            {completing ? '…' : '✓ Returned to Sender'}
+                            {completing ? '…' : t.reMarkReturned}
                         </button>
                     )}
                     {rowError && (
@@ -344,7 +346,7 @@ function OrderRow({
                     <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 400, boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                             <div>
-                                <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>Set Service Price</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>{t.rePriceTitle}</div>
                                 <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
                                     <span className="tn-badge" style={{ fontSize: '0.75rem' }}>{order.trackingNumber}</span>
                                 </div>
@@ -354,7 +356,7 @@ function OrderRow({
                             </button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>Service Price ₾</span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>{t.rePriceLabel}</span>
                             <input
                                 type="number" min="0" step="0.01" placeholder="0.00"
                                 autoFocus
@@ -365,9 +367,9 @@ function OrderRow({
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                            <button onClick={() => setShowPriceModal(false)} disabled={priceSaving} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Cancel</button>
+                            <button onClick={() => setShowPriceModal(false)} disabled={priceSaving} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>{t.cancel}</button>
                             <button onClick={handlePriceSave} disabled={priceSaving || !priceInput} style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (priceSaving || !priceInput) ? 0.6 : 1 }}>
-                                {priceSaving ? 'Saving…' : 'Save & Continue'}
+                                {priceSaving ? t.reSaving : t.rePriceSaveContinue}
                             </button>
                         </div>
                     </div>
@@ -390,7 +392,7 @@ function OrderRow({
                     <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 400, boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                             <div>
-                                <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>Set Courier Salary</div>
+                                <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>{t.reSalaryTitle}</div>
                                 <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
                                     <span className="tn-badge" style={{ fontSize: '0.75rem' }}>{order.trackingNumber}</span>
                                 </div>
@@ -400,7 +402,7 @@ function OrderRow({
                             </button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>Courier Salary ₾</span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>{t.reSalaryLabel}</span>
                             <input
                                 type="number" min="0" step="0.01" placeholder="0.00"
                                 autoFocus
@@ -411,9 +413,9 @@ function OrderRow({
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                            <button onClick={() => setShowSalaryModal(false)} disabled={salarySaving} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Cancel</button>
+                            <button onClick={() => setShowSalaryModal(false)} disabled={salarySaving} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>{t.cancel}</button>
                             <button onClick={handleSalarySave} disabled={salarySaving || !salaryInput} style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (salarySaving || !salaryInput) ? 0.6 : 1 }}>
-                                {salarySaving ? 'Saving…' : 'Save & Assign'}
+                                {salarySaving ? t.reSaving : t.reSalarySaveAssign}
                             </button>
                         </div>
                     </div>
@@ -433,6 +435,7 @@ interface Props {
 }
 
 export default function AdminReturnExchangePage({ token, couriers, onBack }: Props) {
+    const { t } = useLanguage();
     const [orders, setOrders]         = useState<ReturnExchangeOrder[]>([]);
     const [loading, setLoading]       = useState(true);
     const [error, setError]           = useState<string | null>(null);
@@ -445,11 +448,11 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
             const data = await fetchReturnExchangeOrders(token);
             setOrders(data);
         } catch (e) {
-            if (!silent) setError(e instanceof Error ? e.message : 'Failed to load');
+            if (!silent) setError(e instanceof Error ? e.message : t.reLoadFailed);
         } finally {
             if (!silent) setLoading(false);
         }
-    }, [token]);
+    }, [token, t]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -489,25 +492,29 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                         <path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    Back
+                    {t.reBack}
                 </button>
                 <div>
                     <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        ↩ Returns &amp; Exchanges
+                        ↩ {t.reTitle}
                     </h2>
                     <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
-                        Manage return pickups and exchange deliveries
+                        {t.reSubtitle}
                     </p>
                 </div>
             </div>
 
             {/* Type filter */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Type:</span>
-                {(['All', 'Return', 'Exchange'] as FilterType[]).map(f => (
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t.reTypeLabel}</span>
+                {([
+                    ['All',      t.reFilterAll],
+                    ['Return',   t.reFilterReturn],
+                    ['Exchange', t.reFilterExchange],
+                ] as [FilterType, string][]).map(([f, label]) => (
                     <Pill
                         key={f}
-                        label={f}
+                        label={label}
                         active={typeFilter === f}
                         count={f === 'All' ? orders.length : f === 'Return' ? returnCount : exchangeCount}
                         onClick={() => setTypeFilter(f)}
@@ -517,13 +524,13 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
 
             {/* Status filter */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Status:</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t.reStatusLabel}</span>
                 {([
-                    ['All',         'All'],
-                    ['Pending',     'Pending / Assigned'],
-                    ['PickedUp',    'Picked Up'],
-                    ['AtWarehouse', 'At Warehouse'],
-                    ['Completed',   'Completed'],
+                    ['All',         t.reFilterAll],
+                    ['Pending',     t.reFilterPending],
+                    ['PickedUp',    t.reFilterPickedUp],
+                    ['AtWarehouse', t.reFilterAtWarehouse],
+                    ['Completed',   t.reFilterCompleted],
                 ] as [FilterStatus, string][]).map(([f, label]) => (
                     <Pill
                         key={f}
@@ -539,7 +546,7 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
             {loading && (
                 <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-subtle)' }}>
                     <div className="go-spinner" style={{ margin: '0 auto 8px' }} />
-                    Loading…
+                    {t.loading}
                 </div>
             )}
             {error && (
@@ -549,7 +556,7 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
             )}
             {!loading && !error && filtered.length === 0 && (
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem' }}>
-                    No orders match the selected filters.
+                    {t.reNoOrders}
                 </div>
             )}
             {!loading && !error && filtered.length > 0 && (
@@ -557,15 +564,15 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
                     <table className="go-orders-table" style={{ minWidth: 900 }}>
                         <thead>
                             <tr>
-                                <th>Tracking №</th>
-                                <th>Type</th>
-                                <th>Sender</th>
-                                <th>Recipient</th>
-                                <th>Pickup / City</th>
-                                <th>Status</th>
-                                <th>Courier</th>
-                                <th>Created</th>
-                                <th>Actions</th>
+                                <th>{t.reThTracking}</th>
+                                <th>{t.reThType}</th>
+                                <th>{t.reThSender}</th>
+                                <th>{t.reThRecipient}</th>
+                                <th>{t.reThPickupCity}</th>
+                                <th>{t.reThStatus}</th>
+                                <th>{t.reThCourier}</th>
+                                <th>{t.reThCreated}</th>
+                                <th>{t.reThActions}</th>
                             </tr>
                         </thead>
                         <tbody>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { CityDistrictCombo } from '../../components/ui/CityDistrictCombo';
+import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { FormField } from '../../components/ui/FormField';
 import { GeorgianPhoneField } from '../../components/ui/GeorgianPhoneField';
 import type { District } from '../../api/cities';
@@ -270,7 +270,7 @@ function PackageDetail({
               {t.cgoReturnPickupAddress ?? '📍 Return Pickup Address'}
             </div>
             <p className="psl-return-hint">{t.cgoReturnPickupHint ?? 'Address where courier will collect the parcel from the recipient.'}</p>
-            <CityDistrictCombo
+            <CityDistrictPicker
               cityValue={pkg.returnPickupCity ?? ''}
               districtValue={pkg.returnPickupDistrict ?? ''}
               onCityChange={v => { onChange(index, 'returnPickupCity', v); onChange(index, 'returnPickupDistrict', ''); setSelectedReturnDistrict(null); onChange(index, 'companyServicePrice', null); }}
@@ -315,7 +315,7 @@ function PackageDetail({
           <div className="psl-section__label">
             {isReturn ? (t.cgoReturnDeliverBackTo ?? 'Deliver back to (Sender)') : t.cgoDeliveryAddress}
           </div>
-          <CityDistrictCombo
+          <CityDistrictPicker
             cityValue={pkg.recipientCity}
             districtValue={pkg.recipientDistrict}
             onCityChange={v => { onChange(index, 'recipientCity', v); onChange(index, 'recipientDistrict', ''); if (!isReturn) { setSelectedDistrict(null); onChange(index, 'companyServicePrice', null); } }}

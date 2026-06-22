@@ -774,6 +774,11 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                       </td>
                       <td style={{ padding: '10px 16px', color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>
                         {o.companyServicePrice != null ? `₾${o.companyServicePrice.toFixed(2)}` : '—'}
+                        {o.whoPaysForCompanyService && (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+                            {o.whoPaysForCompanyService === 'Sender' ? t.ofinSenderPays : t.ofinRecipientPays}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '10px 16px', textAlign: 'right' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
