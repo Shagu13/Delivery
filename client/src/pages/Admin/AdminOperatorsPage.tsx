@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   type Operator,
   fetchOperators,
@@ -160,7 +161,10 @@ function OperatorModal({ open, editing, token, onClose, onSaved }: ModalProps) {
 
   if (!open) return null;
 
-  return (
+  // Portal to <body> so the fixed-position modal escapes the page's
+  // content-card (overflow:hidden) and any transformed ancestor that would
+  // otherwise become its containing block and clip it.
+  return createPortal(
     <>
       <div className="modal-backdrop" onClick={onClose} />
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="operator-modal-title">
@@ -258,7 +262,8 @@ function OperatorModal({ open, editing, token, onClose, onSaved }: ModalProps) {
         @keyframes modal-fade-in { from{opacity:0} to{opacity:1} }
         @keyframes modal-slide-up { from{opacity:0;transform:translate(-50%,calc(-50% + 16px))} to{opacity:1;transform:translate(-50%,-50%)} }
       `}</style>
-    </>
+    </>,
+    document.body,
   );
 }
 

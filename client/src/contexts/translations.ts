@@ -3144,7 +3144,7 @@ const ka: typeof en = {
     ofinSelectAll:       'ყველას მონიშვნა',
     ofinSelectedTotal:   (s: string) => `მონიშნული ${s}`,
     ofinViewDaily:       'დღიური',
-    ofinViewMonthly:     'თვიური',
+    ofinViewMonthly:     'ყოველთვიური',
     ofinColAddress:      'მისამართი',
     ofinNoneMonth:       'ამ თვეში შეკვეთები არ არის.',
     ofinPrevMonth:       'წინა თვე',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
@@ -29,11 +29,22 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
     const [loadingIds, setLoadingIds] = useState(false);
     const [selectedId, setSelectedId] = useState('');
     const [open, setOpen] = useState(false);
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const pickerRef = useRef<HTMLDivElement>(null);
     const [toast, setToast] = useState<string | null>(null);
 
     useEffect(() => {
         fetchCouriers(token).then(setCouriers).catch(() => setCouriers([]));
     }, [token]);
+
+    // Close the courier dropdown on an outside click.
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
 
     // When a date is chosen, load which couriers delivered that day; clear the filter
     // (show all) when the date is emptied.
@@ -66,7 +77,7 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
     const noneForDate = !!date && !loadingIds && visibleCouriers.length === 0;
 
     return (
-        <div className="content-card" style={{ padding: 16 }}>
+        <div className="content-card" style={{ padding: 16, overflow: 'visible' }}>
             {/* Date filter */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
                 <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finCourierDateLabel}</span>
@@ -85,22 +96,41 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
                 {loadingIds && <span className="go-spinner" style={{ width: 14, height: 14 }} />}
             </div>
 
-            {/* Courier picker */}
+            {/* Courier picker — custom dropdown so the list opens upward, above the field */}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                <select
-                    className="go-select"
-                    value={selectedId}
-                    onChange={e => setSelectedId(e.target.value)}
-                    style={{ minWidth: 240 }}
-                    disabled={noneForDate}
-                >
-                    <option value="">{t.finCourierSelect}</option>
-                    {visibleCouriers.map(c => (
-                        <option key={c.courierId} value={c.courierId}>
-                            {c.fullName}{c.isDeleted ? ' (inactive)' : ''}
-                        </option>
-                    ))}
-                </select>
+                <div ref={pickerRef} style={{ position: 'relative', minWidth: 240 }}>
+                    <button
+                        type="button"
+                        disabled={noneForDate}
+                        onClick={() => setPickerOpen(o => !o)}
+                        style={{
+                            ...dateInputStyle, width: '100%', minHeight: 34,
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                            cursor: noneForDate ? 'not-allowed' : 'pointer', opacity: noneForDate ? 0.5 : 1,
+                        }}
+                    >
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selected ? 'var(--color-text)' : 'var(--color-text-subtle)' }}>
+                            {selected ? `${selected.fullName}${selected.isDeleted ? ' (inactive)' : ''}` : t.finCourierSelect}
+                        </span>
+                        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, color: 'var(--color-text-subtle)', transform: pickerOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>
+                            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    </button>
+                    {pickerOpen && visibleCouriers.length > 0 && (
+                        <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50, background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 -8px 28px rgba(0,0,0,0.16)', maxHeight: 260, overflowY: 'auto' }}>
+                            {visibleCouriers.map(c => (
+                                <button
+                                    key={c.courierId}
+                                    type="button"
+                                    onClick={() => { setSelectedId(c.courierId); setPickerOpen(false); }}
+                                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: selectedId === c.courierId ? 'var(--color-accent-dim)' : 'transparent', border: 'none', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', color: 'var(--color-text)', fontSize: '0.85rem' }}
+                                >
+                                    {c.fullName}{c.isDeleted ? ' (inactive)' : ''}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 <button className="btn-primary" disabled={!selected} onClick={() => setOpen(true)}>
                     {t.finCourierOpen}
                 </button>
