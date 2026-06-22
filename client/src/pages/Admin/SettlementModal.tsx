@@ -125,12 +125,15 @@ export function SettlementModal({
     const cashShortfall = preview
         ? Math.max(0, preview.totalCourierSalary - preview.totalCashCourierHolds)
         : 0;
-    // "Transfer to company" tracks what the admin actually pays the courier: the
-    // cash the courier holds minus the amount paid out to them. Recomputes live as
-    // the admin edits the amount-paid input. Negative ⇒ the company owes the courier.
+    // "Transfer to company" = the cash the courier holds minus their FULL salary for the
+    // day. The salary is paid in two parts: what was already paid in an earlier settle of
+    // the same day (existingAmountCourierWasPaid) plus what is being paid now (the input).
+    // Subtracting both keeps the courier's whole salary deducted exactly once, so a
+    // re-settle doesn't drop the already-paid portion. Negative ⇒ the company owes the courier.
     const effectivePaid = paidValid ? paidNum : 0;
+    const salaryAlreadyPaid = preview?.existingAmountCourierWasPaid ?? 0;
     const liveTransferToCompany = preview
-        ? preview.totalCashCourierHolds - effectivePaid
+        ? preview.totalCashCourierHolds - (salaryAlreadyPaid + effectivePaid)
         : 0;
 
     return createPortal(

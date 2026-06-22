@@ -81,7 +81,17 @@ public sealed class CreateCourierSettlementCommandHandler
             .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
             .Sum(o => o.CompanyServicePrice);
         var totalCourierSalary    = orders.Sum(o => o.CourierSalary ?? 0m);
-        var totalTransferToCompany = totalCashCollected - totalCourierSalary;
+        // for updating existing record in CourierSettlement get if any amount was paid to courier.
+        // Scoped to the courier + THIS day so a prior day's payment is never pulled in.
+        var existingSettlement = await _context.CourierSettlements
+                .FirstOrDefaultAsync(s => s.CourierId  == request.CourierId
+                                       && s.CreatedAt >= dayStart
+                                       && s.CreatedAt <= dayEnd,
+                                     cancellationToken);
+        var salaryPaidToCourier =
+            existingSettlement?.AmountCourierWasPaid ?? 0m;
+
+        var totalTransferToCompany = totalCashCollected - totalCourierSalary - salaryPaidToCourier;
         var totalNetIncome        = totalServiceRevenue - totalCourierSalary;
 
         // ── 6. Count packages picked up on this day ───────────────────────────
