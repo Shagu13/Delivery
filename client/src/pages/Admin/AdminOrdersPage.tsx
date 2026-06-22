@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMarkOrderDelivered } from '../../api/orders';
+import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMarkOrderDelivered, exportOrdersExcel } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
@@ -336,6 +336,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
 
   const [showTracking,  setShowTracking]  = useState(false);
   const [showPrices,    setShowPrices]    = useState(true);
+  const [exporting,     setExporting]     = useState(false);
 
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkPrice,     setBulkPrice]     = useState('');
@@ -475,6 +476,28 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+
+  // Export to Excel: the currently selected orders if any are ticked, otherwise every
+  // order matching the active filters (across all pages — the server re-applies them).
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportOrdersExcel(token, {
+        city:      filterCity || undefined,
+        district:  filterDistrict || undefined,
+        search:    search || undefined,
+        courierId: filterCourier?.courierId,
+        unpriced:  filterUnpriced || undefined,
+        assigned:  assignTab === 'assigned',
+        date:      selectedDate ? toDateKey(selectedDate) : undefined,
+        ids:       selected.size > 0 ? [...selected] : undefined,
+      });
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : t.aopBulkFailed, 'err');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Print parcel labels for the currently selected orders (same sticker as the customer side).
   const handlePrintLabels = () => {
@@ -844,7 +867,20 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           <button className="go-clear-btn" onClick={clearAll}>{t.aopClearFilters}</button>
         )}
 
-        <span className="go-count" style={{ marginLeft: 'auto' }}>
+        <button
+          className="aop-export-btn"
+          onClick={handleExport}
+          disabled={exporting || loading}
+          title={t.aopExportTitle}
+          style={{ marginLeft: 'auto' }}
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1v9M4.5 6.5L8 10l3.5-3.5M2.5 13.5h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {exporting ? t.aopExporting : (selected.size > 0 ? t.aopExportSelected(selected.size) : t.aopExportExcel)}
+        </button>
+
+        <span className="go-count">
           {data ? t.aopOrderCount(data.totalCount) : ''}
         </span>
       </div>
@@ -1644,6 +1680,16 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
           border-radius: 100px; font-size: 0.68rem; font-weight: 700; line-height: 1;
         }
         .aop-unpriced-badge--active { background: #fff; color: #ef4444; }
+
+        /* ── Export button ── */
+        .aop-export-btn {
+          display: inline-flex; align-items: center; gap: 7px;
+          background: #16a34a; border: 1px solid #16a34a; color: #fff;
+          border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600;
+          padding: 7px 13px; cursor: pointer; transition: opacity var(--transition); white-space: nowrap;
+        }
+        .aop-export-btn:hover:not(:disabled) { opacity: 0.9; }
+        .aop-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* ── Bulk bar ── */
         .aop-bulk-bar {

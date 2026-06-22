@@ -7,6 +7,7 @@ using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
 using Application.Orders.Queries.GetOrderByTrackingNumber;
 using Application.Orders.Queries;
+using ClosedXML.Excel;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +40,93 @@ public sealed class OrdersController : BaseController
         var result = await Sender.Send(
             new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date), ct);
         return Ok(result);
+    }
+
+    // ── GET /api/orders/export  (Admin — Excel of all matching, or a selected subset) ──
+    [HttpGet("export")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportExcel(
+        [FromQuery] string? city      = null,
+        [FromQuery] string? district  = null,
+        [FromQuery] string? search    = null,
+        [FromQuery] Guid?   courierId = null,
+        [FromQuery] bool    unpriced  = false,
+        [FromQuery] bool?   assigned  = null,
+        [FromQuery] DateTime? date    = null,
+        [FromQuery] string? ids       = null,   // comma-separated order ids → export just those
+        CancellationToken ct = default)
+    {
+        // Reuse the list query (un-paged) so the export honors the exact same filters as
+        // the Delivery page; then narrow to the selected ids when provided.
+        var result = await Sender.Send(new GetAllOrdersQuery(
+            city, district, search, courierId,
+            OrderType: null, Unpriced: unpriced, ActiveOnly: false, Postponed: false,
+            Page: 1, PageSize: int.MaxValue, Assigned: assigned, Date: date), ct);
+
+        IEnumerable<AdminOrderListDto> rows = result.Items;
+        if (!string.IsNullOrWhiteSpace(ids))
+        {
+            var idSet = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                           .Select(s => Guid.TryParse(s, out var g) ? g : (Guid?)null)
+                           .Where(g => g.HasValue).Select(g => g!.Value)
+                           .ToHashSet();
+            rows = rows.Where(o => idSet.Contains(o.Id));
+        }
+        var list = rows.ToList();
+
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Orders");
+
+        string[] headers =
+        {
+            "Tracking #", "Store / Sender", "Sender Phone", "Recipient", "Recipient Phone",
+            "City", "District", "Address", "Type", "Status", "Paid",
+            "COD ₾", "Service ₾", "Salary ₾", "Revenue ₾", "Courier", "Created", "Delivered",
+        };
+        for (int c = 0; c < headers.Length; c++)
+            ws.Cell(1, c + 1).Value = headers[c];
+        ws.Row(1).Style.Font.Bold = true;
+
+        var row = 2;
+        foreach (var o in list)
+        {
+            ws.Cell(row, 1).Value  = o.TrackingNumber;
+            ws.Cell(row, 2).Value  = string.IsNullOrWhiteSpace(o.SenderBusinessName)
+                ? $"{o.SenderFirstName} {o.SenderLastName}".Trim()
+                : o.SenderBusinessName;
+            ws.Cell(row, 3).Value  = o.SenderPhone;
+            ws.Cell(row, 4).Value  = o.RecipientName;
+            ws.Cell(row, 5).Value  = o.RecipientPhone;
+            ws.Cell(row, 6).Value  = o.RecipientCity;
+            ws.Cell(row, 7).Value  = o.RecipientDistrict;
+            ws.Cell(row, 8).Value  = o.RecipientAddress;
+            ws.Cell(row, 9).Value  = o.OrderType;
+            ws.Cell(row, 10).Value = o.Status;
+            ws.Cell(row, 11).Value = o.ProductPaymentStatus;
+            if (o.AmountToCollectForPackage.HasValue) ws.Cell(row, 12).Value = o.AmountToCollectForPackage.Value;
+            ws.Cell(row, 13).Value = o.CompanyServicePrice;
+            if (o.CourierSalary.HasValue)  ws.Cell(row, 14).Value = o.CourierSalary.Value;
+            if (o.CompanyRevenue.HasValue) ws.Cell(row, 15).Value = o.CompanyRevenue.Value;
+            ws.Cell(row, 16).Value = o.CourierFullName ?? string.Empty;
+            ws.Cell(row, 17).Value = o.CreatedAt;
+            ws.Cell(row, 17).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+            if (o.DeliveredAt.HasValue)
+            {
+                ws.Cell(row, 18).Value = o.DeliveredAt.Value;
+                ws.Cell(row, 18).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+            }
+            row++;
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        var fileName = $"orders-{Domain.CustomTime.Now:yyyyMMdd-HHmm}.xlsx";
+        return File(ms.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName);
     }
 
     // ── GET /api/orders/track/{trackingNumber}  (Public) ─────────────────────

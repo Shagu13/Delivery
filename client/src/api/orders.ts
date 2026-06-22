@@ -2,6 +2,42 @@ import type { OrderStatus, PaymentStatus, ServicePayer } from './adminGroupOrder
 
 const BASE = '/api/orders';
 
+/** Admin: download an Excel of orders matching the given filters, or just the selected
+ *  `ids`. Triggers a browser file save. Mirrors the Delivery page's filters server-side. */
+export async function exportOrdersExcel(
+    token: string,
+    params: {
+        city?: string; district?: string; search?: string; courierId?: string;
+        unpriced?: boolean; assigned?: boolean; date?: string; ids?: string[];
+    },
+): Promise<void> {
+    const qs = new URLSearchParams();
+    if (params.city)      qs.set('city', params.city);
+    if (params.district)  qs.set('district', params.district);
+    if (params.search)    qs.set('search', params.search);
+    if (params.courierId) qs.set('courierId', params.courierId);
+    if (params.unpriced)  qs.set('unpriced', 'true');
+    if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
+    if (params.date)      qs.set('date', params.date);
+    if (params.ids && params.ids.length) qs.set('ids', params.ids.join(','));
+
+    const res = await fetch(`${BASE}/export?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.title ?? `Export failed (${res.status})`);
+    }
+    const blob        = await res.blob();
+    const url         = URL.createObjectURL(blob);
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match       = /filename[^;=\n]*=(['"]?)([^;"'\n]*)\1/.exec(disposition);
+    const filename    = match?.[2]?.trim() || 'orders.xlsx';
+    const anchor      = document.createElement('a');
+    anchor.href       = url;
+    anchor.download   = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+}
+
 export type PostponeReason =
     | 'RecipientDidNotAnswer'
     | 'WrongRecipientPhoneNumber'
