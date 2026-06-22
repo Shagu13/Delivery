@@ -13,5 +13,8 @@ public sealed record AttachOrdersToGroupOrderCommand(
     Guid CustomerId,
     DateTime Date,
     IReadOnlyList<Guid> OrderIds,
-    Guid? TargetGroupOrderId = null
+    Guid? TargetGroupOrderId = null,
+    // When true and no target is given, always create a fresh batch instead of reusing
+    // the customer's open same-day batch. Lets the admin explicitly choose "new batch".
+    bool ForceNewBatch = false
 ) : IRequest<CreateGroupOrderResultDto>;

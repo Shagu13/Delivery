@@ -1,5 +1,7 @@
 using Application.Common.Interfaces;
 using Application.GroupOrders.DTOs;
+using Domain;
+using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +10,13 @@ namespace Application.GroupOrders.Queries.GetAllGroupOrders;
 public sealed class GetAllGroupOrdersQueryHandler
     : IRequestHandler<GetAllGroupOrdersQuery, IReadOnlyList<AdminGroupOrderDto>>
 {
+    private static readonly OrderStatus[] CancelledStatuses =
+    {
+        OrderStatus.CancelledByAdmin,
+        OrderStatus.CancelledBySender,
+        OrderStatus.OrderNotAccepted,
+    };
+
     private readonly IAppDbContext _context;
     public GetAllGroupOrdersQueryHandler(IAppDbContext context) => _context = context;
 
@@ -52,7 +61,40 @@ public sealed class GetAllGroupOrdersQueryHandler
         var districtGeo = (await _context.Districts .AsNoTracking().Where(d => d.DateDeleted == null).ToListAsync(cancellationToken))
                             .GroupBy(d => d.DistrictName).ToDictionary(g => g.Key, g => g.First().DistrictNameGeo);
 
-        return groupOrders.Select(go => new AdminGroupOrderDto(
+        AdminOrderDto MapOrder(Order o) => new(
+            Id:                               o.Id,
+            TrackingNumber:                   o.TrackingNumber,
+            RecipientName:                    o.RecipientName,
+            RecipientPhone:                   o.RecipientPhone,
+            RecipientCity:                    o.RecipientCity,
+            RecipientCityGeo:                 cityGeo.GetValueOrDefault(o.RecipientCity),
+            RecipientDistrict:                o.RecipientDistrict,
+            RecipientDistrictGeo:             districtGeo.GetValueOrDefault(o.RecipientDistrict),
+            RecipientAddress:                 o.RecipientAddress,
+            Description:                      o.Description,
+            IsFragile:                        o.IsFragile,
+            OrderType:                        o.OrderType,
+            ReturnPickupAddress:              o.ReturnPickupAddress,
+            ReturnPickupCity:                 o.ReturnPickupCity,
+            ReturnPickupDistrict:             o.ReturnPickupDistrict,
+            Status:                           o.Status,
+            ProductPaymentStatus:             o.ProductPaymentStatus,
+            WhoPaysForCompanyService:         o.WhoPaysForCompanyService,
+            AmountToCollectForPackage:        o.AmountToCollectForPackage,
+            AmountOfCashCollected:            o.AmountOfCashCollected,
+            CourierSalary:                    o.CourierSalary,
+            CompanyServicePrice:              o.CompanyServicePrice,
+            IsCompanyServicePriceIncluded:    o.IsCompanyServicePriceIncluded,
+            CompanyRevenue:                   o.CompanyRevenue,
+            CourierId:                        o.CourierId,
+            CreatedAt:                        o.CreatedAt,
+            DeliveryDateFrom:                 o.DeliveryDateFrom,
+            DeliveryDateTo:                   o.DeliveryDateTo,
+            DeliveredAt:                      o.DeliveredAt,
+            CancellationReason:               o.CancellationReason,
+            CancellationComment:              o.CancellationComment);
+
+        var result = groupOrders.Select(go => new AdminGroupOrderDto(
             Id:                      go.Id,
             CreatedAt:               go.CreatedAt,
             Status:                  go.Status,
@@ -78,41 +120,74 @@ public sealed class GetAllGroupOrdersQueryHandler
             CompanyServiceCapitalPrice:  go.Customer?.CompanyServiceCapitalPrice,
             CompanyServiceCityPrice:     go.Customer?.CompanyServiceCityPrice,
             CompanyServiceDistrictPrice: go.Customer?.CompanyServiceDistrictPrice,
-            Orders: go.Orders
-                .OrderBy(o => o.CreatedAt)
-                .Select(o => new AdminOrderDto(
-                    Id:                               o.Id,
-                    TrackingNumber:                   o.TrackingNumber,
-                    RecipientName:                    o.RecipientName,
-                    RecipientPhone:                   o.RecipientPhone,
-                    RecipientCity:                    o.RecipientCity,
-                    RecipientCityGeo:                 cityGeo.GetValueOrDefault(o.RecipientCity),
-                    RecipientDistrict:                o.RecipientDistrict,
-                    RecipientDistrictGeo:             districtGeo.GetValueOrDefault(o.RecipientDistrict),
-                    RecipientAddress:                 o.RecipientAddress,
-                    Description:                      o.Description,
-                    IsFragile:                        o.IsFragile,
-                    OrderType:                        o.OrderType,
-                    ReturnPickupAddress:              o.ReturnPickupAddress,
-                    ReturnPickupCity:                 o.ReturnPickupCity,
-                    ReturnPickupDistrict:             o.ReturnPickupDistrict,
-                    Status:                           o.Status,
-                    ProductPaymentStatus:             o.ProductPaymentStatus,
-                    WhoPaysForCompanyService:         o.WhoPaysForCompanyService,
-                    AmountToCollectForPackage:        o.AmountToCollectForPackage,
-                    AmountOfCashCollected:            o.AmountOfCashCollected,
-                    CourierSalary:                    o.CourierSalary,
-                    CompanyServicePrice:              o.CompanyServicePrice,
-                    IsCompanyServicePriceIncluded:    o.IsCompanyServicePriceIncluded,
-                    CompanyRevenue:                   o.CompanyRevenue,
-                    CourierId:                        o.CourierId,
-                    CreatedAt:                        o.CreatedAt,
-                    DeliveryDateFrom:                 o.DeliveryDateFrom,
-                    DeliveryDateTo:                   o.DeliveryDateTo,
-                    DeliveredAt:                      o.DeliveredAt,
-                    CancellationReason:               o.CancellationReason,
-                    CancellationComment:              o.CancellationComment))
-                .ToList()
+            Orders: go.Orders.OrderBy(o => o.CreatedAt).Select(MapOrder).ToList()
         )).ToList();
+
+        // ── Standalone orders (GroupOrderId == null) as synthetic single-order batches ──
+        // Cart checkout with one package stores the order un-batched. Surface each as a
+        // group-order-shaped row (flagged IsStandalone) so it appears in the admin list
+        // alongside real batches; the sender/pickup come from the owning customer.
+        var standaloneQuery = _context.Orders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Where(o => o.GroupOrderId == null
+                     && o.CustomerId != null
+                     && !CancelledStatuses.Contains(o.Status));
+
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            var term = request.SearchTerm.Trim().ToLower();
+            standaloneQuery = standaloneQuery.Where(o =>
+                o.RecipientName.ToLower().Contains(term) ||
+                o.RecipientPhone.Contains(term) ||
+                o.RecipientCity.ToLower().Contains(term) ||
+                o.RecipientDistrict.ToLower().Contains(term) ||
+                o.RecipientAddress.ToLower().Contains(term) ||
+                o.TrackingNumber.ToLower().Contains(term) ||
+                (o.Customer != null && (
+                    o.Customer.BusinessName.ToLower().Contains(term) ||
+                    o.Customer.FirstName.ToLower().Contains(term) ||
+                    o.Customer.LastName.ToLower().Contains(term) ||
+                    o.Customer.PhoneNumber.Contains(term))));
+        }
+
+        var standalone = await standaloneQuery
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        foreach (var o in standalone)
+        {
+            var c = o.Customer;
+            result.Add(new AdminGroupOrderDto(
+                Id:                      o.Id,
+                CreatedAt:               o.CreatedAt,
+                Status:                  o.Status,
+                CustomerId:              o.CustomerId,
+                SenderFirstName:         c?.FirstName ?? string.Empty,
+                SenderLastName:          c?.LastName ?? string.Empty,
+                SenderIdNumber:          c?.IdNumber,
+                SenderBusinessName:      c?.BusinessName ?? string.Empty,
+                SenderPhone:             c?.PhoneNumber ?? string.Empty,
+                AlternativeSenderPhone:  null,
+                PickUpCity:              c?.City ?? string.Empty,
+                PickUpCityGeo:           c is null ? null : cityGeo.GetValueOrDefault(c.City),
+                PickUpDistrict:          c?.District ?? string.Empty,
+                PickUpDistrictGeo:       c is null ? null : districtGeo.GetValueOrDefault(c.District),
+                PickUpAddress:           c?.Address ?? string.Empty,
+                Note:                    null,
+                NumberOfPackages:        1,
+                WhenPackagePickedUpDate: null,
+                CourierId:               o.CourierId,
+                CourierFullName:         null,
+                CompanyServiceCapitalPrice:  c?.CompanyServiceCapitalPrice,
+                CompanyServiceCityPrice:     c?.CompanyServiceCityPrice,
+                CompanyServiceDistrictPrice: c?.CompanyServiceDistrictPrice,
+                Orders:                  new List<AdminOrderDto> { MapOrder(o) },
+                IsStandalone:            true));
+        }
+
+        return result
+            .OrderByDescending(go => go.CreatedAt)
+            .ToList();
     }
 }

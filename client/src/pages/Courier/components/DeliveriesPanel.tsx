@@ -133,14 +133,13 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                     </div>
                                     <div className="courier-card__collapse-info">
                                         <span className="courier-card__collapse-primary">
-                                            {order.orderType === 'Return' && order.returnPickupCity
-                                                ? `${order.returnPickupCity}, ${order.returnPickupDistrict}`
-                                                : `${order.recipientCity}, ${order.recipientDistrict}`}
+                                            {order.senderBusinessName}
                                         </span>
                                         <span className="courier-card__collapse-secondary">
-                                            {order.orderType === 'Return' && order.returnPickupAddress
-                                                ? order.returnPickupAddress
-                                                : order.recipientAddress}
+                                            {(order.orderType === 'Return' && order.returnPickupCity
+                                                ? [order.returnPickupAddress, order.returnPickupDistrict, order.returnPickupCity]
+                                                : [order.recipientAddress, order.recipientDistrict, order.recipientCity]
+                                            ).filter(Boolean).join(', ')}
                                         </span>
                                     </div>
                                     <div className="courier-card__collapse-right">

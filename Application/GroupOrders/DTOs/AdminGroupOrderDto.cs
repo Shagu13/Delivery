@@ -36,7 +36,11 @@ public sealed record AdminGroupOrderDto(
     decimal? CompanyServiceCityPrice,
     decimal? CompanyServiceDistrictPrice,
     // Child orders
-    IReadOnlyList<AdminOrderDto> Orders
+    IReadOnlyList<AdminOrderDto> Orders,
+    // True for a synthetic "batch" wrapping a single standalone order (GroupOrderId
+    // == null). The Pick-Up page shows it like a batch but offers a Group action
+    // instead of batch lifecycle actions; the Id is the order's own id.
+    bool IsStandalone = false
 );
 
 /// <summary>Single package within a group order — admin view.</summary>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markPickingUp, markPickedUp, markDeliveredToWarehouse,
@@ -61,11 +61,19 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
         return distanceToAddress(coords, go.pickUpAddress, go.pickUpDistrict, go.pickUpCity, geocodeCache);
     };
 
-    const sortedPickups = [...pickups].sort((a, b) =>
-        sortMode === 'nearest'
+    // Picked-up batches (awaiting the warehouse drop-off) sink to the bottom so the next
+    // batch to head to rises to the top; within each group keep the chosen sort.
+    const stageRank = (go: AdminGroupOrder) => (go.status === 'CourierDeliveringToWarehouse' ? 1 : 0);
+    const sortedPickups = [...pickups].sort((a, b) => {
+        const s = stageRank(a) - stageRank(b);
+        if (s !== 0) return s;
+        return sortMode === 'nearest'
             ? distanceTo(a) - distanceTo(b)
-            : a.pickUpDistrict.localeCompare(b.pickUpDistrict)
-    );
+            : a.pickUpDistrict.localeCompare(b.pickUpDistrict);
+    });
+
+    // Batches already picked up, waiting to be dropped at the warehouse at day's end.
+    const pickedUpIds = sortedPickups.filter(go => go.status === 'CourierDeliveringToWarehouse').map(go => go.id);
 
     // Bulk action: enabled only when all selected pickups share a single status,
     // so the one action that's valid for that stage can apply to every selection.
@@ -133,6 +141,16 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                     )}
                 </div>
             </div>
+            {pickedUpIds.length > 0 && (
+                <button
+                    onClick={() => setSelectedIds(new Set(pickedUpIds))}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        width: '100%', marginBottom: 10, padding: '11px 14px',
+                        background: 'var(--color-accent)', color: '#fff', border: 'none',
+                        borderRadius: 10, fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer' }}>
+                    🏁 {t.cdFinishDay} ({pickedUpIds.length})
+                </button>
+            )}
             {selectedIds.size > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10,
                     background: 'var(--color-bg-2)', border: '1px solid var(--color-border)',
@@ -156,11 +174,20 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                 </div>
             )}
             <div className="courier-cards">
-                {sortedPickups.map(go => {
+                {sortedPickups.map((go, i) => {
                     const isExpanded = expandedIds.has(go.id);
                     const isSelected = selectedIds.has(go.id);
+                    // Label the boundary where picked-up (awaiting-warehouse) batches begin.
+                    const showPickedUpDivider = go.status === 'CourierDeliveringToWarehouse'
+                        && (i === 0 || sortedPickups[i - 1].status !== 'CourierDeliveringToWarehouse');
                     return (
-                        <div key={go.id} className={`courier-card${isSelected ? ' courier-card--selected' : ''}`}>
+                        <Fragment key={go.id}>
+                        {showPickedUpDivider && (
+                            <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-text-muted)', padding: '8px 4px 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                ✅ {t.cdPickedUpSection(pickedUpIds.length)}
+                            </div>
+                        )}
+                        <div className={`courier-card${isSelected ? ' courier-card--selected' : ''}`}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(go.id)}
                                     style={{ width: 18, height: 18, marginLeft: 12, cursor: 'pointer', accentColor: 'var(--color-accent)', flexShrink: 0 }} />
@@ -242,13 +269,15 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                                 onSwipe={() => onAct(go.id, () => markPickedUp(token, go.id), t.cdPickupToastPickedUp)} />
                                         )}
                                         {go.status === 'CourierDeliveringToWarehouse' && (
-                                            <SwipeButton label={t.cdPickupSwipeToWarehouse} variant="success" disabled={busyId === go.id}
-                                                onSwipe={() => onAct(go.id, () => markDeliveredToWarehouse(token, go.id), t.cdPickupToastToWarehouse)} />
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                ✅ {t.cdPickupAwaitingWarehouse}
+                                            </span>
                                         )}
                                     </div>
                                 </>
                             )}
                         </div>
+                        </Fragment>
                     );
                 })}
             </div>

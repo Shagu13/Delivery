@@ -112,18 +112,23 @@ function isAssignable(o: AdminOrderItem): boolean {
       || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
 }
 
-// Terminal statuses an order can no longer move past — shared by the deliver guard.
-const DELIVERED_TERMINAL_STATUSES = [
-  'DeliveredToRecipient', 'ExchangeCompleted',
-  'DeliveredReturnOrderToWarehouse', 'ReturnedToSender',
-  'CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted', 'AllDelivered',
+// Last-mile statuses — an order is in (or past) the warehouse and on its way to the
+// recipient. Only here can a delivery courier be attributed and the order delivered.
+const LAST_MILE_STATUSES = [
+  'AdminAcceptedOrderInWareHouse',
+  'OrderIsOnItsWayToRecipientsCity',
+  'CourierAssignedToDeliver',
+  'CourierDeliveringTheOrderToRecipient',
+  'DeliveryPostponed',
 ];
 
-// Orders the admin can force-mark "delivered to recipient" from the Packages page:
-// any non-terminal Send/Exchange order. Return orders are excluded — their final leg
-// is a warehouse drop-off, not a recipient delivery.
+// Orders the admin can mark "delivered to recipient" from the Packages page: only
+// Send/Exchange orders that have reached the warehouse (last-mile flow). Orders still in
+// the pickup flow must first be accepted into the warehouse on the Pick-Up page, so the
+// pickup courier is recorded on the batch — otherwise that trace is lost. Return orders
+// are excluded — their final leg is a warehouse drop-off, not a recipient delivery.
 function isDeliverable(o: AdminOrderItem): boolean {
-  return o.orderType !== 'Return' && !DELIVERED_TERMINAL_STATUSES.includes(o.status);
+  return o.orderType !== 'Return' && LAST_MILE_STATUSES.includes(o.status);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -323,7 +328,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
   const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
   // Day navigator — mirrors the Pick-Up page; filters by Order.CreatedAt (Georgian day).
-  const [selectedDate,    setSelectedDate]    = useState<Date>(() => georgianToday());
+  // null = show ALL days (default); a date filters to that single Georgian day.
+  const [selectedDate,    setSelectedDate]    = useState<Date | null>(null);
   const [couriers,        setCouriers]        = useState<Courier[]>([]);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
@@ -359,7 +365,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   const [priceSaving,       setPriceSaving]       = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: toDateKey(georgianToday()) });
+  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '' });
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
@@ -371,7 +377,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   }, [token]);
 
   const refreshUnpricedCount = useCallback(async () => {
-    const count = await fetchUnpricedCount(token, filterCourier?.courierId, toDateKey(selectedDate));
+    const count = await fetchUnpricedCount(token, filterCourier?.courierId, selectedDate ? toDateKey(selectedDate) : undefined);
     setUnpricedCount(count);
   }, [token, filterCourier, selectedDate]);
 
@@ -384,9 +390,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setLoading(true);
     setError(null);
     try {
-      // Always scope to the selected Georgian day (day navigator), so every reload
-      // path stays on the chosen day without threading it through each call site.
-      const result = await fetchAllOrders(token, { ...params, date: toDateKey(selectedDate), pageSize: PAGE_SIZE });
+      // Scope to the selected Georgian day when one is chosen; otherwise (null) show
+      // every day. Threaded here so all reload paths honor the day navigator.
+      const result = await fetchAllOrders(token, { ...params, date: selectedDate ? toDateKey(selectedDate) : undefined, pageSize: PAGE_SIZE });
       setData(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : t.aopFailedLoad);
@@ -404,7 +410,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       courierId: filterCourier?.courierId ?? '',
       unpriced:  filterUnpriced,
       assigned:  assignTab === 'assigned',
-      date:      toDateKey(selectedDate),
+      date:      selectedDate ? toDateKey(selectedDate) : '',
     };
 
     const filterChanged =
@@ -495,10 +501,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         ...(salary !== null ? [setCourierSalary(token, id, salary)]       : []),
       ]));
       const parts = [
-        price  !== null ? `service price ₾${price.toFixed(2)}`  : '',
-        salary !== null ? `salary ₾${salary.toFixed(2)}`        : '',
+        price  !== null ? `${t.aopBulkSvcLabel} ₾${price.toFixed(2)}`  : '',
+        salary !== null ? `${t.aopBulkSalLabel} ₾${salary.toFixed(2)}` : '',
       ].filter(Boolean).join(' + ');
-      showToast(`Set ${parts} on ${ids.length} order${ids.length !== 1 ? 's' : ''}.`);
+      showToast(t.aopBulkApplied(parts, ids.length));
       setShowBulkModal(false);
       setBulkPrice('');
       setBulkSalary('');
@@ -592,8 +598,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setBulkCourierId('');
     const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
     await Promise.all([load(reloadParams), refreshUnpricedCount()]);
-    showToast(fail === 0 ? `Assigned courier to ${ok} order${ok !== 1 ? 's' : ''}.`
-                         : `Assigned ${ok}, failed ${fail}.`, fail > 0 ? 'err' : 'ok');
+    showToast(fail === 0 ? t.aopAssignedToast(ok)
+                         : t.aopAssignedPartial(ok, fail), fail > 0 ? 'err' : 'ok');
   };
 
   // ── Mark delivered ─────────────────────────────────────────────────────────
@@ -602,7 +608,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   // settlement. Delegates the actual cash/COD/service-fee handling to the backend,
   // which mirrors the courier's own "delivered to recipient" action.
   const handleBulkDeliver = async () => {
-    if (actionPool.length === 0) { showToast('No deliverable orders selected.', 'err'); return; }
+    if (actionPool.length === 0) { showToast(t.aopNoDeliverable, 'err'); return; }
     if (missingPriceOrders.length > 0) {
       const drafts: Record<string, string> = {};
       const checked = new Set<string>();
@@ -622,7 +628,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
       return;
     }
     if (missingCourierOrders.length > 0 && !bulkCourierId) {
-      showToast('Choose a courier for the unassigned order(s) first.', 'err');
+      showToast(t.aopChooseCourierFirst, 'err');
       return;
     }
     await doDeliver();
@@ -649,8 +655,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     setSelected(new Set());
     const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
     await Promise.all([load(reloadParams), refreshUnpricedCount()]);
-    showToast(fail === 0 ? `Marked ${ok} order${ok !== 1 ? 's' : ''} delivered.`
-                         : `Delivered ${ok}, failed ${fail}.`, fail > 0 ? 'err' : 'ok');
+    showToast(fail === 0 ? t.aopDeliveredToast(ok)
+                         : t.aopDeliveredPartial(ok, fail), fail > 0 ? 'err' : 'ok');
   };
 
   const handleSalarySave = async () => {
@@ -667,7 +673,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     } catch { /* best-effort */ }
     setSalarySaving(false);
     setShowSalaryModal(false);
-    showToast(`Salary set for ${toSave.length} order${toSave.length !== 1 ? 's' : ''}.`);
+    showToast(t.aopSalarySetToast(toSave.length));
   };
 
   const handlePriceSave = async () => {
@@ -684,7 +690,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
     } catch { /* best-effort */ }
     setPriceSaving(false);
     setShowPriceModal(false);
-    showToast(`Service price set for ${toSave.length} order${toSave.length !== 1 ? 's' : ''}.`);
+    showToast(t.aopPriceSetToast(toSave.length));
   };
 
   const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced;
@@ -694,19 +700,22 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
   };
 
   // ── Day navigator (mirrors the Pick-Up page) ─────────────────────────────────
+  // Arrows only step once a day is chosen; from "All" they fall back to today.
   const shiftDay = (delta: number) => setSelectedDate(prev => {
-    const d = new Date(prev); d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d;
+    const d = prev ? new Date(prev) : georgianToday();
+    d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d;
   });
-  const isToday = toDateKey(selectedDate) === toDateKey(georgianToday());
+  const isToday = selectedDate != null && toDateKey(selectedDate) === toDateKey(georgianToday());
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="aop-root">
 
-      {/* Day navigator — filters packages by the day they were placed (Order.CreatedAt) */}
+      {/* Day navigator — All by default; pick a day (or step with the arrows) to filter
+          packages by the day they were placed (Order.CreatedAt). */}
       <div className="aop-daynav">
-        <button className="aop-daynav__arrow" onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
+        <button className="aop-daynav__arrow" disabled={!selectedDate} onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </button>
         <div className="aop-daynav__label">
@@ -714,17 +723,23 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
             <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
-          <span>{selectedDate.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>
-          {isToday && <span className="aop-daynav__today">{t.pickupToday}</span>}
+          <input
+            type="date"
+            className="aop-daynav__date"
+            value={selectedDate ? toDateKey(selectedDate) : ''}
+            max={toDateKey(georgianToday())}
+            onChange={e => setSelectedDate(e.target.value ? new Date(e.target.value + 'T00:00:00') : null)}
+          />
+          {!selectedDate
+            ? <span className="aop-daynav__today">{t.aopAllDays}</span>
+            : isToday && <span className="aop-daynav__today">{t.pickupToday}</span>}
         </div>
-        <button className="aop-daynav__arrow" onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
+        <button className="aop-daynav__arrow" disabled={!selectedDate || isToday} onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </button>
-        {!isToday && (
-          <button className="aop-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>
-            {t.pickupToday}
-          </button>
-        )}
+        {selectedDate
+          ? <button className="aop-daynav__jump" onClick={() => setSelectedDate(null)}>{t.aopShowAll}</button>
+          : <button className="aop-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>{t.pickupToday}</button>}
       </div>
 
       {/* Pending Assign / Assigned tabs + column toggles */}
@@ -874,7 +889,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
                 <path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               </svg>
-              Assign Courier
+              {t.aopModeAssign}
             </button>
             <button
               className={`go-seg__btn${bulkMode === 'prices' ? ' go-seg__btn--active' : ''}`}
@@ -884,7 +899,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.3"/>
                 <path d="M8 4.5v1M8 10.5v1M5.5 8c0-.83.67-1.5 1.5-1.5h2a1 1 0 010 2H7a1 1 0 000 2h2c.83 0 1.5-.67 1.5-1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
               </svg>
-              Set Prices
+              {t.aopModePrices}
             </button>
             <button
               className={`go-seg__btn${bulkMode === 'deliver' ? ' go-seg__btn--active' : ''}`}
@@ -893,7 +908,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <path d="M2 8.5l3.5 3.5L14 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              Mark Delivered
+              {t.aopModeDeliver}
             </button>
           </div>
 
@@ -902,14 +917,14 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             type="button"
             className="aop-bulk-btn aop-bulk-btn--ghost"
             onClick={handlePrintLabels}
-            title="Print labels for selected orders"
+            title={t.aopPrintLabelsTitle}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M4.5 6V2.5h7V6M4.5 11.5h-1A1.5 1.5 0 0 1 2 10V8a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 14 8v2a1.5 1.5 0 0 1-1.5 1.5h-1M4.5 9.5h7v4h-7z"
                 stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            Print Labels
+            {t.aopPrintLabels}
           </button>
 
           <span className="aop-bulk-count">
@@ -934,7 +949,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                   onChange={e => setBulkCourierId(e.target.value)}
                   style={{ minWidth: 220 }}
                 >
-                  <option value="">Choose courier…</option>
+                  <option value="">{t.aopChooseCourierOpt}</option>
                   {couriers.map(c => (
                     <option key={c.courierId} value={c.courierId}>
                       {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
@@ -950,7 +965,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 disabled={!bulkCourierId || bulkAssigning}
                 onClick={handleBulkAssign}
               >
-                {bulkAssigning ? 'Assigning…' : `Assign to ${selected.size} order${selected.size !== 1 ? 's' : ''}`}
+                {bulkAssigning ? t.aopAssigning : t.aopAssignToN(selected.size)}
               </button>
             </>
           )}
@@ -960,27 +975,27 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
             <>
               {!showBulkModal ? (
                 <button className="aop-bulk-btn aop-bulk-btn--price" onClick={() => setShowBulkModal(true)}>
-                  💰 Set Prices
+                  {t.aopSetPrices}
                 </button>
               ) : (
                 <div className="aop-bulk-input-row">
-                  <span className="aop-bulk-label">Service Price</span>
+                  <span className="aop-bulk-label">{t.aopBulkSvcLabel}</span>
                   <div className="aop-bulk-input-wrap">
                     <span className="aop-bulk-currency">₾</span>
                     <input
                       className="aop-bulk-input"
-                      type="number" min="0" step="0.01" placeholder="unchanged"
+                      type="number" min="0" step="0.01" placeholder={t.aopUnchangedPh}
                       value={bulkPrice} autoFocus
                       onChange={e => setBulkPrice(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Escape') cancelBulk(); }}
                     />
                   </div>
-                  <span className="aop-bulk-label" style={{ marginLeft: 8 }}>Courier Salary</span>
+                  <span className="aop-bulk-label" style={{ marginLeft: 8 }}>{t.aopBulkSalLabel}</span>
                   <div className="aop-bulk-input-wrap">
                     <span className="aop-bulk-currency">₾</span>
                     <input
                       className="aop-bulk-input"
-                      type="number" min="0" step="0.01" placeholder="unchanged"
+                      type="number" min="0" step="0.01" placeholder={t.aopUnchangedPh}
                       value={bulkSalary}
                       onChange={e => setBulkSalary(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') void handleBulkApply(); if (e.key === 'Escape') cancelBulk(); }}
@@ -1015,7 +1030,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                     onChange={e => setBulkCourierId(e.target.value)}
                     style={{ minWidth: 220 }}
                   >
-                    <option value="">Courier for unassigned…</option>
+                    <option value="">{t.aopCourierForUnassigned}</option>
                     {couriers.map(c => (
                       <option key={c.courierId} value={c.courierId}>
                         {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
@@ -1033,8 +1048,8 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 onClick={handleBulkDeliver}
               >
                 {bulkDelivering
-                  ? 'Marking…'
-                  : `Mark ${actionPool.length} delivered`}
+                  ? t.aopMarking
+                  : t.aopMarkNDelivered(actionPool.length)}
               </button>
             </>
           )}
@@ -1084,7 +1099,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               </div>
               {/* Bulk apply banner */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', marginBottom: 12, background: 'var(--color-accent-dim)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>Apply to {salaryChecked.size > 0 ? `selected (${salaryChecked.size})` : 'all'}:</span>
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>{salaryChecked.size > 0 ? t.aopApplyToSel(salaryChecked.size) : t.aopApplyToAll}</span>
                 <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'var(--color-bg-2)' }}>
                   <span style={{ padding: '0 6px 0 10px', fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>₾</span>
                   <input type="number" min="0" step="0.01" placeholder="0.00" id="bulk-salary-input-pkg"
@@ -1097,23 +1112,23 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                   setSalaryDrafts(prev => { const next = { ...prev }; targets.forEach(id => { next[id] = val; }); return next; });
                   setSalaryChecked(prev => { const next = new Set(prev); targets.forEach(id => next.add(id)); return next; });
                   inp.value = '';
-                }} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0, background: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Apply</button>
+                }} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0, background: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{t.aopApplyValue}</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--color-border)' }}>
                 <input type="checkbox" style={{ cursor: 'pointer' }} checked={allChecked}
                   onChange={e => setSalaryChecked(e.target.checked ? new Set(missingSalaryOrders.map(o => o.id)) : new Set())} />
-                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Select all ({missingSalaryOrders.length})</span>
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopSelectAllN(missingSalaryOrders.length)}</span>
               </div>
               <div style={{ overflowY: 'auto', flex: 1 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                   <thead>
                     <tr style={{ background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
                       <th style={{ width: 28, padding: '6px 4px' }}></th>
-                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Tracking</th>
-                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Address</th>
-                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Svc Price</th>
-                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Salary</th>
-                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Revenue</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThTracking}</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopColAddress}</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSvcPrice}</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSalary}</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThRevenue}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1152,10 +1167,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
                 <button onClick={() => setShowSalaryModal(false)} disabled={salarySaving}
-                  style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Close</button>
+                  style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>{t.close}</button>
                 <button onClick={handleSalarySave} disabled={salarySaving || salaryChecked.size === 0}
                   style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (salarySaving || salaryChecked.size === 0) ? 0.6 : 1 }}>
-                  {salarySaving ? 'Saving…' : `Save${salaryChecked.size > 0 ? ` (${salaryChecked.size})` : ''}`}
+                  {salarySaving ? t.aopSaving : t.aopSaveWithCount(salaryChecked.size)}
                 </button>
               </div>
             </div>
@@ -1180,7 +1195,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               </div>
               {/* Bulk apply banner */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', marginBottom: 12, background: 'var(--color-accent-dim)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>Apply to {priceChecked.size > 0 ? `selected (${priceChecked.size})` : 'all'}:</span>
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>{priceChecked.size > 0 ? t.aopApplyToSel(priceChecked.size) : t.aopApplyToAll}</span>
                 <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'var(--color-bg-2)' }}>
                   <span style={{ padding: '0 6px 0 10px', fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>₾</span>
                   <input type="number" min="0" step="0.01" placeholder="0.00" id="bulk-price-input-pkg"
@@ -1193,21 +1208,21 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                   setPriceDrafts(prev => { const next = { ...prev }; targets.forEach(id => { next[id] = val; }); return next; });
                   setPriceChecked(prev => { const next = new Set(prev); targets.forEach(id => next.add(id)); return next; });
                   inp.value = '';
-                }} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0, background: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Apply</button>
+                }} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0, background: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{t.aopApplyValue}</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--color-border)' }}>
                 <input type="checkbox" style={{ cursor: 'pointer' }} checked={allChecked}
                   onChange={e => setPriceChecked(e.target.checked ? new Set(missingPriceOrders.map(o => o.id)) : new Set())} />
-                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Select all ({missingPriceOrders.length})</span>
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopSelectAllN(missingPriceOrders.length)}</span>
               </div>
               <div style={{ overflowY: 'auto', flex: 1 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
                   <thead>
                     <tr style={{ background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
                       <th style={{ width: 28, padding: '6px 4px' }}></th>
-                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Tracking</th>
-                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Address</th>
-                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>Svc Price</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThTracking}</th>
+                      <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopColAddress}</th>
+                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSvcPrice}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1240,10 +1255,10 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
                 <button onClick={() => setShowPriceModal(false)} disabled={priceSaving}
-                  style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>Close</button>
+                  style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>{t.close}</button>
                 <button onClick={handlePriceSave} disabled={priceSaving || priceChecked.size === 0}
                   style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (priceSaving || priceChecked.size === 0) ? 0.6 : 1 }}>
-                  {priceSaving ? 'Saving…' : `Save${priceChecked.size > 0 ? ` (${priceChecked.size})` : ''}`}
+                  {priceSaving ? t.aopSaving : t.aopSaveWithCount(priceChecked.size)}
                 </button>
               </div>
             </div>
@@ -1287,7 +1302,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                 {showPrices && <th className="aop-th aop-th--num">{t.aopThSalary}</th>}
                 {showPrices && <th className="aop-th aop-th--num">{t.aopThRevenue}</th>}
                 <th className="aop-th">{t.aopThPaid}</th>
-                <th className="aop-th">Actions</th>
+                <th className="aop-th">{t.aopThActions}</th>
               </tr>
             </thead>
             <tbody>
@@ -1394,7 +1409,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                           cursor: 'pointer', whiteSpace: 'nowrap',
                         }}
                       >
-                        View
+                        {t.aopView}
                       </button>
                       <button
                         onClick={() => setEditingOrder(order)}
@@ -1405,7 +1420,7 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
                           cursor: 'pointer', whiteSpace: 'nowrap',
                         }}
                       >
-                        Edit
+                        {t.aopEdit}
                       </button>
                     </td>
                   </tr>
@@ -1471,7 +1486,9 @@ export default function AdminOrdersPage({ token: tokenProp }: { token: string })
         /* ── Day navigator (mirrors Pick-Up page) ── */
         .aop-daynav { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
         .aop-daynav__arrow { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer; transition: all var(--transition); }
-        .aop-daynav__arrow:hover { background: var(--color-bg-3); border-color: var(--color-text-subtle); }
+        .aop-daynav__arrow:hover:not(:disabled) { background: var(--color-bg-3); border-color: var(--color-text-subtle); }
+        .aop-daynav__arrow:disabled { opacity: 0.4; cursor: not-allowed; }
+        .aop-daynav__date { background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.85rem; font-weight: 600; padding: 5px 8px; outline: none; font-family: inherit; }
         .aop-daynav__label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; font-weight: 700; color: var(--color-text); }
         .aop-daynav__today { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent); background: var(--color-accent-dim); border-radius: 100px; padding: 2px 8px; }
         .aop-daynav__jump { margin-left: 4px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.76rem; font-weight: 600; padding: 6px 12px; cursor: pointer; transition: all var(--transition); }

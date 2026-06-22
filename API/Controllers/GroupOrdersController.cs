@@ -10,6 +10,8 @@ using Application.GroupOrders.Commands.CancelGroupOrderByAdmin;
 using Application.GroupOrders.Commands.CourierGroupOrderActions;
 using Application.GroupOrders.Commands.CreateGroupOrder;
 using Application.GroupOrders.Commands.DeclineGroupOrder;
+using Application.GroupOrders.Commands.GroupAndAcceptStandaloneOrder;
+using Application.GroupOrders.Commands.GroupAndWarehouseStandaloneOrder;
 using Application.GroupOrders.Commands.SetGroupOrderPickupDate;
 using Application.GroupOrders.DTOs;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
@@ -327,6 +329,35 @@ public sealed class GroupOrdersController : BaseController
     {
         await Sender.Send(new AcceptGroupOrderCommand(id), ct);
         return NoContent();
+    }
+
+    // Group a standalone order (GroupOrderId == null) into a batch and accept it in one step.
+    // {id} is the standalone Order's id. Returns the resulting batch id.
+    [HttpPut("standalone/{id:guid}/group-and-accept")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> GroupAndAcceptStandalone(
+        Guid id, [FromQuery] Guid? targetGroupOrderId, CancellationToken ct)
+    {
+        var groupOrderId = await Sender.Send(new GroupAndAcceptStandaloneOrderCommand(id, targetGroupOrderId), ct);
+        return Ok(new { groupOrderId });
+    }
+
+    // Group a standalone order into a batch (chosen or new), record the pickup courier on
+    // the batch, and mark it in the warehouse — all in one step. {id} is the Order's id.
+    [HttpPut("standalone/{id:guid}/group-and-warehouse")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> GroupAndWarehouseStandalone(
+        Guid id, [FromQuery] Guid? targetGroupOrderId, [FromQuery] Guid? courierId, CancellationToken ct)
+    {
+        var groupOrderId = await Sender.Send(
+            new GroupAndWarehouseStandaloneOrderCommand(id, targetGroupOrderId, courierId), ct);
+        return Ok(new { groupOrderId });
     }
 
     [HttpPut("{id:guid}/decline")]

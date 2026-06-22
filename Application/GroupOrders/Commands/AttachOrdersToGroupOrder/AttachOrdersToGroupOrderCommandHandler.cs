@@ -61,6 +61,11 @@ public sealed class AttachOrdersToGroupOrderCommandHandler
             if (!GroupOrderAppendPolicy.Appendable.Contains(groupOrder.Status))
                 throw new ConflictException("The chosen batch has already been picked up.");
         }
+        else if (request.ForceNewBatch)
+        {
+            // Admin explicitly chose "new batch": skip reuse so a fresh one is created below.
+            groupOrder = null;
+        }
         else
         {
             // Reuse an open same-day batch for this customer if one exists.

@@ -6,7 +6,8 @@ import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
 import { fetchGroupOrders,
-    fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup, mergeGroupOrders, moveOrderToGroup } from '../../api/adminGroupOrders';
+    fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup, mergeGroupOrders, moveOrderToGroup,
+    groupAndAcceptStandalone, groupAndWarehouseStandalone } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/adminGroupOrders';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import type { AdminOrderItem } from './AdminOrdersPage';
@@ -548,7 +549,9 @@ export function AdminDashboard() {
         /* Pick-Up day navigator */
         .pickup-daynav { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); }
         .pickup-daynav__arrow { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer; transition: all var(--transition); }
-        .pickup-daynav__arrow:hover { background: var(--color-bg-3); border-color: var(--color-text-subtle); }
+        .pickup-daynav__arrow:hover:not(:disabled) { background: var(--color-bg-3); border-color: var(--color-text-subtle); }
+        .pickup-daynav__arrow:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pickup-daynav__date { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.9rem; font-weight: 700; padding: 5px 8px; outline: none; font-family: inherit; }
         .pickup-daynav__label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.92rem; font-weight: 700; color: var(--color-text); }
         .pickup-daynav__today { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent); background: var(--color-accent-dim); border-radius: 100px; padding: 2px 8px; }
         .pickup-daynav__jump { margin-left: 4px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.76rem; font-weight: 600; padding: 6px 12px; cursor: pointer; transition: all var(--transition); }
@@ -942,12 +945,29 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Pick-Up day navigation + grouping ──────────────────────────────────────
-  // The page always shows one day (today by default) and steps with the arrows.
-  const [selectedDate,     setSelectedDate]     = useState<Date>(() => georgianToday());
+  // null = show ALL days (default); a date filters the list to that single day.
+  const [selectedDate,     setSelectedDate]     = useState<Date | null>(null);
   const [daySummary,       setDaySummary]       = useState<PickupDayCustomer[]>([]);
   const [groupingCustomer, setGroupingCustomer] = useState<PickupDayCustomer | null>(null);
-  const shiftDay = (delta: number) => setSelectedDate(prev => { const d = new Date(prev); d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d; });
-  const isToday = toDateKey(selectedDate) === toDateKey(georgianToday());
+  // The day grouping/merge actions operate on. Falls back to today while showing All,
+  // so the per-day Non-Grouped tools still work without a day chosen.
+  const [groupingDate,     setGroupingDate]     = useState<Date>(() => georgianToday());
+  // Standalone order the admin is accepting — drives the "choose batch, then accept" dialog.
+  const [acceptStandalone, setAcceptStandalone] = useState<AdminGroupOrder | null>(null);
+  const [acceptTargetId,   setAcceptTargetId]   = useState<string>(''); // '' = create a new batch
+  const [acceptBusy,       setAcceptBusy]       = useState(false);
+  // Standalone order the admin is warehousing — group + pickup courier + mark in warehouse.
+  const [whStandalone,     setWhStandalone]     = useState<AdminGroupOrder | null>(null);
+  const [whTargetId,       setWhTargetId]       = useState<string>(''); // '' = create a new batch
+  const [whCourierId,      setWhCourierId]      = useState<string>('');
+  const [whBusy,           setWhBusy]           = useState(false);
+  const effectiveDay    = selectedDate ?? georgianToday();
+  const effectiveDayKey = toDateKey(effectiveDay);
+  const shiftDay = (delta: number) => setSelectedDate(prev => {
+    const d = prev ? new Date(prev) : georgianToday();
+    d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d;
+  });
+  const isToday = selectedDate != null && toDateKey(selectedDate) === toDateKey(georgianToday());
   const [mergingCustomer, setMergingCustomer] = useState<{ name: string; batches: AdminGroupOrder[] } | null>(null);
   // Grouped (batches) vs Non-grouped (customers with un-grouped orders) view.
   const [pickupMode,      setPickupMode]      = useState<'grouped' | 'ungrouped'>('grouped');
@@ -1021,9 +1041,11 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
   }, [token]);
 
   const loadSummary = useCallback(async () => {
-    try { setDaySummary(await fetchPickupDay(token ?? '', toDateKey(selectedDate))); }
+    // The Non-Grouped tools are per-day; summarize the effective day (the chosen day,
+    // or today while showing All) so they keep working without a day filter.
+    try { setDaySummary(await fetchPickupDay(token ?? '', effectiveDayKey)); }
     catch { setDaySummary([]); }
-  }, [token, selectedDate]);
+  }, [token, effectiveDayKey]);
 
   useEffect(() => { void loadSummary(); }, [loadSummary]);
 
@@ -1116,10 +1138,10 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
     });
   }, [groupOrders, filterStatus, filterCity, filterDistricts, filterParty]);
 
-  // Only the selected day's batches (Pick-Up page is single-day, by Georgian created date).
-  const dayKey = toDateKey(selectedDate);
+  // When a day is chosen, show only that Georgian day's batches; otherwise (All) show every day.
+  const dayKey = selectedDate ? toDateKey(selectedDate) : null;
   const dayOrders = useMemo(
-    () => visibleOrders.filter(go => georgianDateKeyOf(go.createdAt) === dayKey),
+    () => (dayKey ? visibleOrders.filter(go => georgianDateKeyOf(go.createdAt) === dayKey) : visibleOrders),
     [visibleOrders, dayKey],
   );
 
@@ -1127,8 +1149,9 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
   const mergeableByCustomer = useMemo(() => {
     const m = new Map<string, AdminGroupOrder[]>();
     for (const go of groupOrders) {
+      if (go.isStandalone) continue;            // not a real batch — can't merge
       if (!go.customerId) continue;
-      if (georgianDateKeyOf(go.createdAt) !== dayKey) continue;
+      if (georgianDateKeyOf(go.createdAt) !== effectiveDayKey) continue;
       if (!MERGEABLE_STATUSES.has(go.status)) continue;
       const arr = m.get(go.customerId);
       if (arr) arr.push(go); else m.set(go.customerId, [go]);
@@ -1137,7 +1160,17 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
     for (const arr of m.values())
       arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     return m;
-  }, [groupOrders, dayKey]);
+  }, [groupOrders, effectiveDayKey]);
+
+  // Appendable real batches for a customer on a specific Georgian day. Used when grouping
+  // a standalone order so its target batches match the order's own day — correct even in
+  // All mode, where cards from several days are shown together.
+  const batchesFor = useCallback((customerId: string, dKey: string) =>
+    groupOrders
+      .filter(b => !b.isStandalone && b.customerId === customerId
+        && georgianDateKeyOf(b.createdAt) === dKey && MERGEABLE_STATUSES.has(b.status))
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+  [groupOrders]);
 
   // Customers that have batches on the selected day (for the Grouped-view dropdown).
   const groupedCustomers = useMemo(() => {
@@ -1157,8 +1190,9 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
   const multiBatchCustomers = useMemo(() => {
     const counts = new Map<string, { name: string; n: number }>();
     for (const go of groupOrders) {
+      if (go.isStandalone) continue;            // standalone singles aren't batches
       if (!go.customerId) continue;
-      if (georgianDateKeyOf(go.createdAt) !== dayKey) continue;
+      if (georgianDateKeyOf(go.createdAt) !== effectiveDayKey) continue;
       const e = counts.get(go.customerId);
       if (e) e.n += 1; else counts.set(go.customerId, { name: go.senderBusinessName, n: 1 });
     }
@@ -1166,22 +1200,42 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
       .filter(([, v]) => v.n >= 2)
       .map(([id, v]) => ({ id, name: v.name, count: v.n }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [groupOrders, dayKey]);
+  }, [groupOrders, effectiveDayKey]);
 
-  // The batches shown in the Non-grouped list: every batch belonging to a multi-batch
+  // Customers surfaced in the Non-grouped view: those with 2+ batches that day
+  // (mergeable) AND those with standalone orders not yet attached to any batch
+  // (groupable, GroupOrderId == null). Without the latter a customer whose only
+  // orders are standalone would never be selectable here — and so never groupable.
+  // For the count badge prefer the loose-order count when present, since that's the
+  // figure the "Group orders" action acts on.
+  const ungroupedCustomers = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; count: number }>();
+    for (const c of multiBatchCustomers) map.set(c.id, { id: c.id, name: c.name, count: c.count });
+    for (const s of daySummary) {
+      if (s.unattachedOrders <= 0) continue;
+      const existing = map.get(s.customerId);
+      if (existing) existing.count = s.unattachedOrders;
+      else map.set(s.customerId, { id: s.customerId, name: s.businessName, count: s.unattachedOrders });
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [multiBatchCustomers, daySummary]);
+
+  // The batches shown in the Non-grouped list: every batch belonging to a surfaced
   // customer that day, optionally narrowed to one customer, same-customer batches grouped.
+  // (Standalone, un-batched orders have no batch to draw here — they are grouped via the
+  // per-customer "Group orders" action, which lists them in a modal.)
   const ungroupedListOrders = useMemo(() => {
-    const ids = new Set(multiBatchCustomers.map(c => c.id));
+    const ids = new Set(ungroupedCustomers.map(c => c.id));
     return groupOrders
       .filter(go => !!go.customerId
                  && ids.has(go.customerId)
-                 && georgianDateKeyOf(go.createdAt) === dayKey
+                 && georgianDateKeyOf(go.createdAt) === effectiveDayKey
                  && (!ungroupedCustomerFilter || go.customerId === ungroupedCustomerFilter))
       .sort((a, b) =>
         a.customerId !== b.customerId
           ? a.senderBusinessName.localeCompare(b.senderBusinessName)
           : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }, [groupOrders, dayKey, multiBatchCustomers, ungroupedCustomerFilter]);
+  }, [groupOrders, effectiveDayKey, ungroupedCustomers, ungroupedCustomerFilter]);
 
   // The list the shared batch renderer draws, depending on the active toggle.
   const displayList = pickupMode === 'ungrouped' ? ungroupedListOrders : listOrders;
@@ -1272,9 +1326,9 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
 
   return (
     <div className="content-card" style={{ overflow: 'hidden' }}>
-      {/* Day navigator — always one day, today by default */}
+      {/* Day navigator — All by default; pick a day (or step with arrows) to filter */}
       <div className="pickup-daynav">
-        <button className="pickup-daynav__arrow" onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
+        <button className="pickup-daynav__arrow" disabled={!selectedDate} onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </button>
         <div className="pickup-daynav__label">
@@ -1282,17 +1336,23 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
             <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
             <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
-          <span>{selectedDate.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>
-          {isToday && <span className="pickup-daynav__today">{t.pickupToday}</span>}
+          <input
+            type="date"
+            className="pickup-daynav__date"
+            value={selectedDate ? toDateKey(selectedDate) : ''}
+            max={toDateKey(georgianToday())}
+            onChange={e => setSelectedDate(e.target.value ? new Date(e.target.value + 'T00:00:00') : null)}
+          />
+          {!selectedDate
+            ? <span className="pickup-daynav__today">{t.aopAllDays}</span>
+            : isToday && <span className="pickup-daynav__today">{t.pickupToday}</span>}
         </div>
-        <button className="pickup-daynav__arrow" onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
+        <button className="pickup-daynav__arrow" disabled={!selectedDate || isToday} onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </button>
-        {!isToday && (
-          <button className="pickup-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>
-            {t.pickupToday}
-          </button>
-        )}
+        {selectedDate
+          ? <button className="pickup-daynav__jump" onClick={() => setSelectedDate(null)}>{t.aopShowAll}</button>
+          : <button className="pickup-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>{t.pickupToday}</button>}
         {canManage && (
         <div className="pickup-modes">
           <button
@@ -1320,7 +1380,7 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
             </svg>
             <select className="go-select" value={ungroupedCustomerFilter} onChange={e => setUngroupedCustomerFilter(e.target.value)}>
               <option value="">{t.pickupAllCustomers}</option>
-              {multiBatchCustomers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.count})</option>)}
+              {ungroupedCustomers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.count})</option>)}
             </select>
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
@@ -1330,7 +1390,7 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
           {ungroupedCustomerFilter && (() => {
             const mergeable = mergeableByCustomer.get(ungroupedCustomerFilter) ?? [];
             const summary   = daySummary.find(c => c.customerId === ungroupedCustomerFilter);
-            const name      = multiBatchCustomers.find(c => c.id === ungroupedCustomerFilter)?.name ?? summary?.businessName ?? '';
+            const name      = ungroupedCustomers.find(c => c.id === ungroupedCustomerFilter)?.name ?? summary?.businessName ?? '';
             return (
               <>
                 {mergeable.length >= 2 && (
@@ -1339,7 +1399,7 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
                   </button>
                 )}
                 {summary && summary.unattachedOrders > 0 && (
-                  <button className="pickup-cust__group" onClick={() => setGroupingCustomer(summary ?? null)}>
+                  <button className="pickup-cust__group" onClick={() => { setGroupingDate(effectiveDay); setGroupingCustomer(summary ?? null); }}>
                     {t.pickupGroupOrdersBtn}
                   </button>
                 )}
@@ -1347,7 +1407,7 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
             );
           })()}
 
-          {multiBatchCustomers.length === 0 && (
+          {ungroupedCustomers.length === 0 && (
             <span className="go-count">{t.pickupNoUngrouped}</span>
           )}
         </div>
@@ -1631,6 +1691,11 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
                             <div className="go-cell go-cell--center">
                               <span className="go-cell__label">{t.goColStatus}</span>
                               <StatusBadge status={go.status} />
+                              {go.isStandalone && (
+                                <span style={{ marginTop: 3, fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', borderRadius: 100, padding: '1px 7px', whiteSpace: 'nowrap' }}>
+                                  {t.pickupStandaloneBadge}
+                                </span>
+                              )}
                             </div>
                             <div className="go-cell go-cell--center">
                               <span className="go-cell__label">{t.goColPackages}</span>
@@ -1642,12 +1707,41 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
                             </div>
                           </div>
                         </div>
-                        <AdminGroupOrderActions
-                          groupOrder={go} couriers={couriers} token={token ?? ''}
-                          onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                          onRefresh={() => load(search)}
-                          canManage={canManage}
-                        />
+                        {go.isStandalone ? (
+                          canManage && go.customerId && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                              <button className="go-action-btn go-action-btn--ghost"
+                                onClick={e => { e.stopPropagation(); setGroupingDate(new Date(georgianDateKeyOf(go.createdAt) + 'T00:00:00')); setGroupingCustomer({ customerId: go.customerId!, businessName: go.senderBusinessName, ordersPlaced: 1, unattachedOrders: 1 }); }}>
+                                {t.pickupGroupOrdersBtn}
+                              </button>
+                              <button className="go-action-btn go-action-btn--accept"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  const bs = batchesFor(go.customerId!, georgianDateKeyOf(go.createdAt));
+                                  setAcceptTargetId(bs[0]?.id ?? '');
+                                  setAcceptStandalone(go);
+                                }}>
+                                {t.goAccept}
+                              </button>
+                              <button className="go-action-btn go-action-btn--warehouse"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setWhTargetId('');          // default: create a new 1-order batch
+                                  setWhCourierId('');
+                                  setWhStandalone(go);
+                                }}>
+                                {t.goForceWarehouse}
+                              </button>
+                            </div>
+                          )
+                        ) : (
+                          <AdminGroupOrderActions
+                            groupOrder={go} couriers={couriers} token={token ?? ''}
+                            onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
+                            onRefresh={() => load(search)}
+                            canManage={canManage}
+                          />
+                        )}
                       </div>
 
                       {expanded && (
@@ -1767,8 +1861,8 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
       {groupingCustomer && (
         <GroupingModal
           customer={groupingCustomer}
-          date={selectedDate}
-          batches={mergeableByCustomer.get(groupingCustomer.customerId) ?? []}
+          date={groupingDate}
+          batches={batchesFor(groupingCustomer.customerId, toDateKey(groupingDate))}
           token={token ?? ''}
           onClose={() => setGroupingCustomer(null)}
           onGrouped={n => {
@@ -1795,6 +1889,143 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
           }}
         />
       )}
+
+      {/* Accept a standalone order: choose which batch to merge into (or a new one), then accept */}
+      {acceptStandalone && (() => {
+        const batches = acceptStandalone.customerId ? batchesFor(acceptStandalone.customerId, georgianDateKeyOf(acceptStandalone.createdAt)) : [];
+        return createPortal(
+          <div className="pickup-modal__overlay" onClick={() => { if (!acceptBusy) setAcceptStandalone(null); }}>
+            <div className="pickup-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+              <div className="pickup-modal__header">
+                <div>
+                  <h3 className="pickup-modal__title">{t.pickupStandaloneAcceptTitle}</h3>
+                  <p className="pickup-modal__subtitle">
+                    {batches.length > 0 ? t.pickupStandaloneAcceptChoose : t.pickupStandaloneAcceptNewOnly(acceptStandalone.senderBusinessName)}
+                  </p>
+                </div>
+                <button className="pickup-modal__close" onClick={() => setAcceptStandalone(null)} disabled={acceptBusy} aria-label={t.close}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                </button>
+              </div>
+              {batches.length > 0 && (
+                <div className="pickup-modal__body">
+                  <label className="pickup-modal__target">
+                    <span>{t.pickupGroupTarget}</span>
+                    <select className="go-select" value={acceptTargetId} onChange={e => setAcceptTargetId(e.target.value)} disabled={acceptBusy}>
+                      {batches.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {t.goPkgs(b.numberOfPackages)}
+                        </option>
+                      ))}
+                      <option value="">{t.pickupGroupNewBatch}</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+              <div className="pickup-modal__footer" style={{ paddingTop: 16 }}>
+                <button className="go-action-btn go-action-btn--ghost" onClick={() => setAcceptStandalone(null)} disabled={acceptBusy}>
+                  {t.cancel}
+                </button>
+                <button className="go-action-btn go-action-btn--accept" disabled={acceptBusy}
+                  onClick={async () => {
+                    setAcceptBusy(true);
+                    try {
+                      await groupAndAcceptStandalone(token ?? '', acceptStandalone.id, acceptTargetId || undefined);
+                      setAcceptStandalone(null);
+                      showToast(t.pickupStandaloneAcceptedToast);
+                      void load(search);
+                      void loadSummary();
+                    } catch (e) {
+                      showToast(e instanceof Error ? e.message : t.goActionFailed, 'err');
+                    } finally {
+                      setAcceptBusy(false);
+                    }
+                  }}>
+                  {acceptBusy ? t.pickupStandaloneAccepting : t.pickupStandaloneAcceptConfirm}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        );
+      })()}
+
+      {/* Mark a standalone order in warehouse: group/merge (or new batch) + pickup courier */}
+      {whStandalone && (() => {
+        const batches = whStandalone.customerId ? batchesFor(whStandalone.customerId, georgianDateKeyOf(whStandalone.createdAt)) : [];
+        const targetBatch = batches.find(b => b.id === whTargetId);
+        const courierRequired = !targetBatch?.courierId;   // new batch / courier-less batch needs one
+        const activeCouriers = couriers.filter(c => !c.isDeleted);
+        return createPortal(
+          <div className="pickup-modal__overlay" onClick={() => { if (!whBusy) setWhStandalone(null); }}>
+            <div className="pickup-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+              <div className="pickup-modal__header">
+                <div>
+                  <h3 className="pickup-modal__title">{t.pickupStandaloneWhTitle}</h3>
+                  <p className="pickup-modal__subtitle">
+                    {batches.length > 0 ? t.pickupStandaloneWhChoose : t.pickupStandaloneWhNewOnly(whStandalone.senderBusinessName)}
+                  </p>
+                </div>
+                <button className="pickup-modal__close" onClick={() => setWhStandalone(null)} disabled={whBusy} aria-label={t.close}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                </button>
+              </div>
+              <div className="pickup-modal__body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {batches.length > 0 && (
+                  <label className="pickup-modal__target">
+                    <span>{t.pickupGroupTarget}</span>
+                    <select className="go-select" value={whTargetId} onChange={e => setWhTargetId(e.target.value)} disabled={whBusy}>
+                      {batches.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {t.goPkgs(b.numberOfPackages)}
+                        </option>
+                      ))}
+                      <option value="">{t.pickupGroupNewBatch}</option>
+                    </select>
+                  </label>
+                )}
+                {courierRequired && (
+                  <label className="pickup-modal__target">
+                    <span>{t.pickupStandaloneWhCourier}</span>
+                    <select className="go-select" value={whCourierId} onChange={e => setWhCourierId(e.target.value)} disabled={whBusy}>
+                      <option value="">{t.goChooseCourierOption}</option>
+                      {activeCouriers.map(c => (
+                        <option key={c.courierId} value={c.courierId}>{c.fullName} — {c.assignedCity}, {c.assignedDistrict}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+              <div className="pickup-modal__footer" style={{ paddingTop: 16 }}>
+                <button className="go-action-btn go-action-btn--ghost" onClick={() => setWhStandalone(null)} disabled={whBusy}>
+                  {t.cancel}
+                </button>
+                <button className="go-action-btn go-action-btn--warehouse" disabled={whBusy || (courierRequired && !whCourierId)}
+                  onClick={async () => {
+                    setWhBusy(true);
+                    try {
+                      await groupAndWarehouseStandalone(token ?? '', whStandalone.id, {
+                        targetGroupOrderId: whTargetId || undefined,
+                        courierId: whCourierId || undefined,
+                      });
+                      setWhStandalone(null);
+                      showToast(t.pickupStandaloneWhToast);
+                      void load(search);
+                      void loadSummary();
+                    } catch (e) {
+                      showToast(e instanceof Error ? e.message : t.goActionFailed, 'err');
+                    } finally {
+                      setWhBusy(false);
+                    }
+                  }}>
+                  {whBusy ? t.pickupStandaloneAccepting : t.goForceWarehouse}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        );
+      })()}
     </div>
   );
 }

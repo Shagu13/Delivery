@@ -88,6 +88,9 @@ export interface AdminGroupOrder {
     companyServiceCityPrice: number | null;
     companyServiceDistrictPrice: number | null;
     orders: AdminOrder[];
+    /** True for a synthetic single-order "batch" wrapping a standalone order
+     *  (GroupOrderId == null). Rendered like a batch but with a Group action. */
+    isStandalone?: boolean;
 }
 
 // ── Queries ───────────────────────────────────────────────────────────────────
@@ -221,6 +224,42 @@ export const setGroupOrderPickupDate  = (token: string, id: string, pickupDate: 
 
 export const assignCourierToGroupOrder = (token: string, id: string, courierId: string) =>
     groupOrderAction(token, id, 'assign-courier', { courierId });
+
+/** Group a standalone order (no batch) into a batch and accept it, in one step.
+ *  `orderId` is the standalone Order's id. Pass `targetGroupOrderId` to merge into a
+ *  specific existing batch; omit it to create a new batch. */
+export async function groupAndAcceptStandalone(
+    token: string, orderId: string, targetGroupOrderId?: string,
+): Promise<void> {
+    const q = targetGroupOrderId ? `?targetGroupOrderId=${targetGroupOrderId}` : '';
+    const res = await fetch(`${BASE}/standalone/${orderId}/group-and-accept${q}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Request failed' }));
+        throw new Error(err.title ?? 'Request failed');
+    }
+}
+
+/** Group a standalone order into a batch (chosen or new), record the pickup courier on
+ *  the batch, and mark it in the warehouse — in one step. `orderId` is the Order's id. */
+export async function groupAndWarehouseStandalone(
+    token: string, orderId: string, opts: { targetGroupOrderId?: string; courierId?: string },
+): Promise<void> {
+    const params = new URLSearchParams();
+    if (opts.targetGroupOrderId) params.set('targetGroupOrderId', opts.targetGroupOrderId);
+    if (opts.courierId)          params.set('courierId', opts.courierId);
+    const q = params.toString() ? `?${params}` : '';
+    const res = await fetch(`${BASE}/standalone/${orderId}/group-and-warehouse${q}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Request failed' }));
+        throw new Error(err.title ?? 'Request failed');
+    }
+}
 
 export const markPickingUp = (token: string, id: string) => groupOrderAction(token, id, 'picking-up');
 export const markPickedUp = (token: string, id: string) => groupOrderAction(token, id, 'picked-up');
