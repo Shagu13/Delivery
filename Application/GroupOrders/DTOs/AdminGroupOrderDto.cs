@@ -26,6 +26,9 @@ public sealed record AdminGroupOrderDto(
     string? Note,
     int     NumberOfPackages,
     DateTime? WhenPackagePickedUpDate,
+    // Actual pickup / warehouse-drop timestamps (null until they happen).
+    DateTime? PickedUpAt,
+    DateTime? DeliveredToWarehouseAt,
     // Assigned pickup courier (null until assigned)
     Guid?   CourierId,
     string? CourierFullName,

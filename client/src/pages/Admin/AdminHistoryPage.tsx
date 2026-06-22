@@ -34,14 +34,24 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── History categories ──────────────────────────────────────────────────────
 
-type HistoryFilter = 'delivered' | 'cancelled' | 'returned' | 'exchanged';
+type HistoryFilter = 'delivered' | 'cancelled' | 'returned' | 'exchanged' | 'pickedup';
 
 const HISTORY_PILLS: { value: HistoryFilter; labelKey: string }[] = [
   { value: 'delivered', labelKey: 'histPillDelivered' },
   { value: 'cancelled', labelKey: 'histPillCancelled' },
   { value: 'returned',  labelKey: 'histPillReturned' },
   { value: 'exchanged', labelKey: 'histPillExchanged' },
+  { value: 'pickedup',  labelKey: 'histPillPickedUp' },
 ];
+
+// Group-order statuses meaning "the batch has reached the warehouse".
+const WAREHOUSE_STATUSES = new Set<string>(['DeliveredToWarehouse', 'AdminAcceptedOrderInWareHouse']);
+
+// The day a batch was brought to the warehouse: its pickup timestamp, else the
+// warehouse-drop timestamp, else (admin force-to-warehouse with no timestamps) its created day.
+function pickedUpDateOf(go: AdminGroupOrder): string {
+  return go.pickedUpAt ?? go.deliveredToWarehouseAt ?? go.createdAt;
+}
 
 const CANCELLED_STATUSES = new Set<string>(['CancelledBySender', 'CancelledByAdmin', 'OrderNotAccepted']);
 
@@ -234,12 +244,24 @@ export default function AdminHistoryPage({ token }: { token: string }) {
     [flatOrders, dayKey],
   );
 
+  // Group orders (real batches, not standalone singles) that reached the warehouse on
+  // the selected day — shows who picked them up. Search is already applied server-side.
+  const pickedUpGroups = useMemo(
+    () => groupOrders
+      .filter(go => !go.isStandalone
+                 && WAREHOUSE_STATUSES.has(go.status)
+                 && georgianDateKeyOf(pickedUpDateOf(go)) === dayKey)
+      .sort((a, b) => new Date(pickedUpDateOf(b)).getTime() - new Date(pickedUpDateOf(a)).getTime()),
+    [groupOrders, dayKey],
+  );
+
   const counts = useMemo(() => ({
     delivered: dayOrders.filter(f => f.category === 'delivered').length,
     cancelled: dayOrders.filter(f => f.category === 'cancelled').length,
     returned:  dayOrders.filter(f => f.category === 'returned').length,
     exchanged: dayOrders.filter(f => f.category === 'exchanged').length,
-  }), [dayOrders]);
+    pickedup:  pickedUpGroups.length,
+  }), [dayOrders, pickedUpGroups]);
 
   const visible = useMemo(
     () => dayOrders
@@ -247,6 +269,11 @@ export default function AdminHistoryPage({ token }: { token: string }) {
       .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()),
     [dayOrders, filterStatus],
   );
+
+  // The "Group orders picked-up" category lists batches (not single orders), so it has
+  // its own result set and table.
+  const isPickedUp  = filterStatus === 'pickedup';
+  const resultCount = isPickedUp ? pickedUpGroups.length : visible.length;
 
   // Footer totals for the visible set.
   const totals = useMemo(() => visible.reduce((acc, f) => {
@@ -326,7 +353,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
         </div>
         {!loading && !error && (
           <span className="go-count" style={{ marginLeft: 'auto' }}>
-            {visible.length} {t.goOrdersMatched}
+            {resultCount} {t.goOrdersMatched}
           </span>
         )}
       </div>
@@ -363,7 +390,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
       {/* States */}
       {loading && <div className="go-loading"><div className="go-spinner" />{t.goHistoryLoading}</div>}
       {!loading && error && <div className="go-error">{error}</div>}
-      {!loading && !error && visible.length === 0 && (
+      {!loading && !error && resultCount === 0 && (
         <div className="empty-state" style={{ padding: '48px 20px' }}>
           <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
             <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
@@ -373,8 +400,46 @@ export default function AdminHistoryPage({ token }: { token: string }) {
         </div>
       )}
 
+      {/* Group-orders picked-up: one row per batch brought to the warehouse, with courier */}
+      {!loading && !error && isPickedUp && resultCount > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="hist-table">
+            <thead>
+              <tr>
+                <th>{t.goSender}</th>
+                <th>{t.cgoPickupLocation}</th>
+                <th>{t.goThAddress}</th>
+                <th>{t.histThCourier}</th>
+                <th className="num">{t.goColPackages}</th>
+                <th>{t.goThStatus}</th>
+                <th className="num">{t.histThPickedUp}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pickedUpGroups.map(go => (
+                <tr key={go.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{go.senderBusinessName || '—'}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{go.senderPhone}</div>
+                  </td>
+                  <td>
+                    <div>{locCity(go.pickUpCity, go.pickUpCityGeo)}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}</div>
+                  </td>
+                  <td style={{ color: 'var(--color-text-subtle)', fontSize: '0.78rem', whiteSpace: 'normal', maxWidth: 220 }}>{go.pickUpAddress}</td>
+                  <td>{go.courierFullName ?? <span style={{ opacity: 0.35 }}>—</span>}</td>
+                  <td className="num">{go.numberOfPackages}</td>
+                  <td><StatusBadge status={go.status} /></td>
+                  <td className="num" style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{formatDate(pickedUpDateOf(go))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Flat single-order table */}
-      {!loading && !error && visible.length > 0 && (
+      {!loading && !error && !isPickedUp && visible.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table className="hist-table">
             <thead>
@@ -417,6 +482,9 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                       <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>
                         {locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}
                       </div>
+                      {o.recipientAddress && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                      )}
                     </td>
                     <td><StatusBadge status={o.status} /></td>
                     <td>

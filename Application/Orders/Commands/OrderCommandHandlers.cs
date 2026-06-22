@@ -547,16 +547,57 @@ public sealed class SetOrderCompanyServicePriceCommandHandler : IRequestHandler<
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
 
+        // ── All-in pricing: keep the customer's entered total constant ─────────
+        // For an order whose price was entered all-in (service fee bundled in), the
+        // stored COD is the product remainder and CompanyServicePrice is the fee slice;
+        // together they are the all-in total the customer committed to. When an admin
+        // sets/modifies the fee, re-slice so that total stays fixed:
+        //   newProduct = (currentProduct + currentFee) − newFee.
+        // Without this the total would drift (e.g. fee 0 → 12 turns a 100 all-in into 112).
+        if (order.IsCompanyServicePriceIncluded && order.AmountToCollectForPackage is decimal product)
+        {
+            var allInTotal = product + order.CompanyServicePrice;
+            if (request.Price > allInTotal)
+                throw new ValidationException(new[] {
+                    new FluentValidation.Results.ValidationFailure("Price",
+                        $"The service fee ({request.Price:0.##}) cannot exceed the all-in price ({allInTotal:0.##}).")
+                });
+            order.AmountToCollectForPackage = allInTotal - request.Price;
+        }
+
         order.CompanyServicePrice = request.Price;
 
         // Recalculate revenue if courier salary already set
         if (order.CourierSalary.HasValue)
             order.CompanyRevenue = order.CompanyServicePrice - order.CourierSalary.Value;
 
+        // If the order is already delivered, re-derive the physical cash the courier
+        // collected from the corrected fee (recipient-pays bundles the fee into the cash;
+        // sender-pays does not). Mirrors UpdateOrderCommandHandler so an admin correcting
+        // the fee from the Finance page after delivery keeps the courier's cash consistent.
+        var isDelivered = order.Status is OrderStatus.DeliveredToRecipient
+                                       or OrderStatus.ExchangeCompleted
+                                       or OrderStatus.DeliveredReturnOrderToWarehouse
+                                       or OrderStatus.ReturnedToSender;
+        if (isDelivered)
+            order.AmountOfCashCollected = order.WhoPaysForCompanyService == ServicePayer.Recipient
+                ? (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice
+                : order.AmountToCollectForPackage;
+
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Service price feeds "service owed by customer" on the batch invoice.
+        // ── Propagate to all finance settlements ──────────────────────────────
+        // Service price feeds "service owed by customer" on the batch invoice…
         await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
+
+        // …and the courier's daily settlement (service revenue, net income, cash) for the
+        // delivery day. No-op when the order has no courier / no settlement for that day.
+        var settlementDate = order.OrderType == OrderType.Return
+            ? order.DeliveredToWarehouseAt ?? order.DeliveredAt
+            : order.DeliveredAt ?? order.DeliveredToWarehouseAt;
+        if (order.CourierId.HasValue && settlementDate.HasValue)
+            await Settlements.CourierSettlementService.RecomputeForDayAsync(
+                _context, order.CourierId.Value, settlementDate.Value, cancellationToken);
     }
 }
 

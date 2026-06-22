@@ -10,6 +10,7 @@ import {
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
+import { setCompanyServicePrice } from '../../api/orders';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
@@ -465,6 +466,60 @@ function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmoun
     );
 }
 
+// Inline editor for an order's company service price. Saving propagates through the
+// backend to the customer + courier settlements and the company overview, so an admin
+// can correct a wrong price (e.g. city vs district rate) even after delivery.
+function ServicePriceEditor({ orderId, current, token, onError, onSaved }: {
+    orderId: string; current: number; token: string; onError: (m: string) => void; onSaved: () => void;
+}) {
+    const { t } = useLanguage();
+    const [editing, setEditing] = useState(false);
+    const [val, setVal] = useState(current.toFixed(2));
+    const [saving, setSaving] = useState(false);
+
+    // Re-sync the display whenever the saved value changes (after a reload).
+    useEffect(() => { if (!editing) setVal(current.toFixed(2)); }, [current, editing]);
+
+    const cancel = () => { setEditing(false); setVal(current.toFixed(2)); };
+    const save = async () => {
+        const n = Number(val);
+        if (isNaN(n) || n < 0) { onError(t.ofinSvcInvalid); return; }
+        if (round2(n) === round2(current)) { setEditing(false); return; }
+        setSaving(true);
+        try {
+            await setCompanyServicePrice(token, orderId, round2(n));
+            setEditing(false);
+            onSaved();
+        } catch (e) {
+            onError(e instanceof Error ? e.message : t.ofinErrAction);
+        } finally { setSaving(false); }
+    };
+
+    const btn: React.CSSProperties = { fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: '1px solid var(--color-border)' };
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: '0.7rem', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--color-text-subtle)' }}>{t.ofinColService}:</span>
+            {editing ? (
+                <>
+                    <span style={{ color: 'var(--color-text-subtle)' }}>₾</span>
+                    <input type="number" min="0" step="0.01" value={val} autoFocus disabled={saving}
+                        onChange={e => setVal(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') void save(); if (e.key === 'Escape') cancel(); }}
+                        style={{ width: 64, textAlign: 'right', background: 'var(--color-bg-3)', border: '1px solid var(--color-accent)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.74rem', padding: '2px 5px', outline: 'none' }} />
+                    <button onClick={() => void save()} disabled={saving} style={{ ...btn, background: 'var(--color-accent)', color: '#fff', borderColor: 'var(--color-accent)' }}>{saving ? '…' : t.save}</button>
+                    <button onClick={cancel} disabled={saving} style={{ ...btn, background: 'var(--color-bg-3)', color: 'var(--color-text-muted)' }}>✕</button>
+                </>
+            ) : (
+                <>
+                    <strong style={{ color: 'var(--color-text-muted)', fontWeight: 700 }}>{gel(current)}</strong>
+                    <button onClick={() => setEditing(true)} style={{ ...btn, background: 'var(--color-bg-3)', color: 'var(--color-accent)' }}>{t.edit}</button>
+                </>
+            )}
+        </div>
+    );
+}
+
 function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     customerId: string;
     lines: OrderFinanceLine[];
@@ -598,6 +653,9 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                         <span>{t.ofinColPlaced}: <strong style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{formatGeorgianDateTime(o.createdAt)}</strong></span>
                                         <span>{t.ofinColDelivered}: <strong style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{o.deliveredAt ? formatGeorgianDateTime(o.deliveredAt) : t.ofinNotDelivered}</strong></span>
                                     </div>
+                                    {/* Editable company service price — corrects a wrong rate and reflows all settlements */}
+                                    <ServicePriceEditor orderId={o.orderId} current={o.companyServicePrice}
+                                        token={token} onError={onError} onSaved={onChanged} />
                                 </div>
 
                                 {/* Service — customer → company (sender-pays only) */}

@@ -81,6 +81,9 @@ export interface AdminGroupOrder {
     note: string | null;
     numberOfPackages: number;
     whenPackagePickedUpDate: string | null;
+    /** Actual pickup / warehouse-drop timestamps (null until they happen). */
+    pickedUpAt?: string | null;
+    deliveredToWarehouseAt?: string | null;
     courierId: string | null;
     courierFullName: string | null;
     // Customer-specific service pricing (null when no linked customer / tier unset).

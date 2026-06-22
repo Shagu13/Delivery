@@ -212,6 +212,15 @@ export async function getCustomerById(id: string, token: string): Promise<Custom
   return handle(await fetch(`/api/customers/${id}`, { headers: { Authorization: `Bearer ${token}` } }));
 }
 
+/** Admin updates a customer's profile (name, business, phone, id, and pickup address). */
+export async function adminUpdateCustomer(id: string, data: UpdateCustomerRequest, token: string): Promise<void> {
+  return handleEmpty(await fetch(`/api/customers/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
+}
+
 /** Admin sets a new password for a customer without knowing the old one. */
 export async function adminSetCustomerPassword(
   id: string,

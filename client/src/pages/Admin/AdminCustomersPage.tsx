@@ -6,6 +6,7 @@ import {
   setCustomerActive,
 } from '../../api/customers';
 import { AdminSetPasswordModal } from './AdminSetPasswordModal';
+import { EditCustomerModal } from './EditCustomerModal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useLanguage } from '../../contexts/useLanguage';
 
@@ -36,6 +37,7 @@ export default function AdminCustomersPage({ token }: Props) {
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState('');
   const [pwdCustomer, setPwdCustomer]   = useState<AdminCustomer | null>(null);
+  const [editCustomer, setEditCustomer] = useState<AdminCustomer | null>(null);
   const [togglingId, setTogglingId]     = useState<string | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<AdminCustomer | null>(null);
   const [notice, setNotice]             = useState('');
@@ -146,7 +148,7 @@ export default function AdminCustomersPage({ token }: Props) {
           <thead>
             <tr style={{ background: '#f5f5f5' }}>
               {[
-                t.acupThBusiness, t.acupThName, t.acupThPhone, t.acupThCity, t.acupThDistrict, t.acupThEmail, t.acupThActive,
+                t.acupThBusiness, t.acupThName, t.acupThPhone, t.acupThCity, t.acupThDistrict, t.acupThAddress, t.acupThEmail, t.acupThActive,
                 t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, t.acupThIncluded, t.acupThActions,
               ].map((h, i) => (
                 <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
@@ -163,6 +165,7 @@ export default function AdminCustomersPage({ token }: Props) {
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.phoneNumber}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.city}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.district}</td>
+                <td style={{ padding: '0.6rem 0.75rem' }}>{c.address}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.email}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.isActive ? t.acupActive : t.acupInactive}</td>
 
@@ -220,9 +223,13 @@ export default function AdminCustomersPage({ token }: Props) {
                     <td style={{ padding: '0.6rem 0.75rem' }}>
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         <button
+                          onClick={() => setEditCustomer(c)}
+                          style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#eef2ff', border: '1px solid #c7d2fe', color: '#4338ca', cursor: 'pointer', fontSize: '0.8rem' }}
+                        >{t.edit}</button>
+                        <button
                           onClick={() => startEdit(c)}
                           style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
-                        >{t.edit}</button>
+                        >{t.acupPricesBtn}</button>
                         <button
                           onClick={() => setPwdCustomer(c)}
                           style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
@@ -265,6 +272,16 @@ export default function AdminCustomersPage({ token }: Props) {
         customer={pwdCustomer}
         onClose={() => setPwdCustomer(null)}
         onDone={() => { setPwdCustomer(null); setNotice(t.acupSetPwdSuccess); }}
+      />
+
+      <EditCustomerModal
+        customer={editCustomer}
+        onClose={() => setEditCustomer(null)}
+        onSaved={patch => {
+          setCustomers(prev => prev.map(x => x.id === editCustomer?.id ? { ...x, ...patch } : x));
+          setEditCustomer(null);
+          setNotice(t.acupEditSuccess);
+        }}
       />
 
       <ConfirmDialog

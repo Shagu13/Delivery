@@ -153,6 +153,23 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/customers/{id}  (Admin updates a customer's profile + address) ──
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AdminUpdate(
+        Guid id, [FromBody] UpdateCustomerRequest request, CancellationToken ct)
+    {
+        await Sender.Send(new UpdateCustomerCommand(
+            id,
+            new UpdateCustomerDto(
+                request.FirstName, request.LastName, request.IdNumber,
+                request.BusinessName, request.PhoneNumber,
+                request.City, request.District, request.Address)), ct);
+        return NoContent();
+    }
+
     // ── PUT /api/customers/{id}/password  (Admin sets a new password) ─────────
     /// <summary>
     /// Admin override for customers who can't recover their account. Sets a new
