@@ -101,6 +101,8 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             Note:                    go.Note,
             NumberOfPackages:        go.NumberOfPackages,
             WhenPackagePickedUpDate: go.WhenPackagePickedUpDate,
+            PickedUpAt:              go.PickedUpAt,
+            DeliveredToWarehouseAt:  go.DeliveredToWarehouseAt,
             CourierId:               go.CourierId,
             CourierFullName:         go.Courier is null
                 ? null
@@ -133,6 +135,8 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             Note:                    null,
             NumberOfPackages:        1,
             WhenPackagePickedUpDate: null,
+            PickedUpAt:              null,
+            DeliveredToWarehouseAt:  o.DeliveredToWarehouseAt,
             CourierId:               o.CourierId,
             CourierFullName:         null,
             CompanyServiceCapitalPrice:  null,
