@@ -910,6 +910,9 @@ namespace Persistence.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<string>("HomepageJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Host")
                         .IsRequired()
                         .HasMaxLength(150)

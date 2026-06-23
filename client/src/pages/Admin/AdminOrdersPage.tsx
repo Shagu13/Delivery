@@ -112,23 +112,23 @@ function isAssignable(o: AdminOrderItem): boolean {
       || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
 }
 
-// Last-mile statuses — an order is in (or past) the warehouse and on its way to the
-// recipient. Only here can a delivery courier be attributed and the order delivered.
-const LAST_MILE_STATUSES = [
-  'AdminAcceptedOrderInWareHouse',
-  'OrderIsOnItsWayToRecipientsCity',
-  'CourierAssignedToDeliver',
-  'CourierDeliveringTheOrderToRecipient',
-  'DeliveryPostponed',
+// Terminal statuses the backend's admin mark-delivered rejects (already finished/cancelled).
+const DELIVER_TERMINAL_STATUSES = [
+  'DeliveredToRecipient',
+  'ExchangeCompleted',
+  'AllDelivered',
+  'CancelledByAdmin',
+  'CancelledBySender',
+  'OrderNotAccepted',
 ];
 
-// Orders the admin can mark "delivered to recipient" from the Packages page: only
-// Send/Exchange orders that have reached the warehouse (last-mile flow). Orders still in
-// the pickup flow must first be accepted into the warehouse on the Pick-Up page, so the
-// pickup courier is recorded on the batch — otherwise that trace is lost. Return orders
-// are excluded — their final leg is a warehouse drop-off, not a recipient delivery.
+// Orders the admin can force "delivered to recipient" from the Packages page: any
+// Send/Exchange order that isn't already in a terminal status — including ones still in the
+// pickup flow (the admin override). Mirrors the backend AdminMarkOrderDelivered guard, so
+// every row it would accept is selectable here. Return orders are excluded — their final
+// leg is a warehouse drop-off, not a recipient delivery.
 function isDeliverable(o: AdminOrderItem): boolean {
-  return o.orderType !== 'Return' && LAST_MILE_STATUSES.includes(o.status);
+  return o.orderType !== 'Return' && !DELIVER_TERMINAL_STATUSES.includes(o.status);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -453,6 +453,21 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, selectedDate, page, load]);
 
+  // Esc terminates the Mark-Delivered action: leave deliver mode and clear the selection.
+  // Only active while in deliver mode, and never while a modal/warning dialog is open.
+  useEffect(() => {
+    if (bulkMode !== 'deliver') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showBulkModal || showPriceModal || showSalaryModal || showPriceWarning || showSalaryWarning) return;
+      setBulkMode('assign');
+      setSelected(new Set());
+      setBulkCourierId('');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [bulkMode, showBulkModal, showPriceModal, showSalaryModal, showPriceWarning, showSalaryWarning]);
+
   const cities = useMemo(() => {
     if (!data) return [];
     return [...new Set(data.items.map(o => o.recipientCity))].sort();
@@ -622,7 +637,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
       catch { fail++; }
     }));
     setBulkAssigning(false);
-    // keep selection so user can immediately do Set Prices
+    // Clear the selection after assigning — otherwise these orders stay ticked and get
+    // re-assigned to the next courier the admin picks for a different order.
+    setSelected(new Set());
     setBulkCourierId('');
     const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
     await Promise.all([load(reloadParams), refreshUnpricedCount()]);

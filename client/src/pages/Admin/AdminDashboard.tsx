@@ -27,6 +27,7 @@ import AdminPartnersPage from './AdminPartnersPage';
 import AdminTenantSettlementsPage from './AdminTenantSettlementsPage';
 import AdminTenantsPage from './AdminTenantsPage';
 import { TenantFinanceView } from '../Tenant/TenantFinanceView';
+import { TenantHomepageEditor } from '../Tenant/TenantHomepageEditor';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
@@ -75,9 +76,9 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage'];
 
 // Views an Operator (partial-admin role) may open. Everything else is Admin-only.
 // The Delivery ('packages') page is read-only for Operators (see canManage below).
@@ -86,7 +87,7 @@ const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages'];
 // Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
 // accept-only and Delivery is read-only (both via canManage=false); Finance renders the
 // dedicated tenant components, not the company-wide AdminFinancePage.
-const TENANT_VIEWS: readonly AdminView[] = ['orders', 'packages', 'customers', 'finance'];
+const TENANT_VIEWS: readonly AdminView[] = ['orders', 'packages', 'customers', 'finance', 'homepage'];
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -187,6 +188,15 @@ export function AdminDashboard() {
         <div className="sidebar__divider" />
         <p className="sidebar__section-label">{t.sidebarManagement}</p>
         <nav className="sidebar__nav">
+          {isTenant && (
+          <button className={`sidebar__link ${activeView === 'homepage' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('homepage')} title="Homepage">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 7l6-5 6 5v7H2V7z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+              <path d="M6.5 14V9.5h3V14" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+            </svg>
+            <span className="sidebar__link-text">Homepage</span>
+          </button>
+          )}
           {!isTenant && (
           <button className={`sidebar__link ${activeView === 'overview' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('overview')} title={t.sidebarOverview}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -375,6 +385,7 @@ export function AdminDashboard() {
             {activeView === 'history' && t.topbarHistory}
             {activeView === 'returnExchange' && t.navReturnExchange}
             {activeView === 'finance' && t.navFinance}
+            {activeView === 'homepage' && 'Homepage'}
             {activeView === 'operators' && t.topbarOperators}
           </span>
           {activeView === 'couriers' && (
@@ -406,6 +417,8 @@ export function AdminDashboard() {
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
           {/* Finance: tenant co-admin sees the scoped tenant finance, never the company-wide P&L. */}
           {activeView === 'finance' && (isTenant ? <TenantFinanceView /> : <AdminFinancePage token={token ?? ''} />)}
+          {/* Homepage: tenant co-admin edits their own white-label storefront. */}
+          {activeView === 'homepage' && isTenant && <TenantHomepageEditor />}
           {activeView === 'returnExchange' && token && (
             <AdminReturnExchangePage
               token={token}

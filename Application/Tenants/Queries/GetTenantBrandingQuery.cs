@@ -10,7 +10,7 @@ namespace Application.Tenants.Queries;
 /// the homepage before login. Returns null when no active tenant matches the host — the
 /// frontend then falls back to the root (dilo) branding.
 /// </summary>
-public sealed record TenantBrandingDto(string DisplayName, string? LogoUrl, string? PrimaryColor);
+public sealed record TenantBrandingDto(string DisplayName, string? LogoUrl, string? PrimaryColor, string? HomepageJson);
 
 public sealed record GetTenantBrandingQuery(string Host) : IRequest<TenantBrandingDto?>;
 
@@ -27,7 +27,7 @@ public sealed class GetTenantBrandingQueryHandler
 
         return await _context.Tenants
             .Where(t => t.IsActive && t.Host.ToLower() == host)
-            .Select(t => new TenantBrandingDto(t.DisplayName, t.LogoUrl, t.PrimaryColor))
+            .Select(t => new TenantBrandingDto(t.DisplayName, t.LogoUrl, t.PrimaryColor, t.HomepageJson))
             .FirstOrDefaultAsync(cancellationToken);
     }
 

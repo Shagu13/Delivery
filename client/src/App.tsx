@@ -10,7 +10,7 @@ import { AppLayout } from './components/layout/AppLayout';
 // Route components are lazy-loaded so each area ships as its own chunk and the
 // initial bundle stays small — e.g. a customer never downloads the admin code.
 // These are named exports, so map them to a default for React.lazy.
-const HomePage             = lazy(() => import('./pages/Home/HomePage').then(m => ({ default: m.HomePage })));
+const HomePage             = lazy(() => import('./pages/Home/HomeRoute').then(m => ({ default: m.HomeRoute })));
 const FaqPage              = lazy(() => import('./pages/Faq/FaqPage').then(m => ({ default: m.FaqPage })));
 const LoginPage            = lazy(() => import('./pages/Login/LoginPage').then(m => ({ default: m.LoginPage })));
 const RegisterPage         = lazy(() => import('./pages/Register/RegisterPage').then(m => ({ default: m.RegisterPage })));

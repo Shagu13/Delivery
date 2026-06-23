@@ -29,6 +29,7 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
           brandName:    b.displayName,
           logoUrl:      b.logoUrl,
           primaryColor: b.primaryColor,
+          homepageJson: b.homepageJson,
           loaded:       true,
           isTenant:     true,
         });

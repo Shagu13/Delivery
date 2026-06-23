@@ -5,6 +5,7 @@ export interface Branding {
   displayName: string;
   logoUrl: string | null;
   primaryColor: string | null;
+  homepageJson: string | null;
 }
 
 /** Look up branding for a host. Returns null for the root brand (dilo) or on any error. */

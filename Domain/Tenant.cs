@@ -32,6 +32,13 @@ public class Tenant
     /// <summary>Primary brand color as a hex string, e.g. "#0F62FE".</summary>
     public string? PrimaryColor { get; set; }
 
+    /// <summary>
+    /// The tenant's editable homepage as a JSON document of ordered content blocks
+    /// (hero / text / image). Stored opaque — the frontend owns the schema. Null = no
+    /// custom homepage yet (a default skeleton is shown). The co-admin edits this themselves.
+    /// </summary>
+    public string? HomepageJson { get; set; }
+
     // ── Co-admin (TenantAdmin) ───────────────────────────────────────────────
     /// <summary>
     /// The ApplicationUser who administers this tenant (role "TenantAdmin").
