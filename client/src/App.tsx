@@ -91,11 +91,11 @@ export default function App() {
                                     }
                                 />
 
-                                {/* Admin + Operator (Operator sees a restricted subset) */}
+                                {/* Admin + Operator + TenantAdmin (each sees a restricted subset) */}
                                 <Route
                                     path="/admin/*"
                                     element={
-                                        <ProtectedRoute role={['Admin', 'Operator']}>
+                                        <ProtectedRoute role={['Admin', 'Operator', 'TenantAdmin']}>
                                             <AdminDashboard />
                                         </ProtectedRoute>
                                     }

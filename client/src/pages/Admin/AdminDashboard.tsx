@@ -26,6 +26,7 @@ import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
 import AdminPartnersPage from './AdminPartnersPage';
 import AdminTenantSettlementsPage from './AdminTenantSettlementsPage';
 import AdminTenantsPage from './AdminTenantsPage';
+import { TenantFinanceView } from '../Tenant/TenantFinanceView';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
@@ -82,6 +83,11 @@ const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'co
 // The Delivery ('packages') page is read-only for Operators (see canManage below).
 const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages'];
 
+// Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
+// accept-only and Delivery is read-only (both via canManage=false); Finance renders the
+// dedicated tenant components, not the company-wide AdminFinancePage.
+const TENANT_VIEWS: readonly AdminView[] = ['orders', 'packages', 'customers', 'finance'];
+
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
   const { t } = useLanguage();
@@ -94,6 +100,8 @@ export function AdminDashboard() {
 
   // Operators are a partial-admin role: same dashboard, restricted to Overview + Pick-Up.
   const isOperator = user?.role === 'Operator';
+  // Tenant co-admins reuse this dashboard too, scoped to their tenant (see TENANT_VIEWS).
+  const isTenant = user?.role === 'TenantAdmin';
 
   // Seed the active view from the URL so a page refresh stays on the current page.
   const [sidebarView, setSidebarView] = useState<AdminView>(
@@ -102,7 +110,9 @@ export function AdminDashboard() {
   const requestedView: AdminView = tabParam === 'orders' ? 'orders' : sidebarView;
   // Clamp Operators to their allowed views even if they hand-edit the URL.
   const activeView: AdminView =
-    isOperator && !OPERATOR_VIEWS.includes(requestedView) ? 'overview' : requestedView;
+    isTenant   && !TENANT_VIEWS.includes(requestedView)   ? 'orders'
+    : isOperator && !OPERATOR_VIEWS.includes(requestedView) ? 'overview'
+    : requestedView;
 
   const goTo = (view: AdminView) => {
     // Persist the view in the URL (replace, no history spam) so refresh restores it.
@@ -173,10 +183,11 @@ export function AdminDashboard() {
             }
           </svg>
         </button>
-        <span className="sidebar__role-badge">{isOperator ? 'Operator' : 'Admin'}</span>
+        <span className="sidebar__role-badge">{isTenant ? 'Tenant' : isOperator ? 'Operator' : 'Admin'}</span>
         <div className="sidebar__divider" />
         <p className="sidebar__section-label">{t.sidebarManagement}</p>
         <nav className="sidebar__nav">
+          {!isTenant && (
           <button className={`sidebar__link ${activeView === 'overview' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('overview')} title={t.sidebarOverview}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
@@ -186,6 +197,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.sidebarOverview}</span>
           </button>
+          )}
           <button className={`sidebar__link ${activeView === 'orders' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('orders')} title={t.navPickUp}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
@@ -203,6 +215,7 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">{t.navDelivery}</span>
           </button>
           {!isOperator && (<>
+          {!isTenant && (
           <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')} title={t.sidebarCouriers}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4" />
@@ -211,6 +224,7 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">{t.sidebarCouriers}</span>
             {couriers.length > 0 && <span className="sidebar__badge sidebar__badge--count">{couriers.length}</span>}
           </button>
+          )}
           <button className={`sidebar__link ${activeView === 'customers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('customers')} title={t.sidebarCustomers}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
@@ -219,6 +233,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.sidebarCustomers}</span>
           </button>
+          {!isTenant && (<>
           <button className={`sidebar__link ${activeView === 'cities' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('cities')} title={t.sidebarCities}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="7" width="14" height="8" rx="1" stroke="currentColor" strokeWidth="1.4" />
@@ -298,6 +313,7 @@ export function AdminDashboard() {
               </span>
             )}
           </button>
+          </>)}
           <button
             className={`sidebar__link ${activeView === 'finance' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('finance')}
@@ -309,6 +325,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.navFinance}</span>
           </button>
+          {!isTenant && (
           <button
             className={`sidebar__link ${activeView === 'operators' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('operators')}
@@ -321,6 +338,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.sidebarOperators}</span>
           </button>
+          )}
           </>)}
         </nav>
         <div className="sidebar__footer">
@@ -370,11 +388,14 @@ export function AdminDashboard() {
         </div>
         <main className="dashboard__content">
           {activeView === 'overview'  && <AdminOverview token={token ?? ''} isOperator={isOperator} />}
-          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isOperator} canAssignCourier />}
-          {activeView === 'operators' && !isOperator && <AdminOperatorsPage token={token ?? ''} />}
-          {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isOperator} />}
+          {/* Pick-Up: tenant co-admin is accept-only and can't assign couriers (like an Operator). */}
+          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isOperator && !isTenant} canAssignCourier={!isTenant} />}
+          {activeView === 'operators' && !isOperator && !isTenant && <AdminOperatorsPage token={token ?? ''} />}
+          {/* Delivery: read-only for both Operators and tenant co-admins. */}
+          {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isOperator && !isTenant} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
-          {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} />}
+          {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
+          {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
                   {activeView === 'cities' && <AdminCitiesPage token={token ?? ''} />}
                   {activeView === 'weightTiers' && token && (
                       <AdminWeightPriceTiersPage token={token} />
@@ -383,7 +404,8 @@ export function AdminDashboard() {
           {activeView === 'tenants' && !isOperator && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && !isOperator && token && <AdminTenantSettlementsPage token={token} />}
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
-          {activeView === 'finance' && <AdminFinancePage token={token ?? ''} />}
+          {/* Finance: tenant co-admin sees the scoped tenant finance, never the company-wide P&L. */}
+          {activeView === 'finance' && (isTenant ? <TenantFinanceView /> : <AdminFinancePage token={token ?? ''} />)}
           {activeView === 'returnExchange' && token && (
             <AdminReturnExchangePage
               token={token}

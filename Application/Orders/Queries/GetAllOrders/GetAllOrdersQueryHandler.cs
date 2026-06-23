@@ -30,6 +30,12 @@ public sealed class GetAllOrdersQueryHandler
         if (!string.IsNullOrWhiteSpace(request.City))
             query = query.Where(o => o.RecipientCity == request.City);
 
+        // ── Tenant scope (co-admin) — only this tenant's orders, via either ownership path ──
+        if (request.TenantId is Guid tenantId)
+            query = query.Where(o =>
+                (o.GroupOrder != null && o.GroupOrder.Customer != null && o.GroupOrder.Customer.TenantId == tenantId)
+                || (o.Customer != null && o.Customer.TenantId == tenantId));
+
         // ── District filter ──────────────────────────────────────────────────
         if (!string.IsNullOrWhiteSpace(request.District))
             query = query.Where(o => o.RecipientDistrict == request.District);
@@ -168,7 +174,8 @@ public sealed class GetAllOrdersQueryHandler
                 CompanyServicePrice:      o.CompanyServicePrice,
                 IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded,
                 CourierSalary:            o.CourierSalary,
-                CompanyRevenue:           o.CompanyRevenue,
+                // Company margin is dilo-internal — never shown to a tenant co-admin.
+                CompanyRevenue:           request.TenantId.HasValue ? null : o.CompanyRevenue,
                 CourierId:                o.CourierId,
                 CourierFullName:          o.Courier == null ? null : $"{o.Courier.FirstName} {o.Courier.LastName}".Trim(),
                 CreatedAt:                o.CreatedAt,

@@ -108,6 +108,18 @@ public class Order
     /// <summary>When the sender-paid service fee payment was recorded. Null until paid.</summary>
     public DateTime? ServicePaidByCustomerAt      { get; set; }
 
+    // ── Dilo ↔ tenant settlement (per-order; only for tenant-owned orders) ────
+    // SEPARATE from the *Customer fields above (which are the tenant↔its-customers tier).
+    // These record the company (dilo) settling directly with the TENANT, per order.
+    /// <summary>COD dilo has paid the tenant for this order (dilo owes the tenant). Null until paid.</summary>
+    public decimal?  CodPaidToTenantAmount        { get; set; }
+    /// <summary>When the dilo→tenant COD payout was recorded. Null until paid.</summary>
+    public DateTime? CodPaidToTenantAt            { get; set; }
+    /// <summary>Service fee the tenant has paid dilo for this order (sender-pays only; tenant owes dilo). Null until paid.</summary>
+    public decimal?  ServicePaidByTenantAmount    { get; set; }
+    /// <summary>When the tenant→dilo service payment was recorded. Null until paid.</summary>
+    public DateTime? ServicePaidByTenantAt        { get; set; }
+
     /// <summary>
     /// When true, the price the sender entered for this package was the all-in amount
     /// (product + company service fee bundled). The service fee is resolved separately

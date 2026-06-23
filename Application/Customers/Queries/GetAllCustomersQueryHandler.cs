@@ -9,7 +9,8 @@ namespace Application.Customers.Queries;
 public sealed record GetAllCustomersQuery(
     int    Page     = 1,
     int    PageSize = 20,
-    string Search   = ""
+    string Search   = "",
+    Guid?  TenantId = null   // when set (tenant co-admin), scope to that tenant's customers
 ) : IRequest<PagedResult<AdminCustomerResponseDto>>;
 
 public sealed class GetAllCustomersQueryHandler
@@ -25,6 +26,10 @@ public sealed class GetAllCustomersQueryHandler
         var query = _context.Customers
             .Include(c => c.ApplicationUser)
             .AsNoTracking();
+
+        // Tenant co-admin: only their own tenant's customers.
+        if (request.TenantId is Guid tenantId)
+            query = query.Where(c => c.TenantId == tenantId);
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {

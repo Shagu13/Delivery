@@ -41,19 +41,23 @@ public sealed class CustomersController : BaseController
                 $"{request.FirstName} {request.LastName}"));
     }
 
-    // ── POST /api/customers  (Admin creates customer) ────────────────────────
+    // ── POST /api/customers  (Admin — any tenant; TenantAdmin — own tenant) ───
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,TenantAdmin")]
     public async Task<IActionResult> Create(
         [FromBody] CreateCustomerRequest request, CancellationToken ct)
     {
+        // A tenant co-admin can only create customers under their own tenant — force it
+        // from the JWT claim and ignore any TenantId in the body. Admins keep free choice.
+        var tenantId = CurrentTenantId ?? request.TenantId;
+
         var customerId = await Sender.Send(BuildCommand(
             request.FirstName, request.LastName, request.IdNumber,
             request.BusinessName, request.PhoneNumber,
             request.City, request.District, request.Address,
             request.Email, request.Password,
             request.IsCompanyServicePriceIncludedInPrice,
-            request.TenantId), ct);
+            tenantId), ct);
 
         return CreatedAtAction(nameof(GetById), new { id = customerId },
             new CreateCustomerResponse(customerId, request.Email,
@@ -113,14 +117,15 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
-    // ── GET /api/customers  (Admin — includes company price) ─────────────────
+    // ── GET /api/customers  (Admin — all; TenantAdmin — own tenant) ──────────
     [HttpGet]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,TenantAdmin")]
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
         [FromQuery] string search = "", CancellationToken ct = default)
     {
-        var result = await Sender.Send(new GetAllCustomersQuery(page, pageSize, search), ct);
+        // A tenant co-admin sees only their own customers (scope from the JWT claim).
+        var result = await Sender.Send(new GetAllCustomersQuery(page, pageSize, search, CurrentTenantId), ct);
         return Ok(result);
     }
 
@@ -157,9 +162,9 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/customers/{id}  (Admin updates a customer's profile + address) ──
+    // ── PUT /api/customers/{id}  (Admin — any; TenantAdmin — own tenant's customer) ──
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,TenantAdmin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AdminUpdate(
@@ -170,7 +175,9 @@ public sealed class CustomersController : BaseController
             new UpdateCustomerDto(
                 request.FirstName, request.LastName, request.IdNumber,
                 request.BusinessName, request.PhoneNumber,
-                request.City, request.District, request.Address)), ct);
+                request.City, request.District, request.Address),
+            // Tenant co-admin: guard that the customer is theirs.
+            RequireTenantId: CurrentTenantId), ct);
         return NoContent();
     }
 

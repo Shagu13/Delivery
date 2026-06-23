@@ -12,6 +12,8 @@ import { useLanguage } from '../../contexts/useLanguage';
 
 interface Props {
   token: string;
+  /** Admin caps. When false (tenant co-admin): hide pricing, password reset, deactivate. */
+  canManage?: boolean;
 }
 
 interface EditState {
@@ -25,7 +27,7 @@ function priceDisplay(v: number | null, defaultLabel: string) {
   return v != null ? `₾${v}` : <em style={{ color: '#999' }}>{defaultLabel}</em>;
 }
 
-export default function AdminCustomersPage({ token }: Props) {
+export default function AdminCustomersPage({ token, canManage = true }: Props) {
   const { t } = useLanguage();
   const [customers, setCustomers]       = useState<AdminCustomer[]>([]);
   const [search, setSearch]             = useState('');
@@ -149,7 +151,8 @@ export default function AdminCustomersPage({ token }: Props) {
             <tr style={{ background: '#f5f5f5' }}>
               {[
                 t.acupThBusiness, t.acupThName, t.acupThPhone, t.acupThCity, t.acupThDistrict, t.acupThAddress, t.acupThEmail, t.acupThActive,
-                t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, t.acupThIncluded, t.acupThActions,
+                ...(canManage ? [t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, t.acupThIncluded] : []),
+                t.acupThActions,
               ].map((h, i) => (
                 <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
                   {h}
@@ -214,36 +217,46 @@ export default function AdminCustomersPage({ token }: Props) {
                   </>
                 ) : (
                   <>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCapitalPrice, t.acupDefault)}</td>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCityPrice, t.acupDefault)}</td>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceDistrictPrice, t.acupDefault)}</td>
-                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
-                      {c.isCompanyServicePriceIncludedInPrice ? t.acupYes : t.acupNo}
-                    </td>
+                    {canManage && (
+                      <>
+                        <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCapitalPrice, t.acupDefault)}</td>
+                        <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCityPrice, t.acupDefault)}</td>
+                        <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceDistrictPrice, t.acupDefault)}</td>
+                        <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                          {c.isCompanyServicePriceIncludedInPrice ? t.acupYes : t.acupNo}
+                        </td>
+                      </>
+                    )}
                     <td style={{ padding: '0.6rem 0.75rem' }}>
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         <button
                           onClick={() => setEditCustomer(c)}
                           style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#eef2ff', border: '1px solid #c7d2fe', color: '#4338ca', cursor: 'pointer', fontSize: '0.8rem' }}
                         >{t.edit}</button>
-                        <button
-                          onClick={() => startEdit(c)}
-                          style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
-                        >{t.acupPricesBtn}</button>
-                        <button
-                          onClick={() => setPwdCustomer(c)}
-                          style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
-                        >{t.acupSetPwd}</button>
-                        <button
-                          onClick={() => onToggleClick(c)}
-                          disabled={togglingId === c.id}
-                          style={{
-                            padding: '0.2rem 0.5rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem',
-                            border: '1px solid ' + (c.isActive ? '#fca5a5' : '#86efac'),
-                            background: c.isActive ? '#fef2f2' : '#f0fdf4',
-                            color: c.isActive ? '#b91c1c' : '#15803d',
-                          }}
-                        >{c.isActive ? t.acupDeactivate : t.acupActivate}</button>
+                        {canManage && (
+                          <button
+                            onClick={() => startEdit(c)}
+                            style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
+                          >{t.acupPricesBtn}</button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => setPwdCustomer(c)}
+                            style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
+                          >{t.acupSetPwd}</button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => onToggleClick(c)}
+                            disabled={togglingId === c.id}
+                            style={{
+                              padding: '0.2rem 0.5rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem',
+                              border: '1px solid ' + (c.isActive ? '#fca5a5' : '#86efac'),
+                              background: c.isActive ? '#fef2f2' : '#f0fdf4',
+                              color: c.isActive ? '#b91c1c' : '#15803d',
+                            }}
+                          >{c.isActive ? t.acupDeactivate : t.acupActivate}</button>
+                        )}
                       </div>
                     </td>
                   </>

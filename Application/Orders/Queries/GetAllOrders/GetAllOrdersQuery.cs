@@ -15,5 +15,6 @@ public sealed record GetAllOrdersQuery(
     int     Page       = 1,
     int     PageSize   = 50,
     bool?   Assigned   = null,   // null = all, true = courier assigned, false = unassigned
-    DateTime? Date     = null    // when set, only orders created on this Georgian day
+    DateTime? Date     = null,   // when set, only orders created on this Georgian day
+    Guid?   TenantId   = null    // when set (tenant co-admin), scope to that tenant's orders + hide company revenue
 ) : IRequest<PagedResult<AdminOrderListDto>>;

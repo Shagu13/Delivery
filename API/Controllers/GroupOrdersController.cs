@@ -180,10 +180,18 @@ public sealed class GroupOrdersController : BaseController
 
     // ── GET /api/grouporders ─────────────────────────────────────────────────
     [HttpGet]
-    [Authorize(Roles = "Admin,Operator")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
     [ProducesResponseType(typeof(IReadOnlyList<AdminGroupOrderResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll([FromQuery] string? search, CancellationToken ct)
     {
+        // A tenant co-admin sees only their own tenant's batches, and never company revenue.
+        if (CurrentTenantId is Guid tid)
+        {
+            var scoped = await Sender.Send(
+                new Application.GroupOrders.Queries.GetTenantGroupOrders.GetTenantGroupOrdersQuery(tid), ct);
+            return Ok(scoped.Select(go => MapToAdminResponse(go, includeRevenue: false)).ToList());
+        }
+
         var result = await Sender.Send(new GetAllGroupOrdersQuery(search), ct);
         // Operators run the pick-up flow but must not see internal company revenue.
         bool includeRevenue = !User.IsInRole("Operator");
@@ -192,10 +200,14 @@ public sealed class GroupOrdersController : BaseController
 
     // ── GET /api/grouporders/pickup-day?date=  (Admin/Operator Pick-Up page summary) ───
     [HttpGet("pickup-day")]
-    [Authorize(Roles = "Admin,Operator")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
     [ProducesResponseType(typeof(IReadOnlyList<Application.GroupOrders.DTOs.PickupDayCustomerDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPickupDay([FromQuery] DateTime date, CancellationToken ct)
     {
+        // The day-grouping tools are dilo-only; a tenant co-admin gets nothing here.
+        if (CurrentTenantId is not null)
+            return Ok(Array.Empty<Application.GroupOrders.DTOs.PickupDayCustomerDto>());
+
         var result = await Sender.Send(
             new Application.GroupOrders.Queries.GetPickupDay.GetPickupDayQuery(date), ct);
         return Ok(result);
@@ -323,11 +335,15 @@ public sealed class GroupOrdersController : BaseController
     // ══════════════════════════════════════════════════════════════════════════
 
     [HttpPut("{id:guid}/accept")]
-    [Authorize(Roles = "Admin,Operator")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Accept(Guid id, CancellationToken ct)
     {
-        await Sender.Send(new AcceptGroupOrderCommand(id), ct);
+        // A tenant co-admin may only accept their own tenant's batches (ownership-guarded).
+        if (CurrentTenantId is Guid tid)
+            await Sender.Send(new Application.GroupOrders.Commands.AcceptTenantGroupOrder.AcceptTenantGroupOrderCommand(id, tid), ct);
+        else
+            await Sender.Send(new AcceptGroupOrderCommand(id), ct);
         return NoContent();
     }
 

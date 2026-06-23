@@ -576,6 +576,12 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("CodPaidToCustomerAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal?>("CodPaidToTenantAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("CodPaidToTenantAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal?>("CompanyRevenue")
                         .HasColumnType("decimal(18,2)");
 
@@ -703,6 +709,12 @@ namespace Persistence.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("ServicePaidByCustomerAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("ServicePaidByTenantAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ServicePaidByTenantAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Status")

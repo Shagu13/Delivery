@@ -23,7 +23,9 @@ public sealed record UpdateCustomerDto(
 
 public sealed record UpdateCustomerCommand(
     Guid             CustomerId,
-    UpdateCustomerDto Dto
+    UpdateCustomerDto Dto,
+    /// <summary>When set (tenant co-admin edit), the customer must belong to this tenant or it 404s.</summary>
+    Guid?            RequireTenantId = null
 ) : IRequest;
 
 // ── Validator ─────────────────────────────────────────────────────────────────
@@ -57,6 +59,10 @@ public sealed class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustome
         var customer = await _context.Customers
             .FirstOrDefaultAsync(c => c.Id == request.CustomerId, cancellationToken)
             ?? throw new NotFoundException("Customer", request.CustomerId);
+
+        // A tenant co-admin may only edit their own tenant's customers.
+        if (request.RequireTenantId is Guid rt && customer.TenantId != rt)
+            throw new NotFoundException("Customer", request.CustomerId);
 
         customer.FirstName    = dto.FirstName;
         customer.LastName     = dto.LastName;

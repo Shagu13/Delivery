@@ -53,3 +53,59 @@ export async function recordTenantSettlementPayment(
   if (!res.ok) throw new Error(`Failed to record payment (${res.status})`);
   return res.json() as Promise<TenantSettlement>;
 }
+
+// ── Per-order settlement sheet ──────────────────────────────────────────────────
+
+export interface TenantSettlementOrder {
+  orderId: string;
+  trackingNumber: string;
+  businessName: string;
+  customerName: string;
+  recipientName: string;
+  recipientAddress: string;
+  recipientCity: string;
+  cod: number;
+  codPaidToTenant: number;
+  companyServicePrice: number;
+  whoPaysForCompanyService: string;   // "Sender" | "Recipient"
+  servicePaidByTenant: number;
+  createdAt: string;
+  deliveredAt: string | null;
+}
+
+export interface TenantSettlementOrders {
+  orders: TenantSettlementOrder[];
+  totalCod: number;
+  totalCodPaid: number;
+  totalService: number;
+  totalServicePaid: number;
+}
+
+/** The selected tenant's delivered orders for a day (or month), with per-order settlement state. */
+export async function getTenantSettlementOrders(
+  token: string, tenantId: string, date?: string, monthly = false,
+): Promise<TenantSettlementOrders> {
+  const p = new URLSearchParams({ tenantId });
+  if (date) p.set('date', date);
+  if (monthly) p.set('monthly', 'true');
+  const res = await fetch(`/api/tenantsettlements/orders?${p}`, { headers: auth(token), cache: 'no-store' });
+  if (!res.ok) throw new Error(`Failed to load orders (${res.status})`);
+  return res.json() as Promise<TenantSettlementOrders>;
+}
+
+export interface TenantOrderPaymentRequest {
+  tenantId: string;
+  orderId: string;
+  codPaid?: boolean;
+  codPaidAmount?: number;
+  servicePaid?: boolean;
+  servicePaidAmount?: number;
+}
+
+/** Record/clear a per-order dilo↔tenant payment (COD to tenant, or service from tenant). */
+export async function recordTenantOrderPayment(token: string, data: TenantOrderPaymentRequest): Promise<void> {
+  const res = await fetch('/api/tenantsettlements/order-payment', {
+    method: 'POST', headers: json(token), body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to record payment (${res.status})`);
+}

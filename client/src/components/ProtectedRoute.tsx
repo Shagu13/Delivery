@@ -15,7 +15,7 @@ export function homeFor(role?: UserRole): string {
     case 'Admin':
     case 'Operator':    return '/admin';
     case 'Customer':    return '/customer';
-    case 'TenantAdmin': return '/tenant';
+    case 'TenantAdmin': return '/admin';
     default:            return '/courier';
   }
 }

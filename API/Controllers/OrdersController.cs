@@ -18,9 +18,9 @@ namespace API.Controllers;
 
 public sealed class OrdersController : BaseController
 {
-    // ── GET /api/orders  (Admin — all orders, filterable; Operator — read-only) ──
+    // ── GET /api/orders  (Admin — all orders; Operator — read-only; TenantAdmin — own tenant) ──
     [HttpGet]
-    [Authorize(Roles = "Admin,Operator")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
     [ProducesResponseType(typeof(PagedResult<AdminOrderListDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? city       = null,
@@ -37,8 +37,9 @@ public sealed class OrdersController : BaseController
         [FromQuery] int     pageSize   = 50,
         CancellationToken ct = default)
     {
+        // A tenant co-admin sees only their own tenant's orders (scope from the JWT claim).
         var result = await Sender.Send(
-            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date), ct);
+            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date, CurrentTenantId), ct);
         return Ok(result);
     }
 

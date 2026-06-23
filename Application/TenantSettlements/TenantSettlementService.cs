@@ -40,6 +40,8 @@ internal static class TenantSettlementService
                 o.AmountToCollectForPackage,
                 o.WhoPaysForCompanyService,
                 o.CompanyServicePrice,
+                o.CodPaidToTenantAmount,
+                o.ServicePaidByTenantAmount,
                 o.DeliveredAt,
                 o.DeliveredToWarehouseAt,
             })
@@ -55,9 +57,11 @@ internal static class TenantSettlementService
             .ToList();
 
         decimal cod     = deliveredInMonth.Sum(o => o.AmountToCollectForPackage ?? 0m);
-        decimal service = deliveredInMonth
-            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender)
-            .Sum(o => o.CompanyServicePrice);
+        var senderPays  = deliveredInMonth.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender).ToList();
+        decimal service = senderPays.Sum(o => o.CompanyServicePrice);
+        // Payments derived from the per-order dilo↔tenant fields (admin settlement sheet).
+        decimal codPaid     = deliveredInMonth.Sum(o => o.CodPaidToTenantAmount ?? 0m);
+        decimal servicePaid = senderPays.Sum(o => o.ServicePaidByTenantAmount ?? 0m);
 
         var settlement = await context.TenantSettlements
             .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Year == year && s.Month == month, ct);
@@ -66,23 +70,27 @@ internal static class TenantSettlementService
         {
             settlement = new TenantSettlement
             {
-                TenantId                            = tenantId,
-                Year                                = year,
-                Month                               = month,
-                TotalNumberOfOrdersPlaced           = deliveredInMonth.Count,
-                TotalNumberOfOrderDelivered         = deliveredInMonth.Count,
-                TotalCODCompanyCollectedForTenant   = cod,
-                TotalCompanyServicePriceOwedByTenant = service,
+                TenantId                                  = tenantId,
+                Year                                      = year,
+                Month                                     = month,
+                TotalNumberOfOrdersPlaced                 = deliveredInMonth.Count,
+                TotalNumberOfOrderDelivered               = deliveredInMonth.Count,
+                TotalCODCompanyCollectedForTenant         = cod,
+                TotalCompanyServicePriceOwedByTenant      = service,
+                TotalAmountOfCollectedCodPaidToTenant     = codPaid,
+                TotalAmountPaidToCompanyForCompanyService = servicePaid,
             };
             context.TenantSettlements.Add(settlement);
         }
         else
         {
-            settlement.TotalNumberOfOrdersPlaced           = deliveredInMonth.Count;
-            settlement.TotalNumberOfOrderDelivered         = deliveredInMonth.Count;
-            settlement.TotalCODCompanyCollectedForTenant   = cod;
-            settlement.TotalCompanyServicePriceOwedByTenant = service;
-            settlement.UpdatedAt                           = CustomTime.Now;
+            settlement.TotalNumberOfOrdersPlaced                 = deliveredInMonth.Count;
+            settlement.TotalNumberOfOrderDelivered               = deliveredInMonth.Count;
+            settlement.TotalCODCompanyCollectedForTenant         = cod;
+            settlement.TotalCompanyServicePriceOwedByTenant      = service;
+            settlement.TotalAmountOfCollectedCodPaidToTenant     = codPaid;
+            settlement.TotalAmountPaidToCompanyForCompanyService = servicePaid;
+            settlement.UpdatedAt                                 = CustomTime.Now;
         }
 
         await context.SaveChangesAsync(ct);

@@ -68,6 +68,8 @@ public sealed class GetTenantFinanceOverviewQueryHandler
                 o.WhoPaysForCompanyService,
                 o.CompanyServicePrice,
                 o.ServicePaidByCustomerAmount,
+                o.CodPaidToTenantAmount,
+                o.ServicePaidByTenantAmount,
             })
             .ToListAsync(cancellationToken);
 
@@ -80,14 +82,9 @@ public sealed class GetTenantFinanceOverviewQueryHandler
 
         int ordersDelivered = rows.Count(o => Delivered.Contains(o.Status));
 
-        // Dilo-tier payments recorded so far (summed across the tenant's monthly settlement rows).
-        var settlements = await _context.TenantSettlements
-            .Where(s => s.TenantId == tid)
-            .Select(s => new { s.TotalAmountOfCollectedCodPaidToTenant, s.TotalAmountPaidToCompanyForCompanyService })
-            .ToListAsync(cancellationToken);
-
-        decimal codPaidByCompany    = settlements.Sum(s => s.TotalAmountOfCollectedCodPaidToTenant);
-        decimal servicePaidToCompany = settlements.Sum(s => s.TotalAmountPaidToCompanyForCompanyService);
+        // Dilo-tier payments recorded per order (the admin tenant-settlement sheet writes these).
+        decimal codPaidByCompany     = rows.Sum(o => o.CodPaidToTenantAmount ?? 0m);
+        decimal servicePaidToCompany = senderPays.Sum(o => o.ServicePaidByTenantAmount ?? 0m);
 
         return new TenantFinanceOverviewDto(
             TenantOwesCompany:      grossService - servicePaidToCompany,
