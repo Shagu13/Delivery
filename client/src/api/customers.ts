@@ -13,6 +13,8 @@ export interface CreateCustomerRequest {
   city: string; district: string; address: string;
   email: string; password: string;
   isCompanyServicePriceIncludedInPrice?: boolean;
+  /** White-label tenant to assign the new customer to. Omit/null = root brand (dilo). */
+  tenantId?: string | null;
 }
 
 export interface UpdateCustomerRequest {
@@ -48,6 +50,10 @@ export interface AdminCustomer extends Customer {
   companyServiceCapitalPrice:  number | null;
   companyServiceCityPrice:     number | null;
   companyServiceDistrictPrice: number | null;
+  /** White-label tenant this customer belongs to. Null = root brand (dilo). */
+  tenantId: string | null;
+  /** Display name of the owning tenant (null when root). */
+  tenantDisplayName: string | null;
 }
 
 export interface PagedResult<T> {
@@ -231,6 +237,17 @@ export async function adminSetCustomerPassword(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(data),
+  }));
+}
+
+/** Admin assigns a customer to a white-label tenant (null = move back to root/dilo). */
+export async function setCustomerTenant(
+  id: string, tenantId: string | null, token: string,
+): Promise<void> {
+  return handleEmpty(await fetch(`/api/customers/${id}/tenant`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ tenantId }),
   }));
 }
 

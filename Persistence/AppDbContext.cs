@@ -12,6 +12,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
 
     public DbSet<Courier>          Couriers          => Set<Courier>();
     public DbSet<Customer>         Customers         => Set<Customer>();
+    public DbSet<Tenant>           Tenants           => Set<Tenant>();
+    public DbSet<TenantSettlement> TenantSettlements => Set<TenantSettlement>();
     public DbSet<Warehouse>        Warehouses        => Set<Warehouse>();
     public DbSet<GroupOrder>       GroupOrders       => Set<GroupOrder>();
     public DbSet<Order>            Orders            => Set<Order>();
@@ -68,6 +70,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
              .WithOne(g => g.Customer)
              .HasForeignKey(g => g.CustomerId)
              .OnDelete(DeleteBehavior.SetNull);
+            // White-label tenant: null = root brand (dilo.ge). On tenant delete the
+            // customers survive and fall back to root (SetNull).
+            e.HasIndex(c => c.TenantId);
+            e.HasOne(c => c.Tenant).WithMany(t => t.Customers)
+             .HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.SetNull);
             e.Property(c => c.FirstName).HasMaxLength(100).IsRequired();
             e.Property(c => c.LastName).HasMaxLength(100).IsRequired();
             e.Property(c => c.IdNumber).HasMaxLength(50);
@@ -79,6 +86,40 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(c => c.CompanyServiceCapitalPrice).HasColumnType("decimal(18,2)");
             e.Property(c => c.CompanyServiceCityPrice).HasColumnType("decimal(18,2)");
             e.Property(c => c.CompanyServiceDistrictPrice).HasColumnType("decimal(18,2)");
+        });
+
+        // ── Tenant (white-label brand) ────────────────────────────────────────
+        modelBuilder.Entity<Tenant>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.HasIndex(t => t.Host).IsUnique();
+            e.HasIndex(t => t.AdminApplicationUserId);
+            // The co-admin account; Restrict so a tenant with an assigned admin can't
+            // be orphaned by deleting the user out from under it.
+            e.HasOne(t => t.AdminApplicationUser).WithOne()
+             .HasForeignKey<Tenant>(t => t.AdminApplicationUserId)
+             .OnDelete(DeleteBehavior.Restrict);
+            e.Property(t => t.Host).HasMaxLength(150).IsRequired();
+            e.Property(t => t.DisplayName).HasMaxLength(150).IsRequired();
+            e.Property(t => t.LogoUrl).HasMaxLength(500);
+            e.Property(t => t.PrimaryColor).HasMaxLength(20);
+        });
+
+        // ── TenantSettlement (monthly tenant ↔ company settlement) ─────────────
+        modelBuilder.Entity<TenantSettlement>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.TenantId);
+            // One settlement per tenant per calendar month.
+            e.HasIndex(s => new { s.TenantId, s.Year, s.Month }).IsUnique();
+            e.HasOne(s => s.Tenant).WithMany()
+             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(s => s.TotalCODCompanyCollectedForTenant).HasColumnType("decimal(18,2)");
+            e.Property(s => s.TotalCompanyServicePriceOwedByTenant).HasColumnType("decimal(18,2)");
+            e.Property(s => s.TotalAmountOfCollectedCodPaidToTenant).HasColumnType("decimal(18,2)");
+            e.Property(s => s.AmountOfCollectedCodPaidToTenant).HasColumnType("decimal(18,2)");
+            e.Property(s => s.TotalAmountPaidToCompanyForCompanyService).HasColumnType("decimal(18,2)");
+            e.Property(s => s.AmountPaidToCompanyForCompanyService).HasColumnType("decimal(18,2)");
         });
 
         // ── Warehouse ────────────────────────────────────────────────────────

@@ -13,9 +13,10 @@ interface ProtectedRouteProps {
 export function homeFor(role?: UserRole): string {
   switch (role) {
     case 'Admin':
-    case 'Operator': return '/admin';
-    case 'Customer': return '/customer';
-    default:         return '/courier';
+    case 'Operator':    return '/admin';
+    case 'Customer':    return '/customer';
+    case 'TenantAdmin': return '/tenant';
+    default:            return '/courier';
   }
 }
 

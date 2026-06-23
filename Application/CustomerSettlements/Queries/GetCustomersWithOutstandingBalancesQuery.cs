@@ -54,7 +54,9 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
             .ToDictionaryAsync(c => c.Id, cancellationToken);
 
         return owing
-            .Where(a => customers.ContainsKey(a.CustomerId))
+            // Reconciliation: tenant customers are settled by their tenant, not the company —
+            // hide them from the company's per-customer settlement list.
+            .Where(a => customers.ContainsKey(a.CustomerId) && customers[a.CustomerId].TenantId == null)
             .Select(a =>
             {
                 var c = customers[a.CustomerId];

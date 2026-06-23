@@ -21,6 +21,7 @@ const CartPage             = lazy(() => import('./pages/Cart/CartPage').then(m =
 const AdminDashboard       = lazy(() => import('./pages/Admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const CourierDashboard     = lazy(() => import('./pages/Courier/CourierDashboard').then(m => ({ default: m.CourierDashboard })));
 const CustomerDashboard    = lazy(() => import('./pages/Customer/CustomerDashboard').then(m => ({ default: m.CustomerDashboard })));
+const TenantDashboard      = lazy(() => import('./pages/Tenant/TenantDashboard').then(m => ({ default: m.TenantDashboard })));
 
 // Self-contained loader shown while a route chunk is being fetched.
 function RouteFallback() {
@@ -114,6 +115,16 @@ export default function App() {
                                     element={
                                         <ProtectedRoute role="Customer">
                                             <CustomerDashboard />
+                                        </ProtectedRoute>
+                                    }
+                                />
+
+                                {/* Tenant co-admin only */}
+                                <Route
+                                    path="/tenant/*"
+                                    element={
+                                        <ProtectedRoute role="TenantAdmin">
+                                            <TenantDashboard />
                                         </ProtectedRoute>
                                     }
                                 />

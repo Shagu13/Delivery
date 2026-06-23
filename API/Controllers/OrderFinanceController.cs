@@ -60,7 +60,8 @@ public sealed class OrderFinanceController : BaseController
         var id = await Sender.Send(new SetOrderSettlementPaymentCommand(
             request.OrderId,
             request.CodPaidAmount, request.CodPaid,
-            request.ServicePaidAmount, request.ServicePaid), ct);
+            request.ServicePaidAmount, request.ServicePaid,
+            RequireRootCustomer: true), ct);
 
         return Ok(new { orderId = id });
     }

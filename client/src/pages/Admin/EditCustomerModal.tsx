@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { FormField } from '../../components/ui/FormField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
-import { adminUpdateCustomer, CustomerApiError } from '../../api/customers';
+import { adminUpdateCustomer, setCustomerTenant, CustomerApiError } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
+import { getTenants } from '../../api/tenants';
+import type { Tenant } from '../../api/tenants';
 import { useLanguage } from '../../contexts/useLanguage';
 import '../../components/ui/Modal.css';
 
 interface Props {
   customer: AdminCustomer | null;
   onClose: () => void;
-  onSaved: (patch: Pick<AdminCustomer, 'firstName' | 'lastName' | 'idNumber' | 'businessName' | 'phoneNumber' | 'city' | 'district' | 'address'>) => void;
+  onSaved: (patch: Pick<AdminCustomer, 'firstName' | 'lastName' | 'idNumber' | 'businessName' | 'phoneNumber' | 'city' | 'district' | 'address' | 'tenantId' | 'tenantDisplayName'>) => void;
 }
 
 interface FormState {
@@ -30,6 +32,8 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
   const [errors,   setErrors]   = useState<Partial<Record<keyof FormState, string>>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading,  setLoading]  = useState(false);
+  const [tenants,  setTenants]  = useState<Tenant[]>([]);
+  const [tenantId, setTenantId] = useState('');   // '' = root (dilo)
 
   useEffect(() => {
     if (!customer) return;
@@ -43,9 +47,16 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
       district:    customer.district,
       address:     customer.address,
     });
+    setTenantId(customer.tenantId ?? '');
     setErrors({});
     setApiError(null);
   }, [customer]);
+
+  // Populate the tenant-assignment dropdown when the modal opens.
+  useEffect(() => {
+    if (!customer || !token) return;
+    getTenants(token).then(setTenants).catch(() => setTenants([]));
+  }, [customer, token]);
 
   if (!customer) return null;
 
@@ -88,7 +99,15 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
         address:     form.address.trim(),
       };
       await adminUpdateCustomer(customer.id, payload, token);
-      onSaved({ ...payload, idNumber: payload.idNumber ?? null });
+      // Tenant assignment is a separate admin-only command; only call it if it changed.
+      const newTenantId = tenantId || null;
+      if (newTenantId !== (customer.tenantId ?? null)) {
+        await setCustomerTenant(customer.id, newTenantId, token);
+      }
+      const tenantDisplayName = newTenantId
+        ? (tenants.find(tn => tn.id === newTenantId)?.displayName ?? null)
+        : null;
+      onSaved({ ...payload, idNumber: payload.idNumber ?? null, tenantId: newTenantId, tenantDisplayName });
     } catch (err) {
       if (err instanceof CustomerApiError && err.errors) {
         const fieldMap: Partial<Record<keyof FormState, string>> = {};
@@ -141,6 +160,27 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
             cityError={errors.city} districtError={errors.district}
           />
           <FormField label={t.streetAddress} value={form.address} onChange={set('address')} error={errors.address} placeholder={t.phStreetAddress} />
+
+          {/* White-label tenant assignment — only shown when tenants exist. */}
+          {tenants.length > 0 && (
+            <>
+              <div className="ui-modal__divider" />
+              <p className="ui-modal__section-label">{t.custTenantLabel}</p>
+              <select
+                value={tenantId}
+                onChange={e => { setTenantId(e.target.value); setApiError(null); }}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--color-border)', background: 'var(--color-bg)',
+                  color: 'var(--color-text)', fontSize: '0.88rem' }}
+              >
+                <option value="">{t.custTenantNoneOpt}</option>
+                {tenants.map(tn => (
+                  <option key={tn.id} value={tn.id}>{tn.displayName}</option>
+                ))}
+              </select>
+              <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', marginTop: 4 }}>{t.custTenantHint}</div>
+            </>
+          )}
 
           {apiError && <div className="ui-modal__error" role="alert">{apiError}</div>}
         </div>

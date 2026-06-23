@@ -5,6 +5,7 @@ using Application.Customers.Commands.ChangePassword;
 using Application.Customers.Commands.CreateCustomer;
 using Application.Customers.Commands.SetActive;
 using Application.Customers.Commands.SetCompanyPrice;
+using Application.Customers.Commands.SetTenant;
 using Application.Customers.Commands.UpdateCustomer;
 using Application.Customers.DTOs;
 using Application.Customers.Queries;
@@ -49,7 +50,8 @@ public sealed class CustomersController : BaseController
             request.BusinessName, request.PhoneNumber,
             request.City, request.District, request.Address,
             request.Email, request.Password,
-            request.IsCompanyServicePriceIncludedInPrice), ct);
+            request.IsCompanyServicePriceIncludedInPrice,
+            request.TenantId), ct);
 
         return CreatedAtAction(nameof(GetById), new { id = customerId },
             new CreateCustomerResponse(customerId, request.Email,
@@ -170,6 +172,23 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/customers/{id}/tenant  (Admin assigns / clears the tenant) ────
+    /// <summary>
+    /// Assign the customer to a white-label tenant, or pass <c>null</c> to move them
+    /// back to the root brand (dilo). Separate from the profile update so a customer's
+    /// own profile edit can never change tenant ownership.
+    /// </summary>
+    [HttpPut("{id:guid}/tenant")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetTenant(
+        Guid id, [FromBody] SetCustomerTenantRequest request, CancellationToken ct)
+    {
+        await Sender.Send(new SetCustomerTenantCommand(id, request.TenantId), ct);
+        return NoContent();
+    }
+
     // ── PUT /api/customers/{id}/password  (Admin sets a new password) ─────────
     /// <summary>
     /// Admin override for customers who can't recover their account. Sets a new
@@ -217,10 +236,11 @@ public sealed class CustomersController : BaseController
         string businessName, string phoneNumber,
         string city, string district, string address,
         string email, string password,
-        bool isCompanyServicePriceIncludedInPrice = false) =>
+        bool isCompanyServicePriceIncludedInPrice = false,
+        Guid? tenantId = null) =>
         new(new CreateCustomerDto(firstName, lastName, idNumber,
             businessName, phoneNumber, city, district, address, email, password,
-            isCompanyServicePriceIncludedInPrice));
+            isCompanyServicePriceIncludedInPrice, tenantId));
 }
 
 // ── Request model ─────────────────────────────────────────────────────────────

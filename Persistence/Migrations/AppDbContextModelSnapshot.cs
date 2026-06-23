@@ -319,6 +319,9 @@ namespace Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ApplicationUserId")
@@ -332,6 +335,8 @@ namespace Persistence.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("PhoneNumber");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Customers");
                 });
@@ -876,6 +881,106 @@ namespace Persistence.Migrations
                     b.ToTable("PasswordResetTokens");
                 });
 
+            modelBuilder.Entity("Domain.Tenant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AdminApplicationUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PrimaryColor")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdminApplicationUserId")
+                        .IsUnique()
+                        .HasFilter("[AdminApplicationUserId] IS NOT NULL");
+
+                    b.HasIndex("Host")
+                        .IsUnique();
+
+                    b.ToTable("Tenants");
+                });
+
+            modelBuilder.Entity("Domain.TenantSettlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AmountOfCollectedCodPaidToTenant")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AmountPaidToCompanyForCompanyService")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("TotalAmountOfCollectedCodPaidToTenant")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalAmountPaidToCompanyForCompanyService")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCODCompanyCollectedForTenant")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCompanyServicePriceOwedByTenant")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("TotalNumberOfOrderDelivered")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalNumberOfOrdersPlaced")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "Year", "Month")
+                        .IsUnique();
+
+                    b.ToTable("TenantSettlements");
+                });
+
             modelBuilder.Entity("Domain.TrackingEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1194,7 +1299,14 @@ namespace Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Domain.Tenant", "Tenant")
+                        .WithMany("Customers")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("ApplicationUser");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("Domain.CustomerSettlement", b =>
@@ -1317,6 +1429,27 @@ namespace Persistence.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("Domain.Tenant", b =>
+                {
+                    b.HasOne("Domain.ApplicationUser", "AdminApplicationUser")
+                        .WithOne()
+                        .HasForeignKey("Domain.Tenant", "AdminApplicationUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AdminApplicationUser");
+                });
+
+            modelBuilder.Entity("Domain.TenantSettlement", b =>
+                {
+                    b.HasOne("Domain.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("Domain.TrackingEvent", b =>
                 {
                     b.HasOne("Domain.Order", null)
@@ -1415,6 +1548,11 @@ namespace Persistence.Migrations
             modelBuilder.Entity("Domain.Order", b =>
                 {
                     b.Navigation("TrackingEvents");
+                });
+
+            modelBuilder.Entity("Domain.Tenant", b =>
+                {
+                    b.Navigation("Customers");
                 });
 #pragma warning restore 612, 618
         }

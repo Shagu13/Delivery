@@ -5,6 +5,8 @@ import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { createCustomer, CustomerApiError } from '../../api/customers';
 import type { CreateCustomerResponse } from '../../api/customers';
+import { getTenants } from '../../api/tenants';
+import type { Tenant } from '../../api/tenants';
 import { firstPasswordError } from '../../utils/passwordRules';
 import { useLanguage } from '../../contexts/useLanguage';
 import '../../components/ui/Modal.css';
@@ -27,8 +29,16 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading,  setLoading]  = useState(false);
   const [priceIncluded, setPriceIncluded] = useState(false);
+  const [tenants,  setTenants]  = useState<Tenant[]>([]);
+  const [tenantId, setTenantId] = useState('');   // '' = root (dilo)
 
-  useEffect(() => { if (open) { setForm(EMPTY); setErrors({}); setApiError(null); setPriceIncluded(false); } }, [open]);
+  useEffect(() => { if (open) { setForm(EMPTY); setErrors({}); setApiError(null); setPriceIncluded(false); setTenantId(''); } }, [open]);
+
+  // Load tenants once the modal opens so the assignment dropdown is populated.
+  useEffect(() => {
+    if (!open || !token) return;
+    getTenants(token).then(setTenants).catch(() => setTenants([]));
+  }, [open, token]);
 
   if (!open) return null;
 
@@ -69,7 +79,7 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
     if (!validate() || !token) return;
     setLoading(true);
     try {
-      const result = await createCustomer({ ...form, idNumber: form.idNumber.trim() || undefined, isCompanyServicePriceIncludedInPrice: priceIncluded }, token);
+      const result = await createCustomer({ ...form, idNumber: form.idNumber.trim() || undefined, isCompanyServicePriceIncludedInPrice: priceIncluded, tenantId: tenantId || null }, token);
       setForm(EMPTY);
       onCreated(result);
     } catch (err) {
@@ -154,6 +164,28 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
               <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>{t.cgoServiceIncludedHint}</span>
             </span>
           </label>
+
+          {/* White-label tenant assignment — only shown when tenants exist. */}
+          {tenants.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 5 }}>
+                {t.custTenantLabel}
+              </label>
+              <select
+                value={tenantId}
+                onChange={e => setTenantId(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--color-border)', background: 'var(--color-bg)',
+                  color: 'var(--color-text)', fontSize: '0.88rem' }}
+              >
+                <option value="">{t.custTenantNoneOpt}</option>
+                {tenants.map(tn => (
+                  <option key={tn.id} value={tn.id}>{tn.displayName}</option>
+                ))}
+              </select>
+              <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', marginTop: 4 }}>{t.custTenantHint}</div>
+            </div>
+          )}
 
           {apiError && <div className="ui-modal__error" role="alert">{apiError}</div>}
         </div>

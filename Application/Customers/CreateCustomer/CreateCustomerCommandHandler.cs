@@ -80,7 +80,9 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
             District          = dto.District,
             Address           = dto.Address,
             IsCompanyServicePriceIncludedInPrice = dto.IsCompanyServicePriceIncludedInPrice,
-            ApplicationUserId = user.Id
+            ApplicationUserId = user.Id,
+            // Null = root brand (dilo). Set by admin assignment; self-registration leaves it null.
+            TenantId          = dto.TenantId
         };
 
         _context.Customers.Add(customer);

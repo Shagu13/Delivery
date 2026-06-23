@@ -75,7 +75,7 @@ public static class DependencyInjectionPersistence
         var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
         var config      = sp.GetRequiredService<IConfiguration>();
 
-        foreach (var role in new[] { "Admin", "Operator", "Courier", "Customer" })
+        foreach (var role in new[] { "Admin", "Operator", "Courier", "Customer", "TenantAdmin" })
         {
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));
@@ -112,6 +112,53 @@ public static class DependencyInjectionPersistence
         {
             existing.PhoneNumber = adminPhone;
             await userManager.UpdateAsync(existing);
+        }
+
+        // ── White-label tenant bootstrap (livo) ──────────────────────────────
+        // Seeds the demo Tenant + its co-admin (TenantAdmin role) so the tenant
+        // flow is testable. Idempotent: creates only what's missing.
+        var db = sp.GetRequiredService<AppDbContext>();
+
+        const string livoHost     = "livo.ge";
+        const string livoUsername = "livo";
+
+        // Find (or create) the co-admin login first, then key idempotency off the user —
+        // one TenantAdmin owns at most one tenant (unique index on AdminApplicationUserId).
+        // Keying off the user (not the host) means an admin can later rename the tenant's
+        // host (e.g. livo.ge → livoexpress.ge) without the seed trying to re-create it.
+        var coAdmin = await userManager.FindByNameAsync(livoUsername);
+        if (coAdmin is null)
+        {
+            coAdmin = new ApplicationUser
+            {
+                UserName        = livoUsername,
+                Email           = "livo@livo.ge",
+                NormalizedEmail = "LIVO@LIVO.GE",
+                FirstName       = "Livo",
+                LastName        = "Admin",
+                Role            = "TenantAdmin",
+            };
+            var created = await userManager.CreateAsync(coAdmin, "Livo@12345");
+            if (created.Succeeded)
+                await userManager.AddToRoleAsync(coAdmin, "TenantAdmin");
+            else
+                coAdmin = null;   // creation failed → don't link a broken FK
+        }
+
+        if (coAdmin is not null)
+        {
+            bool alreadyHasTenant = await db.Tenants.AnyAsync(t => t.AdminApplicationUserId == coAdmin.Id);
+            if (!alreadyHasTenant)
+            {
+                db.Tenants.Add(new Tenant
+                {
+                    Host                   = livoHost,
+                    DisplayName            = "Livo",
+                    AdminApplicationUserId = coAdmin.Id,
+                    IsActive               = true,
+                });
+                await db.SaveChangesAsync();
+            }
         }
     }
 }

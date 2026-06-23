@@ -1,0 +1,109 @@
+using Application.Common.Interfaces;
+using Application.TenantSettlements.DTOs;
+using Domain;
+using Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+
+namespace Application.TenantSettlements;
+
+/// <summary>
+/// Shared compute + upsert + mapping for the monthly tenant ↔ company (dilo) settlement.
+/// One row per tenant per calendar month. The aggregate figures are derived from the
+/// tenant's orders DELIVERED in that month (settlement basis); the payment accumulators
+/// are recorded by a dilo-admin and preserved across recomputes.
+/// Mirrors <see cref="Application.CustomerSettlements.CustomerSettlementService"/> one tier up.
+/// </summary>
+internal static class TenantSettlementService
+{
+    private static readonly OrderStatus[] Delivered =
+    {
+        OrderStatus.DeliveredToRecipient,
+        OrderStatus.ExchangeCompleted,
+        OrderStatus.DeliveredReturnOrderToWarehouse,
+        OrderStatus.ReturnedToSender,
+    };
+
+    /// <summary>
+    /// Creates or refreshes the (tenant, year, month) row's order-derived aggregates,
+    /// leaving the payment accumulators untouched. Returns the tracked row.
+    /// </summary>
+    public static async Task<TenantSettlement> EnsureAndRecomputeAsync(
+        IAppDbContext context, Guid tenantId, int year, int month, CancellationToken ct)
+    {
+        var rows = await context.Orders
+            .Where(o =>
+                (o.GroupOrder != null && o.GroupOrder.Customer != null && o.GroupOrder.Customer.TenantId == tenantId)
+                || (o.Customer != null && o.Customer.TenantId == tenantId))
+            .Select(o => new
+            {
+                o.Status,
+                o.AmountToCollectForPackage,
+                o.WhoPaysForCompanyService,
+                o.CompanyServicePrice,
+                o.DeliveredAt,
+                o.DeliveredToWarehouseAt,
+            })
+            .ToListAsync(ct);
+
+        var deliveredInMonth = rows
+            .Where(o => Delivered.Contains(o.Status))
+            .Where(o =>
+            {
+                var d = o.DeliveredAt ?? o.DeliveredToWarehouseAt;
+                return d.HasValue && d.Value.Year == year && d.Value.Month == month;
+            })
+            .ToList();
+
+        decimal cod     = deliveredInMonth.Sum(o => o.AmountToCollectForPackage ?? 0m);
+        decimal service = deliveredInMonth
+            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender)
+            .Sum(o => o.CompanyServicePrice);
+
+        var settlement = await context.TenantSettlements
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Year == year && s.Month == month, ct);
+
+        if (settlement is null)
+        {
+            settlement = new TenantSettlement
+            {
+                TenantId                            = tenantId,
+                Year                                = year,
+                Month                               = month,
+                TotalNumberOfOrdersPlaced           = deliveredInMonth.Count,
+                TotalNumberOfOrderDelivered         = deliveredInMonth.Count,
+                TotalCODCompanyCollectedForTenant   = cod,
+                TotalCompanyServicePriceOwedByTenant = service,
+            };
+            context.TenantSettlements.Add(settlement);
+        }
+        else
+        {
+            settlement.TotalNumberOfOrdersPlaced           = deliveredInMonth.Count;
+            settlement.TotalNumberOfOrderDelivered         = deliveredInMonth.Count;
+            settlement.TotalCODCompanyCollectedForTenant   = cod;
+            settlement.TotalCompanyServicePriceOwedByTenant = service;
+            settlement.UpdatedAt                           = CustomTime.Now;
+        }
+
+        await context.SaveChangesAsync(ct);
+        return settlement;
+    }
+
+    public static TenantSettlementDto ToDto(TenantSettlement s, string tenantDisplayName) => new(
+        Id:                                        s.Id,
+        TenantId:                                  s.TenantId,
+        TenantDisplayName:                         tenantDisplayName,
+        Year:                                      s.Year,
+        Month:                                     s.Month,
+        TotalNumberOfOrdersPlaced:                 s.TotalNumberOfOrdersPlaced,
+        TotalNumberOfOrderDelivered:               s.TotalNumberOfOrderDelivered,
+        TotalCODCompanyCollectedForTenant:         s.TotalCODCompanyCollectedForTenant,
+        TotalAmountOfCollectedCodPaidToTenant:     s.TotalAmountOfCollectedCodPaidToTenant,
+        AmountOfCollectedCodPaidToTenant:          s.AmountOfCollectedCodPaidToTenant,
+        OutstandingCodOwedToTenant:                s.TotalCODCompanyCollectedForTenant - s.TotalAmountOfCollectedCodPaidToTenant,
+        TotalCompanyServicePriceOwedByTenant:      s.TotalCompanyServicePriceOwedByTenant,
+        TotalAmountPaidToCompanyForCompanyService: s.TotalAmountPaidToCompanyForCompanyService,
+        AmountPaidToCompanyForCompanyService:      s.AmountPaidToCompanyForCompanyService,
+        OutstandingServiceOwedByTenant:            s.TotalCompanyServicePriceOwedByTenant - s.TotalAmountPaidToCompanyForCompanyService,
+        UpdatedAt:                                 s.UpdatedAt?.ToString("o"));
+}

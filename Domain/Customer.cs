@@ -54,6 +54,15 @@ public class Customer
     public bool     IsActive  { get; set; } = true;
     public DateTime CreatedAt { get; set; } = CustomTime.Now;
 
+    // ── White-label tenant ───────────────────────────────────────────────────
+    /// <summary>
+    /// The white-label brand this customer registered under (e.g. livo.ge), matched
+    /// from the request host at registration. Null = root brand (dilo.ge). Drives
+    /// co-admin data scoping: a TenantAdmin sees only customers with their TenantId.
+    /// </summary>
+    public Guid?   TenantId { get; set; }
+    public Tenant? Tenant   { get; set; }
+
     // ── Identity link ────────────────────────────────────────────────────────
     public required string ApplicationUserId { get; set; }
     public ApplicationUser ApplicationUser   { get; set; } = null!;

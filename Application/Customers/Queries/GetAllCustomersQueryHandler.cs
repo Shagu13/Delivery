@@ -59,7 +59,9 @@ public sealed class GetAllCustomersQueryHandler
                 c.CompanyServiceCapitalPrice,
                 c.CompanyServiceCityPrice,
                 c.CompanyServiceDistrictPrice,
-                c.IsCompanyServicePriceIncludedInPrice
+                c.IsCompanyServicePriceIncludedInPrice,
+                c.TenantId,
+                c.Tenant != null ? c.Tenant.DisplayName : null
             ))
             .ToListAsync(cancellationToken);
 

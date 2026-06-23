@@ -38,4 +38,13 @@ public abstract class BaseController : ControllerBase
             return id;
         }
     }
+
+    /// <summary>
+    /// The white-label Tenant.Id embedded in the JWT, identifying which tenant this
+    /// principal is scoped to. Present for a TenantAdmin co-admin and for tenant-owned
+    /// customers; null for root admins and root (dilo) customers. Tenant-scoped queries
+    /// must filter by this — never trust a tenant id from the request body/query.
+    /// </summary>
+    protected Guid? CurrentTenantId =>
+        Guid.TryParse(User.FindFirstValue("tenantId"), out var id) ? id : null;
 }

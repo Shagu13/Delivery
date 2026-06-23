@@ -22,5 +22,9 @@ public sealed record AdminCustomerResponseDto(
     decimal? CompanyServiceCityPrice,
     decimal? CompanyServiceDistrictPrice,
     /// <summary>When true, this customer's package prices are all-in (service fee deducted in the background).</summary>
-    bool     IsCompanyServicePriceIncludedInPrice
+    bool     IsCompanyServicePriceIncludedInPrice,
+    /// <summary>White-label tenant this customer belongs to. Null = root brand (dilo).</summary>
+    Guid?    TenantId,
+    /// <summary>Display name of the owning tenant, for the admin list/edit UI. Null when root.</summary>
+    string?  TenantDisplayName
 );

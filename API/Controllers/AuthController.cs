@@ -28,7 +28,8 @@ public sealed class AuthController : BaseController
             LastName:   result.LastName,
             Role:       result.Role,
             ExpiresAt:  result.ExpiresAt,
-            CustomerId: result.CustomerId
+            CustomerId: result.CustomerId,
+            TenantId:   result.TenantId
         ));
     }
 

@@ -7,6 +7,7 @@ namespace API.Models.Auth
         string   LastName,
         string   Role,
         DateTime ExpiresAt,
-        Guid?    CustomerId = null
+        Guid?    CustomerId = null,
+        Guid?    TenantId   = null
     );
 }

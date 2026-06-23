@@ -22,7 +22,13 @@ public sealed record SetOrderSettlementPaymentCommand(
     decimal? CodPaidAmount,
     bool?    CodPaid,
     decimal? ServicePaidAmount,
-    bool?    ServicePaid
+    bool?    ServicePaid,
+    /// <summary>
+    /// When true (the company/dilo admin path), reject orders whose owning customer belongs
+    /// to a tenant — those are settled by the tenant, not the company. The tenant's own
+    /// payment path leaves this false (it has already verified tenant ownership).
+    /// </summary>
+    bool     RequireRootCustomer = false
 ) : IRequest<Guid>;
 
 public sealed class SetOrderSettlementPaymentCommandHandler
@@ -38,6 +44,19 @@ public sealed class SetOrderSettlementPaymentCommandHandler
         var order = await _context.Orders
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
+
+        // Reconciliation: the company never settles a tenant customer's order directly —
+        // the tenant pays its own customers (and the company settles with the tenant).
+        if (request.RequireRootCustomer)
+        {
+            bool tenantOwned = await _context.Orders.AnyAsync(o => o.Id == request.OrderId
+                && ((o.GroupOrder != null && o.GroupOrder.Customer != null && o.GroupOrder.Customer.TenantId != null)
+                    || (o.Customer != null && o.Customer.TenantId != null)),
+                cancellationToken);
+            if (tenantOwned)
+                throw new ConflictException(
+                    "This order belongs to a tenant customer and is settled by the tenant, not the company.");
+        }
 
         if (request.CodPaid is bool codPaid)
         {

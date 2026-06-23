@@ -954,7 +954,7 @@ public sealed class GroupOrdersController : BaseController
     // ══════════════════════════════════════════════════════════════════════════
     //  Private mapper
     // ══════════════════════════════════════════════════════════════════════════
-    private static AdminGroupOrderResponse MapToAdminResponse(AdminGroupOrderDto go, bool includeRevenue = true) =>
+    internal static AdminGroupOrderResponse MapToAdminResponse(AdminGroupOrderDto go, bool includeRevenue = true) =>
         new(
             Id:                      go.Id,
             CreatedAt:               go.CreatedAt,

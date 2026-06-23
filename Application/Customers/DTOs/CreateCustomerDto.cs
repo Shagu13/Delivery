@@ -23,5 +23,8 @@ public sealed record CreateCustomerDto(
     string Password,
 
     /// <summary>When true, this customer's package prices are all-in (service fee deducted in background).</summary>
-    bool IsCompanyServicePriceIncludedInPrice = false
+    bool IsCompanyServicePriceIncludedInPrice = false,
+
+    /// <summary>White-label tenant this customer belongs to. Null = root brand (dilo).</summary>
+    Guid? TenantId = null
 );

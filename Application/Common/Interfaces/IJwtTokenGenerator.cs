@@ -8,5 +8,6 @@ public interface IJwtTokenGenerator
         ApplicationUser user,
         string          role,
         Guid?           courierId  = null,
-        Guid?           customerId = null);
+        Guid?           customerId = null,
+        Guid?           tenantId   = null);
 }

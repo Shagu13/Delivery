@@ -46,9 +46,10 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
         var role  = roles.FirstOrDefault()
             ?? throw new ForbiddenException("User has no assigned role.");
 
-        // 5. Embed domain ID for Courier JWT claim
+        // 5. Embed domain IDs for the relevant JWT claims
         Guid? courierId  = null;
         Guid? customerId = null;
+        Guid? tenantId   = null;
 
         if (role == "Courier")
         {
@@ -67,11 +68,25 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
                 throw new ForbiddenException("This account has been deactivated. Please contact support.");
 
             customerId = customer.Id;
+            // Tenant-owned (livo) customers carry their tenant; root (dilo) customers stay null.
+            tenantId   = customer.TenantId;
+        }
+        else if (role == "TenantAdmin")
+        {
+            // The co-admin's tenant is the one whose AdminApplicationUserId points back at them.
+            var tenant = await _context.Tenants
+                .FirstOrDefaultAsync(t => t.AdminApplicationUserId == user.Id, cancellationToken)
+                ?? throw new NotFoundException(nameof(Tenant), user.Id);
+
+            if (!tenant.IsActive)
+                throw new ForbiddenException("This tenant has been deactivated. Please contact support.");
+
+            tenantId = tenant.Id;
         }
 
         // 6. Generate token
         var expiresAt = CustomTime.Now.AddMinutes(480);
-        var token = _jwtGenerator.GenerateToken(user, role, courierId, customerId);
+        var token = _jwtGenerator.GenerateToken(user, role, courierId, customerId, tenantId);
 
         return new LoginResultDto(
             Token:      token,
@@ -80,7 +95,8 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
             LastName:   user.LastName,
             Role:       role,
             ExpiresAt:  expiresAt,
-            CustomerId: customerId
+            CustomerId: customerId,
+            TenantId:   tenantId
         );
     }
 }

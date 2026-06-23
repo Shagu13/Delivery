@@ -7,6 +7,7 @@ namespace Application.Auth.DTOs
         string  LastName,
         string  Role,
         DateTime ExpiresAt,
-        Guid?   CustomerId = null   // ← included when role is Customer
+        Guid?   CustomerId = null,  // ← included when role is Customer
+        Guid?   TenantId   = null   // ← included for TenantAdmin, or a tenant-owned Customer
     );
 }

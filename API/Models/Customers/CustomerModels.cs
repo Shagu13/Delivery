@@ -29,7 +29,8 @@ public sealed record CreateCustomerRequest(
     [Required][MaxLength(250)]  string  Address,
     [Required][EmailAddress][MaxLength(256)] string Email,
     [Required][MinLength(8)][MaxLength(100)] string Password,
-    bool IsCompanyServicePriceIncludedInPrice = false
+    bool IsCompanyServicePriceIncludedInPrice = false,
+    Guid? TenantId = null
 );
 
 // ── Profile update ────────────────────────────────────────────────────────────
@@ -59,6 +60,9 @@ public sealed record AdminSetPasswordRequest(
 
 // ── Admin: soft-delete / activate a customer ────────────────────────────────────
 public sealed record SetCustomerActiveRequest(bool IsActive);
+
+// ── Admin: assign / clear the customer's white-label tenant (null = root/dilo) ──
+public sealed record SetCustomerTenantRequest(Guid? TenantId);
 
 // ── Responses ─────────────────────────────────────────────────────────────────
 public sealed record CreateCustomerResponse(Guid CustomerId, string Email, string FullName);

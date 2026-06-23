@@ -18,7 +18,8 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
         ApplicationUser user,
         string          role,
         Guid?           courierId  = null,
-        Guid?           customerId = null)
+        Guid?           customerId = null,
+        Guid?           tenantId   = null)
     {
         var claims = new List<Claim>
         {
@@ -37,6 +38,11 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
 
         if (customerId.HasValue)
             claims.Add(new Claim("customerId", customerId.Value.ToString()));
+
+        // The white-label tenant this principal is scoped to (TenantAdmin co-admin, or a
+        // tenant-owned Customer). Absent for root admins and root (dilo) customers.
+        if (tenantId.HasValue)
+            claims.Add(new Claim("tenantId", tenantId.Value.ToString()));
 
         var key         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

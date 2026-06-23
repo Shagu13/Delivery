@@ -36,6 +36,13 @@ public sealed class PayCustomerOrdersCommandHandler
 
     public async Task<int> Handle(PayCustomerOrdersCommand request, CancellationToken ct)
     {
+        // Reconciliation: a tenant's sub-customers are settled by the tenant, not the company.
+        bool tenantOwned = await _context.Customers
+            .AnyAsync(c => c.Id == request.CustomerId && c.TenantId != null, ct);
+        if (tenantOwned)
+            throw new ConflictException(
+                "This customer belongs to a tenant and is settled by the tenant, not the company.");
+
         var ids = request.Allocations.Select(a => a.OrderId).Distinct().ToList();
 
         var orders = await _context.Orders
