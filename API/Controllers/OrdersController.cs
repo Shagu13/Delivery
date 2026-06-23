@@ -18,9 +18,9 @@ namespace API.Controllers;
 
 public sealed class OrdersController : BaseController
 {
-    // ── GET /api/orders  (Admin — all orders, filterable) ────────────────────
+    // ── GET /api/orders  (Admin — all orders, filterable; Operator — read-only) ──
     [HttpGet]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(PagedResult<AdminOrderListDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? city       = null,

@@ -77,7 +77,8 @@ type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' |
 const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'history', 'returnExchange', 'finance', 'operators'];
 
 // Views an Operator (partial-admin role) may open. Everything else is Admin-only.
-const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders'];
+// The Delivery ('packages') page is read-only for Operators (see canManage below).
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages'];
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -190,7 +191,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.navPickUp}</span>
           </button>
-          {!isOperator && (<>
+          {/* Delivery page: Operators get a read-only view (see canManage on AdminOrdersPage). */}
           <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')} title={t.navDelivery}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
@@ -199,6 +200,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.navDelivery}</span>
           </button>
+          {!isOperator && (<>
           <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')} title={t.sidebarCouriers}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4" />
@@ -342,9 +344,9 @@ export function AdminDashboard() {
         </div>
         <main className="dashboard__content">
           {activeView === 'overview'  && <AdminOverview token={token ?? ''} isOperator={isOperator} />}
-          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isOperator} />}
+          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isOperator} canAssignCourier />}
           {activeView === 'operators' && !isOperator && <AdminOperatorsPage token={token ?? ''} />}
-          {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} />}
+          {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isOperator} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} />}
                   {activeView === 'cities' && <AdminCitiesPage token={token ?? ''} />}
@@ -924,7 +926,7 @@ function DistrictMultiPicker({
   );
 }
 
-function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?: string; canManage?: boolean }) {
+function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = canManage }: { initialStatus?: string; canManage?: boolean; canAssignCourier?: boolean }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -1740,6 +1742,7 @@ function AdminOrders({ initialStatus = '', canManage = true }: { initialStatus?:
                             onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
                             onRefresh={() => load(search)}
                             canManage={canManage}
+                            canAssignCourier={canAssignCourier}
                           />
                         )}
                       </div>

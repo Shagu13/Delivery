@@ -10,7 +10,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers;
 
-[Authorize(Roles = "Admin")]
+// Authorization is per-method, not class-wide: every endpoint is Admin-only EXCEPT
+// the GetAll roster read, which Operators also need (to populate the pickup-courier
+// dropdown and the Delivery page's courier filter). A class-level [Authorize(Admin)]
+// can't be loosened per-method (attributes combine with AND), so it lives per-action.
 public sealed class CouriersController : BaseController
 {
     private readonly IAppDbContext _context;
@@ -21,6 +24,7 @@ public sealed class CouriersController : BaseController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(CreateCourierResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -55,6 +59,7 @@ public sealed class CouriersController : BaseController
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
@@ -80,12 +85,14 @@ public sealed class CouriersController : BaseController
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     public IActionResult GetById(Guid id) => Ok(new { id });
 
     // ── GET /api/couriers/{id}/orders  (Admin) ────────────────────────────────
     /// <summary>Returns all orders ever assigned to this courier, regardless of status.</summary>
     // ── PUT /api/couriers/{id} (Admin) ─────────────────────────────────────────
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -98,6 +105,7 @@ public sealed class CouriersController : BaseController
 
     // ── PATCH /api/couriers/{id}/active (Admin) ───────────────────────────────
     [HttpPatch("{id:guid}/active")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetActive(Guid id, [FromBody] SetCourierActiveStatusRequest request, CancellationToken ct)
@@ -107,6 +115,7 @@ public sealed class CouriersController : BaseController
     }
 
     [HttpGet("{id:guid}/orders")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCourierOrders(Guid id, CancellationToken ct)
@@ -150,6 +159,7 @@ public sealed class CouriersController : BaseController
     /// Dated by AssignedToCourierAt (the moment Order.CourierId was set).
     /// </summary>
     [HttpGet("assigned")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAssignedForRange(
         [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)
@@ -198,6 +208,7 @@ public sealed class CouriersController : BaseController
     /// GetAssignedForRange, but for the pickup (warehouse-collection) leg.
     /// </summary>
     [HttpGet("assigned-pickups")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAssignedPickupsForRange(
         [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)

@@ -97,12 +97,16 @@ interface Props {
     onSuccess: (message: string) => void;
     onError: (message: string) => void;
     onRefresh: () => void;
-    // Operators get a restricted view: they may only accept a pending batch.
-    // Every other lifecycle action (assign, warehouse, decline, cancel…) is hidden.
+    // Operators get a restricted view: they may accept a pending batch and assign a
+    // pickup courier (canAssignCourier), but every other lifecycle action
+    // (warehouse, decline, cancel, set pickup date…) is hidden.
     canManage?: boolean;
+    // Whether the pickup-courier assign/reassign UI is shown. Defaults to canManage;
+    // Operators get it enabled while canManage stays false.
+    canAssignCourier?: boolean;
 }
 
-export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh, canManage = true }: Props) {
+export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh, canManage = true, canAssignCourier = canManage }: Props) {
     const [busy, setBusy] = useState(false);
     const [showCourierPicker, setShowCourierPicker] = useState(false);
     const [selectedCourierId, setSelectedCourierId] = useState('');
@@ -190,22 +194,25 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
             )}
 
             {/* Step 1b: Assign courier / set pickup date. Shown while awaiting pickup —
-                AcceptedGroupOrder (first assignment) and CourierAssignedToPickUp (re-assign). */}
-            {canManage && (status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && !showCourierPicker && !showPickupDate && (
+                AcceptedGroupOrder (first assignment) and CourierAssignedToPickUp (re-assign).
+                Operators may assign the courier; setting the pickup date stays Admin-only. */}
+            {canAssignCourier && (status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && !showCourierPicker && !showPickupDate && (
                 <>
                     <button className="go-action-btn go-action-btn--assign" disabled={busy}
                         onClick={() => setShowCourierPicker(true)}>
                         {status === 'CourierAssignedToPickUp' ? t.goReassignCourierBtn : t.goAssignCourierBtn}
                     </button>
-                    <button className="go-action-btn go-action-btn--ghost" disabled={busy}
-                        onClick={() => setShowPickupDate(true)}>
-                        {t.goSetPickupDate}
-                    </button>
+                    {canManage && (
+                        <button className="go-action-btn go-action-btn--ghost" disabled={busy}
+                            onClick={() => setShowPickupDate(true)}>
+                            {t.goSetPickupDate}
+                        </button>
+                    )}
                 </>
             )}
 
             {/* Courier picker */}
-            {canManage && (status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && showCourierPicker && (
+            {canAssignCourier && (status === 'AcceptedGroupOrder' || status === 'CourierAssignedToPickUp') && showCourierPicker && (
                 <div className="go-courier-picker" onClick={e => e.stopPropagation()}>
                     <select className="go-select go-select--inline" value={selectedCourierId}
                         onChange={e => setSelectedCourierId(e.target.value)}>

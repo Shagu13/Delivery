@@ -370,7 +370,7 @@ public sealed class GroupOrdersController : BaseController
     }
 
     [HttpPut("{id:guid}/assign-courier")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> AssignCourier(
         Guid id,
