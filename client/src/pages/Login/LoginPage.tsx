@@ -5,11 +5,13 @@ import { useAuth } from '../../contexts/useAuth';
 import { FormField } from '../../components/ui/FormField';
 import { homeFor } from '../../components/ProtectedRoute';
 import { useLanguage } from '../../contexts/useLanguage';
+import { useBranding } from '../../contexts/BrandingContext';
 import './login.css';
 
 export function LoginPage() {
   const { signIn, isAuthenticated, user } = useAuth();
   const { t } = useLanguage();
+  const { brandName, isTenant } = useBranding();
   const navigate  = useNavigate();
   const location  = useLocation();
   const from = (location.state as { from?: Location })?.from?.pathname;
@@ -58,7 +60,7 @@ export function LoginPage() {
             <rect width="28" height="28" rx="6" fill="currentColor" />
             <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          {t.appName}
+          {isTenant ? brandName : t.appName}
         </div>
 
         <p className="login-card__eyebrow">{t.loginEyebrow}</p>

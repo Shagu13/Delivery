@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthProvider';
 import { CartProvider } from './contexts/CartProvider';
 import { LanguageProvider } from './contexts/LanguageProvider';
+import { BrandingProvider } from './contexts/BrandingProvider';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 
@@ -54,6 +55,7 @@ export default function App() {
 
     return (
         <LanguageProvider>
+            <BrandingProvider>
             <AuthProvider>
                 <CartProvider>
                 <BrowserRouter>
@@ -137,6 +139,7 @@ export default function App() {
                 </BrowserRouter>
                 </CartProvider>
             </AuthProvider>
+            </BrandingProvider>
         </LanguageProvider>
     );
 }

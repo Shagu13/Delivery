@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LanguageToggle } from '../ui/LanguageToggle';
 import { useLanguage } from '../../contexts/useLanguage';
+import { useBranding } from '../../contexts/BrandingContext';
 import { PriceCalculatorModal } from '../../pages/Home/PriceCalculatorModal';
 import { prefetchCalcData } from '../../pages/Home/calcDataCache';
 
 export function PublicNav() {
     const { t } = useLanguage();
+    const { brandName, logoUrl, isTenant } = useBranding();
     const [menuOpen, setMenuOpen] = useState(false);
     const [calcOpen, setCalcOpen] = useState(false);
     const location = useLocation();
@@ -42,10 +44,10 @@ export function PublicNav() {
         <>
             <header className="nav nav--public">
                 <div className="nav__inner">
-                    {/* Logo */}
+                    {/* Logo — tenant logo/name when on a white-label host, else dilo. */}
                     <Link to="/" className="nav__logo nav__logo--dilo">
-                        <img src="/dilo-logo-mark.png" alt="Dilo Delivery" className="nav__logo-img" />
-                        <span className="nav__logo-script">Delivery</span>
+                        <img src={logoUrl ?? '/dilo-logo-mark.png'} alt={brandName} className="nav__logo-img" />
+                        <span className="nav__logo-script">{isTenant ? brandName : 'Delivery'}</span>
                     </Link>
 
                     {/* ── Desktop nav ── */}

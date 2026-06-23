@@ -25,6 +25,7 @@ import { fetchSmsBalance } from '../../api/sms';
 import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
 import AdminPartnersPage from './AdminPartnersPage';
 import AdminTenantSettlementsPage from './AdminTenantSettlementsPage';
+import AdminTenantsPage from './AdminTenantsPage';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
@@ -73,9 +74,9 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators';
+type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators'];
 
 // Views an Operator (partial-admin role) may open. Everything else is Admin-only.
 // The Delivery ('packages') page is read-only for Operators (see canManage below).
@@ -248,6 +249,17 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">Partner API</span>
           </button>
           <button
+            className={`sidebar__link ${activeView === 'tenants' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('tenants')}
+            title="Tenants"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 14V6l6-4 6 4v8" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+              <path d="M6 14V9h4v5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+            </svg>
+            <span className="sidebar__link-text">Tenants</span>
+          </button>
+          <button
             className={`sidebar__link ${activeView === 'tenantSettlements' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('tenantSettlements')}
             title="Tenant Settlements"
@@ -340,6 +352,7 @@ export function AdminDashboard() {
             {activeView === 'cities' && t.topbarCities}
             {activeView === 'weightTiers' && t.topbarWeightTiers}
             {activeView === 'partners' && 'Partner API'}
+            {activeView === 'tenants' && 'Tenants'}
             {activeView === 'tenantSettlements' && 'Tenant Settlements'}
             {activeView === 'history' && t.topbarHistory}
             {activeView === 'returnExchange' && t.navReturnExchange}
@@ -367,6 +380,7 @@ export function AdminDashboard() {
                       <AdminWeightPriceTiersPage token={token} />
                   )}
           {activeView === 'partners' && token && <AdminPartnersPage token={token} />}
+          {activeView === 'tenants' && !isOperator && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && !isOperator && token && <AdminTenantSettlementsPage token={token} />}
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
           {activeView === 'finance' && <AdminFinancePage token={token ?? ''} />}

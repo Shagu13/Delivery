@@ -32,7 +32,9 @@ public sealed class CustomersController : BaseController
             request.FirstName, request.LastName, request.IdNumber,
             request.BusinessName, request.PhoneNumber,
             request.City, request.District, request.Address,
-            request.Email, request.Password), ct);
+            request.Email, request.Password,
+            // Self-registration: stamp the tenant from the host they signed up on (if any).
+            registrationHost: Request.Host.Host), ct);
 
         return CreatedAtAction(nameof(GetById), new { id = customerId },
             new CreateCustomerResponse(customerId, request.Email,
@@ -237,10 +239,11 @@ public sealed class CustomersController : BaseController
         string city, string district, string address,
         string email, string password,
         bool isCompanyServicePriceIncludedInPrice = false,
-        Guid? tenantId = null) =>
+        Guid? tenantId = null,
+        string? registrationHost = null) =>
         new(new CreateCustomerDto(firstName, lastName, idNumber,
             businessName, phoneNumber, city, district, address, email, password,
-            isCompanyServicePriceIncludedInPrice, tenantId));
+            isCompanyServicePriceIncludedInPrice, tenantId, registrationHost));
 }
 
 // ── Request model ─────────────────────────────────────────────────────────────

@@ -68,6 +68,19 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
 
         await _userManager.AddToRoleAsync(user, "Customer");
 
+        // Tenant resolution: an explicit TenantId (admin path) wins; otherwise, if the customer
+        // self-registered on a white-label host, resolve it to an active tenant and stamp that.
+        Guid? tenantId = dto.TenantId;
+        if (tenantId is null && !string.IsNullOrWhiteSpace(dto.RegistrationHost))
+        {
+            var host = NormalizeHost(dto.RegistrationHost);
+            if (host.Length > 0)
+                tenantId = await _context.Tenants
+                    .Where(t => t.IsActive && t.Host.ToLower() == host)
+                    .Select(t => (Guid?)t.Id)
+                    .FirstOrDefaultAsync(cancellationToken);
+        }
+
         // Create the domain Customer entity
         var customer = new Customer
         {
@@ -81,13 +94,24 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
             Address           = dto.Address,
             IsCompanyServicePriceIncludedInPrice = dto.IsCompanyServicePriceIncludedInPrice,
             ApplicationUserId = user.Id,
-            // Null = root brand (dilo). Set by admin assignment; self-registration leaves it null.
-            TenantId          = dto.TenantId
+            // Null = root brand (dilo). From admin assignment or host-stamped self-registration.
+            TenantId          = tenantId
         };
 
         _context.Customers.Add(customer);
         await _context.SaveChangesAsync(cancellationToken);
 
         return customer.Id;
+    }
+
+    /// <summary>Lower-cases, drops a port and a leading "www." so a host matches the stored value.</summary>
+    private static string NormalizeHost(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        var h = raw.Trim().ToLowerInvariant();
+        int colon = h.IndexOf(':');
+        if (colon >= 0) h = h[..colon];
+        if (h.StartsWith("www.")) h = h[4..];
+        return h;
     }
 }

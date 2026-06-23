@@ -26,5 +26,12 @@ public sealed record CreateCustomerDto(
     bool IsCompanyServicePriceIncludedInPrice = false,
 
     /// <summary>White-label tenant this customer belongs to. Null = root brand (dilo).</summary>
-    Guid? TenantId = null
+    Guid? TenantId = null,
+
+    /// <summary>
+    /// The host the customer registered on (self-registration only). When set and TenantId is
+    /// null, the handler resolves it to an active tenant and stamps that — so a sign-up on
+    /// livoexpress.ge auto-belongs to livo. Ignored when TenantId is supplied (admin path).
+    /// </summary>
+    string? RegistrationHost = null
 );
