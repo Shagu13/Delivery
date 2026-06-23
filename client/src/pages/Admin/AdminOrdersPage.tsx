@@ -112,23 +112,31 @@ function isAssignable(o: AdminOrderItem): boolean {
       || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
 }
 
-// Terminal statuses the backend's admin mark-delivered rejects (already finished/cancelled).
-const DELIVER_TERMINAL_STATUSES = [
-  'DeliveredToRecipient',
-  'ExchangeCompleted',
-  'AllDelivered',
-  'CancelledByAdmin',
-  'CancelledBySender',
-  'OrderNotAccepted',
+// Last-mile statuses — an order is in (or past) the warehouse and on its way to the
+// recipient. Only here can a delivery courier be attributed and the order delivered.
+const LAST_MILE_STATUSES = [
+  'AdminAcceptedOrderInWareHouse',
+  'OrderIsOnItsWayToRecipientsCity',
+  'CourierAssignedToDeliver',
+  'CourierDeliveringTheOrderToRecipient',
+  'DeliveryPostponed',
 ];
 
-// Orders the admin can force "delivered to recipient" from the Packages page: any
-// Send/Exchange order that isn't already in a terminal status — including ones still in the
-// pickup flow (the admin override). Mirrors the backend AdminMarkOrderDelivered guard, so
-// every row it would accept is selectable here. Return orders are excluded — their final
-// leg is a warehouse drop-off, not a recipient delivery.
+// Orders the admin can mark "delivered to recipient" from the Packages page: only
+// Send/Exchange orders that have reached the warehouse (last-mile flow). Orders still in the
+// pickup flow stay locked — they must first be accepted into the warehouse on the Pick-Up
+// page so the pickup courier is recorded, otherwise that trace is lost. Return orders are
+// excluded — their final leg is a warehouse drop-off, not a recipient delivery.
 function isDeliverable(o: AdminOrderItem): boolean {
-  return o.orderType !== 'Return' && !DELIVER_TERMINAL_STATUSES.includes(o.status);
+  return o.orderType !== 'Return' && LAST_MILE_STATUSES.includes(o.status);
+}
+
+// Format a stored Georgian wall-clock timestamp (no offset) as date + time. Parsed as local,
+// formatted as local — so the displayed numbers match the stored wall-clock regardless of tz.
+function fmtDateTime(iso: string, lang: string): string {
+  return new Intl.DateTimeFormat(lang === 'ka' ? 'ka-GE' : 'en-GB', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  }).format(new Date(iso));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -891,13 +899,31 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
           <button className="go-clear-btn" onClick={clearAll}>{t.aopClearFilters}</button>
         )}
 
+        {/* Always-available Mark-Delivered entry: click to enter the mode (then deliverable
+            orders become selectable), click again or press Esc to exit. */}
+        {canManage && (
+          <button
+            className={`aop-unpriced-btn${bulkMode === 'deliver' ? ' aop-unpriced-btn--active' : ''}`}
+            onClick={() => {
+              if (bulkMode === 'deliver') { setBulkMode('assign'); setSelected(new Set()); setBulkCourierId(''); }
+              else setBulkMode('deliver');
+            }}
+            style={{ marginLeft: 'auto' }}
+            title={t.aopModeDeliver}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M2 8.5l3.5 3.5L14 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {t.aopModeDeliver}
+          </button>
+        )}
+
         {canManage && (
           <button
             className="aop-export-btn"
             onClick={handleExport}
             disabled={exporting || loading}
             title={t.aopExportTitle}
-            style={{ marginLeft: 'auto' }}
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <path d="M8 1v9M4.5 6.5L8 10l3.5-3.5M2.5 13.5h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -938,8 +964,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         </div>
       )}
 
-      {/* Mode toggle + bulk action bar — Admin only (read-only Operators can't select) */}
-      {canManage && someSelected && (
+      {/* Mode toggle + bulk action bar — Admin only (read-only Operators can't select).
+          Also shown while in Mark-Delivered mode even before anything is selected. */}
+      {canManage && (someSelected || bulkMode === 'deliver') && (
         <div className="aop-bulk-bar">
           {/* Mode segmented switch */}
           <div className="go-seg" style={{ flexShrink: 0 }}>
@@ -1418,9 +1445,21 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                       >
                         {statusMeta.short}
                       </span>
-                      {order.courierFullName && (
-                        <div className="aop-courier-name" title={order.courierFullName}>
-                          {order.courierFullName}
+                      {/* Assignment tick: green = a delivery courier is assigned, red = not yet. */}
+                      <div className="aop-courier-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                        title={order.courierFullName ?? t.vomUnassigned}>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                          <path d="M3 8.5l3.5 3.5L13 5" stroke={order.courierId ? '#10b981' : '#ef4444'}
+                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span style={order.courierId ? undefined : { color: '#ef4444' }}>
+                          {order.courierFullName ?? t.vomUnassigned}
+                        </span>
+                      </div>
+                      {/* Delivered time — shown on delivered (Assigned-tab) orders. */}
+                      {order.deliveredAt && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+                          {t.aopDeliveredAt} · {fmtDateTime(order.deliveredAt, lang)}
                         </div>
                       )}
                       {order.status === 'DeliveryPostponed' && order.postponeReason && (
