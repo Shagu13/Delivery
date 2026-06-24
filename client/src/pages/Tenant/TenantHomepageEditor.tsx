@@ -72,6 +72,11 @@ export function TenantHomepageEditor() {
     }
   };
 
+  // Primary color must be a 6-digit hex (e.g. #EFD22A). An invalid value (like a
+  // 3- or 4-digit hex) is silently ignored by the browser, so flag it here.
+  const trimmedColor = primaryColor.trim();
+  const colorValid   = /^#?[0-9a-f]{6}$/i.test(trimmedColor);
+
   if (loading) return <div style={{ padding: 24, color: 'var(--color-text-subtle)' }}>Loading…</div>;
 
   return (
@@ -80,7 +85,10 @@ export function TenantHomepageEditor() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>Homepage</h2>
         <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>
-          Your storefront on your own domain. Edit the header, color, and content blocks; changes go live on save.
+          Your storefront on your own domain. Edit the header, color, and content blocks; changes go live on save.{' '}
+          <a href="/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)', fontWeight: 600 }}>
+            Open my live homepage ↗
+          </a>
         </p>
 
         <div className="content-card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -88,8 +96,13 @@ export function TenantHomepageEditor() {
           <div><span style={label}>Logo URL</span><input style={input} value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://…" /></div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}><span style={label}>Primary color (hex)</span><input style={input} value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} placeholder="#0F62FE" /></div>
-            {primaryColor.trim() && <div style={{ width: 34, height: 34, borderRadius: 6, border: '1px solid var(--color-border)', background: primaryColor.trim() }} />}
+            {trimmedColor && colorValid && <div style={{ width: 34, height: 34, borderRadius: 6, border: '1px solid var(--color-border)', background: trimmedColor }} />}
           </div>
+          {trimmedColor && !colorValid && (
+            <div style={{ color: '#ef4444', fontSize: '0.78rem' }}>
+              Enter a 6-digit hex color, e.g. <code>#EFD22A</code>. “{trimmedColor}” is not valid and will be ignored.
+            </div>
+          )}
         </div>
 
         {/* Blocks */}
@@ -135,7 +148,7 @@ export function TenantHomepageEditor() {
         <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-subtle)', marginBottom: 8 }}>Preview</div>
         <div style={{
           border: '1px solid var(--color-border)', borderRadius: 12, overflow: 'hidden', background: 'var(--color-bg)',
-          ...(primaryColor.trim() ? ({ ['--color-accent' as string]: primaryColor.trim() }) : {}),
+          ...(colorValid ? ({ ['--color-accent' as string]: trimmedColor }) : {}),
         }}>
           <TenantHomePage brandName={displayName} sections={sections} />
         </div>

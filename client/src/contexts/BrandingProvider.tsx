@@ -35,12 +35,15 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
         });
         document.title = b.displayName;
 
-        if (b.primaryColor) {
+        // Only apply a valid 6-digit hex; an invalid value (e.g. "#EF2A") would
+        // otherwise poison the accent var and leave the theme broken.
+        const dim = b.primaryColor ? hexToRgba(b.primaryColor, 0.08) : null;
+        if (b.primaryColor && dim) {
+          const hex  = b.primaryColor.trim().startsWith('#') ? b.primaryColor.trim() : `#${b.primaryColor.trim()}`;
           const root = document.documentElement;
-          root.style.setProperty('--color-accent', b.primaryColor);
-          const dim  = hexToRgba(b.primaryColor, 0.08);
+          root.style.setProperty('--color-accent', hex);
+          root.style.setProperty('--color-accent-dim', dim);
           const glow = hexToRgba(b.primaryColor, 0.2);
-          if (dim)  root.style.setProperty('--color-accent-dim', dim);
           if (glow) root.style.setProperty('--color-accent-glow', glow);
         }
       })

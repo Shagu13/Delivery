@@ -27,11 +27,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     useEffect(() => {
         if (!isAuthenticated || !user) return;
 
-        const shouldRedirect = REDIRECT_IF_AUTHED.includes(location.pathname);
+        // A tenant co-admin is allowed to stay on "/" so they can view their own
+        // storefront preview there; only bounce them off /login and /register.
+        const shouldRedirect = REDIRECT_IF_AUTHED.includes(location.pathname)
+            && !(user.role === 'TenantAdmin' && location.pathname === '/');
         if (!shouldRedirect) return;
 
         const dest =
-            user.role === 'Admin'    ? '/admin'    :
+            user.role === 'Admin' || user.role === 'Operator' || user.role === 'TenantAdmin' ? '/admin' :
             user.role === 'Customer' ? '/customer' : '/courier';
 
         navigate(dest, { replace: true });
