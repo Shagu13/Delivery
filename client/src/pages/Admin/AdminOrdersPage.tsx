@@ -4,6 +4,7 @@ import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMa
 import { assignReturnCourier } from '../../api/returnExchange';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
+import { fetchAllDistrictsFlat, type AllDistrictEntry } from '../../api/cities';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -335,6 +336,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   const [assignTab,       setAssignTab]       = useState<'pending' | 'assigned'>('pending');
   const [filterCity,      setFilterCity]      = useState('');
   const [filterDistrict,  setFilterDistrict]  = useState('');
+  // Master city/district list — drives the City/District filters so every district shows,
+  // not just the ones on the currently loaded page of orders.
+  const [allDistricts,    setAllDistricts]    = useState<AllDistrictEntry[]>([]);
   const [filterCourier,   setFilterCourier]   = useState<Courier | null>(null);
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
   const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
@@ -476,17 +480,34 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     return () => document.removeEventListener('keydown', onKey);
   }, [bulkMode, showBulkModal, showPriceModal, showSalaryModal, showPriceWarning, showSalaryWarning]);
 
+  // Load the full city/district list once so the filters list every district — the
+  // previous approach derived them from the loaded page only, hiding districts whose
+  // orders sat on another page (e.g. Tskneti).
+  useEffect(() => {
+    fetchAllDistrictsFlat().then(setAllDistricts).catch(() => { /* keep filters empty on failure */ });
+  }, []);
+
+  // Filter value is the English name (what the backend matches on recipientCity/District);
+  // the label shows the Georgian name when the UI is in Georgian.
   const cities = useMemo(() => {
-    if (!data) return [];
-    return [...new Set(data.items.map(o => o.recipientCity))].sort();
-  }, [data]);
+    const byName = new Map<string, string>();
+    for (const d of allDistricts) {
+      if (!byName.has(d.cityName)) {
+        byName.set(d.cityName, lang === 'ka' && d.cityNameGeo ? d.cityNameGeo : d.cityName);
+      }
+    }
+    return [...byName.entries()]
+      .map(([value, optionLabel]) => ({ value, label: optionLabel }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allDistricts, lang]);
 
   const districts = useMemo(() => {
-    if (!data || !filterCity) return [];
-    return [...new Set(
-      data.items.filter(o => o.recipientCity === filterCity).map(o => o.recipientDistrict)
-    )].sort();
-  }, [data, filterCity]);
+    if (!filterCity) return [];
+    return allDistricts
+      .filter(d => d.cityName === filterCity)
+      .map(d => ({ value: d.districtName, label: lang === 'ka' && d.districtNameGeo ? d.districtNameGeo : d.districtName }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allDistricts, filterCity, lang]);
 
   const orders = data?.items ?? [];
 
@@ -860,7 +881,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
           <select className="go-select" value={filterCity}
             onChange={e => { setFilterCity(e.target.value); setFilterDistrict(''); }}>
             <option value="">{t.aopAllCities}</option>
-            {cities.map(c => <option key={c} value={c}>{c}</option>)}
+            {cities.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
           <svg className="go-select-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none">
             <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
@@ -871,7 +892,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
           <select className="go-select" value={filterDistrict} disabled={!filterCity}
             onChange={e => setFilterDistrict(e.target.value)}>
             <option value="">{t.aopAllDistricts}</option>
-            {districts.map(d => <option key={d} value={d}>{d}</option>)}
+            {districts.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
           </select>
           <svg className="go-select-chevron" width="12" height="12" viewBox="0 0 16 16" fill="none">
             <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
