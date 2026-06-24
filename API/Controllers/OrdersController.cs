@@ -6,6 +6,7 @@ using Application.Orders.DTOs;
 using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
 using Application.Orders.Queries.GetOrderByTrackingNumber;
+using Application.Orders.Queries.GetOrderLocations;
 using Application.Orders.Queries;
 using ClosedXML.Excel;
 using Domain.Enums;
@@ -40,6 +41,20 @@ public sealed class OrdersController : BaseController
         // A tenant co-admin sees only their own tenant's orders (scope from the JWT claim).
         var result = await Sender.Send(
             new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date, CurrentTenantId), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/orders/locations  (Delivery page City/District filter options) ──
+    // Distinct city/district pairs that actually appear in orders — only used locations,
+    // complete across all pages. Scoped to the tenant and (optionally) the selected day.
+    [HttpGet("locations")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
+    [ProducesResponseType(typeof(List<OrderLocationDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetLocations(
+        [FromQuery] DateTime? date = null,
+        CancellationToken ct = default)
+    {
+        var result = await Sender.Send(new GetOrderLocationsQuery(date, CurrentTenantId), ct);
         return Ok(result);
     }
 

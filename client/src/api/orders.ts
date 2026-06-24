@@ -189,6 +189,27 @@ export const retryDelivery       = (token: string, id: string) => orderAction(to
 export const markReturnPickedUp           = (token: string, id: string) => orderAction(token, id, 'return-picked-up');
 export const markReturnDeliveredWarehouse = (token: string, id: string) => orderAction(token, id, 'return-delivered-warehouse');
 
+/** A distinct recipient city + district pair that appears in orders. */
+export interface OrderLocation {
+    city: string;
+    cityGeo?: string | null;
+    district: string;
+    districtGeo?: string | null;
+}
+
+/** Admin/Operator/TenantAdmin: distinct city/district pairs used in orders — drives the
+ *  Delivery page City/District filters (only used locations, complete across all pages).
+ *  Optionally scoped to a Georgian day (yyyy-MM-dd). */
+export async function fetchOrderLocations(token: string, date?: string): Promise<OrderLocation[]> {
+    const qs = new URLSearchParams();
+    if (date) qs.set('date', date);
+    const res = await fetch(`${BASE}/locations${qs.toString() ? `?${qs}` : ''}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch order locations');
+    return res.json();
+}
+
 export async function fetchMyDeliveries(token: string): Promise<CourierOrder[]> {
     const res = await fetch(`${BASE}/my-deliveries`, {
         headers: { Authorization: `Bearer ${token}` },

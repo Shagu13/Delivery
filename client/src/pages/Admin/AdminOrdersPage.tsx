@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMarkOrderDelivered, exportOrdersExcel } from '../../api/orders';
+import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations, type OrderLocation } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
-import { fetchAllDistrictsFlat, type AllDistrictEntry } from '../../api/cities';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -336,9 +335,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   const [assignTab,       setAssignTab]       = useState<'pending' | 'assigned'>('pending');
   const [filterCity,      setFilterCity]      = useState('');
   const [filterDistrict,  setFilterDistrict]  = useState('');
-  // Master city/district list — drives the City/District filters so every district shows,
-  // not just the ones on the currently loaded page of orders.
-  const [allDistricts,    setAllDistricts]    = useState<AllDistrictEntry[]>([]);
+  // Distinct city/district pairs that actually appear in orders — drives the City/District
+  // filters so they list only used locations (not the whole master list) and the full set
+  // across all pages (not just the loaded one). Refreshed for the selected day below.
+  const [orderLocations,  setOrderLocations]  = useState<OrderLocation[]>([]);
   const [filterCourier,   setFilterCourier]   = useState<Courier | null>(null);
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
   const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
@@ -480,34 +480,42 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     return () => document.removeEventListener('keydown', onKey);
   }, [bulkMode, showBulkModal, showPriceModal, showSalaryModal, showPriceWarning, showSalaryWarning]);
 
-  // Load the full city/district list once so the filters list every district — the
-  // previous approach derived them from the loaded page only, hiding districts whose
-  // orders sat on another page (e.g. Tskneti).
+  // Load the city/district pairs actually used in orders so the filters are complete across
+  // all pages (the old approach derived them from the loaded page only, hiding districts
+  // whose orders sat on another page, e.g. Tskneti). Scoped to the selected Georgian day.
   useEffect(() => {
-    fetchAllDistrictsFlat().then(setAllDistricts).catch(() => { /* keep filters empty on failure */ });
-  }, []);
+    if (!token) return;
+    fetchOrderLocations(token, selectedDate ? toDateKey(selectedDate) : undefined)
+      .then(setOrderLocations)
+      .catch(() => { /* keep filters empty on failure */ });
+  }, [token, selectedDate]);
 
   // Filter value is the English name (what the backend matches on recipientCity/District);
   // the label shows the Georgian name when the UI is in Georgian.
   const cities = useMemo(() => {
     const byName = new Map<string, string>();
-    for (const d of allDistricts) {
-      if (!byName.has(d.cityName)) {
-        byName.set(d.cityName, lang === 'ka' && d.cityNameGeo ? d.cityNameGeo : d.cityName);
+    for (const l of orderLocations) {
+      if (!byName.has(l.city)) {
+        byName.set(l.city, lang === 'ka' && l.cityGeo ? l.cityGeo : l.city);
       }
     }
     return [...byName.entries()]
       .map(([value, optionLabel]) => ({ value, label: optionLabel }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [allDistricts, lang]);
+  }, [orderLocations, lang]);
 
   const districts = useMemo(() => {
     if (!filterCity) return [];
-    return allDistricts
-      .filter(d => d.cityName === filterCity)
-      .map(d => ({ value: d.districtName, label: lang === 'ka' && d.districtNameGeo ? d.districtNameGeo : d.districtName }))
+    const byName = new Map<string, string>();
+    for (const l of orderLocations) {
+      if (l.city === filterCity && !byName.has(l.district)) {
+        byName.set(l.district, lang === 'ka' && l.districtGeo ? l.districtGeo : l.district);
+      }
+    }
+    return [...byName.entries()]
+      .map(([value, optionLabel]) => ({ value, label: optionLabel }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [allDistricts, filterCity, lang]);
+  }, [orderLocations, filterCity, lang]);
 
   const orders = data?.items ?? [];
 

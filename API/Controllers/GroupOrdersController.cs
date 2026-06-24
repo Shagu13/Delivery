@@ -663,22 +663,16 @@ public sealed class GroupOrdersController : BaseController
                 : XLColor.FromArgb(0x6B, 0x65, 0x60);
         }
 
-        // Sample district for the example row — first district of the sample city
-        // (Tbilisi) so the example shows a filled City + District pair like the form.
-        var sampleCity = cities.FirstOrDefault(c =>
-            c.CityName.Equals("Tbilisi", StringComparison.OrdinalIgnoreCase)
-            || (c.CityNameGeo ?? string.Empty) == "თბილისი");
-        var sampleDistrict = sampleCity?.Districts.FirstOrDefault();
-        string sampleDistrictGeo = sampleDistrict is null ? string.Empty
-            : (!string.IsNullOrWhiteSpace(sampleDistrict.DistrictNameGeo) ? sampleDistrict.DistrictNameGeo! : sampleDistrict.DistrictName);
-        string sampleDistrictEn  = sampleDistrict?.DistrictName ?? string.Empty;
-
+        // City + District are intentionally left BLANK in the sample row — the customer
+        // must pick them from the cascading dropdowns. (A pre-filled City/District was left
+        // unchanged by customers who only edited the name/address, so every imported order
+        // silently inherited that default location.) The Create Order page rejects a blank
+        // or invalid city/district per row, so a missing one can never slip through.
         if (isGeo)
         {
             ws.Cell(2, 1).Value = "ანა სმიტი";
             ws.Cell(2, 2).Value = "599123456";
-            ws.Cell(2, 3).Value = "თბილისი";
-            ws.Cell(2, 4).Value = sampleDistrictGeo;
+            // cols 3 (city) + 4 (district) intentionally left blank — customer must choose
             ws.Cell(2, 5).Value = "პეკინის გამზ. 42";
             ws.Cell(2, 6).Value = "მტვრევადი – ფრთხილად";
             ws.Cell(2, 7).Value = "გადასახდელი";
@@ -691,8 +685,7 @@ public sealed class GroupOrdersController : BaseController
         {
             ws.Cell(2, 1).Value = "Ana Smith";
             ws.Cell(2, 2).Value = "599123456";
-            ws.Cell(2, 3).Value = "Tbilisi";
-            ws.Cell(2, 4).Value = sampleDistrictEn;
+            // cols 3 (city) + 4 (district) intentionally left blank — customer must choose
             ws.Cell(2, 5).Value = "Pekini Ave 42";
             ws.Cell(2, 6).Value = "Fragile – handle with care";
             ws.Cell(2, 7).Value = "Not Paid";
