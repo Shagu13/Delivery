@@ -115,26 +115,25 @@ public sealed class GetAllOrdersQueryHandler
         var totalCount = await query.CountAsync(cancellationToken);
 
         // ── Ordering ─────────────────────────────────────────────────────────
-        // Packages ready to hand to a courier float to the top: not yet assigned,
-        // in an assignable status for their type, and with the figures the assign
-        // gate requires (a service price and a courier salary). Everything else
-        // falls back to newest-first. Mirrors isAssignable + the price/salary
-        // checks on the Packages page so the top rows are the ones an admin can
-        // assign immediately without a warning.
+        // Orders still actionable on the Delivery page float to the top, oldest-first
+        // (FIFO) so the longest-waiting ones get handled first. "Actionable" = any
+        // Send/Exchange in the last-mile flow (warehouse-accepted, en-route, assigned,
+        // out-for-delivery, postponed) plus Returns still awaiting pickup assignment —
+        // anything an admin can Assign or Mark Delivered here. Price/salary no longer
+        // gate the float: an unpriced warehouse order is still ready for action (you set
+        // the price/salary on this page). Everything else falls below, also oldest-first.
         var entities = await query
             .OrderByDescending(o =>
-                o.CourierId == null
-                && o.CompanyServicePrice > 0
-                && o.CourierSalary != null
-                && (
-                    ((o.OrderType == OrderType.Send || o.OrderType == OrderType.Exchange)
-                        && (o.Status == OrderStatus.AdminAcceptedOrderInWareHouse
-                            || o.Status == OrderStatus.OrderIsOnItsWayToRecipientsCity))
-                    || (o.OrderType == OrderType.Return
-                        && (o.Status == OrderStatus.Pending
-                            || o.Status == OrderStatus.CourierAssignedToPickUp))
-                ))
-            .ThenByDescending(o => o.CreatedAt)
+                ((o.OrderType == OrderType.Send || o.OrderType == OrderType.Exchange)
+                    && (o.Status == OrderStatus.AdminAcceptedOrderInWareHouse
+                        || o.Status == OrderStatus.OrderIsOnItsWayToRecipientsCity
+                        || o.Status == OrderStatus.CourierAssignedToDeliver
+                        || o.Status == OrderStatus.CourierDeliveringTheOrderToRecipient
+                        || o.Status == OrderStatus.DeliveryPostponed))
+                || (o.OrderType == OrderType.Return
+                    && (o.Status == OrderStatus.Pending
+                        || o.Status == OrderStatus.CourierAssignedToPickUp)))
+            .ThenBy(o => o.CreatedAt)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);
