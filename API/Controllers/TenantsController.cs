@@ -19,7 +19,9 @@ public sealed class TenantsController : BaseController
         => Ok(await Sender.Send(new GetAllTenantsQuery(), ct));
 
     // ── POST /api/tenants  (create tenant + its co-admin login) ────────────────
+    // Tenant management (create/edit) is restricted to the "systemadmin" account.
     [HttpPost]
+    [Authorize(Policy = "SystemAdmin")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Create([FromBody] CreateTenantRequest request, CancellationToken ct)
@@ -33,6 +35,7 @@ public sealed class TenantsController : BaseController
 
     // ── PUT /api/tenants/{id}  (edit host + branding + active) ─────────────────
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = "SystemAdmin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]

@@ -65,6 +65,18 @@ try
         .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, API.Auth.ApiKeyAuthenticationHandler>(
             API.Auth.ApiKeyAuthenticationHandler.SchemeName, null);
 
+    // ── Authorization policies ─────────────────────────────────────────────────
+    builder.Services.AddAuthorization(options =>
+    {
+        // Creating/editing white-label tenants is restricted to the dedicated
+        // "systemadmin" account. Ordinary Admins can still read the tenant list
+        // (GET /api/tenants powers the customer-assignment dropdown) but cannot
+        // manage tenants. The JWT carries the username as the Name claim.
+        options.AddPolicy("SystemAdmin", policy =>
+            policy.RequireRole("Admin")
+                  .RequireClaim(System.Security.Claims.ClaimTypes.Name, "systemadmin"));
+    });
+
     // ── Controllers ──────────────────────────────────────────────────────────
     builder.Services.AddControllers()
         .AddJsonOptions(o =>

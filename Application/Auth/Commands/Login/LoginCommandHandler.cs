@@ -88,6 +88,11 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
         var expiresAt = CustomTime.Now.AddMinutes(480);
         var token = _jwtGenerator.GenerateToken(user, role, courierId, customerId, tenantId);
 
+        // The dedicated "systemadmin" account is the only Admin that owns the
+        // white-label Tenants management page (create/edit tenants).
+        bool isSystemAdmin = role == "Admin"
+            && string.Equals(user.UserName, "systemadmin", StringComparison.OrdinalIgnoreCase);
+
         return new LoginResultDto(
             Token:      token,
             Username:   user.Email ?? user.UserName ?? user.Id,
@@ -96,7 +101,8 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
             Role:       role,
             ExpiresAt:  expiresAt,
             CustomerId: customerId,
-            TenantId:   tenantId
+            TenantId:   tenantId,
+            IsSystemAdmin: isSystemAdmin
         );
     }
 }

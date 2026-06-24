@@ -29,7 +29,8 @@ public sealed class AuthController : BaseController
             Role:       result.Role,
             ExpiresAt:  result.ExpiresAt,
             CustomerId: result.CustomerId,
-            TenantId:   result.TenantId
+            TenantId:   result.TenantId,
+            IsSystemAdmin: result.IsSystemAdmin
         ));
     }
 

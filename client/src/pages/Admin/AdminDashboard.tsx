@@ -103,6 +103,8 @@ export function AdminDashboard() {
   const isOperator = user?.role === 'Operator';
   // Tenant co-admins reuse this dashboard too, scoped to their tenant (see TENANT_VIEWS).
   const isTenant = user?.role === 'TenantAdmin';
+  // Only the dedicated 'systemadmin' account may create/edit white-label tenants.
+  const isSystemAdmin = !!user?.isSystemAdmin;
 
   // Seed the active view from the URL so a page refresh stays on the current page.
   const [sidebarView, setSidebarView] = useState<AdminView>(
@@ -113,6 +115,8 @@ export function AdminDashboard() {
   const activeView: AdminView =
     isTenant   && !TENANT_VIEWS.includes(requestedView)   ? 'orders'
     : isOperator && !OPERATOR_VIEWS.includes(requestedView) ? 'overview'
+    // Block a non-systemadmin Admin from landing on the Tenants page via the URL.
+    : requestedView === 'tenants' && !isSystemAdmin ? 'overview'
     : requestedView;
 
   const goTo = (view: AdminView) => {
@@ -273,6 +277,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Partner API</span>
           </button>
+          {isSystemAdmin && (
           <button
             className={`sidebar__link ${activeView === 'tenants' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('tenants')}
@@ -284,6 +289,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Tenants</span>
           </button>
+          )}
           <button
             className={`sidebar__link ${activeView === 'tenantSettlements' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('tenantSettlements')}
@@ -412,7 +418,7 @@ export function AdminDashboard() {
                       <AdminWeightPriceTiersPage token={token} />
                   )}
           {activeView === 'partners' && token && <AdminPartnersPage token={token} />}
-          {activeView === 'tenants' && !isOperator && token && <AdminTenantsPage token={token} />}
+          {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && !isOperator && token && <AdminTenantSettlementsPage token={token} />}
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
           {/* Finance: tenant co-admin sees the scoped tenant finance, never the company-wide P&L. */}

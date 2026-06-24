@@ -114,6 +114,32 @@ public static class DependencyInjectionPersistence
             await userManager.UpdateAsync(existing);
         }
 
+        // ── System admin ─────────────────────────────────────────────────────
+        // A second Admin-role account that additionally owns the white-label
+        // Tenants management page (create/edit tenants); the ordinary "admin"
+        // account does not see that page. Both are otherwise full admins.
+        // The password hash is set directly (rather than via CreateAsync(user,
+        // password)) so the requested credential is honored verbatim even though
+        // it omits the uppercase letter the configured password policy requires.
+        const string systemAdminUsername = "systemadmin";
+        if (await userManager.FindByNameAsync(systemAdminUsername) is null)
+        {
+            var systemAdmin = new ApplicationUser
+            {
+                UserName        = systemAdminUsername,
+                Email           = "systemadmin@dilodelivery.com",
+                NormalizedEmail = "SYSTEMADMIN@DILODELIVERY.COM",
+                FirstName       = "System",
+                LastName        = "Admin",
+                Role            = "Admin",
+            };
+            systemAdmin.PasswordHash = userManager.PasswordHasher.HashPassword(systemAdmin, "systemadmin@12345!");
+
+            var systemAdminResult = await userManager.CreateAsync(systemAdmin);
+            if (systemAdminResult.Succeeded)
+                await userManager.AddToRoleAsync(systemAdmin, "Admin");
+        }
+
         // ── White-label tenant bootstrap (livo) ──────────────────────────────
         // Seeds the demo Tenant + its co-admin (TenantAdmin role) so the tenant
         // flow is testable. Idempotent: creates only what's missing.

@@ -8,6 +8,7 @@ namespace API.Models.Auth
         string   Role,
         DateTime ExpiresAt,
         Guid?    CustomerId = null,
-        Guid?    TenantId   = null
+        Guid?    TenantId   = null,
+        bool     IsSystemAdmin = false
     );
 }
