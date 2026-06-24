@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { PublicNav } from './PublicNav';
 import { StaffNav } from './StaffNav';
+import { isLivoHost } from '../../pages/Tenant/livoHost';
 import './layout.css';
 
 // Pages where an authenticated user should be bounced to their dashboard.
@@ -42,9 +43,15 @@ export function AppLayout({ children }: AppLayoutProps) {
 
     const hideStaffNav = SELF_SHELLED_PREFIXES.some(p => location.pathname.startsWith(p));
 
+    // The LivoExpress homepage renders its own self-contained nav (logo + account),
+    // so suppress the default public/staff nav there. This applies on the livo host
+    // itself and in the logged-in co-admin preview (a TenantAdmin viewing "/").
+    const isTenantOwnHome = location.pathname === '/'
+        && (isLivoHost(window.location.hostname) || user?.role === 'TenantAdmin');
+
     return (
         <div className="app-layout">
-            {!user ? <PublicNav /> : hideStaffNav ? null : <StaffNav />}
+            {isTenantOwnHome ? null : !user ? <PublicNav /> : hideStaffNav ? null : <StaffNav />}
             <main className="app-layout__main">
                 {children}
             </main>

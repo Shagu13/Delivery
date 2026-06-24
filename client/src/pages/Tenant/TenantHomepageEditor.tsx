@@ -4,6 +4,8 @@ import { getMyBranding, updateMyBranding } from '../../api/tenantBranding';
 import { parseHomepage, emptyBlock } from '../../types/homepage';
 import type { HomepageBlock, HomepageBlockType } from '../../types/homepage';
 import { TenantHomePage } from './TenantHomePage';
+import { LivoHomePage } from './LivoHomePage';
+import { isLivoHost } from './livoHost';
 
 const input: React.CSSProperties = {
   width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--color-border)',
@@ -21,6 +23,9 @@ export function TenantHomepageEditor() {
   const [logoUrl, setLogoUrl]         = useState('');
   const [primaryColor, setPrimaryColor] = useState('');
   const [sections, setSections]       = useState<HomepageBlock[]>([]);
+  // LivoExpress uses a hand-built coded homepage, so its layout/blocks aren't editable
+  // here — only the brand name, logo, and color feed into the coded design.
+  const [isLivo, setIsLivo]           = useState(false);
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [msg, setMsg]                 = useState<string | null>(null);
@@ -35,6 +40,7 @@ export function TenantHomepageEditor() {
         setLogoUrl(b.logoUrl ?? '');
         setPrimaryColor(b.primaryColor ?? '');
         setSections(parseHomepage(b.homepageJson).sections);
+        setIsLivo(isLivoHost(b.host));
       })
       .catch(() => setErr('Failed to load.'))
       .finally(() => setLoading(false));
@@ -105,8 +111,8 @@ export function TenantHomepageEditor() {
           )}
         </div>
 
-        {/* Blocks */}
-        {sections.map((b, i) => (
+        {/* Blocks — hidden for LivoExpress, whose layout is coded (name/logo/color only). */}
+        {!isLivo && sections.map((b, i) => (
           <div key={b.id} className="content-card" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <strong style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-subtle)' }}>{b.type}</strong>
@@ -132,11 +138,20 @@ export function TenantHomepageEditor() {
           </div>
         ))}
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {(['hero', 'text', 'image'] as HomepageBlockType[]).map(t => (
-            <button key={t} style={iconBtn} onClick={() => addBlock(t)}>+ {t}</button>
-          ))}
-        </div>
+        {!isLivo && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(['hero', 'text', 'image'] as HomepageBlockType[]).map(t => (
+              <button key={t} style={iconBtn} onClick={() => addBlock(t)}>+ {t}</button>
+            ))}
+          </div>
+        )}
+
+        {isLivo && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)', lineHeight: 1.5 }}>
+            Your homepage layout is custom-built. Edit the header name, logo, and color above —
+            they update your live storefront on save.
+          </div>
+        )}
 
         {msg && <div style={{ color: '#059669', fontSize: '0.85rem' }}>{msg}</div>}
         {err && <div style={{ color: '#ef4444', fontSize: '0.85rem' }}>{err}</div>}
@@ -150,7 +165,9 @@ export function TenantHomepageEditor() {
           border: '1px solid var(--color-border)', borderRadius: 12, overflow: 'hidden', background: 'var(--color-bg)',
           ...(colorValid ? ({ ['--color-accent' as string]: trimmedColor }) : {}),
         }}>
-          <TenantHomePage brandName={displayName} sections={sections} />
+          {isLivo
+            ? <LivoHomePage brandName={displayName} logoUrl={logoUrl} />
+            : <TenantHomePage brandName={displayName} sections={sections} />}
         </div>
       </div>
     </div>
