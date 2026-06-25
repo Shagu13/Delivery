@@ -51,8 +51,11 @@ export function OrderRowActionsMenu({
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   const close = () => { setOpen(false); setPanel('menu'); };
+
+  const activeCouriers = couriers.filter(c => !c.isDeleted);
 
   // Anchor the portal panel to the button; flip upward when there's no room below.
   useLayoutEffect(() => {
@@ -71,7 +74,20 @@ export function OrderRowActionsMenu({
       if (menuRef.current?.contains(e.target as Node) || btnRef.current?.contains(e.target as Node)) return;
       close();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { close(); return; }
+      // Type-ahead in the courier list: pressing a letter jumps to the first courier
+      // whose name starts with it (and focuses it, so Enter assigns).
+      if (panel === 'assign' && e.key.length === 1 && /\S/.test(e.key)) {
+        const letter = e.key.toLowerCase();
+        const idx = activeCouriers.findIndex(c => c.fullName.trim().toLowerCase().startsWith(letter));
+        if (idx >= 0) {
+          const item = listRef.current?.children[idx] as HTMLElement | undefined;
+          item?.scrollIntoView({ block: 'nearest' });
+          item?.focus();
+        }
+      }
+    };
     // Close on page scroll (the fixed panel would otherwise drift), but ignore scrolling
     // *inside* the panel itself — e.g. the courier list — which must stay open.
     const onScroll = (e: Event) => {
@@ -86,7 +102,8 @@ export function OrderRowActionsMenu({
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onScroll, true);
     };
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, panel, couriers]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -152,10 +169,10 @@ export function OrderRowActionsMenu({
           {panel === 'assign' && (
             <div className="orm-sub">
               <button className="orm-sub-head" onClick={() => setPanel('menu')}>‹ {t.aopModeAssign}</button>
-              <div className="orm-courier-list">
-                {couriers.filter(c => !c.isDeleted).length === 0
+              <div className="orm-courier-list" ref={listRef}>
+                {activeCouriers.length === 0
                   ? <div className="orm-empty">{t.goChooseCourierOption}</div>
-                  : couriers.filter(c => !c.isDeleted).map(c => (
+                  : activeCouriers.map(c => (
                       <button key={c.courierId} className="orm-item" disabled={busy}
                         onClick={() => assign(c.courierId)}>{c.fullName}</button>
                     ))}

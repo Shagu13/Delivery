@@ -1660,7 +1660,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         .aop-export-btn { display: inline-flex; align-items: center; gap: 7px; background: #16a34a; border: 1px solid #16a34a; color: #fff; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; padding: 7px 13px; cursor: pointer; transition: opacity var(--transition); white-space: nowrap; }
         .aop-export-btn:hover:not(:disabled) { opacity: 0.9; }
         .aop-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .aop-bulk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 20px; background: linear-gradient(var(--color-accent-dim), var(--color-accent-dim)), var(--color-bg); border-bottom: 1px solid rgba(196,127,23,0.25); animation: expand-in 0.15s ease both; position: sticky; top: 0; z-index: 20; }
+        .aop-bulk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 20px; background: linear-gradient(var(--color-accent-dim), var(--color-accent-dim)), var(--color-bg); border-bottom: 1px solid rgba(196,127,23,0.25); animation: expand-in 0.15s ease both; position: sticky; top: var(--staff-nav-h, 64px); z-index: 20; }
         .aop-bulk-count { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--color-accent); }
         .aop-bulk-btn { border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
         .aop-bulk-btn:disabled { opacity: 0.45; cursor: not-allowed; }

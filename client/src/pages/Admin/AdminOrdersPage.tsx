@@ -1828,8 +1828,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
           background: linear-gradient(var(--color-accent-dim), var(--color-accent-dim)), var(--color-bg);
           border-bottom: 1px solid rgba(196,127,23,0.25);
           animation: expand-in 0.15s ease both;
-          /* Follow the page scroll so the action buttons stay reachable in long lists. */
-          position: sticky; top: 0; z-index: 20;
+          /* Follow the page scroll so the action buttons stay reachable in long lists.
+             Stick below the sticky StaffNav (top: nav height) so it isn't hidden behind it. */
+          position: sticky; top: var(--staff-nav-h, 64px); z-index: 20;
         }
         .aop-bulk-count { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--color-accent); }
         .aop-bulk-btn { border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
@@ -1849,7 +1850,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         /* ── Table ── */
         .aop-table-wrap { overflow-x: auto; flex: 1; }
         .aop-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-        .aop-th { text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 10px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: var(--bulk-bar-h, 0px); z-index: 1; }
+        .aop-th { text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 10px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: calc(var(--staff-nav-h, 64px) + var(--bulk-bar-h, 0px)); z-index: 1; }
         .aop-th--check { width: 44px; padding-left: 20px; }
         .aop-th--num { text-align: right; }
         .aop-td { padding: 11px 14px; font-size: 0.82rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; cursor: pointer; }
