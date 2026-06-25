@@ -1023,6 +1023,15 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   const [filterStatus,   setFilterStatus]   = useState(initialStatus);
   const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
   const [actionToast,    setActionToast]    = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  // Warehouse acceptance: per-package "arrived" ticks keyed by order id. A package NOT in
+  // this set is present (default ticked); ids here were unticked = missing, so they get
+  // cancelled as "not received" when the batch is accepted in warehouse.
+  const [absentPkgs, setAbsentPkgs] = useState<Set<string>>(() => new Set());
+  const togglePkgPresent = (orderId: string) => setAbsentPkgs(prev => {
+    const next = new Set(prev);
+    if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+    return next;
+  });
   // Order being edited from a group order's package row, with its customer's pricing.
   const [editing, setEditing] = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1830,6 +1839,12 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                             onRefresh={() => load(search)}
                             canManage={canManage}
                             canAssignCourier={canAssignCourier}
+                            warehousePresentIds={go.status === 'DeliveredToWarehouse'
+                              ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && !absentPkgs.has(o.id)).map(o => o.id)
+                              : undefined}
+                            warehouseAbsentCount={go.status === 'DeliveredToWarehouse'
+                              ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && absentPkgs.has(o.id)).length
+                              : undefined}
                           />
                         )}
                       </div>
@@ -1860,7 +1875,17 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                                 <tbody>
                                   {filteredOrders.map(o => (
                                     <tr key={o.id}>
-                                      <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                                      <td>
+                                        <span className="tn-badge">{o.trackingNumber}</span>
+                                        {canManage && o.status === 'DeliveredToWarehouse' && (
+                                          <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.7rem', color: 'var(--color-text-subtle)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                            <input type="checkbox" style={{ cursor: 'pointer' }}
+                                              checked={!absentPkgs.has(o.id)}
+                                              onChange={() => togglePkgPresent(o.id)} />
+                                            {t.goWarehousePresent}
+                                          </label>
+                                        )}
+                                      </td>
                                       <td><div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div></td>
                                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                                       <td>

@@ -533,6 +533,11 @@ const en = {
   goConfirm:               'Confirm',
   goSaveDate:              'Save Date',
   goAcceptInWarehouse:     '✓ Accept in Warehouse',
+  goWarehousePresent:      'Arrived',
+  goWarehouseAcceptTitle:  'Accept present packages?',
+  goWarehousePartialConfirm: (present: number, absent: number) =>
+    `${present} package${present !== 1 ? 's' : ''} will be accepted in warehouse; ${absent} not received will be cancelled.`,
+  goWarehouseNonePresent:  'Tick at least one package that arrived, or cancel the whole batch.',
   goForceWarehouse:        '⤓ Mark in Warehouse',
   goForceWarehouseTitle:   'Mark batch in warehouse?',
   goWarehouseNeedsCourier: 'No pickup courier is assigned to this batch. Choose the courier who collected it — they will be recorded as the pickup courier and the batch marked in the warehouse.',
@@ -876,6 +881,7 @@ const en = {
     DidNotWant: 'Did not want',
     WrongSize:  'Wrong size',
     Other:      'Other',
+    WarehouseNotReceived: 'Warehouse did not receive package',
   } as Record<string, string>,
 
   // Settlements page
@@ -2280,6 +2286,11 @@ const ka: typeof en = {
   goConfirm:               'დადასტურება',
   goSaveDate:              'თარიღის შენახვა',
   goAcceptInWarehouse:     '✓ საწყობში მიღება',
+  goWarehousePresent:      'მიღებული',
+  goWarehouseAcceptTitle:  'მიღებული ამანათების დადასტურება?',
+  goWarehousePartialConfirm: (present: number, absent: number) =>
+    `${present} ამანათი მიიღება საწყობში; ${absent} მიუღებელი გაუქმდება.`,
+  goWarehouseNonePresent:  'მონიშნეთ მინიმუმ ერთი მიღებული ამანათი, ან გააუქმეთ მთლიანი შეკვეთა.',
   goForceWarehouse:        '⤓ საწყობში გადატანა',
   goForceWarehouseTitle:   'პარტია გადავიდეს საწყობში?',
   goWarehouseNeedsCourier: 'ამ პარტიას არ ჰყავს მიმღები კურიერი. აირჩიეთ კურიერი, რომელმაც აიღო — ის დაფიქსირდება აღების კურიერად და პარტია მოინიშნება საწყობში.',
@@ -2623,6 +2634,7 @@ const ka: typeof en = {
     DidNotWant: 'გადაიფიქრა',
     WrongSize:  'არ მოერგო',
     Other:      'სხვა',
+    WarehouseNotReceived: 'ამანათი საწყობში არ მიგვიღია',
   } as Record<string, string>,
 
   // Settlements page

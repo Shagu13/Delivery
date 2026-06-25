@@ -78,7 +78,7 @@ export interface CustomerOrder {
   isCompanyServicePriceIncluded?: boolean;
   amountToCollectForPackage?: number | null;
   /** Why a courier cancelled the delivery (null unless cancelled). */
-  cancellationReason?: 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other' | null;
+  cancellationReason?: 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other' | 'WarehouseNotReceived' | null;
   /** Free-text note captured for the "Other" reason. */
   cancellationComment?: string | null;
 }

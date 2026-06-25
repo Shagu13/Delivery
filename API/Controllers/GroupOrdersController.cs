@@ -400,9 +400,12 @@ public sealed class GroupOrdersController : BaseController
     [HttpPut("{id:guid}/accept-in-warehouse")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> AcceptInWarehouse(Guid id, CancellationToken ct)
+    public async Task<IActionResult> AcceptInWarehouse(
+        Guid id,
+        [FromBody] AcceptInWarehouseRequest? request,
+        CancellationToken ct)
     {
-        await Sender.Send(new AcceptGroupOrderInWarehouseCommand(id), ct);
+        await Sender.Send(new AcceptGroupOrderInWarehouseCommand(id, request?.PresentOrderIds), ct);
         return NoContent();
     }
 
@@ -1012,6 +1015,10 @@ public sealed class GroupOrdersController : BaseController
 
 // ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetPickupDateRequest(DateTime PickupDate);
+
+/// <summary>Body for PUT /api/grouporders/{id}/accept-in-warehouse — the packages that
+/// physically arrived. Omit (null) to accept the whole batch.</summary>
+public sealed record AcceptInWarehouseRequest(IReadOnlyList<Guid>? PresentOrderIds);
 
 /// <summary>Body for PUT /api/grouporders/attach — group a customer's unattached orders.</summary>
 public sealed record AttachOrdersRequest(

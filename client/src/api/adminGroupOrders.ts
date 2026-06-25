@@ -57,7 +57,7 @@ export interface AdminOrder {
     deliveryDateFrom: string | null;
     deliveryDateTo: string | null;
     deliveredAt: string | null;
-    cancellationReason?: 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other' | null;
+    cancellationReason?: 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other' | 'WarehouseNotReceived' | null;
     cancellationComment?: string | null;
 }
 
@@ -220,7 +220,10 @@ async function groupOrderAction(
 
 export const acceptGroupOrder         = (token: string, id: string) => groupOrderAction(token, id, 'accept');
 export const declineGroupOrder        = (token: string, id: string) => groupOrderAction(token, id, 'decline');
-export const acceptGroupOrderInWarehouse = (token: string, id: string) => groupOrderAction(token, id, 'accept-in-warehouse');
+/** Accept a batch in warehouse. Pass `presentOrderIds` to accept only the packages that
+ *  physically arrived; the rest are cancelled as "not received". Omit it to accept all. */
+export const acceptGroupOrderInWarehouse = (token: string, id: string, presentOrderIds?: string[]) =>
+    groupOrderAction(token, id, 'accept-in-warehouse', presentOrderIds ? { presentOrderIds } : undefined);
 export const cancelGroupOrderByAdmin  = (token: string, id: string) => groupOrderAction(token, id, 'cancel-by-admin');
 export const setGroupOrderPickupDate  = (token: string, id: string, pickupDate: string) =>
     groupOrderAction(token, id, 'pickup-date', { pickupDate });

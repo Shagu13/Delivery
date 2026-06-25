@@ -297,6 +297,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const [filterStatus,    setFilterStatus]    = useState('');
   const [expandedIds,     setExpandedIds]     = useState<Set<string>>(new Set());
   const [actionToast,     setActionToast]     = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  // Warehouse acceptance: per-package "arrived" ticks keyed by order id. Not in this set =
+  // present (default ticked); ids here were unticked = missing → cancelled as "not received".
+  const [absentPkgs, setAbsentPkgs] = useState<Set<string>>(() => new Set());
+  const togglePkgPresent = (orderId: string) => setAbsentPkgs(prev => {
+    const next = new Set(prev);
+    if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+    return next;
+  });
   const [editing,         setEditing]         = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -836,7 +844,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   };
 
   // ── Render: one package row (shared by accordion + flat view) ───────────────
-  const renderOrderRow = (o: AdminOrder, go: AdminGroupOrder, moveDestinations: AdminGroupOrder[]) => {
+  const renderOrderRow = (o: AdminOrder, go: AdminGroupOrder, moveDestinations: AdminGroupOrder[], warehouseSelectable = false) => {
     const selectable = canManage && rowSelectable(toOrderItem(o, go, null));
     const isChecked = selected.has(o.id);
     const courierName = o.courierId ? (courierNameById.get(o.courierId) ?? null) : null;
@@ -848,7 +856,17 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
               onChange={() => selectable && toggleOne(o.id)} />
           </td>
         )}
-        <td><span className="tn-badge">{o.trackingNumber}</span></td>
+        <td>
+          <span className="tn-badge">{o.trackingNumber}</span>
+          {warehouseSelectable && canManage && o.status === 'DeliveredToWarehouse' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.7rem', color: 'var(--color-text-subtle)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <input type="checkbox" style={{ cursor: 'pointer' }}
+                checked={!absentPkgs.has(o.id)}
+                onChange={() => togglePkgPresent(o.id)} />
+              {t.goWarehousePresent}
+            </label>
+          )}
+        </td>
         <td><div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div></td>
         <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
         <td>
@@ -1308,7 +1326,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                           ) : (
                             <AdminGroupOrderActions groupOrder={go} couriers={couriers} token={token ?? ''}
                               onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                              onRefresh={() => load(searchRef.current)} canManage={canManage} canAssignCourier={canAssignCourier} />
+                              onRefresh={() => load(searchRef.current)} canManage={canManage} canAssignCourier={canAssignCourier}
+                              warehousePresentIds={go.status === 'DeliveredToWarehouse'
+                                ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && !absentPkgs.has(o.id)).map(o => o.id)
+                                : undefined}
+                              warehouseAbsentCount={go.status === 'DeliveredToWarehouse'
+                                ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && absentPkgs.has(o.id)).length
+                                : undefined} />
                           )}
                         </div>
                         {expanded && (
@@ -1319,7 +1343,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                               <div style={{ overflowX: 'auto' }}>
                                 <table className="go-orders-table">
                                   {packageHead}
-                                  <tbody>{filteredOrders.map(o => renderOrderRow(o, go, moveDestinations))}</tbody>
+                                  <tbody>{filteredOrders.map(o => renderOrderRow(o, go, moveDestinations, true))}</tbody>
                                 </table>
                               </div>
                             )}
