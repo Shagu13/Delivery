@@ -55,7 +55,7 @@ public static class DependencyInjectionPersistence
         .AddRoles<IdentityRole>()
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
-
+            
         // ── Password-reset token lifespan ─────────────────────────────────────
         // Controls only the Identity DataProtection tokens (password reset,
         // email confirmation).  JWT login tokens are NOT affected — those are

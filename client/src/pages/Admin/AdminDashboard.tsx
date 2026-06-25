@@ -17,6 +17,7 @@ import { recipientDisplayName } from '../../utils/recipientName';
 import AdminCustomersPage from './AdminCustomersPage';
 import AdminCitiesPage from './AdminCitiesPage';
 import AdminOrdersPage from './AdminOrdersPage';
+import AdminPackagesPage from './AdminPackagesPage';
 import { useLanguage } from '../../contexts/useLanguage';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -76,18 +77,18 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage';
+type AdminView = 'overview' | 'orders' | 'packages' | 'packagesTest' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage'];
 
 // Views an Operator (partial-admin role) may open. Everything else is Admin-only.
 // The Delivery ('packages') page is read-only for Operators (see canManage below).
-const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages'];
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest'];
 
 // Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
 // accept-only and Delivery is read-only (both via canManage=false); Finance renders the
 // dedicated tenant components, not the company-wide AdminFinancePage.
-const TENANT_VIEWS: readonly AdminView[] = ['orders', 'packages', 'customers', 'finance', 'homepage'];
+const TENANT_VIEWS: readonly AdminView[] = ['orders', 'packages', 'packagesTest', 'customers', 'finance', 'homepage'];
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -227,6 +228,14 @@ export function AdminDashboard() {
               <path d="M1 8h14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
             </svg>
             <span className="sidebar__link-text">{t.navDelivery}</span>
+          </button>
+          {/* TEST: merged Pick-Up + Delivery into a single Packages list. */}
+          <button className={`sidebar__link ${activeView === 'packagesTest' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packagesTest')} title="ამანათები (Packages)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 5l6-3 6 3v6l-6 3-6-3V5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+              <path d="M2 5l6 3 6-3M8 8v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="sidebar__link-text">ამანათები</span>
           </button>
           {!isOperator && (<>
           {!isTenant && (
@@ -381,6 +390,7 @@ export function AdminDashboard() {
             {activeView === 'overview'  && t.topbarOverview}
             {activeView === 'orders'    && t.navPickUp}
             {activeView === 'packages'  && t.navDelivery}
+            {activeView === 'packagesTest' && 'ამანათები'}
             {activeView === 'couriers'  && t.topbarCouriers}
             {activeView === 'customers' && t.topbarCustomers}
             {activeView === 'cities' && t.topbarCities}
@@ -410,6 +420,8 @@ export function AdminDashboard() {
           {activeView === 'operators' && !isOperator && !isTenant && <AdminOperatorsPage token={token ?? ''} />}
           {/* Delivery: read-only for both Operators and tenant co-admins. */}
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isOperator && !isTenant} />}
+          {/* TEST: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
+          {activeView === 'packagesTest' && <AdminPackagesPage canManage={!isOperator && !isTenant} canAssignCourier={!isTenant} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
