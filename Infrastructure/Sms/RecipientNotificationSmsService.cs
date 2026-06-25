@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Sms;
@@ -11,13 +12,18 @@ public sealed class RecipientNotificationSmsService : IRecipientNotificationSmsS
 {
     private readonly ISmsService _smsService;
     private readonly ILogger<RecipientNotificationSmsService> _logger;
+    private readonly bool _enabled;
 
     public RecipientNotificationSmsService(
         ISmsService smsService,
-        ILogger<RecipientNotificationSmsService> logger)
+        ILogger<RecipientNotificationSmsService> logger,
+        IConfiguration configuration)
     {
         _smsService = smsService;
         _logger     = logger;
+        // Recipient SMS notifications are off by default. To turn them on, set
+        // "RecipientSms:Enabled" = true (e.g. RecipientSms__Enabled in env vars).
+        _enabled    = configuration.GetValue<bool>("RecipientSms:Enabled");
     }
 
     // ── Courier assigned notification ────────────────────────────────────────
@@ -28,6 +34,15 @@ public sealed class RecipientNotificationSmsService : IRecipientNotificationSmsS
         string senderBusinessName,
         CancellationToken cancellationToken = default)
     {
+        if (!_enabled)
+        {
+            _logger.LogInformation(
+                "Recipient notification SMS disabled — skipped for order {TrackingNumber}. " +
+                "Set RecipientSms:Enabled=true to turn it on.",
+                trackingNumber);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(recipientPhone))
         {
             _logger.LogWarning(
