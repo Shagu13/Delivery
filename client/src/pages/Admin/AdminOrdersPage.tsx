@@ -1581,6 +1581,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                         canDeliver={isDeliverable(order)}
                         onView={() => setViewingOrder(order)}
                         onEdit={() => setEditingOrder(order)}
+                        onLabel={() => void printParcelLabels([buildAdminLabel(order)])}
                         onChanged={reload}
                         onError={msg => showToast(msg, 'err')}
                       />

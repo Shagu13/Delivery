@@ -402,9 +402,11 @@ interface OrderActionProps {
     onEdit?: () => void;
     // Operators may only print the label; edit / send-to-city / cancel are hidden.
     canManage?: boolean;
+    // Hide the print-label button (e.g. the Delivery page surfaces it in the kebab menu instead).
+    showLabel?: boolean;
 }
 
-export function AdminOrderRowActions({ order, storeName, token, onSuccess, onError, onRefresh, onEdit, canManage = true }: OrderActionProps) {
+export function AdminOrderRowActions({ order, storeName, token, onSuccess, onError, onRefresh, onEdit, canManage = true, showLabel = true }: OrderActionProps) {
     const [busy, setBusy] = useState(false);
     const { t } = useLanguage();
 
@@ -427,16 +429,18 @@ export function AdminOrderRowActions({ order, storeName, token, onSuccess, onErr
 
     return (
         <div className="go-actions" onClick={e => e.stopPropagation()}>
-            {/* Print this single package's label — always available. */}
-            <button
-                type="button"
-                className="go-action-btn go-action-btn--ghost"
-                title={t.custLabelBtn}
-                onClick={() => void printParcelLabels([buildLabel(storeName, order)])}
-            >
-                {printIcon}
-                {t.custLabelBtn}
-            </button>
+            {/* Print this single package's label — hidden when the host surfaces it elsewhere. */}
+            {showLabel && (
+                <button
+                    type="button"
+                    className="go-action-btn go-action-btn--ghost"
+                    title={t.custLabelBtn}
+                    onClick={() => void printParcelLabels([buildLabel(storeName, order)])}
+                >
+                    {printIcon}
+                    {t.custLabelBtn}
+                </button>
+            )}
 
             {/* Edit this package — opens the full order edit modal. */}
             {canManage && onEdit && (

@@ -935,14 +935,17 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
               canDeliver={isDeliverable(menuItem)}
               onView={() => setViewingOrder(menuItem)}
               onEdit={() => openEditOrder(o, go)}
+              onLabel={() => void printParcelLabels([buildAdminLabel(menuItem)])}
               onChanged={() => load(searchRef.current)}
               onError={msg => showToast(msg, 'err')}
             />
+            {/* Edit + Label now live in the kebab menu above; this keeps the pickup-only
+                actions (send-to-city, cancel). */}
             <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
               onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
               onRefresh={() => load(searchRef.current)}
               canManage={canManage}
-              onEdit={canManage ? () => openEditOrder(o, go) : undefined} />
+              showLabel={false} />
             {canManage && moveDestinations.length > 0 && (
               <MoveOrderControl orderId={o.id} destinations={moveDestinations} token={token ?? ''}
                 onMoved={() => { void load(searchRef.current); void loadSummary(); showToast(t.pickupMovedToast); }}
@@ -978,7 +981,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="content-card" style={{ overflow: 'hidden' }}>
+    // overflow must stay visible (not hidden) or the sticky bulk-action bar below can't
+    // stick to the window — an overflow:hidden ancestor traps position:sticky. The inner
+    // tables keep their own overflow-x wrappers, so nothing spills horizontally.
+    <div className="content-card" style={{ overflow: 'visible' }}>
       {/* Day navigator */}
       <div className="pickup-daynav">
         <button className="pickup-daynav__arrow" disabled={!selectedDate} onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>

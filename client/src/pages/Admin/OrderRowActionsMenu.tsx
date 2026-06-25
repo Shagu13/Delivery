@@ -25,6 +25,8 @@ interface Props {
   canDeliver: boolean;
   onView: () => void;
   onEdit: () => void;
+  /** Print this order's parcel label. When omitted the item is hidden. */
+  onLabel?: () => void;
   /** Refresh the list after an action mutates the order. */
   onChanged: () => void;
   onError: (msg: string) => void;
@@ -39,7 +41,7 @@ type Panel = 'menu' | 'assign' | 'salary' | 'deliver';
  * against the button so the table's overflow never clips it.
  */
 export function OrderRowActionsMenu({
-  order, couriers, token, canManage, canAssign, canDeliver, onView, onEdit, onChanged, onError,
+  order, couriers, token, canManage, canAssign, canDeliver, onView, onEdit, onLabel, onChanged, onError,
 }: Props) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -70,7 +72,12 @@ export function OrderRowActionsMenu({
       close();
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-    const onScroll = () => close();
+    // Close on page scroll (the fixed panel would otherwise drift), but ignore scrolling
+    // *inside* the panel itself — e.g. the courier list — which must stay open.
+    const onScroll = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      close();
+    };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onScroll, true);
@@ -120,6 +127,7 @@ export function OrderRowActionsMenu({
             <>
               <button className="orm-item" onClick={() => { onView(); close(); }}>{t.aopView}</button>
               {canManage && <button className="orm-item" onClick={() => { onEdit(); close(); }}>{t.aopEdit}</button>}
+              {onLabel && <button className="orm-item" onClick={() => { onLabel(); close(); }}>{t.custLabelBtn}</button>}
               {showAssign && (
                 <button className="orm-item" onClick={() => setPanel('assign')}>
                   {order.courierId ? t.goReassignCourierBtn : t.aopModeAssign} <span className="orm-chev">›</span>
