@@ -1279,7 +1279,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                             <input type="checkbox" style={{ cursor: 'pointer' }} checked={isChecked}
                               onChange={() => setSalaryChecked(prev => { const next = new Set(prev); isChecked ? next.delete(o.id) : next.add(o.id); return next; })} />
                           </td>
-                          <td style={{ padding: '6px 8px' }}><span className="tn-badge">{o.trackingNumber}</span></td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span className="tn-badge">{o.trackingNumber}</span>
+                            {o.senderBusinessName && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>{o.senderBusinessName}</div>}
+                          </td>
                           <td style={{ padding: '6px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>

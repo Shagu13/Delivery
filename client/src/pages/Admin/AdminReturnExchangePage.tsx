@@ -395,6 +395,7 @@ function OrderRow({
                                 <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>{t.reSalaryTitle}</div>
                                 <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
                                     <span className="tn-badge" style={{ fontSize: '0.75rem' }}>{order.trackingNumber}</span>
+                                    {order.senderName && <span style={{ marginLeft: 8 }}>{order.senderName}</span>}
                                 </div>
                             </div>
                             <button onClick={() => setShowSalaryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}>

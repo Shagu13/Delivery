@@ -1784,6 +1784,12 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                               <span className="go-cell__label">{t.goColPackages}</span>
                               <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
                             </div>
+                            {go.courierId && (
+                              <div className="go-cell go-cell--center">
+                                <span className="go-cell__label">{t.vomLblCourier}</span>
+                                <span className="go-cell__value">{go.courierFullName || '—'}</span>
+                              </div>
+                            )}
                             <div className="go-cell go-cell--center">
                               <span className="go-cell__label">{t.goColDate}</span>
                               <span className="go-cell__sub go-cell__sub--muted">{formatDate(go.createdAt)}</span>

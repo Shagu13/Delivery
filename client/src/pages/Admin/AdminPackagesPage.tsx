@@ -1285,6 +1285,12 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                                 <span className="go-cell__label">{t.goColPackages}</span>
                                 <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
                               </div>
+                              {go.courierId && (
+                                <div className="go-cell go-cell--center">
+                                  <span className="go-cell__label">{t.vomLblCourier}</span>
+                                  <span className="go-cell__value">{go.courierFullName || '—'}</span>
+                                </div>
+                              )}
                               <div className="go-cell go-cell--center">
                                 <span className="go-cell__label">{t.goColDate}</span>
                                 <span className="go-cell__sub go-cell__sub--muted">{formatDate(go.createdAt)}</span>
@@ -1380,7 +1386,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                       return (
                         <tr key={o.id} style={{ borderBottom: '1px solid var(--color-border)', background: isChecked ? 'var(--color-accent-dim)' : 'var(--color-bg-2)' }}>
                           <td style={{ padding: '6px 4px', textAlign: 'center' }}><input type="checkbox" style={{ cursor: 'pointer' }} checked={isChecked} onChange={() => setSalaryChecked(prev => { const next = new Set(prev); isChecked ? next.delete(o.id) : next.add(o.id); return next; })} /></td>
-                          <td style={{ padding: '6px 8px' }}><span className="tn-badge">{o.trackingNumber}</span></td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <span className="tn-badge">{o.trackingNumber}</span>
+                            {o.senderBusinessName && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>{o.senderBusinessName}</div>}
+                          </td>
                           <td style={{ padding: '6px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>

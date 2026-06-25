@@ -132,6 +132,7 @@ public sealed class GetAllGroupOrdersQueryHandler
         var standaloneQuery = _context.Orders
             .AsNoTracking()
             .Include(o => o.Customer)
+            .Include(o => o.Courier)
             .Where(o => o.GroupOrderId == null
                      && o.CustomerId != null
                      && !CancelledStatuses.Contains(o.Status));
@@ -182,7 +183,9 @@ public sealed class GetAllGroupOrdersQueryHandler
                 PickedUpAt:              null,
                 DeliveredToWarehouseAt:  null,
                 CourierId:               o.CourierId,
-                CourierFullName:         null,
+                CourierFullName:         o.Courier is null
+                    ? null
+                    : $"{o.Courier.FirstName} {o.Courier.LastName}",
                 CompanyServiceCapitalPrice:  c?.CompanyServiceCapitalPrice,
                 CompanyServiceCityPrice:     c?.CompanyServiceCityPrice,
                 CompanyServiceDistrictPrice: c?.CompanyServiceDistrictPrice,
