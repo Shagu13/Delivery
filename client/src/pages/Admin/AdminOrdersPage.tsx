@@ -382,6 +382,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   const [priceChecked,      setPriceChecked]      = useState<Set<string>>(new Set());
   const [priceSaving,       setPriceSaving]       = useState(false);
 
+  // The bulk action bar is sticky at the top while scrolling the order list. Measure
+  // its (wrap-dependent) height so the sticky table header can sit just below it
+  // instead of being covered.
+  const bulkBarRef = useRef<HTMLDivElement | null>(null);
+  const [bulkBarH, setBulkBarH] = useState(0);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '' });
 
@@ -479,6 +485,19 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [bulkMode, showBulkModal, showPriceModal, showSalaryModal, showPriceWarning, showSalaryWarning]);
+
+  // Track the sticky bulk bar's height (it can wrap onto multiple rows) so the sticky
+  // table header below it stays offset by exactly that much. Resets to 0 when the bar
+  // isn't rendered so the header sticks flush to the top.
+  useEffect(() => {
+    const el = bulkBarRef.current;
+    if (!el) { setBulkBarH(0); return; }
+    const update = () => setBulkBarH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [canManage, selected.size, bulkMode]);
 
   // Load the city/district pairs actually used in orders so the filters are complete across
   // all pages (the old approach derived them from the loaded page only, hiding districts
@@ -792,7 +811,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="aop-root">
+    <div className="aop-root" style={{ ['--bulk-bar-h' as string]: `${bulkBarH}px` }}>
 
       {/* Day navigator — All by default; pick a day (or step with the arrows) to filter
           packages by the day they were placed (Order.CreatedAt). */}
@@ -996,7 +1015,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
       {/* Mode toggle + bulk action bar — Admin only (read-only Operators can't select).
           Also shown while in Mark-Delivered mode even before anything is selected. */}
       {canManage && (someSelected || bulkMode === 'deliver') && (
-        <div className="aop-bulk-bar">
+        <div className="aop-bulk-bar" ref={bulkBarRef}>
           {/* Mode segmented switch */}
           <div className="go-seg" style={{ flexShrink: 0 }}>
             <button
@@ -1795,9 +1814,14 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         /* ── Bulk bar ── */
         .aop-bulk-bar {
           display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-          padding: 10px 20px; background: var(--color-accent-dim);
+          padding: 10px 20px;
+          /* Opaque base under the translucent accent tint so list rows don't show
+             through while the bar is stuck during scroll. */
+          background: linear-gradient(var(--color-accent-dim), var(--color-accent-dim)), var(--color-bg);
           border-bottom: 1px solid rgba(196,127,23,0.25);
           animation: expand-in 0.15s ease both;
+          /* Follow the page scroll so the action buttons stay reachable in long lists. */
+          position: sticky; top: 0; z-index: 20;
         }
         .aop-bulk-count { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--color-accent); }
         .aop-bulk-btn { border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
@@ -1817,7 +1841,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         /* ── Table ── */
         .aop-table-wrap { overflow-x: auto; flex: 1; }
         .aop-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-        .aop-th { text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 10px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+        .aop-th { text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 10px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: var(--bulk-bar-h, 0px); z-index: 1; }
         .aop-th--check { width: 44px; padding-left: 20px; }
         .aop-th--num { text-align: right; }
         .aop-td { padding: 11px 14px; font-size: 0.82rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; cursor: pointer; }
