@@ -12,6 +12,7 @@ import { EditOrderModal } from './EditOrderModal';
 import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
+import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { georgianToday, toDateKey } from '../../utils/georgianTime';
@@ -424,6 +425,21 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
       setLoading(false);
     }
   }, [token, t, selectedDate]);
+
+  // Reload the current view with the active filters — used by per-row actions (the kebab
+  // menu) that mutate a single order outside the bulk flow.
+  const reload = () => {
+    void load({
+      city:      filterCity     || undefined,
+      district:  filterDistrict || undefined,
+      search:    search         || undefined,
+      courierId: filterCourier?.courierId,
+      unpriced:  filterUnpriced || undefined,
+      assigned:  assignTab === 'assigned',
+      page,
+    });
+    void refreshUnpricedCount();
+  };
 
   useEffect(() => {
     const prev = filterRef.current;
@@ -1556,30 +1572,18 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                       }
                     </td>
                     <td className="aop-td aop-td--actions" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => setViewingOrder(order)}
-                        style={{
-                          padding: '3px 10px', fontSize: '0.72rem', fontWeight: 600,
-                          background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)',
-                          border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer', whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {t.aopView}
-                      </button>
-                      {canManage && (
-                        <button
-                          onClick={() => setEditingOrder(order)}
-                          style={{
-                            padding: '3px 10px', fontSize: '0.72rem', fontWeight: 600,
-                            background: 'rgba(59,130,246,0.1)', color: '#3b82f6',
-                            border: '1px solid rgba(59,130,246,0.3)', borderRadius: 'var(--radius-sm)',
-                            cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {t.aopEdit}
-                        </button>
-                      )}
+                      <OrderRowActionsMenu
+                        order={order}
+                        couriers={couriers}
+                        token={token ?? ''}
+                        canManage={canManage}
+                        canAssign={isAssignable(order)}
+                        canDeliver={isDeliverable(order)}
+                        onView={() => setViewingOrder(order)}
+                        onEdit={() => setEditingOrder(order)}
+                        onChanged={reload}
+                        onError={msg => showToast(msg, 'err')}
+                      />
                     </td>
                   </tr>
                 );

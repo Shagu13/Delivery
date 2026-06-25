@@ -1,0 +1,68 @@
+/* Per-row kebab action menu for the Delivery / Packages tables. Co-located because
+   these class names exist nowhere else and the page CSS lives inline in the TSX. */
+
+.orm-kebab {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0;
+  background: var(--color-bg-3); color: var(--color-text-subtle);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  cursor: pointer; transition: background var(--transition), color var(--transition);
+}
+.orm-kebab:hover { background: var(--color-bg-2); color: var(--color-text); }
+
+.orm-menu {
+  position: fixed; z-index: 10000;
+  width: 210px; max-height: 320px; overflow-y: auto;
+  background: var(--color-bg-2); border: 1px solid var(--color-border);
+  border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  animation: orm-pop 0.12s ease both;
+}
+@keyframes orm-pop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.orm-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; text-align: left;
+  padding: 8px 10px; border: none; background: none;
+  color: var(--color-text); font-size: 0.82rem; font-weight: 600;
+  border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;
+}
+.orm-item:hover:not(:disabled) { background: var(--color-bg-3); }
+.orm-item:disabled { opacity: 0.5; cursor: not-allowed; }
+.orm-item--deliver { color: #16a34a; }
+.orm-chev { color: var(--color-text-subtle); font-size: 0.9rem; }
+
+.orm-sub { display: flex; flex-direction: column; gap: 6px; }
+.orm-sub-head {
+  display: flex; align-items: center; gap: 4px;
+  background: none; border: none; cursor: pointer;
+  color: var(--color-text-subtle); font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 4px 6px; border-radius: var(--radius-sm);
+}
+.orm-sub-head:hover { background: var(--color-bg-3); color: var(--color-text); }
+
+.orm-courier-list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.orm-empty { padding: 8px 10px; font-size: 0.78rem; color: var(--color-text-subtle); }
+
+.orm-field {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  padding: 4px 8px; background: var(--color-bg);
+}
+.orm-currency { color: var(--color-text-subtle); font-size: 0.85rem; }
+.orm-field input {
+  flex: 1; min-width: 0; border: none; outline: none; background: none;
+  color: var(--color-text); font-size: 0.85rem; padding: 2px 0;
+}
+
+.orm-confirm {
+  padding: 7px 10px; border: none; border-radius: var(--radius-sm);
+  background: var(--color-accent); color: #fff;
+  font-size: 0.8rem; font-weight: 700; cursor: pointer;
+}
+.orm-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+.orm-confirm--deliver { background: #16a34a; }

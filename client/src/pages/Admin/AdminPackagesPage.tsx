@@ -35,6 +35,7 @@ import {
 } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
+import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
@@ -848,6 +849,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     const selectable = canManage && rowSelectable(toOrderItem(o, go, null));
     const isChecked = selected.has(o.id);
     const courierName = o.courierId ? (courierNameById.get(o.courierId) ?? null) : null;
+    const menuItem = toOrderItem(o, go, courierName);
     return (
       <tr key={o.id} className={isChecked ? 'pkg-row--selected' : ''}>
         {canManage && (
@@ -924,10 +926,18 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         </td>
         <td>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" className="go-action-btn go-action-btn--ghost"
-              onClick={() => setViewingOrder(toOrderItem(o, go, courierName))}>
-              {t.aopView}
-            </button>
+            <OrderRowActionsMenu
+              order={menuItem}
+              couriers={couriers}
+              token={token ?? ''}
+              canManage={canManage}
+              canAssign={isAssignable(menuItem)}
+              canDeliver={isDeliverable(menuItem)}
+              onView={() => setViewingOrder(menuItem)}
+              onEdit={() => openEditOrder(o, go)}
+              onChanged={() => load(searchRef.current)}
+              onError={msg => showToast(msg, 'err')}
+            />
             <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
               onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
               onRefresh={() => load(searchRef.current)}
@@ -1644,7 +1654,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         .aop-export-btn { display: inline-flex; align-items: center; gap: 7px; background: #16a34a; border: 1px solid #16a34a; color: #fff; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; padding: 7px 13px; cursor: pointer; transition: opacity var(--transition); white-space: nowrap; }
         .aop-export-btn:hover:not(:disabled) { opacity: 0.9; }
         .aop-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .aop-bulk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 20px; background: var(--color-accent-dim); border-bottom: 1px solid rgba(196,127,23,0.25); animation: expand-in 0.15s ease both; }
+        .aop-bulk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 20px; background: linear-gradient(var(--color-accent-dim), var(--color-accent-dim)), var(--color-bg); border-bottom: 1px solid rgba(196,127,23,0.25); animation: expand-in 0.15s ease both; position: sticky; top: 0; z-index: 20; }
         .aop-bulk-count { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--color-accent); }
         .aop-bulk-btn { border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
         .aop-bulk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
