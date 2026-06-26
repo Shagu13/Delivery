@@ -2433,6 +2433,19 @@ function groupByCourier<T extends { courierId: string }>(
     .sort((a, b) => b.items.length - a.items.length);
 }
 
+// Matches a courier against a free-text query (name, username, phone, assigned city/district).
+function courierMatchesSearch(c: Courier, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    c.fullName.toLowerCase().includes(q) ||
+    c.username.toLowerCase().includes(q) ||
+    c.phoneNumber.toLowerCase().includes(q) ||
+    c.assignedCity.toLowerCase().includes(q) ||
+    c.assignedDistrict.toLowerCase().includes(q)
+  );
+}
+
 function AdminCouriers({
   couriers,
   token,
@@ -2447,6 +2460,8 @@ function AdminCouriers({
   onActiveChanged: (courierId: string, isActive: boolean) => void;
 }) {
   const { t } = useLanguage();
+  // Free-text courier search (name / username / phone / assigned area) for this view.
+  const [search, setSearch] = useState('');
   // Single global day for the whole list — defaults to today.
   const [day, setDay] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
   // Which sub-view is showing: the day's assigned orders ('today') or the plain roster ('all').
@@ -2495,6 +2510,11 @@ function AdminCouriers({
   );
 
   const rows = mode === 'pickup' ? pickupRows : deliveryRows;
+  // Narrow the day's courier rows to those matching the search box.
+  const filteredRows = useMemo(
+    () => (search.trim() ? rows.filter(r => courierMatchesSearch(r.courier, search)) : rows),
+    [rows, search],
+  );
   const totalAssigned = mode === 'pickup' ? pickups.length : deliveries.length;
   // Pickup mode: total single orders (packages) collected across all batches that day.
   const totalSingleOrders = useMemo(
@@ -2530,6 +2550,8 @@ function AdminCouriers({
       <AllCouriersList
         couriers={couriers}
         token={token}
+        search={search}
+        onSearchChange={setSearch}
         onBack={() => setView('today')}
         onEdit={onEdit}
         onActiveChanged={onActiveChanged}
@@ -2579,7 +2601,7 @@ function AdminCouriers({
             All Couriers ›
           </button>
           <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>
-            {rows.length} courier{rows.length !== 1 ? 's' : ''} ·{' '}
+            {filteredRows.length} courier{filteredRows.length !== 1 ? 's' : ''} ·{' '}
             {mode === 'pickup'
               ? <>{totalAssigned} {t.crwModePickup.toLowerCase()} · {totalSingleOrders} {t.crwOrdersWord}</>
               : <>{totalAssigned} assigned</>}
@@ -2588,34 +2610,54 @@ function AdminCouriers({
       </div>
 
       <div className="content-card">
-        <div className="content-card__header">
+        <div className="content-card__header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span className="content-card__title">{mode === 'pickup' ? t.crwTitlePickups : t.crwTitleDeliveries}</span>
+          <div className="go-search" style={{ flexShrink: 0, marginLeft: 'auto' }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="text"
+              placeholder={t.courierSearchPh}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoComplete="off"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="go-search-clear" aria-label="Clear search">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         {loading ? (
           <div className="go-loading"><div className="go-spinner" />{mode === 'pickup' ? t.crwLoadingPickups : t.crwLoadingDeliveries}</div>
         ) : error ? (
           <div style={{ padding: '24px 20px', textAlign: 'center', color: '#ef4444', fontSize: '0.875rem' }}>{error}</div>
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <div style={{ padding: '28px 20px', textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem' }}>
-            {mode === 'pickup' ? t.crwEmptyPickups : t.crwEmptyDeliveries}
+            {search.trim() ? t.courierSearchNoMatch : mode === 'pickup' ? t.crwEmptyPickups : t.crwEmptyDeliveries}
           </div>
         ) : mode === 'pickup' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {pickupRows.map(r => (
+            {filteredRows.map(r => (
               <CourierPickupRow
                 key={r.courier.courierId}
                 courier={r.courier}
-                pickups={r.items}
+                pickups={r.items as CourierDayPickup[]}
               />
             ))}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {deliveryRows.map(r => (
+            {filteredRows.map(r => (
               <CourierRow
                 key={r.courier.courierId}
                 courier={r.courier}
-                orders={r.items}
+                orders={r.items as CourierDayDelivery[]}
               />
             ))}
           </div>
@@ -2629,17 +2671,25 @@ function AdminCouriers({
 function AllCouriersList({
   couriers,
   token,
+  search,
+  onSearchChange,
   onBack,
   onEdit,
   onActiveChanged,
 }: {
   couriers: Courier[];
   token: string;
+  search: string;
+  onSearchChange: (v: string) => void;
   onBack: () => void;
   onEdit: (courier: Courier) => void;
   onActiveChanged: (courierId: string, isActive: boolean) => void;
 }) {
   const { t } = useLanguage();
+  const filtered = useMemo(
+    () => (search.trim() ? couriers.filter(c => courierMatchesSearch(c, search)) : couriers),
+    [couriers, search],
+  );
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; err: boolean } | null>(null);
   const [confirmCourier, setConfirmCourier] = useState<Courier | null>(null);
@@ -2664,18 +2714,43 @@ function AllCouriersList({
 
   return (
     <div className="content-card">
-      <div className="content-card__header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="content-card__header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.8rem' }} onClick={onBack}>
           ‹ Working Today
         </button>
         <span className="content-card__title">All Couriers</span>
-        <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>
-          {couriers.length} courier{couriers.length !== 1 ? 's' : ''}
+        <div className="go-search" style={{ flexShrink: 0, marginLeft: 'auto' }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+          <input
+            type="text"
+            placeholder={t.courierSearchPh}
+            value={search}
+            onChange={e => onSearchChange(e.target.value)}
+            autoComplete="off"
+          />
+          {search && (
+            <button onClick={() => onSearchChange('')} className="go-search-clear" aria-label="Clear search">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          )}
+        </div>
+        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>
+          {filtered.length} courier{filtered.length !== 1 ? 's' : ''}
         </span>
       </div>
 
+      {filtered.length === 0 ? (
+        <div style={{ padding: '28px 20px', textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem' }}>
+          {t.courierSearchNoMatch}
+        </div>
+      ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {couriers.map(courier => (
+        {filtered.map(courier => (
           <div
             key={courier.courierId}
             style={{ borderBottom: '1px solid var(--color-border)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isDeleted ? 0.6 : 1 }}
@@ -2718,6 +2793,7 @@ function AllCouriersList({
           </div>
         ))}
       </div>
+      )}
 
       {toast && (
         <div style={{ padding: '8px 20px', fontSize: '0.78rem', color: toast.err ? '#ef4444' : '#10b981', fontWeight: 600 }}>
