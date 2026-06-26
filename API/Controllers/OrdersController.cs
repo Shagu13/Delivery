@@ -34,13 +34,14 @@ public sealed class OrdersController : BaseController
         [FromQuery] bool    activeOnly = false,
         [FromQuery] bool?   assigned   = null,
         [FromQuery] DateTime? date     = null,
+        [FromQuery] DateTime? dateTo   = null,
         [FromQuery] int     page       = 1,
         [FromQuery] int     pageSize   = 50,
         CancellationToken ct = default)
     {
         // A tenant co-admin sees only their own tenant's orders (scope from the JWT claim).
         var result = await Sender.Send(
-            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date, CurrentTenantId), ct);
+            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date, dateTo, CurrentTenantId), ct);
         return Ok(result);
     }
 
@@ -51,10 +52,11 @@ public sealed class OrdersController : BaseController
     [Authorize(Roles = "Admin,Operator,TenantAdmin")]
     [ProducesResponseType(typeof(List<OrderLocationDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetLocations(
-        [FromQuery] DateTime? date = null,
+        [FromQuery] DateTime? date   = null,
+        [FromQuery] DateTime? dateTo = null,
         CancellationToken ct = default)
     {
-        var result = await Sender.Send(new GetOrderLocationsQuery(date, CurrentTenantId), ct);
+        var result = await Sender.Send(new GetOrderLocationsQuery(date, dateTo, CurrentTenantId), ct);
         return Ok(result);
     }
 
@@ -70,6 +72,7 @@ public sealed class OrdersController : BaseController
         [FromQuery] bool    unpriced  = false,
         [FromQuery] bool?   assigned  = null,
         [FromQuery] DateTime? date    = null,
+        [FromQuery] DateTime? dateTo  = null,
         [FromQuery] string? ids       = null,   // comma-separated order ids → export just those
         CancellationToken ct = default)
     {
@@ -78,7 +81,7 @@ public sealed class OrdersController : BaseController
         var result = await Sender.Send(new GetAllOrdersQuery(
             city, district, search, courierId,
             OrderType: null, Unpriced: unpriced, ActiveOnly: false, Postponed: false,
-            Page: 1, PageSize: int.MaxValue, Assigned: assigned, Date: date), ct);
+            Page: 1, PageSize: int.MaxValue, Assigned: assigned, Date: date, DateTo: dateTo), ct);
 
         IEnumerable<AdminOrderListDto> rows = result.Items;
         if (!string.IsNullOrWhiteSpace(ids))
@@ -332,6 +335,17 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/{id}/correct-status  (Admin) ─────────────────────────
+    [HttpPut("{id:guid}/correct-status")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CorrectStatus(Guid id, [FromBody] CorrectStatusRequest request, CancellationToken ct)
+    {
+        await Sender.Send(new AdminCorrectOrderStatusCommand(id, request.Correction), ct);
+        return NoContent();
+    }
+
     // ── PUT /api/orders/{id}/courier-salary  (Admin) ──────────────────────────
     [HttpPut("{id:guid}/courier-salary")]
     [Authorize(Roles = "Admin")]
@@ -513,6 +527,8 @@ public sealed record SetCompanyServicePriceRequest(decimal Price);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);
 public sealed record CancelDeliveryRequest(Domain.Enums.CancellationReason Reason, string? Comment);
 public sealed record DeliveredPaidToSenderRequest(bool ServiceFeeAlsoPaidToSender);
+/// <summary>Body for correct-status: which mistaken-status correction to apply.</summary>
+public sealed record CorrectStatusRequest(Application.Orders.Commands.OrderStatusCorrection Correction);
 
 public sealed record UpdateOrderRequest(
     string   RecipientName,

@@ -10,6 +10,12 @@ namespace Application.GroupOrders.Commands.Shared;
 /// resolving the company service fee (explicit override → weight-tier zone price →
 /// customer negotiated → district default) and generating tracking numbers.
 ///
+/// Pricing is normally keyed off the recipient (delivery) district, but "swaps" to the
+/// batch pickup district when the pickup is NOT in the capital (Tbilisi): e.g. a parcel
+/// picked up in Rustavi for delivery to Tbilisi is priced at Rustavi's rate. Standalone
+/// Returns already price off their own pickup district, so the swap only affects
+/// Send/Exchange orders.
+///
 /// Placement is the caller's job: the returned orders carry no GroupOrderId or
 /// CustomerId — the create handler adds Send/Exchange to a GroupOrder and stamps
 /// standalone Returns with the customer, and the add-to-batch handler appends to an
@@ -22,14 +28,17 @@ internal static class GroupOrderOrderBuilder
         ITrackingNumberGenerator trackingGen,
         Customer? customer,
         IReadOnlyList<DTOs.CreateOrderDto> orderDtos,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? pickUpDistrictName = null)
     {
         // Load the districts referenced by orders so we can fall back to their default price.
         // For Return orders the fee is based on the return pickup district (where courier collects).
+        // The batch pickup district is loaded too — it drives swapped pricing (see below).
         var districtNames = orderDtos
             .Select(o => o.OrderType == OrderType.Return
                 ? (o.ReturnPickupDistrict ?? o.RecipientDistrict)
                 : o.RecipientDistrict)
+            .Append(pickUpDistrictName)
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Distinct()
             .ToList();
@@ -56,18 +65,38 @@ internal static class GroupOrderOrderBuilder
 
         var trackingNumbers = await trackingGen.GenerateManyAsync(orderDtos.Count, ct);
 
+        // Resolve the batch pickup district once. When it exists and is NOT the capital
+        // (Tbilisi), Send/Exchange orders are priced off the pickup instead of the recipient.
+        var pickUpDistrict = string.IsNullOrWhiteSpace(pickUpDistrictName)
+            ? null
+            : districts.FirstOrDefault(d =>
+                d.DistrictName.Equals(pickUpDistrictName, StringComparison.OrdinalIgnoreCase));
+        bool pickUpSwapsPricing = pickUpDistrict is not null && !pickUpDistrict.IsCapitalTerritory;
+
         var built = new List<Order>(orderDtos.Count);
 
         for (int i = 0; i < orderDtos.Count; i++)
         {
             var o = orderDtos[i];
 
-            var districtName = o.OrderType == OrderType.Return
-                ? (o.ReturnPickupDistrict ?? o.RecipientDistrict)
-                : o.RecipientDistrict;
-
-            var district = districts.FirstOrDefault(d =>
-                d.DistrictName.Equals(districtName, StringComparison.OrdinalIgnoreCase));
+            // Pricing district: Returns price off their own pickup; Send/Exchange normally
+            // price off the recipient, but swap to the batch pickup when it isn't the capital.
+            District? district;
+            if (o.OrderType == OrderType.Return)
+            {
+                var returnName = o.ReturnPickupDistrict ?? o.RecipientDistrict;
+                district = districts.FirstOrDefault(d =>
+                    d.DistrictName.Equals(returnName, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (pickUpSwapsPricing)
+            {
+                district = pickUpDistrict;
+            }
+            else
+            {
+                district = districts.FirstOrDefault(d =>
+                    d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
+            }
 
             bool isCapital = district?.IsCapitalTerritory == true;
             bool isCity    = district?.IsCityTerritory    == true;

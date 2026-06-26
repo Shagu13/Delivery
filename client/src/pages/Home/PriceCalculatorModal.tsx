@@ -92,13 +92,6 @@ function entryMatchesQuery(d: AllDistrictEntry, q: string): boolean {
   );
 }
 
-/** City entry matches query */
-function cityMatchesQuery(c: CityEntry, q: string): boolean {
-  if (!q) return true;
-  const n = norm(q);
-  return norm(c.name).includes(n) || norm(c.nameGeo).includes(n);
-}
-
 /** True when a district's name is the same as its city name (e.g. Zugdidi › Zugdidi) */
 function isEponymous(d: AllDistrictEntry): boolean {
   return (
@@ -113,9 +106,15 @@ interface PriceResult {
   tier: 'capital' | 'city' | 'district' | 'default';
 }
 
-async function fetchBasePrice(districtId: string, weightTierId?: string | null, token?: string | null): Promise<PriceResult> {
+async function fetchBasePrice(
+  districtId: string,
+  weightTierId?: string | null,
+  token?: string | null,
+  fromDistrictId?: string | null,
+): Promise<PriceResult> {
   const params = new URLSearchParams({ districtId });
   if (weightTierId) params.set('weightTierId', weightTierId);
+  if (fromDistrictId) params.set('fromDistrictId', fromDistrictId);
   const res = await fetch(`/api/calculator?${params}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
@@ -123,8 +122,40 @@ async function fetchBasePrice(districtId: string, weightTierId?: string | null, 
   return res.json();
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface CityEntry { id: string; name: string; nameGeo: string; }
+/** Filter + rank districts for the type-ahead pickers (shared by From and To). */
+function rankDistricts(allDistricts: AllDistrictEntry[], search: string): AllDistrictEntry[] {
+  const q = norm(search);
+  const base = allDistricts.filter(d => entryMatchesQuery(d, q));
+
+  // No query: group by city, with the city itself (eponymous row) first.
+  if (!q) return [...base].sort((a, b) => {
+    const c = a.cityName.localeCompare(b.cityName);
+    if (c !== 0) return c;
+    const aEpo = isEponymous(a), bEpo = isEponymous(b);
+    if (aEpo && !bEpo) return -1;
+    if (!aEpo && bEpo) return 1;
+    return a.districtName.localeCompare(b.districtName);
+  });
+
+  return [...base].sort((a, b) => {
+    const aEpo = isEponymous(a);
+    const bEpo = isEponymous(b);
+    if (aEpo && !bEpo) return -1;
+    if (!aEpo && bEpo) return 1;
+
+    const aCityStart = norm(a.cityName).startsWith(q) || norm(a.cityNameGeo ?? '').startsWith(q);
+    const bCityStart = norm(b.cityName).startsWith(q) || norm(b.cityNameGeo ?? '').startsWith(q);
+    if (aCityStart && !bCityStart) return -1;
+    if (!aCityStart && bCityStart) return 1;
+
+    const aDistStart = norm(a.districtName).startsWith(q) || norm(a.districtNameGeo ?? '').startsWith(q);
+    const bDistStart = norm(b.districtName).startsWith(q) || norm(b.districtNameGeo ?? '').startsWith(q);
+    if (aDistStart && !bDistStart) return -1;
+    if (!aDistStart && bDistStart) return 1;
+
+    return a.cityName.localeCompare(b.cityName) || a.districtName.localeCompare(b.districtName);
+  });
+}
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const LABEL: React.CSSProperties = {
@@ -172,11 +203,11 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
   const [weightTiers,      setWeightTiers]       = useState<WeightPriceTier[]>(() => _cachedTiers ?? []);
   const [loadingData,      setLoadingData]       = useState(() => !isCacheValid());
 
-  // From city
-  const [fromSearch,    setFromSearch]    = useState('');
-  const [fromOpen,      setFromOpen]      = useState(false);
-  const [selectedCity,  setSelectedCity]  = useState('');
-  const [fromHoverId,   setFromHoverId]   = useState<string | null>(null);
+  // From district (pickup) — drives swapped pricing when it isn't the capital
+  const [fromSearch,       setFromSearch]       = useState('');
+  const [fromOpen,         setFromOpen]         = useState(false);
+  const [selectedFromEntry, setSelectedFromEntry] = useState<AllDistrictEntry | null>(null);
+  const [fromHoverId,      setFromHoverId]      = useState<string | null>(null);
 
   // To district
   const [toSearch,      setToSearch]      = useState('');
@@ -212,7 +243,7 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
     const h = (e: MouseEvent) => {
       if (fromWrapRef.current && !fromWrapRef.current.contains(e.target as Node)) {
         setFromOpen(false);
-        if (!selectedCity) setFromSearch('');
+        if (!selectedFromEntry) setFromSearch('');
       }
       if (toWrapRef.current && !toWrapRef.current.contains(e.target as Node)) {
         setToOpen(false);
@@ -221,7 +252,7 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
     };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
-  }, [selectedCity, selectedEntry]);
+  }, [selectedFromEntry, selectedEntry]);
 
   // ── Fetch base price when destination or weight tier changes ───────────────
   useEffect(() => {
@@ -231,7 +262,8 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
       setLoadingPrice(true);
       setPriceError(false);
       try {
-        const result = await fetchBasePrice(selectedEntry.districtId, selectedTierId, token);
+        const result = await fetchBasePrice(
+          selectedEntry.districtId, selectedTierId, token, selectedFromEntry?.districtId);
         if (!cancelled) setBasePrice(result);
       } catch {
         if (!cancelled) setPriceError(true);
@@ -241,62 +273,14 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
     };
     run();
     return () => { cancelled = true; };
-  }, [selectedEntry, selectedTierId, token]);
+  }, [selectedEntry, selectedTierId, token, selectedFromEntry]);
 
-  // ── Derived: unique cities ──────────────────────────────────────────────────
-  const allCities = useMemo<CityEntry[]>(() => {
-    const seen = new Map<string, string>();
-    allDistricts.forEach(d => {
-      if (!seen.has(d.cityName)) seen.set(d.cityName, d.cityNameGeo ?? d.cityName);
-    });
-    return Array.from(seen.entries()).map(([name, nameGeo]) => ({ id: name, name, nameGeo }));
-  }, [allDistricts]);
+  // ── Derived: filtered + sorted districts for each picker ───────────────────
+  const filteredFromDistricts = useMemo(
+    () => rankDistricts(allDistricts, fromSearch), [allDistricts, fromSearch]);
 
-  const filteredCities = useMemo(() => {
-    if (!fromSearch) return allCities;
-    return allCities.filter(c => cityMatchesQuery(c, fromSearch));
-  }, [allCities, fromSearch]);
-
-  // ── Derived: filtered + sorted districts ───────────────────────────────────
-  const filteredDistricts = useMemo(() => {
-    const q = norm(toSearch);
-
-    const base = allDistricts.filter(d => entryMatchesQuery(d, q));
-
-    // No query: group by city, with the city itself (eponymous row) first,
-    // then its districts alphabetically.
-    if (!q) return [...base].sort((a, b) => {
-      const c = a.cityName.localeCompare(b.cityName);
-      if (c !== 0) return c;
-      const aEpo = isEponymous(a), bEpo = isEponymous(b);
-      if (aEpo && !bEpo) return -1;
-      if (!aEpo && bEpo) return 1;
-      return a.districtName.localeCompare(b.districtName);
-    });
-
-    return [...base].sort((a, b) => {
-      // 1. Eponymous district comes first (Zugdidi › Zugdidi before Zugdidi › Mestia)
-      const aEpo = isEponymous(a);
-      const bEpo = isEponymous(b);
-      if (aEpo && !bEpo) return -1;
-      if (!aEpo && bEpo) return 1;
-
-      // 2. Cities that START with the query rank above those that just contain it
-      const aCityStart = norm(a.cityName).startsWith(q) || norm(a.cityNameGeo ?? '').startsWith(q);
-      const bCityStart = norm(b.cityName).startsWith(q) || norm(b.cityNameGeo ?? '').startsWith(q);
-      if (aCityStart && !bCityStart) return -1;
-      if (!aCityStart && bCityStart) return 1;
-
-      // 3. Districts that START with the query rank above partial matches
-      const aDistStart = norm(a.districtName).startsWith(q) || norm(a.districtNameGeo ?? '').startsWith(q);
-      const bDistStart = norm(b.districtName).startsWith(q) || norm(b.districtNameGeo ?? '').startsWith(q);
-      if (aDistStart && !bDistStart) return -1;
-      if (!aDistStart && bDistStart) return 1;
-
-      // 4. Alphabetical fallback
-      return a.cityName.localeCompare(b.cityName) || a.districtName.localeCompare(b.districtName);
-    });
-  }, [allDistricts, toSearch]);
+  const filteredDistricts = useMemo(
+    () => rankDistricts(allDistricts, toSearch), [allDistricts, toSearch]);
 
   // ── Computed final price ────────────────────────────────────────────────────
   /** Final price shown to user — null when no destination is selected */
@@ -308,27 +292,26 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
 
   // ── Labels ──────────────────────────────────────────────────────────────────
   const displayName = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
-  const cityLabel   = (c: CityEntry) => displayName(c.name, c.nameGeo);
+  const entryLabel  = (d: AllDistrictEntry) =>
+    isEponymous(d)
+      ? displayName(d.cityName, d.cityNameGeo)
+      : `${displayName(d.cityName, d.cityNameGeo)} › ${displayName(d.districtName, d.districtNameGeo)}`;
 
-  function selectCity(c: CityEntry) {
-    setSelectedCity(c.name);
-    setFromSearch(cityLabel(c));
+  function selectFromEntry(d: AllDistrictEntry) {
+    setSelectedFromEntry(d);
+    setFromSearch(entryLabel(d));
     setFromOpen(false);
   }
 
   function selectEntry(d: AllDistrictEntry) {
     setSelectedEntry(d);
-    setToSearch(
-      isEponymous(d)
-        ? displayName(d.cityName, d.cityNameGeo)
-        : `${displayName(d.cityName, d.cityNameGeo)} › ${displayName(d.districtName, d.districtNameGeo)}`
-    );
+    setToSearch(entryLabel(d));
     setToOpen(false);
     setSelectedTierId(null); // reset tier on new destination
   }
 
   function reset() {
-    setSelectedCity(''); setFromSearch('');
+    setSelectedFromEntry(null); setFromSearch('');
     setSelectedEntry(null); setToSearch('');
     setBasePrice(null); setPriceError(false);
     setSelectedTierId(null);
@@ -354,29 +337,40 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
         <SearchInput
           inputRef={fromInputRef}
           value={fromSearch}
-          onChange={v => { setFromSearch(v); setSelectedCity(''); setFromOpen(true); }}
+          onChange={v => { setFromSearch(v); setSelectedFromEntry(null); setFromOpen(true); }}
           onFocus={() => setFromOpen(true)}
-          onClear={() => { setFromSearch(''); setSelectedCity(''); setFromOpen(false); }}
-          placeholder={lang === 'ka' ? 'ქალაქი...' : 'Search city…'}
+          onClear={() => { setFromSearch(''); setSelectedFromEntry(null); setFromOpen(false); }}
+          placeholder={t.calcToPlaceholder}
           isOpen={fromOpen}
         />
         {fromOpen && (
           <div style={DROPDOWN}>
-            {filteredCities.length === 0
+            {filteredFromDistricts.length === 0
               ? <div style={EMPTY}>{lang === 'ka' ? 'შედეგი არ მოიძებნა' : 'No results'}</div>
-              : filteredCities.map(c => {
-                  const sel = selectedCity === c.name;
-                  const hov = fromHoverId === c.id;
+              : filteredFromDistricts.map(d => {
+                  const sel  = selectedFromEntry?.districtId === d.districtId;
+                  const hov  = fromHoverId === d.districtId;
+                  const city = displayName(d.cityName, d.cityNameGeo);
+                  const dist = displayName(d.districtName, d.districtNameGeo);
+                  const eponym = isEponymous(d);
                   return (
                     <div
-                      key={c.id}
-                      onMouseDown={e => { e.preventDefault(); selectCity(c); }}
-                      onMouseEnter={() => setFromHoverId(c.id)}
+                      key={d.districtId}
+                      onMouseDown={e => { e.preventDefault(); selectFromEntry(d); }}
+                      onMouseEnter={() => setFromHoverId(d.districtId)}
                       onMouseLeave={() => setFromHoverId(null)}
                       style={{ ...OPTION, background: sel ? C.accentDim : hov ? C.bg3 : C.bg }}
                     >
-                      <span style={{ fontSize: '0.88rem', color: C.text, fontWeight: sel ? 600 : 400, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                        {cityLabel(c)}
+                      <span style={{ fontSize: '0.88rem', color: C.text, fontFamily: "'Plus Jakarta Sans', sans-serif", display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                        {eponym ? (
+                          <span style={{ fontWeight: 600, color: C.text }}>{city}</span>
+                        ) : (
+                          <>
+                            <span style={{ color: C.textSubtle, fontSize: '0.82rem' }}>{city}</span>
+                            <span style={{ color: C.textSubtle, margin: '0 2px' }}>›</span>
+                            <span style={{ fontWeight: 500, color: C.text }}>{dist}</span>
+                          </>
+                        )}
                       </span>
                       {sel && <Tick />}
                     </div>
@@ -515,7 +509,7 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
           </>
         )}
 
-        {(selectedCity || selectedEntry) && (
+        {(selectedFromEntry || selectedEntry) && (
           <button
             type="button"
             onClick={reset}

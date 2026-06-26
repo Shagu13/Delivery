@@ -44,7 +44,7 @@ public sealed class CheckoutCartCommandHandler
             : null;
 
         var built = await GroupOrderOrderBuilder.BuildAsync(
-            _context, _trackingGen, customer, dto.Orders, cancellationToken);
+            _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict);
 
         // ── Split: Return orders are always standalone; Send/Exchange may batch.
         //    Mirrors CreateGroupOrderCommandHandler so a Return never lands inside a

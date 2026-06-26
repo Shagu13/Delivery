@@ -18,6 +18,10 @@ public sealed class CalculatorController : ControllerBase
     /// Returns the delivery price for a given destination district.
     /// If the caller is an authenticated Customer with negotiated tier prices,
     /// those are applied. Otherwise the district's default price is returned.
+    ///
+    /// When <paramref name="fromDistrictId"/> (the pickup district) is supplied and is
+    /// NOT the capital (Tbilisi), pricing "swaps" to the pickup location instead of the
+    /// destination — e.g. Rustavi → Tbilisi is priced at Rustavi's rate.
     /// </summary>
     [HttpGet]
     [AllowAnonymous]
@@ -26,6 +30,7 @@ public sealed class CalculatorController : ControllerBase
     public async Task<IActionResult> Calculate(
         [FromQuery] Guid  districtId,
         [FromQuery] Guid? weightTierId,
+        [FromQuery] Guid? fromDistrictId,
         CancellationToken ct)
     {
         var district = await _context.Districts
@@ -33,6 +38,17 @@ public sealed class CalculatorController : ControllerBase
             .FirstOrDefaultAsync(d => d.Id == districtId && d.DateDeleted == null, ct);
 
         if (district is null) return NotFound();
+
+        // Swapped pricing: price off the pickup district when it's set and not the capital.
+        if (fromDistrictId is Guid fromId && fromId != districtId)
+        {
+            var fromDistrict = await _context.Districts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == fromId && d.DateDeleted == null, ct);
+
+            if (fromDistrict is not null && !fromDistrict.IsCapitalTerritory)
+                district = fromDistrict;
+        }
 
         // Start with the district's own default price
         decimal price = district.CompanyServicePrice ?? 0;

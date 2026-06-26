@@ -5,6 +5,7 @@ import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, OrderStatus } from '../../api/adminGroupOrders';
 import { fetchReturnExchangeOrders } from '../../api/returnExchange';
 import type { ReturnExchangeOrder } from '../../api/returnExchange';
+import { correctOrderStatus } from '../../api/orders';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { georgianToday, toDateKey, georgianDateKeyOf } from '../../utils/georgianTime';
 
@@ -275,6 +276,36 @@ export default function AdminHistoryPage({ token }: { token: string }) {
   const isPickedUp  = filterStatus === 'pickedup';
   const resultCount = isPickedUp ? pickedUpGroups.length : visible.length;
 
+  // ── Mistaken-status correction (un-cancel / un-deliver) ─────────────────────
+  // Delivered & cancelled orders only live here in History, so the admin fixes a
+  // courier's mistake from this row. Send/Exchange only — Returns run a separate flow.
+  const [confirmId,   setConfirmId]   = useState<string | null>(null);
+  const [busyId,      setBusyId]      = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const correctionFor = (f: FlatHistoryOrder): 'UnCancel' | 'UnDeliver' | null => {
+    if (f.order.orderType === 'Return') return null;
+    if (f.category === 'cancelled') return 'UnCancel';
+    if (f.category === 'delivered' || f.category === 'exchanged') return 'UnDeliver';
+    return null;
+  };
+
+  const handleCorrect = async (orderId: string, correction: 'UnCancel' | 'UnDeliver') => {
+    setBusyId(orderId);
+    setActionError(null);
+    try {
+      await correctOrderStatus(token, orderId, correction);
+      setConfirmId(null);
+      // The corrected order leaves terminal status, so it drops out of History on reload.
+      setLoading(true);
+      await load(search);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Correction failed.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   // Footer totals for the visible set.
   const totals = useMemo(() => visible.reduce((acc, f) => {
     const o = f.order;
@@ -304,6 +335,10 @@ export default function AdminHistoryPage({ token }: { token: string }) {
         .hist-table th.num, .hist-table td.num { text-align: right; }
         .hist-table .hist-totals td { background: var(--color-bg-3); border-top: 2px solid var(--color-border); border-bottom: none; font-weight: 700; font-size: 0.74rem; }
         .hist-table .hist-totals td:first-child { font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-subtle); }
+        .hist-fix-btn { font-size: 0.72rem; font-weight: 600; padding: 4px 9px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text-subtle); cursor: pointer; white-space: nowrap; transition: all var(--transition); }
+        .hist-fix-btn:hover:not(:disabled) { background: var(--color-bg-3); color: var(--color-text); border-color: var(--color-text-subtle); }
+        .hist-fix-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .hist-fix-btn--confirm { background: var(--color-accent-dim); color: var(--color-accent); border-color: rgba(196,127,23,0.4); }
       `}</style>
 
       {/* Day navigator — filters by completion (delivery) date */}
@@ -390,6 +425,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
       {/* States */}
       {loading && <div className="go-loading"><div className="go-spinner" />{t.goHistoryLoading}</div>}
       {!loading && error && <div className="go-error">{error}</div>}
+      {actionError && <div className="go-error" style={{ margin: '10px 20px' }}>{actionError}</div>}
       {!loading && !error && resultCount === 0 && (
         <div className="empty-state" style={{ padding: '48px 20px' }}>
           <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
@@ -457,11 +493,13 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                 <th className="num" title="Company revenue">Revenue ₾</th>
                 <th className="num" title="Created date">Created</th>
                 <th className="num" title="Completion (delivery) date">Completed</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {visible.map(f => {
                 const o = f.order;
+                const correction = correctionFor(f);
                 return (
                   <tr key={o.id}>
                     <td><span className="tn-badge">{o.trackingNumber}</span></td>
@@ -520,6 +558,39 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                     <td className="num" style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
                       {o.deliveredAt ? formatDate(o.deliveredAt) : <span style={{ opacity: 0.35 }}>—</span>}
                     </td>
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      {correction && (
+                        confirmId === o.id ? (
+                          <span style={{ display: 'inline-flex', gap: 4 }}>
+                            <button
+                              type="button"
+                              className="hist-fix-btn hist-fix-btn--confirm"
+                              disabled={busyId === o.id}
+                              onClick={() => void handleCorrect(o.id, correction)}
+                            >
+                              {busyId === o.id ? '…' : t.goConfirm}
+                            </button>
+                            <button
+                              type="button"
+                              className="hist-fix-btn"
+                              disabled={busyId === o.id}
+                              onClick={() => setConfirmId(null)}
+                            >
+                              {t.cancel}
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="hist-fix-btn"
+                            title={correction === 'UnCancel' ? t.eomConfirmUnCancel : t.eomConfirmUnDeliver}
+                            onClick={() => { setConfirmId(o.id); setActionError(null); }}
+                          >
+                            {correction === 'UnCancel' ? t.histUnCancel : t.histUnDeliver}
+                          </button>
+                        )
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -533,7 +604,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                   <td className="num">₾{totals.svc.toFixed(2)}</td>
                   <td className="num" style={{ color: '#f97316' }}>₾{totals.salary.toFixed(2)}</td>
                   <td className="num" style={{ color: totals.revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{totals.revenue.toFixed(2)}</td>
-                  <td /><td />
+                  <td /><td /><td />
                 </tr>
               </tfoot>
             )}

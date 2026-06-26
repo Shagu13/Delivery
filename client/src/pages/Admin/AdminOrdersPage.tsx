@@ -15,7 +15,8 @@ import { PriceWarningModal } from './PriceWarningModal';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
-import { georgianToday, toDateKey } from '../../utils/georgianTime';
+import { toDateKey } from '../../utils/georgianTime';
+import { DateRangeNav } from '../../components/ui/DateRangeNav';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ async function fetchAllOrders(
   params: {
     city?: string; district?: string; search?: string;
     courierId?: string; unpriced?: boolean; assigned?: boolean;
-    date?: string; page?: number; pageSize?: number;
+    date?: string; dateTo?: string; page?: number; pageSize?: number;
   }
 ): Promise<PagedResult> {
   const qs = new URLSearchParams();
@@ -81,6 +82,7 @@ async function fetchAllOrders(
   if (params.unpriced)   qs.set('unpriced',  'true');
   if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
   if (params.date)       qs.set('date',      params.date);
+  if (params.dateTo)     qs.set('dateTo',    params.dateTo);
   if (params.page)       qs.set('page',      String(params.page));
   if (params.pageSize)   qs.set('pageSize',  String(params.pageSize));
   const res = await fetch(`/api/orders?${qs}`, {
@@ -90,10 +92,11 @@ async function fetchAllOrders(
   return res.json();
 }
 
-async function fetchUnpricedCount(token: string, courierId?: string, date?: string): Promise<number> {
+async function fetchUnpricedCount(token: string, courierId?: string, date?: string, dateTo?: string): Promise<number> {
   const qs = new URLSearchParams({ unpriced: 'true', pageSize: '1', page: '1' });
   if (courierId) qs.set('courierId', courierId);
   if (date)      qs.set('date', date);
+  if (dateTo)    qs.set('dateTo', dateTo);
   const res = await fetch(`/api/orders?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -344,8 +347,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
   const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
   // Day navigator — mirrors the Pick-Up page; filters by Order.CreatedAt (Georgian day).
-  // null = show ALL days (default); a date filters to that single Georgian day.
+  // selectedDate null = show ALL days (default); set = range start (single day when
+  // rangeEnd is null, else the inclusive span [selectedDate..rangeEnd]).
   const [selectedDate,    setSelectedDate]    = useState<Date | null>(null);
+  const [rangeEnd,        setRangeEnd]        = useState<Date | null>(null);
   const [couriers,        setCouriers]        = useState<Courier[]>([]);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
@@ -394,7 +399,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   const aopRootRef  = useRef<HTMLDivElement | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '' });
+  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '', dateTo: '' });
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
@@ -406,9 +411,11 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   }, [token]);
 
   const refreshUnpricedCount = useCallback(async () => {
-    const count = await fetchUnpricedCount(token, filterCourier?.courierId, selectedDate ? toDateKey(selectedDate) : undefined);
+    const count = await fetchUnpricedCount(token, filterCourier?.courierId,
+      selectedDate ? toDateKey(selectedDate) : undefined,
+      rangeEnd ? toDateKey(rangeEnd) : undefined);
     setUnpricedCount(count);
-  }, [token, filterCourier, selectedDate]);
+  }, [token, filterCourier, selectedDate, rangeEnd]);
 
   useEffect(() => { void refreshUnpricedCount(); }, [refreshUnpricedCount]);
 
@@ -421,14 +428,19 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     try {
       // Scope to the selected Georgian day when one is chosen; otherwise (null) show
       // every day. Threaded here so all reload paths honor the day navigator.
-      const result = await fetchAllOrders(token, { ...params, date: selectedDate ? toDateKey(selectedDate) : undefined, pageSize: PAGE_SIZE });
+      const result = await fetchAllOrders(token, {
+        ...params,
+        date:   selectedDate ? toDateKey(selectedDate) : undefined,
+        dateTo: rangeEnd ? toDateKey(rangeEnd) : undefined,
+        pageSize: PAGE_SIZE,
+      });
       setData(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : t.aopFailedLoad);
     } finally {
       setLoading(false);
     }
-  }, [token, t, selectedDate]);
+  }, [token, t, selectedDate, rangeEnd]);
 
   // Reload the current view with the active filters — used by per-row actions (the kebab
   // menu) that mutate a single order outside the bulk flow.
@@ -455,6 +467,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
       unpriced:  filterUnpriced,
       assigned:  assignTab === 'assigned',
       date:      selectedDate ? toDateKey(selectedDate) : '',
+      dateTo:    rangeEnd ? toDateKey(rangeEnd) : '',
     };
 
     const filterChanged =
@@ -464,7 +477,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
       prev.courierId !== next.courierId ||
       prev.unpriced  !== next.unpriced  ||
       prev.assigned  !== next.assigned  ||
-      prev.date      !== next.date;
+      prev.date      !== next.date      ||
+      prev.dateTo    !== next.dateTo;
 
     filterRef.current = next;
 
@@ -489,7 +503,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, selectedDate, page, load]);
+  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, selectedDate, rangeEnd, page, load]);
 
   // Esc terminates the Mark-Delivered action: leave deliver mode and clear the selection.
   // Only active while in deliver mode, and never while a modal/warning dialog is open.
@@ -526,10 +540,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   // whose orders sat on another page, e.g. Tskneti). Scoped to the selected Georgian day.
   useEffect(() => {
     if (!token) return;
-    fetchOrderLocations(token, selectedDate ? toDateKey(selectedDate) : undefined)
+    fetchOrderLocations(token, selectedDate ? toDateKey(selectedDate) : undefined, rangeEnd ? toDateKey(rangeEnd) : undefined)
       .then(setOrderLocations)
       .catch(() => { /* keep filters empty on failure */ });
-  }, [token, selectedDate]);
+  }, [token, selectedDate, rangeEnd]);
 
   // Filter value is the English name (what the backend matches on recipientCity/District);
   // the label shows the Georgian name when the UI is in Georgian.
@@ -588,6 +602,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         unpriced:  filterUnpriced || undefined,
         assigned:  assignTab === 'assigned',
         date:      selectedDate ? toDateKey(selectedDate) : undefined,
+        dateTo:    rangeEnd ? toDateKey(rangeEnd) : undefined,
         ids:       selected.size > 0 ? [...selected] : undefined,
       });
     } catch (e) {
@@ -849,48 +864,19 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     setFilterCourier(null); setFilterUnpriced(false);
   };
 
-  // ── Day navigator (mirrors the Pick-Up page) ─────────────────────────────────
-  // Arrows only step once a day is chosen; from "All" they fall back to today.
-  const shiftDay = (delta: number) => setSelectedDate(prev => {
-    const d = prev ? new Date(prev) : georgianToday();
-    d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d;
-  });
-  const isToday = selectedDate != null && toDateKey(selectedDate) === toDateKey(georgianToday());
-
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="aop-root" ref={aopRootRef}>
 
-      {/* Day navigator — All by default; pick a day (or step with the arrows) to filter
-          packages by the day they were placed (Order.CreatedAt). */}
-      <div className="aop-daynav">
-        <button className="aop-daynav__arrow" disabled={!selectedDate} onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        </button>
-        <div className="aop-daynav__label">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-            <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          <input
-            type="date"
-            className="aop-daynav__date"
-            value={selectedDate ? toDateKey(selectedDate) : ''}
-            max={toDateKey(georgianToday())}
-            onChange={e => setSelectedDate(e.target.value ? new Date(e.target.value + 'T00:00:00') : null)}
-          />
-          {!selectedDate
-            ? <span className="aop-daynav__today">{t.aopAllDays}</span>
-            : isToday && <span className="aop-daynav__today">{t.pickupToday}</span>}
-        </div>
-        <button className="aop-daynav__arrow" disabled={!selectedDate || isToday} onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        </button>
-        {selectedDate
-          ? <button className="aop-daynav__jump" onClick={() => setSelectedDate(null)}>{t.aopShowAll}</button>
-          : <button className="aop-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>{t.pickupToday}</button>}
-      </div>
+      {/* Day navigator — All by default; pick a day, step with the arrows, or choose a
+          custom inclusive range to filter packages by the day they were placed (CreatedAt). */}
+      <DateRangeNav
+        from={selectedDate}
+        to={rangeEnd}
+        onChange={(f, to) => { setSelectedDate(f); setRangeEnd(to); }}
+        classPrefix="aop-daynav"
+      />
 
       {/* Pending Assign / Assigned tabs + column toggles */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, alignSelf: 'flex-start', marginBottom: 12, flexWrap: 'wrap' }}>

@@ -11,7 +11,7 @@ public sealed record OrderLocationDto(string City, string? CityGeo, string Distr
 /// filters so they list only locations that have orders (not the whole master list), and the
 /// full set across every page (not just the loaded one). Scoped to the tenant (co-admin) and,
 /// when set, the selected Georgian day, matching the order list it filters.
-public sealed record GetOrderLocationsQuery(DateTime? Date = null, Guid? TenantId = null)
+public sealed record GetOrderLocationsQuery(DateTime? Date = null, DateTime? DateTo = null, Guid? TenantId = null)
     : IRequest<List<OrderLocationDto>>;
 
 public sealed class GetOrderLocationsQueryHandler
@@ -33,11 +33,13 @@ public sealed class GetOrderLocationsQueryHandler
                 || (o.Customer != null && o.Customer.TenantId == tenantId));
 
         // Created-day scope — CreatedAt is Georgian wall-clock, so a plain .Date comparison
-        // against the selected Georgian day is correct (mirrors the order list).
+        // against the selected Georgian day is correct (mirrors the order list). Date alone =
+        // single day; Date + DateTo = an inclusive [Date..DateTo] range.
         if (request.Date.HasValue)
         {
-            var day = request.Date.Value.Date;
-            query = query.Where(o => o.CreatedAt.Date == day);
+            var from = request.Date.Value.Date;
+            var to   = (request.DateTo ?? request.Date).Value.Date;
+            query = query.Where(o => o.CreatedAt.Date >= from && o.CreatedAt.Date <= to);
         }
 
         // Skip any blank location so the filters never offer an empty option.

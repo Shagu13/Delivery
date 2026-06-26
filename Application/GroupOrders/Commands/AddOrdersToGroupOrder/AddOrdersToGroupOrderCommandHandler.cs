@@ -46,7 +46,7 @@ public sealed class AddOrdersToGroupOrderCommandHandler
             .FirstOrDefaultAsync(c => c.Id == request.CustomerId, cancellationToken);
 
         var built = await GroupOrderOrderBuilder.BuildAsync(
-            _context, _trackingGen, customer, request.Orders, cancellationToken);
+            _context, _trackingGen, customer, request.Orders, cancellationToken, groupOrder.PickUpDistrict);
 
         // Returns are rejected by the validator, so every built order is a Send/Exchange
         // package that joins the batch. Add explicitly with the FK set — attaching a child

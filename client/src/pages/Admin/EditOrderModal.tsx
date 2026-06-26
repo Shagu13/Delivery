@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { updateOrder, adminMarkOrderDelivered, adminMarkReturnAtWarehouse, assignCourierToOrder, setCourierSalary } from '../../api/orders';
+import { updateOrder, adminMarkOrderDelivered, adminMarkReturnAtWarehouse, assignCourierToOrder, setCourierSalary, correctOrderStatus } from '../../api/orders';
 import type { AdminOrderItem } from './AdminOrdersPage';
 import type { Courier } from '../../api/couriers';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
@@ -92,6 +92,11 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
     const [actionBusy,      setActionBusy]      = useState(false);
     const [actionError,     setActionError]     = useState<string | null>(null);
 
+    // ── Mistaken-status correction (un-cancel / un-deliver) ───────────────────
+    const [correctConfirm, setCorrectConfirm] = useState<'UnCancel' | 'UnDeliver' | null>(null);
+    const [correctBusy,    setCorrectBusy]    = useState(false);
+    const [correctError,   setCorrectError]   = useState<string | null>(null);
+
     // Populate form when order changes
     useEffect(() => {
         if (!order) return;
@@ -119,6 +124,8 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
         setReturnDistrict(order.returnPickupDistrict ?? '');
         setReturnAddress(order.returnPickupAddress ?? '');
         setStatusOverride('');
+        setCorrectConfirm(null);
+        setCorrectError(null);
         setError(null);
         setErrors({});
         setActiveTab('delivery');
@@ -159,6 +166,31 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
             setActionError(e instanceof Error ? e.message : 'Action failed.');
         } finally {
             setActionBusy(false);
+        }
+    };
+
+    // ── Correct a courier's mistaken terminal status ──────────────────────────
+    // Un-cancel: a cancelled order (e.g. cancelled instead of postponed). Un-deliver: an
+    // order marked delivered by mistake. Send/Exchange only — Returns run a separate flow.
+    const isReturnOrder = order.orderType === 'Return';
+    const canUnCancel   = !isReturnOrder &&
+        ['OrderNotAccepted', 'CancelledByAdmin', 'CancelledBySender'].includes(order.status);
+    const canUnDeliver  = !isReturnOrder &&
+        ['DeliveredToRecipient', 'ExchangeCompleted'].includes(order.status);
+
+    const handleCorrect = async (correction: 'UnCancel' | 'UnDeliver') => {
+        if (!order) return;
+        setCorrectBusy(true);
+        setCorrectError(null);
+        try {
+            await correctOrderStatus(token, order.id, correction);
+            setCorrectConfirm(null);
+            onActioned?.();
+            onClose();
+        } catch (e) {
+            setCorrectError(e instanceof Error ? e.message : 'Correction failed.');
+        } finally {
+            setCorrectBusy(false);
         }
     };
 
@@ -487,6 +519,57 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                     ))}
                                 </div>
                             </fieldset>
+
+                            {/* Correct a courier's mistaken status (un-cancel / un-deliver) */}
+                            {(canUnCancel || canUnDeliver) && (
+                                <fieldset className="modal__fieldset" style={{ borderColor: 'rgba(196,127,23,0.35)' }}>
+                                    <legend className="modal__legend" style={{ color: 'var(--color-accent)' }}>{t.eomLegendCorrectStatus}</legend>
+                                    <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
+                                        {t.eomCorrectStatusHint}
+                                    </p>
+                                    {correctConfirm ? (
+                                        <div className="eom-action-confirm">
+                                            <span className="eom-action-confirm__label">
+                                                {correctConfirm === 'UnCancel' ? t.eomConfirmUnCancel : t.eomConfirmUnDeliver}
+                                            </span>
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <button
+                                                    type="button"
+                                                    className="eom-action-btn eom-action-btn--ghost"
+                                                    disabled={correctBusy}
+                                                    onClick={() => { setCorrectConfirm(null); setCorrectError(null); }}
+                                                >
+                                                    {t.cancel}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="eom-action-btn eom-action-btn--warehouse"
+                                                    disabled={correctBusy}
+                                                    onClick={() => void handleCorrect(correctConfirm)}
+                                                >
+                                                    {correctBusy ? '…' : t.goConfirm}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="eom-type-row">
+                                            {canUnCancel && (
+                                                <button type="button" className="eom-toggle-btn" onClick={() => { setCorrectConfirm('UnCancel'); setCorrectError(null); }}>
+                                                    {t.eomUnCancel}
+                                                </button>
+                                            )}
+                                            {canUnDeliver && (
+                                                <button type="button" className="eom-toggle-btn" onClick={() => { setCorrectConfirm('UnDeliver'); setCorrectError(null); }}>
+                                                    {t.eomUnDeliver}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    {correctError && (
+                                        <div style={{ fontSize: '0.78rem', color: '#ef4444', marginTop: 8 }}>{correctError}</div>
+                                    )}
+                                </fieldset>
+                            )}
                         </>
                     )}
 

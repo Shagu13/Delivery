@@ -100,7 +100,7 @@ function CustomerPicker({ token, selected, onSelect, onClear }: {
                 </div>
             )}
             {open && results.length > 0 && (
-                <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50, background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 -8px 28px rgba(0,0,0,0.16)', maxHeight: 260, overflowY: 'auto' }}>
+                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50, background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 28px rgba(0,0,0,0.16)', maxHeight: 260, overflowY: 'auto' }}>
                     {results.map(c => (
                         <button
                             key={c.id}

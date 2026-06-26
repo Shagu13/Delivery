@@ -44,7 +44,7 @@ public sealed class CreateGroupOrderCommandHandler
             : null;
 
         var built = await GroupOrderOrderBuilder.BuildAsync(
-            _context, _trackingGen, customer, dto.Orders, cancellationToken);
+            _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict);
 
         // ── Split: Return orders become standalone; Send/Exchange go into a GroupOrder ──
         var standaloneReturns = new List<Order>();

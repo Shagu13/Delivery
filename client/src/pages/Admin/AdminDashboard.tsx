@@ -37,6 +37,7 @@ import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 import { georgianToday, georgianDateKeyOf } from '../../utils/georgianTime';
+import { DateRangeNav } from '../../components/ui/DateRangeNav';
 
 // Terminal order statuses — these orders are hidden from the active Group Orders page
 // and shown only in the History page.
@@ -630,7 +631,11 @@ export function AdminDashboard() {
         .action-toast--err { background: #ef4444; color: #fff; }
 
         /* Pick-Up day navigator */
-        .pickup-daynav { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); }
+        .pickup-daynav { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
+        /* When wrapped alongside the grouped/ungrouped mode toggle, the wrapper owns the
+           bar padding + underline so it spans the full width (incl. the mode toggle). */
+        .pickup-daynav-wrap { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; }
+        .pickup-daynav-wrap .pickup-daynav { padding: 0; border-bottom: none; flex-wrap: nowrap; }
         .pickup-daynav__arrow { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer; transition: all var(--transition); }
         .pickup-daynav__arrow:hover:not(:disabled) { background: var(--color-bg-3); border-color: var(--color-text-subtle); }
         .pickup-daynav__arrow:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -1037,8 +1042,10 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Pick-Up day navigation + grouping ──────────────────────────────────────
-  // null = show ALL days (default); a date filters the list to that single day.
+  // null = show ALL days (default); a date filters the list to that single day, and an
+  // optional rangeEnd widens it to an inclusive [selectedDate..rangeEnd] span.
   const [selectedDate,     setSelectedDate]     = useState<Date | null>(null);
+  const [rangeEnd,         setRangeEnd]         = useState<Date | null>(null);
   const [daySummary,       setDaySummary]       = useState<PickupDayCustomer[]>([]);
   const [groupingCustomer, setGroupingCustomer] = useState<PickupDayCustomer | null>(null);
   // The day grouping/merge actions operate on. Falls back to today while showing All,
@@ -1053,13 +1060,10 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   const [whTargetId,       setWhTargetId]       = useState<string>(''); // '' = create a new batch
   const [whCourierId,      setWhCourierId]      = useState<string>('');
   const [whBusy,           setWhBusy]           = useState(false);
+  // Grouping/merge stay anchored to a single day (the "from" day, else today); the
+  // optional range only widens which batches the list shows.
   const effectiveDay    = selectedDate ?? georgianToday();
   const effectiveDayKey = toDateKey(effectiveDay);
-  const shiftDay = (delta: number) => setSelectedDate(prev => {
-    const d = prev ? new Date(prev) : georgianToday();
-    d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d;
-  });
-  const isToday = selectedDate != null && toDateKey(selectedDate) === toDateKey(georgianToday());
   const [mergingCustomer, setMergingCustomer] = useState<{ name: string; batches: AdminGroupOrder[] } | null>(null);
   // Grouped (batches) vs Non-grouped (customers with un-grouped orders) view.
   const [pickupMode,      setPickupMode]      = useState<'grouped' | 'ungrouped'>('grouped');
@@ -1230,11 +1234,16 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
     });
   }, [groupOrders, filterStatus, filterCity, filterDistricts, filterParty]);
 
-  // When a day is chosen, show only that Georgian day's batches; otherwise (All) show every day.
-  const dayKey = selectedDate ? toDateKey(selectedDate) : null;
+  // When a day is chosen, show that day's batches; an optional rangeEnd widens it to the
+  // inclusive [from..to] span; otherwise (All) show every day. Date keys are 'yyyy-MM-dd',
+  // so lexical string comparison is chronological.
+  const dayKey   = selectedDate ? toDateKey(selectedDate) : null;
+  const dayKeyTo = rangeEnd ? toDateKey(rangeEnd) : dayKey;
   const dayOrders = useMemo(
-    () => (dayKey ? visibleOrders.filter(go => georgianDateKeyOf(go.createdAt) === dayKey) : visibleOrders),
-    [visibleOrders, dayKey],
+    () => (dayKey
+      ? visibleOrders.filter(go => { const k = georgianDateKeyOf(go.createdAt); return k >= dayKey && k <= dayKeyTo!; })
+      : visibleOrders),
+    [visibleOrders, dayKey, dayKeyTo],
   );
 
   // The still-open batches each customer has that day — drives the Merge chooser.
@@ -1418,33 +1427,14 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
 
   return (
     <div className="content-card" style={{ overflow: 'hidden' }}>
-      {/* Day navigator — All by default; pick a day (or step with arrows) to filter */}
-      <div className="pickup-daynav">
-        <button className="pickup-daynav__arrow" disabled={!selectedDate} onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        </button>
-        <div className="pickup-daynav__label">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-            <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          <input
-            type="date"
-            className="pickup-daynav__date"
-            value={selectedDate ? toDateKey(selectedDate) : ''}
-            max={toDateKey(georgianToday())}
-            onChange={e => setSelectedDate(e.target.value ? new Date(e.target.value + 'T00:00:00') : null)}
-          />
-          {!selectedDate
-            ? <span className="pickup-daynav__today">{t.aopAllDays}</span>
-            : isToday && <span className="pickup-daynav__today">{t.pickupToday}</span>}
-        </div>
-        <button className="pickup-daynav__arrow" disabled={!selectedDate || isToday} onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        </button>
-        {selectedDate
-          ? <button className="pickup-daynav__jump" onClick={() => setSelectedDate(null)}>{t.aopShowAll}</button>
-          : <button className="pickup-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>{t.pickupToday}</button>}
+      {/* Day navigator — All, a single day, or a custom inclusive range */}
+      <div className="pickup-daynav-wrap">
+        <DateRangeNav
+          from={selectedDate}
+          to={rangeEnd}
+          onChange={(f, to) => { setSelectedDate(f); setRangeEnd(to); }}
+          classPrefix="pickup-daynav"
+        />
         {canManage && (
         <div className="pickup-modes">
           <button

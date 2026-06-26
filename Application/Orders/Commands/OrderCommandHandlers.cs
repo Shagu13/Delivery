@@ -416,6 +416,101 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
     }
 }
 
+// ── AdminCorrectOrderStatus ───────────────────────────────────────────────────
+// Admin undoes a courier's mistaken terminal status: a cancel that should have been a
+// postpone (UnCancel), or a delivery that should not have happened (UnDeliver). Both
+// return the order to CourierAssignedToDeliver so the courier can re-attempt; UnDeliver
+// also clears the cash/payment the delivery recorded so settlement totals reconcile.
+public sealed class AdminCorrectOrderStatusCommandHandler : IRequestHandler<AdminCorrectOrderStatusCommand>
+{
+    private readonly IAppDbContext _context;
+    private readonly IRealtimeNotifier _notifier;
+    public AdminCorrectOrderStatusCommandHandler(IAppDbContext context, IRealtimeNotifier notifier)
+    {
+        _context  = context;
+        _notifier = notifier;
+    }
+
+    public async Task Handle(AdminCorrectOrderStatusCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        // Both corrections put the order back into the last-mile delivery flow, which is a
+        // Send/Exchange concept — standalone Returns run a different (pickup) flow.
+        if (order.OrderType == OrderType.Return)
+            throw new ConflictException("Status correction is only available for Send/Exchange orders.");
+
+        switch (request.Correction)
+        {
+            case OrderStatusCorrection.UnCancel:
+                if (order.Status is not (OrderStatus.OrderNotAccepted
+                                      or OrderStatus.CancelledByAdmin
+                                      or OrderStatus.CancelledBySender))
+                    throw new ConflictException($"Only a cancelled order can be un-cancelled. Current: {order.Status}.");
+
+                order.CancellationReason  = null;
+                order.CancellationComment = null;
+                order.CancelledAt         = null;
+                break;
+
+            case OrderStatusCorrection.UnDeliver:
+                if (order.Status is not (OrderStatus.DeliveredToRecipient or OrderStatus.ExchangeCompleted))
+                    throw new ConflictException($"Only a delivered order can be un-delivered. Current: {order.Status}.");
+
+                // Clear everything the delivery stamped so the courier's cash reconciles.
+                order.DeliveredAt           = null;
+                order.AmountOfCashCollected = null;
+                // COD orders go back to "pending collection"; pre-paid orders stay paid.
+                order.ProductPaymentStatus  = (order.AmountToCollectForPackage ?? 0m) > 0
+                    ? PaymentStatus.NotPaid
+                    : PaymentStatus.Paid;
+                // The recipient-paid service fee was marked collected at the door — undo that.
+                if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
+                    order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Unpaid;
+                break;
+        }
+
+        // Common: clear any postpone state and return to the assigned-to-deliver step.
+        order.PostponeReason = null;
+        order.PostponedAt    = null;
+        order.Status         = OrderStatus.CourierAssignedToDeliver;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // The parent batch may have auto-closed when this order went terminal; reopen it
+        // since a package is back in the active flow.
+        if (order.GroupOrderId.HasValue)
+            await GroupOrderReopener.TryReopenAsync(_context, order.GroupOrderId.Value, cancellationToken);
+
+        // Live-refresh dashboards: the assigned courier (order returns to their list) + admins.
+        if (order.CourierId is Guid courierId)
+            _notifier.NotifyCourierOrdersChanged(courierId);
+        _notifier.NotifyAdminsOrdersChanged();
+    }
+}
+
+// ── Shared: reopen an auto-closed GroupOrder ──────────────────────────────────
+file static class GroupOrderReopener
+{
+    internal static async Task TryReopenAsync(IAppDbContext context, Guid groupOrderId, CancellationToken ct)
+    {
+        var groupOrder = await context.GroupOrders
+            .FirstOrDefaultAsync(g => g.Id == groupOrderId, ct);
+        if (groupOrder is null) return;
+
+        // Only auto-closed batches need reopening; one package is back in the last-mile
+        // flow, so the batch is no longer fully terminal. Drop it back to the warehouse
+        // hand-off point where the per-order flow begins.
+        if (groupOrder.Status is OrderStatus.AllDelivered or OrderStatus.CancelledByAdmin)
+        {
+            groupOrder.Status = OrderStatus.AdminAcceptedOrderInWareHouse;
+            await context.SaveChangesAsync(ct);
+        }
+    }
+}
+
 // ── CancelOrderByCustomer ─────────────────────────────────────────────────────
 public sealed class CancelOrderByCustomerCommandHandler : IRequestHandler<CancelOrderByCustomerCommand>
 {
@@ -491,9 +586,20 @@ file static class GroupOrderCloser
         var groupOrder = await context.GroupOrders
             .FirstOrDefaultAsync(g => g.Id == groupOrderId, ct);
 
-        if (groupOrder is null || groupOrder.Status == OrderStatus.AllDelivered) return;
+        if (groupOrder is null) return;
 
-        groupOrder.Status = OrderStatus.AllDelivered;
+        // The batch is closed once every package is terminal. Choose the closing status
+        // from the actual outcomes so a fully-cancelled batch reads "Cancelled" rather than
+        // "Delivered". A batch with at least one delivered package closes as AllDelivered;
+        // a mixed delivered/cancelled batch is surfaced as "Delivered / Cancelled" by the UI
+        // from the per-order statuses.
+        var closedStatus = allStatuses.Any(s => s == OrderStatus.DeliveredToRecipient)
+            ? OrderStatus.AllDelivered
+            : OrderStatus.CancelledByAdmin;
+
+        if (groupOrder.Status == closedStatus) return;
+
+        groupOrder.Status = closedStatus;
         await context.SaveChangesAsync(ct);
     }
 }

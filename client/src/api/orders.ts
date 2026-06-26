@@ -8,7 +8,7 @@ export async function exportOrdersExcel(
     token: string,
     params: {
         city?: string; district?: string; search?: string; courierId?: string;
-        unpriced?: boolean; assigned?: boolean; date?: string; ids?: string[];
+        unpriced?: boolean; assigned?: boolean; date?: string; dateTo?: string; ids?: string[];
     },
 ): Promise<void> {
     const qs = new URLSearchParams();
@@ -19,6 +19,7 @@ export async function exportOrdersExcel(
     if (params.unpriced)  qs.set('unpriced', 'true');
     if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
     if (params.date)      qs.set('date', params.date);
+    if (params.dateTo)    qs.set('dateTo', params.dateTo);
     if (params.ids && params.ids.length) qs.set('ids', params.ids.join(','));
 
     const res = await fetch(`${BASE}/export?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -155,6 +156,13 @@ export const adminMarkOrderDelivered     = (
         : undefined,
 );
 export const adminMarkReturnAtWarehouse  = (token: string, id: string) => orderAction(token, id, 'admin-mark-at-warehouse');
+/**
+ * Admin corrects a courier's mistaken terminal status, returning the order to the
+ * delivery flow (CourierAssignedToDeliver). 'UnCancel' revives a wrongly cancelled
+ * order; 'UnDeliver' reverts a wrongly delivered one (clearing its recorded cash/payment).
+ */
+export const correctOrderStatus     = (token: string, id: string, correction: 'UnCancel' | 'UnDeliver') =>
+    orderAction(token, id, 'correct-status', { correction });
 export const setCourierSalary       = (token: string, id: string, salary: number) =>
     orderAction(token, id, 'courier-salary', { salary });
 export const setCompanyServicePrice = (token: string, id: string, price: number) =>
@@ -200,9 +208,10 @@ export interface OrderLocation {
 /** Admin/Operator/TenantAdmin: distinct city/district pairs used in orders — drives the
  *  Delivery page City/District filters (only used locations, complete across all pages).
  *  Optionally scoped to a Georgian day (yyyy-MM-dd). */
-export async function fetchOrderLocations(token: string, date?: string): Promise<OrderLocation[]> {
+export async function fetchOrderLocations(token: string, date?: string, dateTo?: string): Promise<OrderLocation[]> {
     const qs = new URLSearchParams();
-    if (date) qs.set('date', date);
+    if (date)   qs.set('date', date);
+    if (dateTo) qs.set('dateTo', dateTo);
     const res = await fetch(`${BASE}/locations${qs.toString() ? `?${qs}` : ''}`, {
         headers: { Authorization: `Bearer ${token}` },
     });

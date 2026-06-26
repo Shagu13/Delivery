@@ -72,10 +72,12 @@ public sealed class GetAllOrdersQueryHandler
         // ── Created-day filter (Delivery page day navigator) ─────────────────
         // CreatedAt is stored as Georgian wall-clock, so a plain .Date comparison
         // against the selected Georgian day is correct (mirrors the Pick-Up page).
+        // Date alone = single day; Date + DateTo = an inclusive [Date..DateTo] range.
         if (request.Date.HasValue)
         {
-            var day = request.Date.Value.Date;
-            query = query.Where(o => o.CreatedAt.Date == day);
+            var from = request.Date.Value.Date;
+            var to   = (request.DateTo ?? request.Date).Value.Date;
+            query = query.Where(o => o.CreatedAt.Date >= from && o.CreatedAt.Date <= to);
         }
 
         // ── Active-only filter (exclude terminal statuses) ───────────────────

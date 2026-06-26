@@ -22,6 +22,7 @@ import { georgianToday, georgianDateKeyOf, toDateKey } from '../../utils/georgia
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
+import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import {
   fetchGroupOrders, fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup,
   mergeGroupOrders, moveOrderToGroup, groupAndAcceptStandalone, groupAndWarehouseStandalone,
@@ -310,6 +311,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedDate,     setSelectedDate]     = useState<Date | null>(null);
+  const [rangeEnd,         setRangeEnd]         = useState<Date | null>(null);
   const [daySummary,       setDaySummary]       = useState<PickupDayCustomer[]>([]);
   const [groupingCustomer, setGroupingCustomer] = useState<PickupDayCustomer | null>(null);
   const [groupingDate,     setGroupingDate]     = useState<Date>(() => georgianToday());
@@ -359,13 +361,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   const showPricesEff = canManage && showPrices;
 
+  // Grouping/summary stay anchored to a single day (the chosen "from" day, else today);
+  // the optional range only widens which batches are listed.
   const effectiveDay    = selectedDate ?? georgianToday();
   const effectiveDayKey = toDateKey(effectiveDay);
-  const shiftDay = (delta: number) => setSelectedDate(prev => {
-    const d = prev ? new Date(prev) : georgianToday();
-    d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d;
-  });
-  const isToday = selectedDate != null && toDateKey(selectedDate) === toDateKey(georgianToday());
 
   const courierNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -516,10 +515,15 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     });
   }, [groupOrders, filterStatus, filterCity, filterDistricts, filterParty, filterCourier, filterUnpriced, matchesDeliveryFilters]);
 
-  const dayKey = selectedDate ? toDateKey(selectedDate) : null;
+  // Date filter: null = All; a single day; or an inclusive [from..to] range. Date keys are
+  // 'yyyy-MM-dd', so lexical string comparison is chronological.
+  const dayKey   = selectedDate ? toDateKey(selectedDate) : null;
+  const dayKeyTo = rangeEnd ? toDateKey(rangeEnd) : dayKey;
   const dayOrders = useMemo(
-    () => (dayKey ? visibleOrders.filter(go => georgianDateKeyOf(go.createdAt) === dayKey) : visibleOrders),
-    [visibleOrders, dayKey],
+    () => (dayKey
+      ? visibleOrders.filter(go => { const k = georgianDateKeyOf(go.createdAt); return k >= dayKey && k <= dayKeyTo!; })
+      : visibleOrders),
+    [visibleOrders, dayKey, dayKeyTo],
   );
 
   const mergeableByCustomer = useMemo(() => {
@@ -720,6 +724,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         courierId: filterCourier || undefined,
         unpriced:  filterUnpriced || undefined,
         date:      selectedDate ? toDateKey(selectedDate) : undefined,
+        dateTo:    rangeEnd ? toDateKey(rangeEnd) : undefined,
         ids:       selected.size > 0 ? [...selected] : undefined,
       });
     } catch (e) {
@@ -1020,27 +1025,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     // stick to the window — an overflow:hidden ancestor traps position:sticky. The inner
     // tables keep their own overflow-x wrappers, so nothing spills horizontally.
     <div className="content-card" style={{ overflow: 'visible' }}>
-      {/* Day navigator */}
-      <div className="pickup-daynav">
-        <button className="pickup-daynav__arrow" disabled={!selectedDate} onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        </button>
-        <div className="pickup-daynav__label">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-            <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          <input type="date" className="pickup-daynav__date"
-            value={selectedDate ? toDateKey(selectedDate) : ''} max={toDateKey(georgianToday())}
-            onChange={e => setSelectedDate(e.target.value ? new Date(e.target.value + 'T00:00:00') : null)} />
-          {!selectedDate ? <span className="pickup-daynav__today">{t.aopAllDays}</span> : isToday && <span className="pickup-daynav__today">{t.pickupToday}</span>}
-        </div>
-        <button className="pickup-daynav__arrow" disabled={!selectedDate || isToday} onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        </button>
-        {selectedDate
-          ? <button className="pickup-daynav__jump" onClick={() => setSelectedDate(null)}>{t.aopShowAll}</button>
-          : <button className="pickup-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>{t.pickupToday}</button>}
+      {/* Day navigator — All, a single day, or a custom inclusive range */}
+      <div className="pickup-daynav-wrap">
+        <DateRangeNav
+          from={selectedDate}
+          to={rangeEnd}
+          onChange={(f, to) => { setSelectedDate(f); setRangeEnd(to); }}
+          classPrefix="pickup-daynav"
+        />
         {canManage && (
           <div className="pickup-modes">
             <button className={`pickup-mode ${pickupMode === 'grouped' ? 'pickup-mode--active' : ''}`} onClick={() => setPickupMode('grouped')}>{t.pickupTabGrouped}</button>

@@ -42,6 +42,25 @@ public sealed record CancelOrderByCourierCommand(
 public sealed record CancelOrderByAdminCommand(Guid OrderId) : IRequest;
 
 /// <summary>
+/// Admin undoes a courier's mistaken terminal status and returns the order to the
+/// delivery flow (CourierAssignedToDeliver), keeping the assigned courier:
+///  • <see cref="OrderStatusCorrection.UnCancel"/> — order was cancelled by mistake
+///    (e.g. courier cancelled instead of postponing).
+///  • <see cref="OrderStatusCorrection.UnDeliver"/> — order was marked delivered by
+///    mistake; the cash/payment recorded at delivery is cleared so settlement reconciles.
+/// Send/Exchange only — Returns use a separate pickup flow.
+/// </summary>
+public sealed record AdminCorrectOrderStatusCommand(Guid OrderId, OrderStatusCorrection Correction) : IRequest;
+
+public enum OrderStatusCorrection
+{
+    /// <summary>Revert a cancelled order back into the delivery flow.</summary>
+    UnCancel,
+    /// <summary>Revert a delivered order back into the delivery flow, clearing delivery finances.</summary>
+    UnDeliver,
+}
+
+/// <summary>
 /// Admin force-marks a Send/Exchange order as delivered to recipient from any active status.
 /// Applies the same cash-collection logic as the courier version.
 /// Optionally assigns a courier (only when the order has none — so the delivery is

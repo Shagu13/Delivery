@@ -382,10 +382,16 @@ export function CreateGroupOrderPage() {
                 }
             }));
 
+            // Swapped pricing: when the batch pickup isn't the capital (Tbilisi), price
+            // imported Send/Exchange packages off the pickup district instead of the recipient.
+            const pickupDistrictName = appendMode ? appendBatch?.pickUpDistrict : sender.pickUpDistrict;
+            const pickupDistrict = pickupDistrictName ? districtLookup[pickupDistrictName] ?? null : null;
+            const swapToPickup = !!pickupDistrict && !pickupDistrict.isCapitalTerritory;
+
             const withFees = normalised.map(o => {
-                const cityDistricts = districtMap[o.recipientCity];
-                if (!cityDistricts) return o;
-                const district = cityDistricts[o.recipientDistrict];
+                const district = swapToPickup
+                    ? pickupDistrict
+                    : (districtMap[o.recipientCity]?.[o.recipientDistrict] ?? null);
                 if (!district) return o;
                 let fee = 0;
                 const tierId = o.weightPriceTierId;
@@ -779,6 +785,7 @@ export function CreateGroupOrderPage() {
                                 customerPricing={customerPricing}
                                 weightTiers={weightTiers}
                                 senderAddress={senderAddress}
+                                pickupDistrictName={appendMode ? appendBatch?.pickUpDistrict : sender.pickUpDistrict}
                                 districtLookup={districtLookup}
                                 serviceIncludedForced={serviceIncludedForced}
                                 onChange={handlePackageChange}
