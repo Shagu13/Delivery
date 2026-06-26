@@ -108,6 +108,40 @@ public class Order
     /// <summary>When the sender-paid service fee payment was recorded. Null until paid.</summary>
     public DateTime? ServicePaidByCustomerAt      { get; set; }
 
+    // ── Per-order courier settlement (admin-recorded; replaces CourierSettlement) ──
+    /// <summary>
+    /// Running total the company has paid the courier toward this order's
+    /// <see cref="CourierSalary"/>. Accumulates across partial payments. Null until
+    /// the first payment is recorded.
+    /// </summary>
+    public decimal?  CourierSalaryPaidAmount            { get; set; }
+    /// <summary>When the most recent courier-salary payment was recorded. Null until paid.</summary>
+    public DateTime? CourierSalaryPaidAt               { get; set; }
+
+    /// <summary>
+    /// Running total of COD cash the courier has physically handed over to the company
+    /// for this order. Accumulates across partial transfers. Null until any is handed over.
+    /// </summary>
+    public decimal?  CodTransferedToCompanyByCourier    { get; set; }
+    /// <summary>When the most recent courier→company COD transfer was recorded. Null until any.</summary>
+    public DateTime? CodTransferedToCompanyByCourierAt  { get; set; }
+
+    /// <summary>
+    /// Special case (sender-pays only): the service fee the customer owes was settled by
+    /// netting it out of the COD payout to the customer rather than collected as a
+    /// separate cash inflow. When true the service fee is NOT counted again as company
+    /// cash-in (see <c>OrderFinance.ServiceInflow</c>); it was already kept from the COD.
+    /// </summary>
+    public bool IsCompanyServicePriceIncludedSpecialCase { get; set; } = false;
+
+    /// <summary>
+    /// Special case: the courier kept their salary out of the COD cash they collected, so
+    /// the amount transferred to the company is COD minus salary (rather than the full COD
+    /// with a separate salary payout). Drives how the courier settlement command splits
+    /// the collected cash.
+    /// </summary>
+    public bool IsCourierSalaryIncludedSpecialCase       { get; set; } = false;
+
     // ── Dilo ↔ tenant settlement (per-order; only for tenant-owned orders) ────
     // SEPARATE from the *Customer fields above (which are the tenant↔its-customers tier).
     // These record the company (dilo) settling directly with the TENANT, per order.

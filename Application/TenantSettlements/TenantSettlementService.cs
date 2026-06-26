@@ -11,7 +11,7 @@ namespace Application.TenantSettlements;
 /// One row per tenant per calendar month. The aggregate figures are derived from the
 /// tenant's orders DELIVERED in that month (settlement basis); the payment accumulators
 /// are recorded by a dilo-admin and preserved across recomputes.
-/// Mirrors <see cref="Application.CustomerSettlements.CustomerSettlementService"/> one tier up.
+/// The tenant↔company tier (one level up from the company↔customer per-order settlement).
 /// </summary>
 internal static class TenantSettlementService
 {

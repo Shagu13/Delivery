@@ -15,8 +15,6 @@ public interface IAppDbContext
     DbSet<TrackingEvent>        TrackingEvents       { get; }
     DbSet<City>                 Cities               { get; }
     DbSet<District>             Districts            { get; }
-    DbSet<CourierSettlement>    CourierSettlements   { get; }
-    DbSet<CustomerSettlement>   CustomerSettlements  { get; }
     DbSet<WeightPriceTier>      WeightPriceTiers     { get; }
     DbSet<PasswordResetToken>   PasswordResetTokens  { get; }
     DbSet<PartnerApiKey>        PartnerApiKeys       { get; }

@@ -15,14 +15,14 @@ export interface SettlementOrderLine {
     deliveredAt: string | null;
 }
 
+/**
+ * Read-only day summary for a courier on a date, derived live from delivered orders.
+ * (Settlements are no longer stored rows — there is no create/update flow.)
+ */
 export interface SettlementPreview {
     courierId: string;
     courierFullName: string;
     date: string;                              // "YYYY-MM-DD"
-    /** Non-null if a settlement already exists for this courier+date. */
-    existingSettlementId: string | null;
-    /** When a settlement already exists, the amount the courier was last recorded as paid; null otherwise. */
-    existingAmountCourierWasPaid: number | null;
     totalOrdersPickedUp: number;
     totalOrdersDelivered: number;
     /** Sum of AmountOfCashCollected — total cash physically collected (COD + service fees bundled for Recipient-payer orders). */
@@ -44,54 +44,31 @@ export interface SettlementPreview {
 }
 
 /**
- * All financial totals are computed server-side. The caller supplies the identity
- * fields plus how much the admin actually paid the courier for this settlement.
+ * A courier's per-day summary, derived live by grouping delivered orders. Shared by the
+ * admin "by courier" and courier "my" views. No stored row → no id / day-close flag.
  */
-export interface CreateSettlementRequest {
-    courierId: string;
-    date: string;                              // "YYYY-MM-DD"
-    /** Amount the admin paid the courier for this settlement → recorded as AmountCourierWasPaid. */
-    partialAmountPaid: number;
-}
-
-export interface CreateSettlementResponse {
-    settlementId: string;
-}
-
-/** Daily settlement record with all admin-visible fields (payment amounts, cancel/postpone counts). */
-export interface AdminCourierSettlementItem {
-    id: string;
-    date: string;
+export interface CourierSettlementItem {
+    date: string;                              // "YYYY-MM-DD" (delivery day)
     totalOrdersPickedUp: number;
     totalOrdersDelivered: number;
     numberOfOrdersCancelled: number;
     numberOfOrderPostponed: number;
-    totalAmountOfCashCollected: number;
-    totalCompanyServiceRevenue: number;
-    totalCourierSalary: number;
-    amountCourierWasPaid: number;
-    totalCourierTransferToCompany: number;
-    isTheDayClosed: boolean;
-}
-
-/** A daily settlement record as returned to the courier (no admin-only fields). */
-export interface CourierSettlementItem {
-    id: string;
-    date: string;                              // "YYYY-MM-DD"
-    totalOrdersPickedUp: number;
-    totalOrdersDelivered: number;
     /** Total cash collected from recipients on this day. */
     totalAmountOfCashCollected: number;
     /** Sum of all delivery fees (company service price) for the day. */
     totalCompanyServiceRevenue: number;
-    /** Courier's own salary earned that day. */
+    /** Courier's salary earned that day. */
     totalCourierSalary: number;
-    /** How much of the salary the courier has actually been paid so far. */
-    amountCourierWasPaid: number;
-    /** Amount the courier must hand over to the company (cash − salary). */
+    /** How much of the salary has been credited to the courier so far. */
+    totalCourierSalaryPaid: number;
+    /** Cash the courier handed / must hand to the company. */
     totalCourierTransferToCompany: number;
-    isTheDayClosed: boolean;
+    /** Company net cash from the day's orders (Σ per-order net). */
+    totalCompanyNetIncome: number;
 }
+
+/** Admin view is the same shape (figures are read-only on both sides). */
+export type AdminCourierSettlementItem = CourierSettlementItem;
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -147,52 +124,8 @@ export async function fetchCouriersWithDeliveries(
     return res.json() as Promise<string[]>;
 }
 
-export async function createSettlement(
-    data: CreateSettlementRequest,
-    token: string,
-): Promise<CreateSettlementResponse> {
-    const res = await fetch('/api/settlements', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new SettlementApiError(
-            res.status,
-            body?.title ?? `Failed to create settlement (${res.status})`,
-        );
-    }
-    return res.json() as Promise<CreateSettlementResponse>;
-}
-
-export async function updateSettlement(
-    data: CreateSettlementRequest,
-    token: string,
-): Promise<CreateSettlementResponse> {
-    const res = await fetch('/api/settlements', {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new SettlementApiError(
-            res.status,
-            body?.title ?? `Failed to update settlement (${res.status})`,
-        );
-    }
-    return res.json() as Promise<CreateSettlementResponse>;
-}
-
 /**
- * Admin: fetches all daily settlement records for a specific courier.
+ * Admin: fetches all per-day settlement summaries for a specific courier (newest first).
  */
 export async function fetchCourierSettlementsAdmin(
     courierId: string,
@@ -212,7 +145,7 @@ export async function fetchCourierSettlementsAdmin(
 }
 
 /**
- * Courier-facing: fetches all daily settlement records for the authenticated courier.
+ * Courier-facing: per-day settlement summaries for the authenticated courier in a month.
  * Returns newest first. Requires a Courier-role JWT.
  */
 export async function fetchMySettlements(

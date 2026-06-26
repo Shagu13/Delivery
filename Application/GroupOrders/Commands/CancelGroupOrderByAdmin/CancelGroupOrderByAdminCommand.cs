@@ -51,10 +51,6 @@ public sealed class CancelGroupOrderByAdminCommandHandler
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Recompute the batch invoice (keeps any delivered orders; soft-deletes if
-        // none remain active).
-        await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
-
         // Live-refresh every affected courier's dashboard and the admins.
         foreach (var courierId in affectedCourierIds)
             _notifier.NotifyCourierOrdersChanged(courierId);

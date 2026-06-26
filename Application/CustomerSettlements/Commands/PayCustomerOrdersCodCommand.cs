@@ -67,11 +67,6 @@ public sealed class PayCustomerOrdersCommandHandler
         }
 
         await _context.SaveChangesAsync(ct);
-
-        // Refresh affected settlement rollups (the upsert dedups groups internally).
-        foreach (var order in orders)
-            await CustomerSettlementService.UpsertForOrderAsync(_context, order, ct);
-
         return orders.Count;
     }
 
@@ -84,9 +79,23 @@ public sealed class PayCustomerOrdersCommandHandler
         if (amount > outstanding + Epsilon)
             throw new ConflictException($"COD payment for order {order.TrackingNumber} exceeds its outstanding balance.");
 
-        order.CodPaidToCustomerAmount      = already + amount;
+        decimal newPaid = already + amount;
+        order.CodPaidToCustomerAmount      = newPaid;
         order.IsCollectedCodPaidToCustomer = true;
         order.CodPaidToCustomerAt          = now;
+
+        // Case 3 auto-net: once the COD is fully paid on an unpaid, sender-pays order, the
+        // company retains the service fee out of the payout and settles it in one step.
+        bool case3     = order.ProductPaymentStatus == PaymentStatus.NotPaid
+                      && order.WhoPaysForCompanyService == ServicePayer.Sender;
+        bool fullyPaid = newPaid >= owed - Epsilon;
+        if (case3 && fullyPaid && order.CompanyServicePrice > 0m)
+        {
+            order.IsCompanyServicePriceIncludedSpecialCase = true;
+            order.ServicePaidByCustomerAmount              = order.CompanyServicePrice;
+            order.ServicePaidByCustomerAt                  = now;
+            order.CompanyServicePaymentStatus              = CompanyServicePaymentStatus.Paid;
+        }
     }
 
     private static void ApplyService(Domain.Order order, decimal amount, DateTime now)

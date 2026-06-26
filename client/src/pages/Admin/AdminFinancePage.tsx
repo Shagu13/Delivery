@@ -270,15 +270,94 @@ function SignedRow({ label, value, sign }: { label: string; value: number; sign:
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// Outstanding per order for each flow — shared by the Payments status filter and the
+// settle card so both reason about "owed" identically.
+// COD is only owed back once the company has collected it (i.e. on delivery); a
+// not-yet-delivered order (surfaced for advance service payment) contributes 0.
+const serviceOutstanding = (o: OrderFinanceLine) => o.whoPaysForCompanyService === 'Sender'
+    ? round2(Math.max(0, o.companyServicePrice - (o.servicePaidByCustomerAmount ?? 0)))
+    : 0;
+const codOutstanding = (o: OrderFinanceLine) => o.deliveredAt
+    ? round2(Math.max(0, (o.codAmount ?? 0) - (o.codPaidToCustomerAmount ?? 0)))
+    : 0;
+
+// ── Payments status buckets ───────────────────────────────────────────────────────
+type PayFilter = 'all' | 'pending' | 'paid';
+
+// Pending = delivered but not yet fully settled on either flow (the customer still owes
+// the service fee, or the company still owes the COD payout).
+const isPendingLine = (o: OrderFinanceLine) =>
+    o.deliveredAt != null && (serviceOutstanding(o) > 0.005 || codOutstanding(o) > 0.005);
+// Paid = nothing outstanding on either flow AND at least one payment was actually recorded
+// (so trivially-zero rows aren't mislabelled as "paid").
+const isPaidLine = (o: OrderFinanceLine) =>
+    serviceOutstanding(o) <= 0.005 && codOutstanding(o) <= 0.005
+    && ((o.servicePaidByCustomerAmount ?? 0) > 0.005 || (o.codPaidToCustomerAmount ?? 0) > 0.005);
+
+const filterLines = (lines: OrderFinanceLine[], f: PayFilter) =>
+    f === 'pending' ? lines.filter(isPendingLine)
+  : f === 'paid'    ? lines.filter(isPaidLine)
+  : lines;
+
+// ── Payments status filter — segmented switch with live per-bucket counts ──────────
+function PaymentFilterSwitch({ value, counts, onChange }: {
+    value: PayFilter; counts: Record<PayFilter, number>; onChange: (v: PayFilter) => void;
+}) {
+    const { t } = useLanguage();
+    const items: { key: PayFilter; label: string; hint: string; color: string; tint: string }[] = [
+        { key: 'all',     label: t.finPayFilterAll,     hint: t.finPayFilterAllHint,     color: 'var(--color-accent)', tint: 'var(--color-accent-dim)' },
+        { key: 'pending', label: t.finPayFilterPending, hint: t.finPayFilterPendingHint, color: '#b45309',             tint: 'rgba(180,83,9,0.10)' },
+        { key: 'paid',    label: t.finPayFilterPaid,    hint: t.finPayFilterPaidHint,    color: '#059669',             tint: 'rgba(5,150,105,0.10)' },
+    ];
+    return (
+        <div role="tablist" aria-label={t.finViewPayments}
+            style={{ display: 'inline-flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'var(--color-bg-2)' }}>
+            {items.map((it, i) => {
+                const active = value === it.key;
+                return (
+                    <button key={it.key} role="tab" aria-selected={active} onClick={() => onChange(it.key)} title={it.hint}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 7,
+                            padding: '8px 16px', border: 'none', cursor: 'pointer',
+                            borderLeft: i ? '1px solid var(--color-border)' : 'none',
+                            background: active ? it.tint : 'transparent',
+                            color: active ? it.color : 'var(--color-text-muted)',
+                            fontSize: '0.82rem', fontWeight: 700, whiteSpace: 'nowrap',
+                            boxShadow: active ? `inset 0 -2px 0 ${it.color}` : 'none',
+                            transition: 'background .15s, color .15s',
+                        }}>
+                        {it.label}
+                        <span style={{
+                            fontSize: '0.66rem', fontWeight: 800, minWidth: 18, textAlign: 'center',
+                            padding: '1px 6px', borderRadius: 100, lineHeight: 1.5,
+                            background: active ? it.color : 'var(--color-bg-3)',
+                            color: active ? '#fff' : 'var(--color-text-subtle)',
+                        }}>{counts[it.key]}</span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
 function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () => void }) {
     const { t } = useLanguage();
     const [customer, setCustomer] = useState<AdminCustomer | null>(null);
     const [mode, setMode] = useState<'daily' | 'monthly'>('daily');
     const [date, setDate] = useState(isoDate(new Date())); // daily: a day; monthly: any day in the month; '' = all dates
+    const [payFilter, setPayFilter] = useState<PayFilter>('all');
     const [lines, setLines] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
+
+    // Per-bucket counts (over the loaded, date-scoped set) + the filtered subset shown.
+    const counts: Record<PayFilter, number> = {
+        all:     lines.length,
+        pending: lines.filter(isPendingLine).length,
+        paid:    lines.filter(isPaidLine).length,
+    };
+    const visibleLines = filterLines(lines, payFilter);
 
     const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3000); };
 
@@ -351,6 +430,11 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                 </div>
             </div>
 
+            {/* Payment-status filter — only meaningful once a customer's orders are loaded */}
+            {customer && !loading && lines.length > 0 && (
+                <PaymentFilterSwitch value={payFilter} counts={counts} onChange={setPayFilter} />
+            )}
+
             {error && (
                 <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 'var(--radius-sm)', color: '#ef4444', fontSize: '0.82rem' }}>
                     {error}
@@ -369,11 +453,15 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                 <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
                     {!date ? t.ofinNoneAll : mode === 'monthly' ? t.ofinNoneMonth : t.ofinNoneDay}
                 </div>
+            ) : visibleLines.length === 0 ? (
+                <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+                    {payFilter === 'pending' ? t.finPayNonePending : t.finPayNonePaid}
+                </div>
             ) : (
                 <CustomerSettleCard
-                    key={customer.id + '|' + mode + '|' + date}
+                    key={customer.id + '|' + mode + '|' + date + '|' + payFilter}
                     customerId={customer.id}
-                    lines={lines}
+                    lines={visibleLines}
                     token={token}
                     onError={setError}
                     onChanged={() => { showToast(t.ofinSavedToast); load(); onPaid(); }}
@@ -533,11 +621,9 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     const [selCod, setSelCod] = useState<Sel>({});
     const [selSvc, setSelSvc] = useState<Sel>({});
 
-    // Outstanding per order for each flow.
-    const codOut = (o: OrderFinanceLine) => round2(Math.max(0, (o.codAmount ?? 0) - (o.codPaidToCustomerAmount ?? 0)));
-    const svcOut = (o: OrderFinanceLine) => o.whoPaysForCompanyService === 'Sender'
-        ? round2(Math.max(0, o.companyServicePrice - (o.servicePaidByCustomerAmount ?? 0)))
-        : 0;
+    // Outstanding per order for each flow (shared module helpers — see their definitions).
+    const codOut = codOutstanding;
+    const svcOut = serviceOutstanding;
 
     // Displayed amount for a row (defaults to its full outstanding until edited).
     const amountOf = (sel: Sel, o: OrderFinanceLine, out: (o: OrderFinanceLine) => number) =>
@@ -592,6 +678,29 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
         }
     };
 
+    // Net settlement: the cash that physically changes hands is the COD the company owes
+    // the customer minus the sender-paid service the customer owes the company. One click
+    // settles BOTH flows in full per order (the books still record each flow separately).
+    const net = round2(cod.owed - svc.owed);
+    const bothSettled = cod.owed <= 0.005 && svc.owed <= 0.005;
+
+    const settleNet = async () => {
+        const codAllocs = cod.payable.map(o => ({ orderId: o.orderId, amount: codOut(o) }));
+        const svcAllocs = svc.payable.map(o => ({ orderId: o.orderId, amount: svcOut(o) }));
+        if (codAllocs.length === 0 && svcAllocs.length === 0) return;
+        setBusy(true);
+        try {
+            if (codAllocs.length > 0) await payCustomerOrders(customerId, false, codAllocs, token);
+            if (svcAllocs.length > 0) await payCustomerOrders(customerId, true,  svcAllocs, token);
+            setSelCod({}); setSelSvc({});
+            onChanged();
+        } catch (e) {
+            onError(e instanceof OrderFinanceApiError ? e.message : t.ofinErrAction);
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const colLabel: React.CSSProperties = { minWidth: 120, textAlign: 'right', fontSize: '0.6rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' };
 
     return (
@@ -611,6 +720,21 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                 </div>
                 <span style={{ fontSize: '1.2rem', color: 'var(--color-text-subtle)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
             </button>
+
+            {/* Net settlement bar — the cash physically handed over = COD owed − service owed.
+                One click settles both flows in full per order. */}
+            <div style={{ borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 16px', background: 'var(--color-bg-2)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-subtle)' }}>
+                        {net >= 0 ? t.ofinNetToHandOver : t.ofinNetCustomerOwes}
+                    </span>
+                    <span style={{ fontSize: '1.15rem', fontWeight: 800, color: net >= 0 ? 'var(--color-accent)' : '#b45309' }}>{gel(Math.abs(net))}</span>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--color-text-subtle)' }}>{t.ofinNetFormula(gel(cod.owed), gel(svc.owed))}</span>
+                </div>
+                {bothSettled
+                    ? <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>{t.ofinAllSettled}</span>
+                    : <button className="btn-primary" disabled={busy} onClick={settleNet}>{t.ofinSettleNet}</button>}
+            </div>
 
             {/* Pay bars: service (left), COD (right) */}
             <div style={{ borderTop: '1px solid var(--color-border)', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
@@ -682,35 +806,57 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
 
 export default function AdminFinancePage({ token }: { token: string }) {
     const { t } = useLanguage();
-    const [tab, setTab] = useState<'customers' | 'couriers' | 'history'>('customers');
+    // Primary toggle: Overview (company reports) ↔ Payments (settle a customer / courier).
+    const [view, setView] = useState<'overview' | 'payments'>('overview');
+    const [payTab, setPayTab] = useState<'customers' | 'couriers'>('customers');
     // Bumped after a payment so the company cash-position card reloads without a refresh.
     const [overviewRefresh, setOverviewRefresh] = useState(0);
     const [showOutstanding, setShowOutstanding] = useState(false);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Company overview */}
-            <CompanyOverviewCard token={token} refreshSignal={overviewRefresh} />
-
-            {/* Tab bar + outstanding-balances launcher */}
+            {/* Primary toggle + contextual controls (outstanding launcher / payments sub-tabs) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div className="go-seg" style={{ display: 'inline-flex' }}>
-                    <button className={`go-seg__btn ${tab === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('customers')}>{t.finTabCustomers}</button>
-                    <button className={`go-seg__btn ${tab === 'couriers'  ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('couriers')}>{t.finTabCouriers}</button>
-                    <button className={`go-seg__btn ${tab === 'history'   ? 'go-seg__btn--active' : ''}`} onClick={() => setTab('history')}>{t.finTabHistory}</button>
+                    <button className={`go-seg__btn ${view === 'overview' ? 'go-seg__btn--active' : ''}`} onClick={() => setView('overview')}>{t.finViewOverview}</button>
+                    <button className={`go-seg__btn ${view === 'payments' ? 'go-seg__btn--active' : ''}`} onClick={() => setView('payments')}>{t.finViewPayments}</button>
                 </div>
-                <button className="btn-primary" onClick={() => setShowOutstanding(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
-                        <path d="M8 4.5v4l2.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    {t.finOutBtn}
-                </button>
+
+                {view === 'overview' ? (
+                    <button className="btn-primary" onClick={() => setShowOutstanding(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4" />
+                            <path d="M8 4.5v4l2.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        {t.finOutBtn}
+                    </button>
+                ) : (
+                    <div className="go-seg" style={{ display: 'inline-flex' }}>
+                        <button className={`go-seg__btn ${payTab === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setPayTab('customers')}>{t.finTabCustomers}</button>
+                        <button className={`go-seg__btn ${payTab === 'couriers'  ? 'go-seg__btn--active' : ''}`} onClick={() => setPayTab('couriers')}>{t.finTabCouriers}</button>
+                    </div>
+                )}
             </div>
 
-            {tab === 'customers' && <CustomerInvoicesSection token={token} onPaid={() => setOverviewRefresh(k => k + 1)} />}
-            {tab === 'couriers'  && <CourierSettlementsSection token={token} onSettled={() => setOverviewRefresh(k => k + 1)} />}
-            {tab === 'history'   && <AdminFinanceHistoryTab token={token} />}
+            {/* ── Overview: company reports (cash position + outstanding + history) ── */}
+            {view === 'overview' && (
+                <>
+                    <CompanyOverviewCard token={token} refreshSignal={overviewRefresh} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)' }}>{t.finOverviewHistory}</span>
+                        <div style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+                    </div>
+                    <AdminFinanceHistoryTab token={token} />
+                </>
+            )}
+
+            {/* ── Payments: settle a chosen customer (All/Pending/Paid) or courier ── */}
+            {view === 'payments' && payTab === 'customers' && (
+                <CustomerInvoicesSection token={token} onPaid={() => setOverviewRefresh(k => k + 1)} />
+            )}
+            {view === 'payments' && payTab === 'couriers' && (
+                <CourierSettlementsSection token={token} onSettled={() => setOverviewRefresh(k => k + 1)} />
+            )}
 
             {showOutstanding && (
                 <OutstandingBalancesModal token={token} onClose={() => setShowOutstanding(false)} />

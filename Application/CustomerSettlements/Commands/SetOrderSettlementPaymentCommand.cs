@@ -58,19 +58,46 @@ public sealed class SetOrderSettlementPaymentCommandHandler
                     "This order belongs to a tenant customer and is settled by the tenant, not the company.");
         }
 
+        var now = CustomTime.Now;
+
         if (request.CodPaid is bool codPaid)
         {
             if (codPaid)
             {
+                decimal cod = order.AmountToCollectForPackage ?? 0m;
+                decimal amt = request.CodPaidAmount ?? cod;
+
                 order.IsCollectedCodPaidToCustomer = true;
-                order.CodPaidToCustomerAmount      = request.CodPaidAmount ?? order.AmountToCollectForPackage ?? 0m;
-                order.CodPaidToCustomerAt          = CustomTime.Now;
+                order.CodPaidToCustomerAmount      = amt;
+                order.CodPaidToCustomerAt          = now;
+
+                // Case 3 auto-net: fully paying the COD on an unpaid, sender-pays order
+                // retains the service fee out of the payout and settles it in one step.
+                bool case3     = order.ProductPaymentStatus == PaymentStatus.NotPaid
+                              && order.WhoPaysForCompanyService == ServicePayer.Sender;
+                bool fullyPaid = amt >= cod - 0.005m;
+                if (case3 && fullyPaid && order.CompanyServicePrice > 0m)
+                {
+                    order.IsCompanyServicePriceIncludedSpecialCase = true;
+                    order.ServicePaidByCustomerAmount              = order.CompanyServicePrice;
+                    order.ServicePaidByCustomerAt                  = now;
+                    order.CompanyServicePaymentStatus              = CompanyServicePaymentStatus.Paid;
+                }
             }
             else
             {
                 order.IsCollectedCodPaidToCustomer = false;
                 order.CodPaidToCustomerAmount      = null;
                 order.CodPaidToCustomerAt          = null;
+
+                // Reverse an auto-netted service settlement when the COD payout is cleared.
+                if (order.IsCompanyServicePriceIncludedSpecialCase)
+                {
+                    order.IsCompanyServicePriceIncludedSpecialCase = false;
+                    order.ServicePaidByCustomerAmount              = null;
+                    order.ServicePaidByCustomerAt                  = null;
+                    order.CompanyServicePaymentStatus              = CompanyServicePaymentStatus.Unpaid;
+                }
             }
         }
 
@@ -82,12 +109,15 @@ public sealed class SetOrderSettlementPaymentCommandHandler
 
             if (servicePaid)
             {
+                // Explicit direct payment — not a COD-netting special case.
+                order.IsCompanyServicePriceIncludedSpecialCase = false;
                 order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
                 order.ServicePaidByCustomerAmount = request.ServicePaidAmount ?? order.CompanyServicePrice;
-                order.ServicePaidByCustomerAt     = CustomTime.Now;
+                order.ServicePaidByCustomerAt     = now;
             }
             else
             {
+                order.IsCompanyServicePriceIncludedSpecialCase = false;
                 order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Unpaid;
                 order.ServicePaidByCustomerAmount = null;
                 order.ServicePaidByCustomerAt     = null;
@@ -95,10 +125,6 @@ public sealed class SetOrderSettlementPaymentCommandHandler
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-
-        // Refresh the batch/return rollup so company-wide figures reconcile.
-        await CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
-
         return order.Id;
     }
 }

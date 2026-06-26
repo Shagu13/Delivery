@@ -104,9 +104,15 @@ interface Props {
     // Whether the pickup-courier assign/reassign UI is shown. Defaults to canManage;
     // Operators get it enabled while canManage stays false.
     canAssignCourier?: boolean;
+    // Warehouse partial-accept (DeliveredToWarehouse only). `warehousePresentIds` lists the
+    // packages ticked as present; `warehouseAbsentCount` is how many were unticked (missing).
+    // When some are missing, accepting confirms and cancels them as "not received". Left
+    // undefined elsewhere, where the accept button keeps its all-or-nothing behaviour.
+    warehousePresentIds?: string[];
+    warehouseAbsentCount?: number;
 }
 
-export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh, canManage = true, canAssignCourier = canManage }: Props) {
+export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh, canManage = true, canAssignCourier = canManage, warehousePresentIds, warehouseAbsentCount }: Props) {
     const [busy, setBusy] = useState(false);
     const [showCourierPicker, setShowCourierPicker] = useState(false);
     const [selectedCourierId, setSelectedCourierId] = useState('');
@@ -141,6 +147,30 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
         );
         setShowCourierPicker(false);
         setSelectedCourierId('');
+    }
+
+    // Accept the batch in warehouse. With a per-package selection, accept only the present
+    // packages and cancel the missing ones — confirm first so the cancellations are deliberate.
+    function handleAcceptInWarehouse() {
+        const accept = (ids?: string[]) =>
+            run(() => acceptGroupOrderInWarehouse(token, groupOrder.id, ids), t.goAcceptedInWarehouse);
+
+        // No per-package selection supplied → accept the whole batch (legacy behaviour).
+        if (warehousePresentIds === undefined) { accept(); return; }
+
+        if (warehousePresentIds.length === 0) { onError(t.goWarehouseNonePresent); return; }
+
+        if ((warehouseAbsentCount ?? 0) > 0) {
+            setConfirm({
+                title: t.goWarehouseAcceptTitle,
+                message: t.goWarehousePartialConfirm(warehousePresentIds.length, warehouseAbsentCount ?? 0),
+                confirmLabel: t.goAcceptInWarehouse,
+                confirmTone: 'warehouse',
+                action: () => accept(warehousePresentIds),
+            });
+        } else {
+            accept(warehousePresentIds);
+        }
     }
 
     async function handleSetPickupDate() {
@@ -280,10 +310,10 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 </button>
             )}
 
-            {/* Step 6: Accept batch in warehouse */}
+            {/* Step 6: Accept batch in warehouse (only the ticked-present packages; missing ones cancelled) */}
             {canManage && status === 'DeliveredToWarehouse' && (
                 <button className="go-action-btn go-action-btn--warehouse" disabled={busy}
-                    onClick={() => run(() => acceptGroupOrderInWarehouse(token, groupOrder.id), t.goAcceptedInWarehouse)}>
+                    onClick={handleAcceptInWarehouse}>
                     {t.goAcceptInWarehouse}
                 </button>
             )}
@@ -372,9 +402,11 @@ interface OrderActionProps {
     onEdit?: () => void;
     // Operators may only print the label; edit / send-to-city / cancel are hidden.
     canManage?: boolean;
+    // Hide the print-label button (e.g. the Delivery page surfaces it in the kebab menu instead).
+    showLabel?: boolean;
 }
 
-export function AdminOrderRowActions({ order, storeName, token, onSuccess, onError, onRefresh, onEdit, canManage = true }: OrderActionProps) {
+export function AdminOrderRowActions({ order, storeName, token, onSuccess, onError, onRefresh, onEdit, canManage = true, showLabel = true }: OrderActionProps) {
     const [busy, setBusy] = useState(false);
     const { t } = useLanguage();
 
@@ -397,16 +429,18 @@ export function AdminOrderRowActions({ order, storeName, token, onSuccess, onErr
 
     return (
         <div className="go-actions" onClick={e => e.stopPropagation()}>
-            {/* Print this single package's label — always available. */}
-            <button
-                type="button"
-                className="go-action-btn go-action-btn--ghost"
-                title={t.custLabelBtn}
-                onClick={() => void printParcelLabels([buildLabel(storeName, order)])}
-            >
-                {printIcon}
-                {t.custLabelBtn}
-            </button>
+            {/* Print this single package's label — hidden when the host surfaces it elsewhere. */}
+            {showLabel && (
+                <button
+                    type="button"
+                    className="go-action-btn go-action-btn--ghost"
+                    title={t.custLabelBtn}
+                    onClick={() => void printParcelLabels([buildLabel(storeName, order)])}
+                >
+                    {printIcon}
+                    {t.custLabelBtn}
+                </button>
+            )}
 
             {/* Edit this package — opens the full order edit modal. */}
             {canManage && onEdit && (

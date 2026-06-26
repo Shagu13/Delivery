@@ -62,9 +62,6 @@ public sealed class AddOrdersToGroupOrderCommandHandler
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Refresh the batch invoice to fold in the new packages' COD / service figures.
-        await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
-
         // Let open admin dashboards pick up the larger package count live.
         _notifier.NotifyAdminsOrdersChanged();
 

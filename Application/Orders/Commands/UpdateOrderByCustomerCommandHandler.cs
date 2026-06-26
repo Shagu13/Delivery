@@ -60,9 +60,5 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-
-        // The edited COD feeds the customer's per-batch invoice — keep it in sync.
-        await CustomerSettlementService.UpsertForGroupOrderAsync(
-            _context, order.GroupOrderId!.Value, cancellationToken);
     }
 }

@@ -31,7 +31,6 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
     const [open, setOpen] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
     const pickerRef = useRef<HTMLDivElement>(null);
-    const [toast, setToast] = useState<string | null>(null);
 
     useEffect(() => {
         fetchCouriers(token).then(setCouriers).catch(() => setCouriers([]));
@@ -144,26 +143,12 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
                 <SettlementModal
                     open={open}
                     onClose={() => setOpen(false)}
-                    onCreated={() => {
-                        setToast(t.finCourierSavedToast(selected.fullName));
-                        setTimeout(() => setToast(null), 4000);
-                        onSettled?.();
-                    }}
+                    onCreated={() => onSettled?.()}
                     courierId={selected.courierId}
                     courierFullName={selected.fullName}
                     token={token}
                     initialDate={date || isoToday()}
                 />
-            )}
-
-            {toast && (
-                <div className="toast" role="status">
-                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4" />
-                        <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    {toast}
-                </div>
             )}
         </div>
     );

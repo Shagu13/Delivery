@@ -41,5 +41,18 @@ public sealed record OrderFinanceLineDto(
 
     // ── Courier-facing figures ────────────────────────────────────────────────
     decimal? CourierSalary,
-    decimal? AmountOfCashCollected
+    decimal? AmountOfCashCollected,
+
+    // ── Courier settlement (per-order; admin-recorded) ────────────────────────
+    decimal? CourierSalaryPaidAmount,
+    string?  CourierSalaryPaidAt,
+    bool     IsCourierSalaryPaid,
+    decimal? CodTransferedToCompanyByCourier,
+    string?  CodTransferedToCompanyByCourierAt,
+    bool     HasCourierTransferedAmount,
+
+    // ── Derived company figures (live; never stored) ──────────────────────────
+    decimal  CompanyRevenue,
+    decimal  CompanyNetCash,
+    bool     IsCompanyServicePaid
 );

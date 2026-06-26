@@ -258,7 +258,7 @@ function CourierLedger({ token }: { token: string }) {
 
     const selectedCourier = couriers.find(c => c.courierId === selectedId) ?? null;
     const totalSalary = records.reduce((s, r) => s + r.totalCourierSalary, 0);
-    const totalPaid   = records.reduce((s, r) => s + r.amountCourierWasPaid, 0);
+    const totalPaid   = records.reduce((s, r) => s + r.totalCourierSalaryPaid, 0);
     const totalUnpaid = totalSalary - totalPaid;
 
     return (
@@ -329,25 +329,26 @@ function CourierLedger({ token }: { token: string }) {
                             </thead>
                             <tbody>
                                 {records.map(r => {
-                                    const unpaid = r.totalCourierSalary - r.amountCourierWasPaid;
+                                    const unpaid = r.totalCourierSalary - r.totalCourierSalaryPaid;
+                                    const settled = unpaid <= 0.005;
                                     return (
-                                        <tr key={r.id}>
+                                        <tr key={r.date}>
                                             <TD bold>{r.date}</TD>
                                             <TD>{r.totalOrdersDelivered}</TD>
                                             <TD>{gel(r.totalAmountOfCashCollected)}</TD>
                                             <TD>{gel(r.totalCourierSalary)}</TD>
-                                            <TD color="#059669">{gel(r.amountCourierWasPaid)}</TD>
+                                            <TD color="#059669">{gel(r.totalCourierSalaryPaid)}</TD>
                                             <TD color={unpaid > 0 ? '#b45309' : '#059669'} bold={unpaid > 0}>{gel(unpaid)}</TD>
                                             <TD>{gel(r.totalCourierTransferToCompany)}</TD>
                                             <TD>
                                                 <span style={{
                                                     display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
                                                     borderRadius: 100, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em',
-                                                    background: r.isTheDayClosed ? 'rgba(5,150,105,0.1)' : 'rgba(180,83,9,0.08)',
-                                                    color: r.isTheDayClosed ? '#059669' : '#b45309',
-                                                    border: `1px solid ${r.isTheDayClosed ? 'rgba(5,150,105,0.2)' : 'rgba(180,83,9,0.2)'}`,
+                                                    background: settled ? 'rgba(5,150,105,0.1)' : 'rgba(180,83,9,0.08)',
+                                                    color: settled ? '#059669' : '#b45309',
+                                                    border: `1px solid ${settled ? 'rgba(5,150,105,0.2)' : 'rgba(180,83,9,0.2)'}`,
                                                 }}>
-                                                    {r.isTheDayClosed ? t.finHisClosed : t.finHisOpen}
+                                                    {settled ? t.finHisClosed : t.finHisOpen}
                                                 </span>
                                             </TD>
                                         </tr>

@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Domain;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -41,9 +42,40 @@ public sealed class AcceptGroupOrderInWarehouseCommandHandler
 
         groupOrder.Status = OrderStatus.AdminAcceptedOrderInWareHouse;
 
+        // When the admin ticked which packages physically arrived, accept only those and
+        // cancel the missing ones as "not received". A null list keeps the legacy behaviour
+        // (accept everything) used by the force-to-warehouse path. Already-terminal packages
+        // (e.g. a package cancelled earlier) are left untouched.
+        var present = request.PresentOrderIds is null
+            ? null
+            : new HashSet<Guid>(request.PresentOrderIds);
+
+        var now = CustomTime.Now;
+
         foreach (var order in groupOrder.Orders)
-            order.Status = OrderStatus.AdminAcceptedOrderInWareHouse;
+        {
+            if (IsTerminal(order.Status))
+                continue;
+
+            if (present is null || present.Contains(order.Id))
+            {
+                order.Status = OrderStatus.AdminAcceptedOrderInWareHouse;
+            }
+            else
+            {
+                order.Status             = OrderStatus.CancelledByAdmin;
+                order.CancellationReason = CancellationReason.WarehouseNotReceived;
+                order.CancelledAt        = now;
+            }
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    private static bool IsTerminal(OrderStatus status) =>
+        status is OrderStatus.DeliveredToRecipient
+               or OrderStatus.ExchangeCompleted
+               or OrderStatus.CancelledByAdmin
+               or OrderStatus.CancelledBySender
+               or OrderStatus.OrderNotAccepted;
 }

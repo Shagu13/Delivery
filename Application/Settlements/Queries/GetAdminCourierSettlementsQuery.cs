@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.Settlements.Queries;
 
 /// <summary>
-/// Admin: all saved daily settlements for a specific courier, newest first.
+/// Admin: a courier's day-by-day settlement summaries, newest first, derived live by
+/// grouping the courier's delivered orders (no stored settlement rows).
 /// </summary>
 public sealed record GetAdminCourierSettlementsQuery(
     Guid CourierId
@@ -28,25 +29,11 @@ public sealed class GetAdminCourierSettlementsQueryHandler
         if (!courierExists)
             throw new NotFoundException("Courier", request.CourierId);
 
-        var settlements = await _context.CourierSettlements
-            .AsNoTracking()
-            .Where(s => s.CourierId == request.CourierId)
-            .OrderByDescending(s => s.CreatedAt)
-            .ToListAsync(cancellationToken);
+        // All history → bound the range generously.
+        var fromDt = DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc);
+        var toDt   = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc);
 
-        return settlements.Select(s => new CourierSettlementItemDto(
-            Id:                            s.Id,
-            Date:                          DateOnly.FromDateTime(s.CreatedAt).ToString("yyyy-MM-dd"),
-            TotalOrdersPickedUp:           s.TotalOrdersPickedUp,
-            TotalOrdersDelivered:          s.TotalOrdersDelivered,
-            NumberOfOrdersCancelled:       s.NumberOfOrdersCancelled,
-            NumberOfOrderPostponed:        s.NumberOfOrderPostponed,
-            TotalAmountOfCashCollected:    s.TotalAmountOfCashCollected ?? 0m,
-            TotalCompanyServiceRevenue:    s.TotalCompanyServiceRevenue,
-            TotalCourierSalary:            s.TotalCourierSalary,
-            AmountCourierWasPaid:          s.AmountCourierWasPaid,
-            TotalCourierTransferToCompany: s.TotalCourierTransferToCompany,
-            IsTheDayClosed:               s.IsTheDayClosed
-        )).ToList();
+        return await CourierSettlementProjection
+            .BuildAsync(_context, request.CourierId, fromDt, toDt, cancellationToken);
     }
 }

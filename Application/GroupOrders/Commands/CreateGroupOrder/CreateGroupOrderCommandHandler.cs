@@ -81,15 +81,6 @@ public sealed class CreateGroupOrderCommandHandler
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // ── Create / refresh per-batch customer invoices ──────────────────────────
-        // Send/Exchange batch → one invoice (recomputed from all its orders).
-        // Each standalone Return → its own invoice (only when the sender pays the fee).
-        if (groupOrder is not null && groupOrder.CustomerId.HasValue)
-            await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
-
-        foreach (var ret in standaloneReturns)
-            await CustomerSettlementService.UpsertForReturnOrderAsync(_context, ret, cancellationToken);
-
         // ── Notify admin via SMS ──────────────────────────────────────────────────
         if (groupOrder is not null)
         {

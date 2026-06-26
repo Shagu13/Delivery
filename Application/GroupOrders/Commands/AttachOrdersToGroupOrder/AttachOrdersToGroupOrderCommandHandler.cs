@@ -116,24 +116,6 @@ public sealed class AttachOrdersToGroupOrderCommandHandler
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Retire any per-order (standalone Return) invoices for the now-grouped orders.
-        var perOrderSettlements = await _context.CustomerSettlements
-            .Where(s => s.OrderId != null && movedOrderIds.Contains(s.OrderId!.Value) && s.DateDeleted == null)
-            .ToListAsync(cancellationToken);
-
-        if (perOrderSettlements.Count > 0)
-        {
-            foreach (var s in perOrderSettlements)
-            {
-                s.DateDeleted = CustomTime.Now;
-                s.UpdatedAt   = CustomTime.Now;
-            }
-            await _context.SaveChangesAsync(cancellationToken);
-        }
-
-        // Create / refresh the batch invoice to fold in the grouped orders.
-        await CustomerSettlementService.UpsertForGroupOrderAsync(_context, groupOrder.Id, cancellationToken);
-
         _notifier.NotifyAdminsOrdersChanged();
 
         return new CreateGroupOrderResultDto(

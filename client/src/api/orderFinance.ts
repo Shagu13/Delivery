@@ -37,6 +37,19 @@ export interface OrderFinanceLine {
     // Courier-facing
     courierSalary: number | null;
     amountOfCashCollected: number | null;
+
+    // Courier settlement (per-order; admin-recorded)
+    courierSalaryPaidAmount: number | null;
+    courierSalaryPaidAt: string | null;
+    isCourierSalaryPaid: boolean;
+    codTransferedToCompanyByCourier: number | null;
+    codTransferedToCompanyByCourierAt: string | null;
+    hasCourierTransferedAmount: boolean;
+
+    // Derived company figures (live; never stored)
+    companyRevenue: number;
+    companyNetCash: number;
+    isCompanyServicePaid: boolean;
 }
 
 export interface OrderPaymentRequest {
@@ -106,6 +119,18 @@ export async function fetchCourierOrderFinance(token: string, date?: string): Pr
     return handle<OrderFinanceLine[]>(res, 'Failed to load orders');
 }
 
+// ── Admin — a courier's delivered orders by delivery date ────────────────────────
+export async function fetchCourierOrderFinanceAdmin(
+    courierId: string, token: string, date?: string,
+): Promise<OrderFinanceLine[]> {
+    const params = new URLSearchParams({ courierId });
+    if (date) params.set('date', date);
+    const res = await fetch(`/api/orderfinance/courier-lines?${params}`, {
+        headers: authHeaders(token), cache: 'no-store',
+    });
+    return handle<OrderFinanceLine[]>(res, 'Failed to load courier orders');
+}
+
 // ── Admin — record/clear a per-order payment ─────────────────────────────────────
 export async function recordOrderPayment(
     data: OrderPaymentRequest, token: string,
@@ -128,4 +153,39 @@ export async function payCustomerOrders(
         body: JSON.stringify({ customerId, service, allocations }),
     });
     return handle<{ paid: number }>(res, 'Failed to record payment');
+}
+
+// ── Admin — courier side: record/clear a per-order courier payment ───────────────
+export interface CourierPaymentRequest {
+    orderId: string;
+    /** Amount toward the courier's salary; defaults server-side to CourierSalary. */
+    salaryPaidAmount?: number;
+    /** Toggle salary paid/unpaid. Omit to leave unchanged. */
+    salaryPaid?: boolean;
+    /** Amount of COD cash handed over; defaults server-side to the full collected cash (net of kept salary). */
+    codTransferredAmount?: number;
+    /** Toggle COD hand-over recorded/cleared. Omit to leave unchanged. */
+    codTransferred?: boolean;
+}
+
+export async function recordCourierPayment(
+    data: CourierPaymentRequest, token: string,
+): Promise<{ orderId: string }> {
+    const res = await fetch('/api/orderfinance/courier-payment', {
+        method: 'POST', headers: jsonHeaders(token), body: JSON.stringify(data),
+    });
+    return handle<{ orderId: string }>(res, 'Failed to record courier payment');
+}
+
+// ── Admin — courier side: pay salary / record COD transfers across a courier's orders ──
+export type CourierPaymentFlow = 'Salary' | 'CodTransfer';
+
+export async function payCourierOrders(
+    courierId: string, flow: CourierPaymentFlow, allocations: OrderAllocation[], token: string,
+): Promise<{ paid: number }> {
+    const res = await fetch('/api/orderfinance/courier-pay', {
+        method: 'POST', headers: jsonHeaders(token),
+        body: JSON.stringify({ courierId, flow, allocations }),
+    });
+    return handle<{ paid: number }>(res, 'Failed to record courier payment');
 }

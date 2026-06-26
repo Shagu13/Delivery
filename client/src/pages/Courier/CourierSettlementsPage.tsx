@@ -34,11 +34,11 @@ function FinRow({ label, value, highlight = false }: { label: string; value: str
 function SettlementCard({ item }: { item: CourierSettlementItem }) {
     const { t } = useLanguage();
     const [expanded, setExpanded] = useState(false);
-    const isDone = item.isTheDayClosed;
-    // Payment status is derived from salary owed vs. what was actually paid.
+    // Payment status is derived from salary owed vs. what has been credited.
     // remaining == 0 → fully paid; remaining > 0 → still owed to the courier.
-    const remainingSalary = item.totalCourierSalary - item.amountCourierWasPaid;
+    const remainingSalary = item.totalCourierSalary - item.totalCourierSalaryPaid;
     const isPaid = remainingSalary <= 0;
+    const isDone = isPaid;
     return (
         <div className="settle-card">
             <button onClick={() => setExpanded(e => !e)} className={`settle-card__head${expanded ? ' settle-card__head--open' : ''}`}>
@@ -276,7 +276,7 @@ export function CourierSettlementsPage() {
                 <>
                     <SummaryBar items={items} />
                     <div className="settle-list">
-                        {items.map(item => <SettlementCard key={item.id} item={item} />)}
+                        {items.map(item => <SettlementCard key={item.date} item={item} />)}
                     </div>
                 </>
             )}

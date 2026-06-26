@@ -1,3 +1,7 @@
+/* Height of the sticky StaffNav (.nav). Exposed as a global var so page-level sticky
+   headers/bars can offset themselves below the navbar instead of hiding behind it. */
+:root { --staff-nav-h: 64px; }
+
 .app-layout {
     min-height: 100vh;
     display: flex;
@@ -95,6 +99,7 @@
 
 /* ── Mobile ── */
 @media (max-width: 430px) {
+    :root { --staff-nav-h: 56px; }
     .nav {
         height: 56px;
         padding-left: max(14px, env(safe-area-inset-left));

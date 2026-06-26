@@ -1,6 +1,7 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using Application.CustomerSettlements.DTOs;
+using Application.Finance;
 using Domain;
 using Domain.Enums;
 using MediatR;
@@ -70,15 +71,26 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
             ?? throw new NotFoundException("Customer", request.CustomerId);
 
         var query = OrderFinanceQueries.ForCustomer(_context, request.CustomerId);
-        query = request.Monthly
-            ? OrderFinanceQueries.FilterByDeliveredMonth(query, request.Date)
-            : OrderFinanceQueries.FilterByDeliveredAt(query, request.Date);
+
+        // Include an order when EITHER:
+        //   • it is delivered (its COD payout / service settlement is final), OR
+        //   • the sender pays the service fee and the order has been accepted (status past
+        //     Pending) but not cancelled — so the customer can settle that fee in advance,
+        //     before delivery, at any stage of the flow. (Customers often pre-pay.)
+        query = query.Where(o =>
+            (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null
+            || (o.WhoPaysForCompanyService == ServicePayer.Sender && o.Status != OrderStatus.Pending));
+
         // Drop orders with no company↔customer settlement: the recipient pays the
         // service fee (nothing invoiced to the sender) and there is no package COD
         // for the company to pay back.
         query = query.Where(o => !(o.WhoPaysForCompanyService == ServicePayer.Recipient
                                 && o.AmountToCollectForPackage == null));
-        query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt);
+
+        // Date by delivery when delivered, else by placement (for the not-yet-delivered
+        // sender-paid orders) so both slot into the day/month navigation.
+        query = OrderFinanceQueries.FilterByEffectiveDate(query, request.Date, request.Monthly);
+        query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt);
 
         var orders = await query.ToListAsync(ct);
         return orders.Select(OrderFinanceQueries.ToDto).ToList();
@@ -187,6 +199,31 @@ internal static class OrderFinanceQueries
                              && (o.DeliveredAt ?? o.DeliveredToWarehouseAt) <  end);
     }
 
+    /// <summary>
+    /// Dates an order by its delivery timestamp when delivered, else by its placement date
+    /// (CreatedAt). Used by the admin customer view, which also surfaces not-yet-delivered
+    /// sender-paid orders — those have no delivery date so they fall back to when placed.
+    /// No date → no narrowing; <paramref name="monthly"/> → the whole calendar month.
+    /// </summary>
+    public static IQueryable<Order> FilterByEffectiveDate(IQueryable<Order> query, DateOnly? date, bool monthly)
+    {
+        if (date is not DateOnly d) return query;
+
+        DateTime start, end;
+        if (monthly)
+        {
+            start = new DateTime(d.Year, d.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            end   = start.AddMonths(1);
+        }
+        else
+        {
+            start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            end   = start.AddDays(1);
+        }
+        return query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt) >= start
+                             && (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt) <  end);
+    }
+
     public static OrderFinanceLineDto ToDto(Order o)
     {
         bool     isReturn   = o.GroupOrderId is null;
@@ -218,7 +255,18 @@ internal static class OrderFinanceQueries
             ServicePaidByCustomerAmount:  o.ServicePaidByCustomerAmount,
             ServicePaidByCustomerAt:      o.ServicePaidByCustomerAt?.ToString("o"),
             CourierSalary:                o.CourierSalary,
-            AmountOfCashCollected:        o.AmountOfCashCollected
+            AmountOfCashCollected:        o.AmountOfCashCollected,
+
+            CourierSalaryPaidAmount:           o.CourierSalaryPaidAmount,
+            CourierSalaryPaidAt:               o.CourierSalaryPaidAt?.ToString("o"),
+            IsCourierSalaryPaid:               OrderFinance.IsCourierSalaryPaid(o),
+            CodTransferedToCompanyByCourier:   o.CodTransferedToCompanyByCourier,
+            CodTransferedToCompanyByCourierAt: o.CodTransferedToCompanyByCourierAt?.ToString("o"),
+            HasCourierTransferedAmount:        OrderFinance.HasCourierTransferedAmount(o),
+
+            CompanyRevenue:               OrderFinance.CompanyRevenue(o),
+            CompanyNetCash:               OrderFinance.CompanyNetCash(o),
+            IsCompanyServicePaid:         OrderFinance.IsCompanyServicePaid(o)
         );
     }
 }

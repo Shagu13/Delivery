@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations, type OrderLocation } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
@@ -12,6 +12,7 @@ import { EditOrderModal } from './EditOrderModal';
 import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
+import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { georgianToday, toDateKey } from '../../utils/georgianTime';
@@ -381,12 +382,16 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   const [priceDrafts,       setPriceDrafts]       = useState<Record<string, string>>({});
   const [priceChecked,      setPriceChecked]      = useState<Set<string>>(new Set());
   const [priceSaving,       setPriceSaving]       = useState(false);
+  // After a price/salary save inside the assign/deliver gating, the original action is
+  // resumed automatically (see the effect below) so the admin doesn't have to re-click
+  // "Assign"/"Mark delivered" once the missing financials are filled in.
+  const [resumeAction,      setResumeAction]      = useState<null | 'assign' | 'deliver'>(null);
 
-  // The bulk action bar is sticky at the top while scrolling the order list. Measure
-  // its (wrap-dependent) height so the sticky table header can sit just below it
-  // instead of being covered.
-  const bulkBarRef = useRef<HTMLDivElement | null>(null);
-  const [bulkBarH, setBulkBarH] = useState(0);
+  // The bulk action bar is sticky at the top while scrolling the order list. Its height
+  // is written directly to a CSS custom property on the root element so the sticky table
+  // header always sits exactly below it — with no intermediate wrong-frame render.
+  const bulkBarRef  = useRef<HTMLDivElement | null>(null);
+  const aopRootRef  = useRef<HTMLDivElement | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '' });
@@ -424,6 +429,21 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
       setLoading(false);
     }
   }, [token, t, selectedDate]);
+
+  // Reload the current view with the active filters — used by per-row actions (the kebab
+  // menu) that mutate a single order outside the bulk flow.
+  const reload = () => {
+    void load({
+      city:      filterCity     || undefined,
+      district:  filterDistrict || undefined,
+      search:    search         || undefined,
+      courierId: filterCourier?.courierId,
+      unpriced:  filterUnpriced || undefined,
+      assigned:  assignTab === 'assigned',
+      page,
+    });
+    void refreshUnpricedCount();
+  };
 
   useEffect(() => {
     const prev = filterRef.current;
@@ -486,13 +506,15 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     return () => document.removeEventListener('keydown', onKey);
   }, [bulkMode, showBulkModal, showPriceModal, showSalaryModal, showPriceWarning, showSalaryWarning]);
 
-  // Track the sticky bulk bar's height (it can wrap onto multiple rows) so the sticky
-  // table header below it stays offset by exactly that much. Resets to 0 when the bar
-  // isn't rendered so the header sticks flush to the top.
-  useEffect(() => {
-    const el = bulkBarRef.current;
-    if (!el) { setBulkBarH(0); return; }
-    const update = () => setBulkBarH(el.offsetHeight);
+  // Write --bulk-bar-h directly onto the root element so the sticky column headers sit
+  // exactly below the bar with no intermediate wrong frame. useLayoutEffect fires before
+  // the browser paints, so the sticky offset is always correct on first paint.
+  useLayoutEffect(() => {
+    const root = aopRootRef.current;
+    const el   = bulkBarRef.current;
+    if (!root) return;
+    if (!el) { root.style.setProperty('--bulk-bar-h', '0px'); return; }
+    const update = () => root.style.setProperty('--bulk-bar-h', `${el.offsetHeight}px`);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
@@ -767,14 +789,19 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     });
     if (toSave.length === 0) { setShowSalaryModal(false); return; }
     setSalarySaving(true);
+    let saved = false;
     try {
       await Promise.all(toSave.map(id => setCourierSalary(token, id, parseFloat(salaryDrafts[id]))));
       const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
       await Promise.all([load(reloadParams), refreshUnpricedCount()]);
+      saved = true;
     } catch { /* best-effort */ }
     setSalarySaving(false);
     setShowSalaryModal(false);
     showToast(t.aopSalarySetToast(toSave.length));
+    // Resume the action that opened this modal — the gating re-checks against the freshly
+    // reloaded orders, so it commits when nothing is missing or re-prompts otherwise.
+    if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
   };
 
   const handlePriceSave = async () => {
@@ -784,15 +811,37 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     });
     if (toSave.length === 0) { setShowPriceModal(false); return; }
     setPriceSaving(true);
+    let saved = false;
     try {
       await Promise.all(toSave.map(id => setCompanyServicePrice(token, id, parseFloat(priceDrafts[id]))));
       const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
       await Promise.all([load(reloadParams), refreshUnpricedCount()]);
+      saved = true;
     } catch { /* best-effort */ }
     setPriceSaving(false);
     setShowPriceModal(false);
     showToast(t.aopPriceSetToast(toSave.length));
+    // Resume the original action — it advances to the salary step (or commits) without a
+    // second click. Re-checks gating against the reloaded orders.
+    if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
   };
+
+  // Resume the assign/deliver action after a price/salary save, once the reload has
+  // settled and no gating dialog is open. Re-running the entry handler re-evaluates the
+  // gating against the fresh data: it commits when nothing is missing, or re-prompts for
+  // whatever is still missing (e.g. salary right after prices). Driven by the freshly
+  // saved data, so the admin never has to click "Assign"/"Mark delivered" a second time.
+  useEffect(() => {
+    if (!resumeAction) return;
+    if (loading || showSalaryWarning || showSalaryModal || showPriceWarning || showPriceModal) return;
+    const action = resumeAction;
+    setResumeAction(null);
+    if (action === 'deliver') void handleBulkDeliver();
+    else void handleBulkAssign();
+  // handleBulkAssign/handleBulkDeliver are stable enough; re-running only when the gating
+  // state changes is what we want here.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeAction, loading, showSalaryWarning, showSalaryModal, showPriceWarning, showPriceModal]);
 
   const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced;
   const clearAll = () => {
@@ -811,7 +860,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="aop-root" style={{ ['--bulk-bar-h' as string]: `${bulkBarH}px` }}>
+    <div className="aop-root" ref={aopRootRef}>
 
       {/* Day navigator — All by default; pick a day (or step with the arrows) to filter
           packages by the day they were placed (Order.CreatedAt). */}
@@ -1496,16 +1545,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                       >
                         {statusMeta.short}
                       </span>
-                      {/* Assignment tick: green = a delivery courier is assigned, red = not yet. */}
-                      <div className="aop-courier-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                        title={order.courierFullName ?? t.vomUnassigned}>
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                          <path d="M3 8.5l3.5 3.5L13 5" stroke={order.courierId ? '#10b981' : '#ef4444'}
-                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <span style={order.courierId ? undefined : { color: '#ef4444' }}>
-                          {order.courierFullName ?? t.vomUnassigned}
-                        </span>
+                      <div className="aop-courier-name" title={order.courierFullName ?? t.vomUnassigned}
+                        style={order.courierId ? undefined : { color: '#ef4444' }}>
+                        {order.courierFullName ?? t.vomUnassigned}
                       </div>
                       {/* Delivered time — shown on delivered (Assigned-tab) orders. */}
                       {order.deliveredAt && (
@@ -1556,30 +1598,19 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                       }
                     </td>
                     <td className="aop-td aop-td--actions" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => setViewingOrder(order)}
-                        style={{
-                          padding: '3px 10px', fontSize: '0.72rem', fontWeight: 600,
-                          background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)',
-                          border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer', whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {t.aopView}
-                      </button>
-                      {canManage && (
-                        <button
-                          onClick={() => setEditingOrder(order)}
-                          style={{
-                            padding: '3px 10px', fontSize: '0.72rem', fontWeight: 600,
-                            background: 'rgba(59,130,246,0.1)', color: '#3b82f6',
-                            border: '1px solid rgba(59,130,246,0.3)', borderRadius: 'var(--radius-sm)',
-                            cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {t.aopEdit}
-                        </button>
-                      )}
+                      <OrderRowActionsMenu
+                        order={order}
+                        couriers={couriers}
+                        token={token ?? ''}
+                        canManage={canManage}
+                        canAssign={isAssignable(order)}
+                        canDeliver={isDeliverable(order)}
+                        onView={() => setViewingOrder(order)}
+                        onEdit={() => setEditingOrder(order)}
+                        onLabel={() => void printParcelLabels([buildAdminLabel(order)])}
+                        onChanged={reload}
+                        onError={msg => showToast(msg, 'err')}
+                      />
                     </td>
                   </tr>
                 );
@@ -1823,8 +1854,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
           background: linear-gradient(var(--color-accent-dim), var(--color-accent-dim)), var(--color-bg);
           border-bottom: 1px solid rgba(196,127,23,0.25);
           animation: expand-in 0.15s ease both;
-          /* Follow the page scroll so the action buttons stay reachable in long lists. */
-          position: sticky; top: 0; z-index: 20;
+          /* Follow the page scroll so the action buttons stay reachable in long lists.
+             Stick below the sticky StaffNav (top: nav height) so it isn't hidden behind it. */
+          position: sticky; top: var(--staff-nav-h, 64px); z-index: 20;
         }
         .aop-bulk-count { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--color-accent); }
         .aop-bulk-btn { border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
@@ -1842,9 +1874,15 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         .aop-bulk-input:focus { border-color: var(--color-accent); }
 
         /* ── Table ── */
-        .aop-table-wrap { overflow-x: auto; flex: 1; }
+        /* NB: no overflow on the wrap. An overflow-x:auto here would make this a
+           scroll container (the spec forces overflow-y to auto too), which traps the
+           sticky thead inside it so the column headers never stick to the viewport on
+           page scroll. Keeping it visible lets the headers (and the bulk bar above them)
+           stick to the page as intended. The table fits the admin content area; on a
+           rare narrow window it simply widens the page rather than scrolling internally. */
+        .aop-table-wrap { flex: 1; min-width: 0; }
         .aop-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-        .aop-th { text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 10px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: var(--bulk-bar-h, 0px); z-index: 1; }
+        .aop-th { text-align: left; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); padding: 10px 14px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: calc(var(--staff-nav-h, 64px) + var(--bulk-bar-h, 0px)); z-index: 10; box-shadow: 0 1px 0 var(--color-border); }
         .aop-th--check { width: 44px; padding-left: 20px; }
         .aop-th--num { text-align: right; }
         .aop-td { padding: 11px 14px; font-size: 0.82rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; cursor: pointer; }

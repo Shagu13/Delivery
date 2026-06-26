@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.CustomerSettlements.DTOs;
+using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,8 +9,8 @@ namespace Application.CustomerSettlements.Queries;
 /// <summary>
 /// Admin: every customer that still has an outstanding balance in either direction —
 /// COD the company owes them, or sender-paid service fees they owe the company —
-/// aggregated across all their non-deleted batch invoices. Customers fully settled
-/// in both directions are omitted.
+/// aggregated live across all their active (non-cancelled) orders. Customers fully settled
+/// in both directions are omitted, as are tenant sub-customers (settled by their tenant).
 /// </summary>
 public sealed record GetCustomersWithOutstandingBalancesQuery
     : IRequest<IReadOnlyList<CustomerOutstandingDto>>;
@@ -17,6 +18,13 @@ public sealed record GetCustomersWithOutstandingBalancesQuery
 public sealed class GetCustomersWithOutstandingBalancesQueryHandler
     : IRequestHandler<GetCustomersWithOutstandingBalancesQuery, IReadOnlyList<CustomerOutstandingDto>>
 {
+    private static readonly OrderStatus[] CancelledStatuses =
+    {
+        OrderStatus.CancelledByAdmin,
+        OrderStatus.CancelledBySender,
+        OrderStatus.OrderNotAccepted,
+    };
+
     private readonly IAppDbContext _context;
     public GetCustomersWithOutstandingBalancesQueryHandler(IAppDbContext context) => _context = context;
 
@@ -24,23 +32,34 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
         GetCustomersWithOutstandingBalancesQuery request,
         CancellationToken cancellationToken)
     {
-        // Sum the two outstanding flows per customer over all their live invoices.
-        var aggregates = await _context.CustomerSettlements
+        // Per active order: the owning customer (via either ownership path), whether that
+        // customer belongs to a tenant, and the two outstanding money components.
+        var raw = await _context.Orders
             .AsNoTracking()
-            .Where(s => s.DateDeleted == null)
-            .GroupBy(s => s.CustomerId)
-            .Select(g => new
+            .Where(o => !CancelledStatuses.Contains(o.Status))
+            .Select(o => new
             {
-                CustomerId         = g.Key,
-                OutstandingCod     = g.Sum(s => s.TotalCODCompanyCollectedForPackages
-                                              - s.TotalAmountOfCollectedCodPaidByCompany),
-                OutstandingService = g.Sum(s => s.TotalCompanyServicePriceOwedToCompany
-                                              - s.TotalAmountPaidToCompanyForCompanyService),
+                CustomerId = o.GroupOrder != null ? o.GroupOrder.CustomerId : o.CustomerId,
+                TenantId   = o.GroupOrder != null && o.GroupOrder.Customer != null
+                                ? o.GroupOrder.Customer.TenantId
+                                : (o.Customer != null ? o.Customer.TenantId : null),
+                Cod         = o.AmountToCollectForPackage ?? 0m,
+                CodPaid     = o.CodPaidToCustomerAmount ?? 0m,
+                SenderPays  = o.WhoPaysForCompanyService == ServicePayer.Sender,
+                Service     = o.CompanyServicePrice,
+                ServicePaid = o.ServicePaidByCustomerAmount ?? 0m,
             })
             .ToListAsync(cancellationToken);
 
-        // Keep only customers who still owe or are owed something (ignore FP residue).
-        var owing = aggregates
+        var owing = raw
+            .Where(r => r.CustomerId != null && r.TenantId == null)
+            .GroupBy(r => r.CustomerId!.Value)
+            .Select(g => new
+            {
+                CustomerId         = g.Key,
+                OutstandingCod     = g.Sum(r => r.Cod - r.CodPaid),
+                OutstandingService = g.Sum(r => r.SenderPays ? r.Service - r.ServicePaid : 0m),
+            })
             .Where(a => a.OutstandingCod > 0.005m || a.OutstandingService > 0.005m)
             .ToList();
 
@@ -54,9 +73,7 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
             .ToDictionaryAsync(c => c.Id, cancellationToken);
 
         return owing
-            // Reconciliation: tenant customers are settled by their tenant, not the company —
-            // hide them from the company's per-customer settlement list.
-            .Where(a => customers.ContainsKey(a.CustomerId) && customers[a.CustomerId].TenantId == null)
+            .Where(a => customers.ContainsKey(a.CustomerId))
             .Select(a =>
             {
                 var c = customers[a.CustomerId];

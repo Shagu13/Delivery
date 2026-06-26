@@ -57,8 +57,6 @@ public sealed class MoveOrderToGroupOrderCommandHandler
         source.NumberOfPackages = Math.Max(0, source.NumberOfPackages - 1);
 
         var remaining = source.Orders.ToList();
-        Order? collapsedStandalone = null;
-        bool sourceRemoved = false;
 
         if (remaining.Count <= 1)
         {
@@ -70,28 +68,12 @@ public sealed class MoveOrderToGroupOrderCommandHandler
                 last.GroupOrderId = null;
                 last.CustomerId   = source.CustomerId;
                 source.Orders.Remove(last);   // detach so deleting the batch can't cascade it
-                collapsedStandalone = last;
             }
 
-            var sourceSettlements = await _context.CustomerSettlements
-                .Where(s => s.GroupOrderId == source.Id)
-                .ToListAsync(cancellationToken);
-            if (sourceSettlements.Count > 0)
-                _context.CustomerSettlements.RemoveRange(sourceSettlements);
-
             _context.GroupOrders.Remove(source);
-            sourceRemoved = true;
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-
-        // ── Refresh invoices ──────────────────────────────────────────────────────
-        await CustomerSettlementService.UpsertForGroupOrderAsync(_context, target.Id, cancellationToken);
-        if (!sourceRemoved)
-            await CustomerSettlementService.UpsertForGroupOrderAsync(_context, source.Id, cancellationToken);
-        // A collapsed Return regains its own per-order invoice; Send/Exchange no-op.
-        if (collapsedStandalone is not null)
-            await CustomerSettlementService.UpsertForReturnOrderAsync(_context, collapsedStandalone, cancellationToken);
 
         _notifier.NotifyAdminsOrdersChanged();
     }

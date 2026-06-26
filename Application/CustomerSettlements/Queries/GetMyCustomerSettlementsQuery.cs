@@ -8,7 +8,7 @@ namespace Application.CustomerSettlements.Queries;
 
 /// <summary>
 /// Customer-facing (read-only): the authenticated customer's own per-batch invoices,
-/// newest first. Optionally filtered to the batches placed on a single day.
+/// newest first, derived live. Optionally filtered to the batches placed on a single day.
 /// </summary>
 public sealed record GetMyCustomerSettlementsQuery(
     string    CustomerUserId,
@@ -30,12 +30,7 @@ public sealed class GetMyCustomerSettlementsQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CustomerUserId, cancellationToken)
             ?? throw new NotFoundException("Customer", request.CustomerUserId);
 
-        var settlements = await CustomerSettlementQueries
-            .ForCustomer(_context, customer.Id, request.Date)
-            .ToListAsync(cancellationToken);
-
-        return settlements
-            .Select(s => CustomerSettlementService.ToDto(s, customer.BusinessName))
-            .ToList();
+        return await CustomerSettlementProjection.ForCustomerAsync(
+            _context, customer.Id, customer.BusinessName, request.Date, cancellationToken);
     }
 }

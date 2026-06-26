@@ -67,20 +67,9 @@ public sealed class MergeGroupOrdersCommandHandler
             src.NumberOfPackages = 0;
         }
 
-        // Drop the emptied batches' invoices first (FK), then the batches themselves.
-        var sourceSettlements = await _context.CustomerSettlements
-            .Where(s => s.GroupOrderId != null && sourceIds.Contains(s.GroupOrderId.Value))
-            .ToListAsync(cancellationToken);
-
-        if (sourceSettlements.Count > 0)
-            _context.CustomerSettlements.RemoveRange(sourceSettlements);
-
         _context.GroupOrders.RemoveRange(sources);
 
         await _context.SaveChangesAsync(cancellationToken);
-
-        // Refresh the surviving batch's invoice to cover all the merged orders.
-        await CustomerSettlementService.UpsertForGroupOrderAsync(_context, target.Id, cancellationToken);
 
         _notifier.NotifyAdminsOrdersChanged();
 

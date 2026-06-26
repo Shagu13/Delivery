@@ -108,8 +108,6 @@ public sealed class MarkReturnDeliveredToWarehouseCommandHandler
         }
 
         await _context.SaveChangesAsync(ct);
-
-        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, ct);
     }
 }
 
@@ -133,7 +131,5 @@ public sealed class MarkReturnedToSenderCommandHandler
         order.DeliveredAt = CustomTime.Now;
 
         await _context.SaveChangesAsync(ct);
-
-        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, ct);
     }
 }

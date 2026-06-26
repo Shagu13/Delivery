@@ -13,9 +13,9 @@ namespace Domain;
 /// carries this TenantId) and refreshed on recompute. Payment figures accumulate: the plain field
 /// holds the most recent payment, the Total* field the running sum.
 ///
-/// Mirrors <see cref="CustomerSettlement"/> one tier up. No markup in v1 → the same
-/// <c>Order.CompanyServicePrice</c> drives both the tenant↔dilo and tenant↔sub-customer tiers
-/// (the sub-customer tier reuses CustomerSettlement, scoped to the tenant).
+/// The tenant↔dilo tier, one level up from the company↔customer per-order settlement. No
+/// markup in v1 → the same <c>Order.CompanyServicePrice</c> drives both the tenant↔dilo and
+/// tenant↔sub-customer tiers.
 /// </summary>
 public class TenantSettlement
 {

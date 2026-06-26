@@ -1023,6 +1023,15 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   const [filterStatus,   setFilterStatus]   = useState(initialStatus);
   const [expandedIds,    setExpandedIds]    = useState<Set<string>>(new Set());
   const [actionToast,    setActionToast]    = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  // Warehouse acceptance: per-package "arrived" ticks keyed by order id. A package NOT in
+  // this set is present (default ticked); ids here were unticked = missing, so they get
+  // cancelled as "not received" when the batch is accepted in warehouse.
+  const [absentPkgs, setAbsentPkgs] = useState<Set<string>>(() => new Set());
+  const togglePkgPresent = (orderId: string) => setAbsentPkgs(prev => {
+    const next = new Set(prev);
+    if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+    return next;
+  });
   // Order being edited from a group order's package row, with its customer's pricing.
   const [editing, setEditing] = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1650,6 +1659,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                 <thead>
                   <tr>
                     <th>{t.goThTracking}</th>
+                    <th>{t.goSender}</th>
                     <th>{t.goThRecipient}</th>
                     <th>{t.goThPhone}</th>
                     <th>{t.goThCityDistrict}</th>
@@ -1665,6 +1675,10 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                   {flatOrders.map(o => (
                     <tr key={o.id}>
                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{o._go.senderBusinessName || '—'}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{o._go.senderFirstName} {o._go.senderLastName}</div>
+                      </td>
                       <td><div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div></td>
                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                       <td>
@@ -1779,17 +1793,16 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                                   {t.pickupStandaloneBadge}
                                 </span>
                               )}
+                              {go.courierId && (
+                                <span style={{ marginTop: 3, fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130 }}>
+                                  {go.courierFullName}
+                                </span>
+                              )}
                             </div>
                             <div className="go-cell go-cell--center">
                               <span className="go-cell__label">{t.goColPackages}</span>
                               <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
                             </div>
-                            {go.courierId && (
-                              <div className="go-cell go-cell--center">
-                                <span className="go-cell__label">{t.vomLblCourier}</span>
-                                <span className="go-cell__value">{go.courierFullName || '—'}</span>
-                              </div>
-                            )}
                             <div className="go-cell go-cell--center">
                               <span className="go-cell__label">{t.goColDate}</span>
                               <span className="go-cell__sub go-cell__sub--muted">{formatDate(go.createdAt)}</span>
@@ -1830,6 +1843,12 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                             onRefresh={() => load(search)}
                             canManage={canManage}
                             canAssignCourier={canAssignCourier}
+                            warehousePresentIds={go.status === 'DeliveredToWarehouse'
+                              ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && !absentPkgs.has(o.id)).map(o => o.id)
+                              : undefined}
+                            warehouseAbsentCount={go.status === 'DeliveredToWarehouse'
+                              ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && absentPkgs.has(o.id)).length
+                              : undefined}
                           />
                         )}
                       </div>
@@ -1860,7 +1879,17 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                                 <tbody>
                                   {filteredOrders.map(o => (
                                     <tr key={o.id}>
-                                      <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                                      <td>
+                                        <span className="tn-badge">{o.trackingNumber}</span>
+                                        {canManage && o.status === 'DeliveredToWarehouse' && (
+                                          <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.7rem', color: 'var(--color-text-subtle)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                            <input type="checkbox" style={{ cursor: 'pointer' }}
+                                              checked={!absentPkgs.has(o.id)}
+                                              onChange={() => togglePkgPresent(o.id)} />
+                                            {t.goWarehousePresent}
+                                          </label>
+                                        )}
+                                      </td>
                                       <td><div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div></td>
                                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                                       <td>

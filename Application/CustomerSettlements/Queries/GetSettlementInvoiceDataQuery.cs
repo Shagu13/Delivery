@@ -33,6 +33,10 @@ public sealed record SettlementInvoiceData(
     decimal                        OutstandingService
 );
 
+/// <summary>
+/// <paramref name="SettlementId"/> is the batch's GroupOrderId (Send/Exchange) or the
+/// standalone Return order's OrderId — the same id the live invoice rows expose.
+/// </summary>
 public sealed record GetSettlementInvoiceDataQuery(
     Guid   SettlementId,
     string CustomerUserId
@@ -62,29 +66,40 @@ public sealed class GetSettlementInvoiceDataQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CustomerUserId, cancellationToken)
             ?? throw new NotFoundException("Customer", request.CustomerUserId);
 
-        Domain.CustomerSettlement settlement = await _context.CustomerSettlements
-            .AsNoTracking()
-            .Include(s => s.GroupOrder)
-                .ThenInclude(g => g!.Orders)
-            .Include(s => s.Order)
-            .FirstOrDefaultAsync(
-                s => s.Id         == request.SettlementId
-                  && s.CustomerId == customer.Id
-                  && s.DateDeleted == null,
-                cancellationToken)
-            ?? throw new NotFoundException("Settlement", request.SettlementId);
-
+        // The id is a batch (GroupOrder) or a standalone Return order. Resolve whichever
+        // the customer owns and gather its active orders.
         List<Domain.Order> allOrders;
+        bool     isReturn;
+        DateTime createdAt;
 
-        if (settlement.GroupOrder is not null)
-            allOrders = settlement.GroupOrder.Orders.ToList();
-        else if (settlement.Order is not null)
-            allOrders = [settlement.Order];
+        Domain.GroupOrder? group = await _context.GroupOrders
+            .AsNoTracking()
+            .Include(g => g.Orders)
+            .FirstOrDefaultAsync(g => g.Id == request.SettlementId && g.CustomerId == customer.Id, cancellationToken);
+
+        if (group is not null)
+        {
+            allOrders = group.Orders.ToList();
+            isReturn  = false;
+            createdAt = group.CreatedAt;
+        }
         else
-            allOrders = [];
+        {
+            Domain.Order order = await _context.Orders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == request.SettlementId && o.CustomerId == customer.Id, cancellationToken)
+                ?? throw new NotFoundException("Settlement", request.SettlementId);
 
-        List<InvoiceOrderRow> rows = allOrders
+            allOrders = [order];
+            isReturn  = true;
+            createdAt = order.CreatedAt;
+        }
+
+        List<Domain.Order> activeOrders = allOrders
             .Where(o => !CancelledStatuses.Contains(o.Status))
+            .ToList();
+
+        List<InvoiceOrderRow> rows = activeOrders
             .Select(o => new InvoiceOrderRow(
                 TrackingNumber:       o.TrackingNumber,
                 RecipientName:        o.RecipientName,
@@ -102,20 +117,22 @@ public sealed class GetSettlementInvoiceDataQueryHandler
             ))
             .ToList();
 
-        decimal outstandingCod     = settlement.TotalCODCompanyCollectedForPackages
-                                   - settlement.TotalAmountOfCollectedCodPaidByCompany;
-        decimal outstandingService = settlement.TotalCompanyServicePriceOwedToCompany
-                                   - settlement.TotalAmountPaidToCompanyForCompanyService;
+        decimal totalCod     = activeOrders.Sum(o => o.AmountToCollectForPackage ?? 0m);
+        decimal codPaid      = activeOrders.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
+
+        var senderPays       = activeOrders.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender).ToList();
+        decimal totalService = senderPays.Sum(o => o.CompanyServicePrice);
+        decimal servicePaid  = senderPays.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
 
         return new SettlementInvoiceData(
             CustomerBusinessName: customer.BusinessName,
-            BatchCreatedAt:       settlement.CreatedAt,
-            IsReturn:             settlement.OrderId.HasValue,
+            BatchCreatedAt:       createdAt,
+            IsReturn:             isReturn,
             Orders:               rows,
-            TotalCodCollected:    settlement.TotalCODCompanyCollectedForPackages,
-            TotalServiceFee:      settlement.TotalCompanyServicePriceOwedToCompany,
-            OutstandingCod:       outstandingCod,
-            OutstandingService:   outstandingService
+            TotalCodCollected:    totalCod,
+            TotalServiceFee:      totalService,
+            OutstandingCod:       totalCod - codPaid,
+            OutstandingService:   totalService - servicePaid
         );
     }
 }

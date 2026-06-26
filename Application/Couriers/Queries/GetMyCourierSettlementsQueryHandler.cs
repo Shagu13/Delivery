@@ -25,27 +25,7 @@ public sealed class GetMyCourierSettlementsQueryHandler
         var monthStart = new DateTime(request.Year, request.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var monthEnd   = monthStart.AddMonths(1);
 
-        var settlements = await _context.CourierSettlements
-            .AsNoTracking()
-            .Where(s => s.CourierId == courier.Id
-                     && s.CreatedAt >= monthStart
-                     && s.CreatedAt <  monthEnd)
-            .OrderByDescending(s => s.CreatedAt)
-            .ToListAsync(cancellationToken);
-
-        return settlements.Select(s => new CourierSettlementItemDto(
-            Id:                            s.Id,
-            Date:                          DateOnly.FromDateTime(s.CreatedAt).ToString("yyyy-MM-dd"),
-            TotalOrdersPickedUp:           s.TotalOrdersPickedUp,
-            TotalOrdersDelivered:          s.TotalOrdersDelivered,
-            NumberOfOrdersCancelled:       s.NumberOfOrdersCancelled,
-            NumberOfOrderPostponed:        s.NumberOfOrderPostponed,
-            TotalAmountOfCashCollected:    s.TotalAmountOfCashCollected ?? 0m,
-            TotalCompanyServiceRevenue:    s.TotalCompanyServiceRevenue,
-            TotalCourierSalary:            s.TotalCourierSalary,
-            AmountCourierWasPaid:          s.AmountCourierWasPaid,
-            TotalCourierTransferToCompany: s.TotalCourierTransferToCompany,
-            IsTheDayClosed:               s.IsTheDayClosed
-        )).ToList();
+        return await CourierSettlementProjection
+            .BuildAsync(_context, courier.Id, monthStart, monthEnd, cancellationToken);
     }
 }

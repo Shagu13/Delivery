@@ -35,6 +35,7 @@ import {
 } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
+import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
@@ -297,6 +298,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const [filterStatus,    setFilterStatus]    = useState('');
   const [expandedIds,     setExpandedIds]     = useState<Set<string>>(new Set());
   const [actionToast,     setActionToast]     = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  // Warehouse acceptance: per-package "arrived" ticks keyed by order id. Not in this set =
+  // present (default ticked); ids here were unticked = missing → cancelled as "not received".
+  const [absentPkgs, setAbsentPkgs] = useState<Set<string>>(() => new Set());
+  const togglePkgPresent = (orderId: string) => setAbsentPkgs(prev => {
+    const next = new Set(prev);
+    if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+    return next;
+  });
   const [editing,         setEditing]         = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -343,6 +352,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const [priceDrafts,       setPriceDrafts]       = useState<Record<string, string>>({});
   const [priceChecked,      setPriceChecked]      = useState<Set<string>>(new Set());
   const [priceSaving,       setPriceSaving]       = useState(false);
+  // After a price/salary save inside the assign/deliver gating, the original action is
+  // resumed automatically (see the effect below) so the admin doesn't have to re-click
+  // "Assign"/"Mark delivered" once the missing financials are filled in.
+  const [resumeAction,      setResumeAction]      = useState<null | 'assign' | 'deliver'>(null);
 
   const showPricesEff = canManage && showPrices;
 
@@ -819,27 +832,50 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     const toSave = [...salaryChecked].filter(id => { const v = parseFloat(salaryDrafts[id] ?? ''); return !isNaN(v) && v >= 0; });
     if (toSave.length === 0) { setShowSalaryModal(false); return; }
     setSalarySaving(true);
-    try { await Promise.all(toSave.map(id => setCourierSalary(token ?? '', id, parseFloat(salaryDrafts[id])))); void load(searchRef.current); }
+    let saved = false;
+    // Await the reload so the resume below re-checks gating against fresh orders.
+    try { await Promise.all(toSave.map(id => setCourierSalary(token ?? '', id, parseFloat(salaryDrafts[id])))); await load(searchRef.current); saved = true; }
     catch { /* best-effort */ }
     setSalarySaving(false); setShowSalaryModal(false);
     showToast(t.aopSalarySetToast(toSave.length));
+    // Resume the action that opened this modal — it commits when nothing is missing or
+    // re-prompts otherwise, so the admin never has to click "Assign" a second time.
+    if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
   };
 
   const handlePriceSave = async () => {
     const toSave = [...priceChecked].filter(id => { const v = parseFloat(priceDrafts[id] ?? ''); return !isNaN(v) && v >= 0; });
     if (toSave.length === 0) { setShowPriceModal(false); return; }
     setPriceSaving(true);
-    try { await Promise.all(toSave.map(id => setCompanyServicePrice(token ?? '', id, parseFloat(priceDrafts[id])))); void load(searchRef.current); }
+    let saved = false;
+    try { await Promise.all(toSave.map(id => setCompanyServicePrice(token ?? '', id, parseFloat(priceDrafts[id])))); await load(searchRef.current); saved = true; }
     catch { /* best-effort */ }
     setPriceSaving(false); setShowPriceModal(false);
     showToast(t.aopPriceSetToast(toSave.length));
+    // Resume the original action — advances to the salary step (or commits) without a click.
+    if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
   };
 
+  // Resume the assign/deliver action after a price/salary save, once no gating dialog is
+  // open. Re-running the entry handler re-evaluates the gating against the freshly loaded
+  // orders: it commits when nothing is missing, or re-prompts for whatever is still
+  // missing (e.g. salary right after prices) — so no second "Assign" click is needed.
+  useEffect(() => {
+    if (!resumeAction) return;
+    if (showSalaryWarning || showSalaryModal || showPriceWarning || showPriceModal) return;
+    const action = resumeAction;
+    setResumeAction(null);
+    if (action === 'deliver') void handleBulkDeliver();
+    else void handleBulkAssign();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeAction, showSalaryWarning, showSalaryModal, showPriceWarning, showPriceModal]);
+
   // ── Render: one package row (shared by accordion + flat view) ───────────────
-  const renderOrderRow = (o: AdminOrder, go: AdminGroupOrder, moveDestinations: AdminGroupOrder[]) => {
+  const renderOrderRow = (o: AdminOrder, go: AdminGroupOrder, moveDestinations: AdminGroupOrder[], warehouseSelectable = false, showStore = false) => {
     const selectable = canManage && rowSelectable(toOrderItem(o, go, null));
     const isChecked = selected.has(o.id);
     const courierName = o.courierId ? (courierNameById.get(o.courierId) ?? null) : null;
+    const menuItem = toOrderItem(o, go, courierName);
     return (
       <tr key={o.id} className={isChecked ? 'pkg-row--selected' : ''}>
         {canManage && (
@@ -848,7 +884,23 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
               onChange={() => selectable && toggleOne(o.id)} />
           </td>
         )}
-        <td><span className="tn-badge">{o.trackingNumber}</span></td>
+        <td>
+          <span className="tn-badge">{o.trackingNumber}</span>
+          {warehouseSelectable && canManage && o.status === 'DeliveredToWarehouse' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.7rem', color: 'var(--color-text-subtle)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <input type="checkbox" style={{ cursor: 'pointer' }}
+                checked={!absentPkgs.has(o.id)}
+                onChange={() => togglePkgPresent(o.id)} />
+              {t.goWarehousePresent}
+            </label>
+          )}
+        </td>
+        {showStore && (
+          <td>
+            <div style={{ fontWeight: 600 }}>{go.senderBusinessName || '—'}</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{go.senderFirstName} {go.senderLastName}</div>
+          </td>
+        )}
         <td><div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div></td>
         <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
         <td>
@@ -906,15 +958,26 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         </td>
         <td>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" className="go-action-btn go-action-btn--ghost"
-              onClick={() => setViewingOrder(toOrderItem(o, go, courierName))}>
-              {t.aopView}
-            </button>
+            <OrderRowActionsMenu
+              order={menuItem}
+              couriers={couriers}
+              token={token ?? ''}
+              canManage={canManage}
+              canAssign={isAssignable(menuItem)}
+              canDeliver={isDeliverable(menuItem)}
+              onView={() => setViewingOrder(menuItem)}
+              onEdit={() => openEditOrder(o, go)}
+              onLabel={() => void printParcelLabels([buildAdminLabel(menuItem)])}
+              onChanged={() => load(searchRef.current)}
+              onError={msg => showToast(msg, 'err')}
+            />
+            {/* Edit + Label now live in the kebab menu above; this keeps the pickup-only
+                actions (send-to-city, cancel). */}
             <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
               onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
               onRefresh={() => load(searchRef.current)}
               canManage={canManage}
-              onEdit={canManage ? () => openEditOrder(o, go) : undefined} />
+              showLabel={false} />
             {canManage && moveDestinations.length > 0 && (
               <MoveOrderControl orderId={o.id} destinations={moveDestinations} token={token ?? ''}
                 onMoved={() => { void load(searchRef.current); void loadSummary(); showToast(t.pickupMovedToast); }}
@@ -926,12 +989,15 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     );
   };
 
-  // Shared <thead> for the package tables.
-  const packageHead = (
+  // Shared <thead> for the package tables. `showStore` adds a Sender/store column —
+  // used in the flat (recipient + location) single-order view where the batch's sender
+  // isn't otherwise visible.
+  const packageHead = (showStore = false) => (
     <thead>
       <tr>
         {canManage && <th style={{ width: 36 }} />}
         <th>{t.goThTracking}</th>
+        {showStore && <th>{t.goSender}</th>}
         <th>{t.goThRecipient}</th>
         <th>{t.goThPhone}</th>
         <th>{t.goThCityDistrict}</th>
@@ -950,7 +1016,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="content-card" style={{ overflow: 'hidden' }}>
+    // overflow must stay visible (not hidden) or the sticky bulk-action bar below can't
+    // stick to the window — an overflow:hidden ancestor traps position:sticky. The inner
+    // tables keep their own overflow-x wrappers, so nothing spills horizontally.
+    <div className="content-card" style={{ overflow: 'visible' }}>
       {/* Day navigator */}
       <div className="pickup-daynav">
         <button className="pickup-daynav__arrow" disabled={!selectedDate} onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
@@ -1231,8 +1300,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           return (
             <div style={{ overflowX: 'auto' }}>
               <table className="go-orders-table">
-                {packageHead}
-                <tbody>{flatRows.map(({ o, go }) => renderOrderRow(o, go, []))}</tbody>
+                {packageHead(true)}
+                <tbody>{flatRows.map(({ o, go }) => renderOrderRow(o, go, [], false, true))}</tbody>
               </table>
             </div>
           );
@@ -1308,7 +1377,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                           ) : (
                             <AdminGroupOrderActions groupOrder={go} couriers={couriers} token={token ?? ''}
                               onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                              onRefresh={() => load(searchRef.current)} canManage={canManage} canAssignCourier={canAssignCourier} />
+                              onRefresh={() => load(searchRef.current)} canManage={canManage} canAssignCourier={canAssignCourier}
+                              warehousePresentIds={go.status === 'DeliveredToWarehouse'
+                                ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && !absentPkgs.has(o.id)).map(o => o.id)
+                                : undefined}
+                              warehouseAbsentCount={go.status === 'DeliveredToWarehouse'
+                                ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && absentPkgs.has(o.id)).length
+                                : undefined} />
                           )}
                         </div>
                         {expanded && (
@@ -1318,8 +1393,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                             ) : (
                               <div style={{ overflowX: 'auto' }}>
                                 <table className="go-orders-table">
-                                  {packageHead}
-                                  <tbody>{filteredOrders.map(o => renderOrderRow(o, go, moveDestinations))}</tbody>
+                                  {packageHead()}
+                                  <tbody>{filteredOrders.map(o => renderOrderRow(o, go, moveDestinations, true))}</tbody>
                                 </table>
                               </div>
                             )}
@@ -1620,7 +1695,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         .aop-export-btn { display: inline-flex; align-items: center; gap: 7px; background: #16a34a; border: 1px solid #16a34a; color: #fff; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600; padding: 7px 13px; cursor: pointer; transition: opacity var(--transition); white-space: nowrap; }
         .aop-export-btn:hover:not(:disabled) { opacity: 0.9; }
         .aop-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .aop-bulk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 20px; background: var(--color-accent-dim); border-bottom: 1px solid rgba(196,127,23,0.25); animation: expand-in 0.15s ease both; }
+        .aop-bulk-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 20px; background: linear-gradient(var(--color-accent-dim), var(--color-accent-dim)), var(--color-bg); border-bottom: 1px solid rgba(196,127,23,0.25); animation: expand-in 0.15s ease both; position: sticky; top: var(--staff-nav-h, 64px); z-index: 20; }
         .aop-bulk-count { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: var(--color-accent); }
         .aop-bulk-btn { border: none; border-radius: var(--radius-sm); font-size: 0.78rem; font-weight: 600; padding: 7px 14px; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
         .aop-bulk-btn:disabled { opacity: 0.45; cursor: not-allowed; }

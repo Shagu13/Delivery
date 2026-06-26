@@ -24,15 +24,6 @@ public sealed class GetSettlementPreviewQueryHandler
         var dayStart = request.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var dayEnd   = request.Date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
-        // ── Check if a settlement already exists for this day ──────────────────
-        var existingSettlement = await _context.CourierSettlements
-            .AsNoTracking()
-            .Where(d => d.CourierId  == request.CourierId
-                     && d.CreatedAt >= dayStart
-                     && d.CreatedAt <= dayEnd)
-            .Select(d => new { d.Id, d.AmountCourierWasPaid })
-            .FirstOrDefaultAsync(cancellationToken);
-
         // ── Delivered orders for the day ──────────────────────────────────────
         // Keyed on the courier's physical delivery event so an order stays counted
         // for the day it was delivered even after the admin advances it to its final
@@ -109,8 +100,6 @@ public sealed class GetSettlementPreviewQueryHandler
             CourierId:                              courier.Id,
             CourierFullName:                        $"{courier.FirstName} {courier.LastName}",
             Date:                                   request.Date,
-            ExistingSettlementId:                   existingSettlement?.Id,
-            ExistingAmountCourierWasPaid:           existingSettlement?.AmountCourierWasPaid,
             TotalOrdersPickedUp:                    pickedUpPackages,
             TotalOrdersDelivered:                   orders.Count,
             TotalAmountOfCashCollected:             totalCash,

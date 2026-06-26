@@ -5,21 +5,6 @@ public sealed record SettlementPreviewDto(
     string   CourierFullName,
     DateOnly Date,
 
-    /// <summary>
-    /// If a settlement already exists for this courier+date, contains its ID.
-    /// Null if no settlement exists yet. Used by the frontend to show
-    /// "Update Settlement" instead of "Save Settlement".
-    /// </summary>
-    Guid?    ExistingSettlementId,
-
-    /// <summary>
-    /// When a settlement already exists for this courier+date, the amount the
-    /// courier was last recorded as paid (AmountCourierWasPaid). Null when no
-    /// settlement exists yet. The frontend pre-fills the payment field with this
-    /// on update, falling back to TotalCourierSalary on create.
-    /// </summary>
-    decimal? ExistingAmountCourierWasPaid,
-
     int      TotalOrdersPickedUp,
     int      TotalOrdersDelivered,
 

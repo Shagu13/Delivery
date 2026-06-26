@@ -23,6 +23,5 @@ namespace Domain
         // Navigation
         public ICollection<Order>           Orders           { get; set; } = new List<Order>();
         public ICollection<GroupOrder>      GroupOrders      { get; set; } = new List<GroupOrder>();
-        public ICollection<CourierSettlement> CourierSettlements { get; set; } = new List<CourierSettlement>();
     }
 }

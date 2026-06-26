@@ -127,21 +127,5 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-
-        // ── Keep settlements in sync with the edited financials ───────────────
-        // The edited COD / sender-paid service / status feed the customer's per-batch
-        // invoice; a delivered order also feeds the courier daily settlement (cash,
-        // salary, revenue). Refresh both so the admin Finance page reconciles.
-        await CustomerSettlements.CustomerSettlementService.UpsertForOrderAsync(_context, order, cancellationToken);
-
-        // Return orders are attributed to the courier's warehouse drop-off day; for
-        // those, DeliveredAt is the admin's ReturnedToSender timestamp and must not
-        // drive the recompute. Send/Exchange use DeliveredAt (the courier delivery).
-        var settlementDate = order.OrderType == OrderType.Return
-            ? order.DeliveredToWarehouseAt ?? order.DeliveredAt
-            : order.DeliveredAt ?? order.DeliveredToWarehouseAt;
-        if (order.CourierId.HasValue && settlementDate.HasValue)
-            await Settlements.CourierSettlementService.RecomputeForDayAsync(
-                _context, order.CourierId.Value, settlementDate.Value, cancellationToken);
     }
 }
