@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.CustomerSettlements.DTOs;
+using Application.Finance;
 using Domain;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -29,14 +30,25 @@ internal static class CustomerSettlementProjection
         OrderStatus.ReturnedToSender,
     };
 
-    /// <summary>Active (non-cancelled) orders owned by the customer via either ownership path, with navs.</summary>
+    /// <summary>
+    /// Billable orders owned by the customer via either ownership path, with navs. Includes
+    /// active (non-cancelled) orders plus billable failed deliveries (courier-declined or
+    /// admin-cancelled after reaching a delivery courier) — the sender still owes their fee.
+    /// </summary>
     private static async Task<List<Order>> LoadActiveAsync(
         IAppDbContext context, Guid customerId, CancellationToken ct) =>
         await context.Orders
             .AsNoTracking()
             .Include(o => o.GroupOrder)
             .Where(o => (o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId)
-                     && !CancelledStatuses.Contains(o.Status))
+                     && (!CancelledStatuses.Contains(o.Status)
+                         // Billable failed delivery (see OrderFinance.IsBillableFailedDelivery):
+                         // an explicit (non-warehouse) CancellationReason was recorded when the
+                         // courier/admin cancelled-and-charged or returned to sender. ReturnedToSender
+                         // already passes the line above; the cancelled terminals are re-included here.
+                         || (o.OrderType != OrderType.Return
+                             && o.CancellationReason != null
+                             && o.CancellationReason != CancellationReason.WarehouseNotReceived)))
             .ToListAsync(ct);
 
     /// <summary>The customer's per-batch invoice rows, newest first, optionally narrowed to a placement day.</summary>
@@ -79,9 +91,10 @@ internal static class CustomerSettlementProjection
                 orders: grp.ToList()));
         }
 
-        // Standalone Returns — one row each; only sender-pays returns carry a company↔customer invoice.
+        // Standalone orders — one row each; only those whose sender owes the company a fee
+        // (sender-pays returns, or a billable failed delivery) carry a company↔customer invoice.
         foreach (var ret in active.Where(o => o.GroupOrderId == null
-                                           && o.WhoPaysForCompanyService == ServicePayer.Sender))
+                                           && OrderFinance.SenderOwesService(o)))
         {
             rows.Add(BuildRow(
                 id: ret.Id, customerId, businessName,
@@ -102,12 +115,15 @@ internal static class CustomerSettlementProjection
     {
         int delivered = orders.Count(o => DeliveredStatuses.Contains(o.Status));
 
-        decimal cod        = orders.Sum(o => o.AmountToCollectForPackage ?? 0m);
+        // A billable failed delivery collected no COD (nothing handed over), so it contributes
+        // nothing to the COD the company holds for the customer — only a service-fee receivable.
+        decimal cod        = orders.Where(o => !OrderFinance.IsBillableFailedDelivery(o))
+                                   .Sum(o => o.AmountToCollectForPackage ?? 0m);
         decimal codPaid    = orders.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
 
-        var senderPays     = orders.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender).ToList();
-        decimal service    = senderPays.Sum(o => o.CompanyServicePrice);
-        decimal servicePaid = senderPays.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
+        var senderOwes     = orders.Where(OrderFinance.SenderOwesService).ToList();
+        decimal service    = senderOwes.Sum(o => o.CompanyServicePrice);
+        decimal servicePaid = senderOwes.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
 
         DateTime? updated = orders
             .SelectMany(o => new[] { o.CodPaidToCustomerAt, o.ServicePaidByCustomerAt })

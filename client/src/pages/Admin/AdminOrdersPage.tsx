@@ -399,6 +399,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   const aopRootRef  = useRef<HTMLDivElement | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic id for the in-flight data load. Only the most recently issued request may
+  // write to state, so a slow/stale response can never overwrite a newer search — which
+  // otherwise made results flicker in then vanish.
+  const loadSeqRef  = useRef(0);
   const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '', dateTo: '' });
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
@@ -423,6 +427,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
     city?: string; district?: string; search?: string;
     courierId?: string; unpriced?: boolean; assigned?: boolean; page?: number;
   }) => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -434,11 +439,13 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         dateTo: rangeEnd ? toDateKey(rangeEnd) : undefined,
         pageSize: PAGE_SIZE,
       });
+      if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
       setData(result);
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       setError(e instanceof Error ? e.message : t.aopFailedLoad);
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [token, t, selectedDate, rangeEnd]);
 

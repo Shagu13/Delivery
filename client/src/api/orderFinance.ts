@@ -50,6 +50,11 @@ export interface OrderFinanceLine {
     companyRevenue: number;
     companyNetCash: number;
     isCompanyServicePaid: boolean;
+    /** Customer owes the service fee (sender-pays OR a billable failed delivery). Use this,
+     *  not whoPaysForCompanyService, to decide whether the fee is owed. */
+    senderOwesService: boolean;
+    /** Billable failed delivery: no COD owed back, but the sender still owes the service fee. */
+    isBillableFailedDelivery: boolean;
 }
 
 export interface OrderPaymentRequest {
@@ -101,11 +106,14 @@ export async function fetchMyOrderFinance(
 // ── Admin — a customer's orders by delivery date ─────────────────────────────────
 // `monthly` widens the `date` filter to its whole calendar month (day ignored).
 export async function fetchCustomerOrderFinance(
-    customerId: string, token: string, date?: string, monthly = false,
+    customerId: string, token: string,
+    opts: { date?: string; monthly?: boolean; from?: string; to?: string } = {},
 ): Promise<OrderFinanceLine[]> {
     const params = new URLSearchParams({ customerId });
-    if (date) params.set('date', date);
-    if (monthly) params.set('monthly', 'true');
+    if (opts.date) params.set('date', opts.date);
+    if (opts.monthly) params.set('monthly', 'true');
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
     const res = await fetch(`/api/orderfinance/customer?${params}`, {
         headers: authHeaders(token), cache: 'no-store',
     });

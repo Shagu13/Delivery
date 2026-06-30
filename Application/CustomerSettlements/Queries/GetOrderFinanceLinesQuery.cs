@@ -50,10 +50,17 @@ public sealed class GetMyOrderFinanceLinesQueryHandler
 }
 
 // ── Admin: a customer's order lines, dated by delivery ────────────────────────────
+/// <summary>
+/// When <paramref name="From"/>/<paramref name="To"/> are supplied they take precedence over
+/// <paramref name="Date"/>/<paramref name="Monthly"/> and narrow to an inclusive effective-date
+/// range (both ends included).
+/// </summary>
 public sealed record GetCustomerOrderFinanceLinesQuery(
     Guid      CustomerId,
     DateOnly? Date,
-    bool      Monthly = false
+    bool      Monthly = false,
+    DateOnly? From    = null,
+    DateOnly? To      = null
 ) : IRequest<IReadOnlyList<OrderFinanceLineDto>>;
 
 public sealed class GetCustomerOrderFinanceLinesQueryHandler
@@ -76,20 +83,32 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
         //   • it is delivered (its COD payout / service settlement is final), OR
         //   • the sender pays the service fee and the order has been accepted (status past
         //     Pending) but not cancelled — so the customer can settle that fee in advance,
-        //     before delivery, at any stage of the flow. (Customers often pre-pay.)
+        //     before delivery, at any stage of the flow. (Customers often pre-pay.), OR
+        //   • it is a billable failed delivery — the sender owes the fee even though it never
+        //     delivered (mirrors OrderFinance.IsBillableFailedDelivery).
         query = query.Where(o =>
             (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null
-            || (o.WhoPaysForCompanyService == ServicePayer.Sender && o.Status != OrderStatus.Pending));
+            || (o.WhoPaysForCompanyService == ServicePayer.Sender && o.Status != OrderStatus.Pending)
+            || (o.OrderType != OrderType.Return
+                && o.CancellationReason != null
+                && o.CancellationReason != CancellationReason.WarehouseNotReceived));
 
         // Drop orders with no company↔customer settlement: the recipient pays the
         // service fee (nothing invoiced to the sender) and there is no package COD
-        // for the company to pay back.
+        // for the company to pay back. Billable failed deliveries are kept — their fee
+        // shifts to the sender regardless of the original payer.
         query = query.Where(o => !(o.WhoPaysForCompanyService == ServicePayer.Recipient
-                                && o.AmountToCollectForPackage == null));
+                                && o.AmountToCollectForPackage == null)
+                              || (o.OrderType != OrderType.Return
+                                  && o.CancellationReason != null
+                                  && o.CancellationReason != CancellationReason.WarehouseNotReceived));
 
         // Date by delivery when delivered, else by placement (for the not-yet-delivered
-        // sender-paid orders) so both slot into the day/month navigation.
-        query = OrderFinanceQueries.FilterByEffectiveDate(query, request.Date, request.Monthly);
+        // sender-paid orders) so both slot into the day/month navigation. A from/to range
+        // (when given) takes precedence over the single day/month.
+        query = (request.From is not null || request.To is not null)
+            ? OrderFinanceQueries.FilterByEffectiveDateRange(query, request.From, request.To)
+            : OrderFinanceQueries.FilterByEffectiveDate(query, request.Date, request.Monthly);
         query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt);
 
         var orders = await query.ToListAsync(ct);
@@ -132,13 +151,20 @@ internal static class OrderFinanceQueries
         OrderStatus.OrderNotAccepted,
     };
 
-    /// <summary>Active (non-cancelled) orders with the navigations needed for mapping.</summary>
+    /// <summary>
+    /// Billable orders with the navigations needed for mapping: active (non-cancelled) orders
+    /// plus billable failed deliveries (mirrors OrderFinance.IsBillableFailedDelivery; inlined
+    /// because this composes into SQL) — the sender still owes their fee / the courier their salary.
+    /// </summary>
     public static IQueryable<Order> Base(IAppDbContext context) =>
         context.Orders
             .AsNoTracking()
             .Include(o => o.GroupOrder)!.ThenInclude(g => g!.Customer)
             .Include(o => o.Customer)
-            .Where(o => !CancelledStatuses.Contains(o.Status));
+            .Where(o => !CancelledStatuses.Contains(o.Status)
+                     || (o.OrderType != OrderType.Return
+                         && o.CancellationReason != null
+                         && o.CancellationReason != CancellationReason.WarehouseNotReceived));
 
     /// <summary>Active orders owned by a customer via either ownership path.</summary>
     public static IQueryable<Order> ForCustomer(IAppDbContext context, Guid customerId) =>
@@ -175,13 +201,16 @@ internal static class OrderFinanceQueries
     /// </summary>
     public static IQueryable<Order> FilterByDeliveredAt(IQueryable<Order> query, DateOnly? date)
     {
-        query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null);
+        // CancelledAt covers billable failed deliveries (courier earns salary) that have no
+        // delivery timestamp; Base() has already limited the set to active + billable orders,
+        // so the only cancelled orders here are billable ones.
+        query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) != null);
 
         if (date is not DateOnly d) return query;
         var start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var end   = start.AddDays(1);
-        return query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt) >= start
-                             && (o.DeliveredAt ?? o.DeliveredToWarehouseAt) <  end);
+        return query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) >= start
+                             && (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) <  end);
     }
 
     /// <summary>
@@ -222,6 +251,26 @@ internal static class OrderFinanceQueries
         }
         return query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt) >= start
                              && (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt) <  end);
+    }
+
+    /// <summary>
+    /// Narrows to an inclusive effective-date range [from, to] (either bound optional). Dates an
+    /// order by its delivery timestamp when delivered, else by placement — matching
+    /// <see cref="FilterByEffectiveDate"/>. "23 to 26" includes both the 23rd and the 26th.
+    /// </summary>
+    public static IQueryable<Order> FilterByEffectiveDateRange(IQueryable<Order> query, DateOnly? from, DateOnly? to)
+    {
+        if (from is DateOnly f)
+        {
+            var start = f.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt) >= start);
+        }
+        if (to is DateOnly tt)
+        {
+            var end = tt.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc); // inclusive upper bound
+            query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt) < end);
+        }
+        return query;
     }
 
     public static OrderFinanceLineDto ToDto(Order o)
@@ -266,7 +315,9 @@ internal static class OrderFinanceQueries
 
             CompanyRevenue:               OrderFinance.CompanyRevenue(o),
             CompanyNetCash:               OrderFinance.CompanyNetCash(o),
-            IsCompanyServicePaid:         OrderFinance.IsCompanyServicePaid(o)
+            IsCompanyServicePaid:         OrderFinance.IsCompanyServicePaid(o),
+            SenderOwesService:            OrderFinance.SenderOwesService(o),
+            IsBillableFailedDelivery:     OrderFinance.IsBillableFailedDelivery(o)
         );
     }
 }

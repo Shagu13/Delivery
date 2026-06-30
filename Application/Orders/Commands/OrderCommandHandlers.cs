@@ -85,6 +85,19 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         order.CourierId = courier.Id;
         order.AssignedToCourierAt = CustomTime.Now;
         order.Status = OrderStatus.CourierAssignedToDeliver;
+
+        // The separate "on the way" step was removed (courier now confirms delivery in one
+        // swipe), so the warehouse-pickup stamp and the non-Tbilisi delivery-window estimate
+        // are recorded here, at assignment — the start of the courier's last-mile possession.
+        // Guarded so a re-assignment doesn't overwrite an already-recorded pickup/window.
+        order.PickedUpFromWarehouseAt ??= order.AssignedToCourierAt;
+        if (order.DeliveryDateFrom is null
+            && !order.RecipientCity.Equals("Tbilisi", StringComparison.OrdinalIgnoreCase))
+        {
+            order.DeliveryDateFrom = order.AssignedToCourierAt.Value.Date.AddDays(1);
+            order.DeliveryDateTo   = order.AssignedToCourierAt.Value.Date.AddDays(4);
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         // Live-refresh dashboards: the newly assigned courier (order appears),
@@ -138,38 +151,6 @@ file static class OrderCourierGuard
     }
 }
 
-// ── MarkOrderDelivering ───────────────────────────────────────────────────────
-// Courier picks up the order from warehouse and starts delivering.
-public sealed class MarkOrderDeliveringCommandHandler : IRequestHandler<MarkOrderDeliveringCommand>
-{
-    private readonly IAppDbContext _context;
-    public MarkOrderDeliveringCommandHandler(IAppDbContext context) => _context = context;
-
-    public async Task Handle(MarkOrderDeliveringCommand request, CancellationToken cancellationToken)
-    {
-        var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
-            _context, request.OrderId, request.CourierUserId, cancellationToken);
-
-        if (order.Status != OrderStatus.CourierAssignedToDeliver)
-            throw new ConflictException($"Expected CourierAssignedToDeliver. Current: {order.Status}.");
-
-        var pickedUpAt = CustomTime.Now;
-
-        order.Status = OrderStatus.CourierDeliveringTheOrderToRecipient;
-        order.PickedUpFromWarehouseAt = pickedUpAt;
-
-        // Auto-fill delivery window for non-Tbilisi orders
-        const string tbilisi = "Tbilisi";
-        if (!order.RecipientCity.Equals(tbilisi, StringComparison.OrdinalIgnoreCase))
-        {
-            order.DeliveryDateFrom = pickedUpAt.Date.AddDays(1);
-            order.DeliveryDateTo = pickedUpAt.Date.AddDays(4);
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
-    }
-}
-
 // ── MarkOrderDelivered ────────────────────────────────────────────────────────
 public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrderDeliveredCommand>
 {
@@ -181,8 +162,12 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
             _context, request.OrderId, request.CourierUserId, cancellationToken);
 
-        if (order.Status != OrderStatus.CourierDeliveringTheOrderToRecipient)
-            throw new ConflictException($"Expected CourierDeliveringTheOrderToRecipient. Current: {order.Status}.");
+        // The separate "on the way" step was removed — couriers confirm delivery in one swipe
+        // from CourierAssignedToDeliver. CourierDeliveringTheOrderToRecipient is still accepted
+        // for any orders left mid-flight under the old two-step process.
+        if (order.Status is not (OrderStatus.CourierAssignedToDeliver
+                              or OrderStatus.CourierDeliveringTheOrderToRecipient))
+            throw new ConflictException($"Expected CourierAssignedToDeliver. Current: {order.Status}.");
 
         // Capture payment status before marking paid, so the cash-collection logic below
         // still knows whether the product was unpaid at the time of delivery.
@@ -245,8 +230,9 @@ public sealed class MarkOrderDeliveredPaidToSenderCommandHandler
         var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
             _context, request.OrderId, request.CourierUserId, cancellationToken);
 
-        if (order.Status != OrderStatus.CourierDeliveringTheOrderToRecipient)
-            throw new ConflictException($"Expected CourierDeliveringTheOrderToRecipient. Current: {order.Status}.");
+        if (order.Status is not (OrderStatus.CourierAssignedToDeliver
+                              or OrderStatus.CourierDeliveringTheOrderToRecipient))
+            throw new ConflictException($"Expected CourierAssignedToDeliver. Current: {order.Status}.");
 
         order.Status = OrderStatus.DeliveredToRecipient;
 
@@ -299,8 +285,9 @@ public sealed class PostponeOrderCommandHandler : IRequestHandler<PostponeOrderC
         var (order, _) = await OrderCourierGuard.LoadAndVerifyAsync(
             _context, request.OrderId, request.CourierUserId, cancellationToken);
 
-        if (order.Status != OrderStatus.CourierDeliveringTheOrderToRecipient)
-            throw new ConflictException($"Expected CourierDeliveringTheOrderToRecipient. Current: {order.Status}.");
+        if (order.Status is not (OrderStatus.CourierAssignedToDeliver
+                              or OrderStatus.CourierDeliveringTheOrderToRecipient))
+            throw new ConflictException($"Expected CourierAssignedToDeliver. Current: {order.Status}.");
 
         order.Status = OrderStatus.DeliveryPostponed;
         order.PostponeReason = request.Reason;
@@ -323,7 +310,7 @@ public sealed class RetryDeliveryCommandHandler : IRequestHandler<RetryDeliveryC
         if (order.Status != OrderStatus.DeliveryPostponed)
             throw new ConflictException($"Expected DeliveryPostponed. Current: {order.Status}.");
 
-        order.Status = OrderStatus.CourierDeliveringTheOrderToRecipient;
+        order.Status = OrderStatus.CourierAssignedToDeliver;
         order.PostponeReason = null;
         order.PostponedAt = null;
         await _context.SaveChangesAsync(cancellationToken);
@@ -347,7 +334,9 @@ public sealed class CancelOrderByCourierCommandHandler : IRequestHandler<CancelO
         var (order, courier) = await OrderCourierGuard.LoadAndVerifyAsync(
             _context, request.OrderId, request.CourierUserId, cancellationToken);
 
-        if (order.Status is not (OrderStatus.CourierDeliveringTheOrderToRecipient or OrderStatus.DeliveryPostponed))
+        if (order.Status is not (OrderStatus.CourierAssignedToDeliver
+                              or OrderStatus.CourierDeliveringTheOrderToRecipient
+                              or OrderStatus.DeliveryPostponed))
             throw new ConflictException($"Cannot cancel from status {order.Status}.");
 
         order.Status              = OrderStatus.OrderNotAccepted;
@@ -399,7 +388,26 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
         // Remember who had it so their open dashboard can drop it live.
         var assignedCourierId = order.CourierId;
 
+        // "Cancel & charge": an explicit (non-warehouse) reason makes this a billable failed
+        // delivery (OrderFinance.IsBillableFailedDelivery keys off CancellationReason) — the sender
+        // is invoiced the fee and the courier earns salary. Guarded so it can only be applied once
+        // the order genuinely reached a delivery courier. A null reason is a plain, no-charge cancel.
+        if (request.Reason is CancellationReason reason)
+        {
+            if (reason == CancellationReason.WarehouseNotReceived)
+                throw new ConflictException("WarehouseNotReceived is set during warehouse acceptance, not here.");
+            if (order.AssignedToCourierAt is null)
+                throw new ConflictException("Can only cancel & charge an order that reached a delivery courier.");
+
+            order.CancellationReason  = reason;
+            order.CancellationComment = reason == CancellationReason.Other
+                ? (string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim())
+                : null;
+        }
+
         order.Status = OrderStatus.CancelledByAdmin;
+        // Stamp the cancellation time so it can be dated into finance ranges.
+        order.CancelledAt = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);
 
 
@@ -410,6 +418,63 @@ public sealed class CancelOrderByAdminCommandHandler : IRequestHandler<CancelOrd
 
         // Live-refresh dashboards: the assigned courier (so the cancelled order
         // leaves their active deliveries) and admins.
+        if (assignedCourierId is Guid courierId)
+            _notifier.NotifyCourierOrdersChanged(courierId);
+        _notifier.NotifyAdminsOrdersChanged();
+    }
+}
+
+// ── MarkSendReturnedToSender ──────────────────────────────────────────────────
+// Admin marks a Send/Exchange order whose delivery failed (recipient refused) as returned to
+// the sender. Mirrors the Return-order action; the sender still owes the service fee and the
+// courier still earns salary (OrderFinance.IsBillableFailedDelivery keys off this terminal).
+public sealed class MarkSendReturnedToSenderCommandHandler : IRequestHandler<MarkSendReturnedToSenderCommand>
+{
+    private static readonly OrderStatus[] AllowedFrom =
+    {
+        OrderStatus.CourierAssignedToDeliver,
+        OrderStatus.CourierDeliveringTheOrderToRecipient,
+        OrderStatus.DeliveryPostponed,
+        OrderStatus.OrderNotAccepted, // courier already declined → admin formalises the return
+    };
+
+    private readonly IAppDbContext _context;
+    private readonly IRealtimeNotifier _notifier;
+    public MarkSendReturnedToSenderCommandHandler(IAppDbContext context, IRealtimeNotifier notifier)
+    {
+        _context  = context;
+        _notifier = notifier;
+    }
+
+    public async Task Handle(MarkSendReturnedToSenderCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        if (order.OrderType == OrderType.Return)
+            throw new ConflictException("Returns use their own returned-to-sender action.");
+
+        if (order.AssignedToCourierAt is null || !AllowedFrom.Contains(order.Status))
+            throw new ConflictException(
+                $"Can only return-to-sender a Send/Exchange order that reached a delivery courier. Current: {order.Status}.");
+
+        var assignedCourierId = order.CourierId;
+
+        order.Status      = OrderStatus.ReturnedToSender;
+        order.DeliveredAt = CustomTime.Now;   // dates the billing/settlement event into finance ranges
+        // Record an explicit billable reason so the sender is invoiced the fee — finance keys off
+        // CancellationReason (OrderFinance.IsBillableFailedDelivery). Keep any reason the courier
+        // already chose when declining; otherwise mark it a generic return.
+        order.CancellationReason ??= CancellationReason.Other;
+        // Clear any postpone state — this is now terminal.
+        order.PostponeReason = null;
+        order.PostponedAt    = null;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        if (order.GroupOrderId.HasValue)
+            await GroupOrderCloser.TryCloseGroupOrderAsync(_context, order.GroupOrderId.Value, cancellationToken);
+
         if (assignedCourierId is Guid courierId)
             _notifier.NotifyCourierOrdersChanged(courierId);
         _notifier.NotifyAdminsOrdersChanged();
@@ -568,6 +633,10 @@ file static class GroupOrderCloser
         OrderStatus.DeliveredToRecipient,
         OrderStatus.CancelledByAdmin,
         OrderStatus.CancelledBySender,
+        // A last-mile delivery that ended at the recipient without success is terminal too:
+        // the courier declined it (OrderNotAccepted) or the admin returned it to the sender.
+        OrderStatus.OrderNotAccepted,
+        OrderStatus.ReturnedToSender,
     };
 
     internal static async Task TryCloseGroupOrderAsync(

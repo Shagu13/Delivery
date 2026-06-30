@@ -141,7 +141,18 @@ async function orderAction(token: string, id: string, action: string, body?: obj
 export const sendOrderToCity        = (token: string, id: string) => orderAction(token, id, 'send-to-city');
 export const assignCourierToOrder   = (token: string, id: string, courierId: string) =>
     orderAction(token, id, 'assign-courier', { courierId });
-export const cancelOrderByAdmin          = (token: string, id: string) => orderAction(token, id, 'cancel-by-admin');
+/**
+ * Admin cancels an order. With no `opts` it is a plain, no-charge cancel. Passing a `reason`
+ * makes it a billable "cancel & charge" — the sender is invoiced the service fee and the courier
+ * earns salary (the order must have reached a delivery courier), mirroring the courier's own
+ * cancel-with-reason.
+ */
+export const cancelOrderByAdmin          = (
+    token: string, id: string, opts?: { reason?: CancellationReason; comment?: string },
+) => orderAction(
+    token, id, 'cancel-by-admin',
+    opts?.reason ? { reason: opts.reason, comment: opts.comment ?? null } : undefined,
+);
 /**
  * Admin force-marks a Send/Exchange order delivered to recipient. Optionally assigns a
  * courier (only applied when the order has none, so the delivery is attributed for
@@ -156,6 +167,12 @@ export const adminMarkOrderDelivered     = (
         : undefined,
 );
 export const adminMarkReturnAtWarehouse  = (token: string, id: string) => orderAction(token, id, 'admin-mark-at-warehouse');
+/**
+ * Admin marks a Send/Exchange order whose delivery failed (recipient refused) as returned to
+ * the sender — Order → ReturnedToSender. The sender still owes the company service fee and the
+ * courier still earns salary.
+ */
+export const markSendReturnedToSender    = (token: string, id: string) => orderAction(token, id, 'mark-send-returned-to-sender');
 /**
  * Admin corrects a courier's mistaken terminal status, returning the order to the
  * delivery flow (CourierAssignedToDeliver). 'UnCancel' revives a wrongly cancelled
@@ -184,7 +201,6 @@ export async function updateOrder(token: string, id: string, data: UpdateOrderRe
 }
 
 // ── Courier ───────────────────────────────────────────────────────────────────
-export const markOrderDelivering = (token: string, id: string) => orderAction(token, id, 'delivering');
 export const markOrderDelivered  = (token: string, id: string) => orderAction(token, id, 'delivered');
 /** Delivered, but the recipient had already paid the sender directly (COD zeroed). */
 export const markOrderDeliveredPaidToSender = (token: string, id: string, serviceFeeAlsoPaidToSender: boolean) =>

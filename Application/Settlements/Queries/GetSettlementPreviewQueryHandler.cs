@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Finance;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +44,21 @@ public sealed class GetSettlementPreviewQueryHandler
             .OrderBy(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt)
             .ToListAsync(cancellationToken);
 
+        // Billable failed deliveries for the day (mirrors OrderFinance.IsBillableFailedDelivery;
+        // dated by the billing event = DeliveredAt ?? CancelledAt). The courier still earns salary,
+        // so they belong in the day's settlement; they collected no cash. Disjoint from `orders`.
+        var billableFailed = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CourierId == request.CourierId
+                     && o.OrderType != OrderType.Return
+                     && o.CancellationReason != null
+                     && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                     && (o.DeliveredAt ?? o.CancelledAt) >= dayStart
+                     && (o.DeliveredAt ?? o.CancelledAt) <= dayEnd)
+            .ToListAsync(cancellationToken);
+
+        orders = orders.Concat(billableFailed).ToList();
+
         // ── GroupOrders picked up on the day → drives TotalOrdersPickedUp ────
         var pickedUpPackages = await _context.GroupOrders
             .AsNoTracking()
@@ -56,8 +72,10 @@ public sealed class GetSettlementPreviewQueryHandler
         // AND the service fee for Recipient-payer orders. Do NOT add service fees again.
         var totalCash        = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
 
-        // Pure parcel money only (no service fees) — used for the COD display row.
-        var totalCodOnly     = orders.Sum(o => o.AmountToCollectForPackage ?? 0m);
+        // Pure parcel money only (no service fees) — used for the COD display row. A failed
+        // delivery collected no COD, so it is excluded from this figure (it still earns salary).
+        var totalCodOnly     = orders.Where(o => !OrderFinance.IsBillableFailedDelivery(o))
+                                     .Sum(o => o.AmountToCollectForPackage ?? 0m);
 
         var totalService     = orders.Sum(o => o.CompanyServicePrice);
         var totalSalary      = orders.Sum(o => o.CourierSalary ?? 0m);

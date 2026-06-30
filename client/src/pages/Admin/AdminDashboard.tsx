@@ -1040,6 +1040,10 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   // Order being edited from a group order's package row, with its customer's pricing.
   const [editing, setEditing] = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic id for the in-flight data load. Only the most recently issued request may
+  // write to state, so a slow/stale response (initial load, realtime refetch) can never
+  // overwrite a newer search — which otherwise made results flicker in then vanish.
+  const loadSeqRef = useRef(0);
 
   // ── Pick-Up day navigation + grouping ──────────────────────────────────────
   // null = show ALL days (default); a date filters the list to that single day, and an
@@ -1125,14 +1129,17 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   };
 
   const load = useCallback(async (term: string) => {
+    const seq = ++loadSeqRef.current;
     try {
       const data = await fetchGroupOrders(token ?? '', term || undefined);
+      if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
       setGroupOrders(data);
       setError(null);
     } catch (e: unknown) {
+      if (seq !== loadSeqRef.current) return;
       setError(e instanceof Error ? e.message : t.goLoadingOrders);
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [token]);
 
@@ -2994,8 +3001,8 @@ function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrde
               <thead>
                 <tr>
                   <th>{t.aopThTracking}</th>
-                  <th>{t.aopThRecipient}</th>
-                  <th>{t.aopThCityDistrict}</th>
+                  <th>{t.crwThSender}</th>
+                  <th>{t.crwThCityAddress}</th>
                   <th>{t.aopThStatus}</th>
                   <th>{t.crwThSvcPrice}</th>
                   <th>{t.crwThCourierSalary}</th>
@@ -3010,12 +3017,11 @@ function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrde
                     <tr key={o.id}>
                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
                       <td>
-                        <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontFamily: 'Courier New, monospace' }}>{o.recipientPhone}</div>
+                        <div style={{ fontWeight: 600 }}>{o.senderBusinessName || '—'}</div>
                       </td>
                       <td>
                         <div>{o.recipientCity}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientDistrict}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
                       </td>
                       <td><StatusBadge status={o.status} /></td>
                       <td style={{ fontWeight: 600 }}>₾{o.companyServicePrice.toFixed(2)}</td>

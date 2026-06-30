@@ -9,9 +9,6 @@ public sealed record SendOrderToCityCommand(Guid OrderId) : IRequest;
 /// <summary>Admin assigns last-mile delivery courier.</summary>
 public sealed record AssignCourierToOrderCommand(Guid OrderId, Guid CourierId) : IRequest;
 
-/// <summary>Courier picks up the order and starts delivering. Order → CourierDeliveringTheOrderToRecipient.</summary>
-public sealed record MarkOrderDeliveringCommand(Guid OrderId, string CourierUserId) : IRequest;
-
 /// <summary>Courier confirms delivery to recipient. Order → DeliveredToRecipient.</summary>
 public sealed record MarkOrderDeliveredCommand(Guid OrderId, string CourierUserId) : IRequest;
 
@@ -38,8 +35,25 @@ public sealed record RetryDeliveryCommand(Guid OrderId, string CourierUserId) : 
 public sealed record CancelOrderByCourierCommand(
     Guid OrderId, string CourierUserId, CancellationReason Reason, string? Comment) : IRequest;
 
-/// <summary>Admin cancels any single order at any stage. Order → CancelledByAdmin.</summary>
-public sealed record CancelOrderByAdminCommand(Guid OrderId) : IRequest;
+/// <summary>
+/// Admin cancels any single order at any stage. Order → CancelledByAdmin.
+/// When <paramref name="Reason"/> is null this is a plain (non-billable) cancellation — used to
+/// kill an order early without charging. When a (non-warehouse) <paramref name="Reason"/> is given
+/// it is a "cancel &amp; charge" — the order must have reached a delivery courier, the sender is
+/// invoiced the service fee and the courier earns their salary, mirroring the courier's own
+/// cancel-with-reason (OrderFinance.IsBillableFailedDelivery keys off CancellationReason).
+/// Comment is only kept for the "Other" reason.
+/// </summary>
+public sealed record CancelOrderByAdminCommand(
+    Guid OrderId, CancellationReason? Reason = null, string? Comment = null) : IRequest;
+
+/// <summary>
+/// Admin marks a Send/Exchange order whose delivery failed (recipient refused / wanted to
+/// cancel mid-delivery) as returned to the sender. Order → ReturnedToSender. Mirrors the
+/// Return-order "mark returned to sender" action; the sender still owes the company service
+/// fee and the courier still earns salary (OrderFinance.IsBillableFailedDelivery).
+/// </summary>
+public sealed record MarkSendReturnedToSenderCommand(Guid OrderId) : IRequest;
 
 /// <summary>
 /// Admin undoes a courier's mistaken terminal status and returns the order to the

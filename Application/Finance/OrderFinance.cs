@@ -34,7 +34,43 @@ public static class OrderFinance
     /// <summary>Tolerance for decimal "fully settled" comparisons (sub-tetri).</summary>
     private const decimal Epsilon = 0.005m;
 
-    private static bool RecipientPays(Order o) => o.WhoPaysForCompanyService == ServicePayer.Recipient;
+    /// <summary>
+    /// A delivery that was deliberately failed-and-billed by whoever handled it: the courier
+    /// declined it on the recipient's behalf, or an admin cancelled-and-charged / marked the
+    /// Send/Exchange parcel returned to the sender. The single signal is an explicit
+    /// <see cref="Order.CancellationReason"/> recorded at that moment — the courier picks one
+    /// when cancelling a delivery, and the admin picks one in the equivalent "cancel & charge"
+    /// / "returned to sender" actions. The company still bills the <b>sender</b> for the service
+    /// fee and still pays the courier their salary, exactly as if the order had been sender-pays.
+    ///
+    /// Excluded: standalone Returns (their own flow), and the <see cref="CancellationReason.WarehouseNotReceived"/>
+    /// reason (the parcel never physically arrived, so nothing is owed). A plain admin/customer
+    /// cancellation records no reason and is therefore never billable, which is what lets an
+    /// order be cancelled early without charging. The reason is cleared whenever an order is
+    /// un-cancelled back into the flow, so a later-delivered order never carries a stale one.
+    /// </summary>
+    public static bool IsBillableFailedDelivery(Order o) =>
+        o.OrderType != OrderType.Return
+        && o.CancellationReason != null
+        && o.CancellationReason != CancellationReason.WarehouseNotReceived;
+
+    /// <summary>
+    /// When the settlement/billing event for a billable failed delivery happened, used to date
+    /// it into a finance range: the admin "returned to sender" timestamp (DeliveredAt) or, for a
+    /// cancellation, the CancelledAt timestamp.
+    /// </summary>
+    public static DateTime? FailedDeliveryEventAt(Order o) => o.DeliveredAt ?? o.CancelledAt;
+
+    /// <summary>
+    /// Effective payer of the company service fee. The recipient only ever pays when the parcel
+    /// was actually delivered; on a billable failed delivery the recipient paid nothing, so the
+    /// fee shifts to the sender as a receivable regardless of the order's original payer.
+    /// </summary>
+    private static bool RecipientPays(Order o) =>
+        o.WhoPaysForCompanyService == ServicePayer.Recipient && !IsBillableFailedDelivery(o);
+
+    /// <summary>True when the sender owes the company the service fee for this order.</summary>
+    public static bool SenderOwesService(Order o) => !RecipientPays(o);
 
     /// <summary>
     /// Service-fee value the company keeps for this order (i.e. not already inside the
@@ -67,8 +103,16 @@ public static class OrderFinance
     public static decimal CompanyNetCash(Order o) =>
         (o.CodTransferedToCompanyByCourier ?? 0m)
       - (o.CodPaidToCustomerAmount        ?? 0m)
-      - (o.IsCourierSalaryIncludedSpecialCase ? 0m : (o.CourierSalaryPaidAmount ?? 0m))
+      - (CourierKeptSalaryFromCash(o) ? 0m : (o.CourierSalaryPaidAmount ?? 0m))
       + ServiceInflow(o);
+
+    /// <summary>
+    /// True when the courier kept their salary out of the cash they collected (so the company's
+    /// handover is already net of it). Never true for a billable failed delivery — the courier
+    /// collected no cash, so any salary the company pays them is a separate outflow.
+    /// </summary>
+    private static bool CourierKeptSalaryFromCash(Order o) =>
+        o.IsCourierSalaryIncludedSpecialCase && !IsBillableFailedDelivery(o);
 
     /// <summary>The company's terminal margin on this order: service fee minus courier salary.</summary>
     public static decimal CompanyRevenue(Order o) =>
@@ -76,10 +120,30 @@ public static class OrderFinance
 
     /// <summary>
     /// Total cash the courier collected from the recipient and must account for: package COD
-    /// plus, for recipient-pays orders, the service fee collected at delivery.
+    /// plus, for recipient-pays orders, the service fee collected at delivery. A billable failed
+    /// delivery collected nothing (the recipient declined the parcel), so it is zero.
     /// </summary>
     public static decimal ExpectedCourierCash(Order o) =>
-        (o.AmountToCollectForPackage ?? 0m) + (RecipientPays(o) ? o.CompanyServicePrice : 0m);
+        IsBillableFailedDelivery(o)
+            ? 0m
+            : (o.AmountToCollectForPackage ?? 0m) + (RecipientPays(o) ? o.CompanyServicePrice : 0m);
+
+    /// <summary>
+    /// Package COD the company still owes the customer for this order. A billable failed delivery
+    /// collected no COD (the parcel was never handed over), so nothing is owed back.
+    /// </summary>
+    public static decimal CodOwedToCustomer(Order o) =>
+        IsBillableFailedDelivery(o)
+            ? 0m
+            : (o.AmountToCollectForPackage ?? 0m) - (o.CodPaidToCustomerAmount ?? 0m);
+
+    /// <summary>
+    /// Company service fee the sender still owes for this order (0 when the recipient pays it
+    /// in cash at delivery). Counts the full fee on a billable failed delivery, less anything
+    /// the sender has already paid.
+    /// </summary>
+    public static decimal ServiceOwedBySender(Order o) =>
+        RecipientPays(o) ? 0m : o.CompanyServicePrice - (o.ServicePaidByCustomerAmount ?? 0m);
 
     /// <summary>True once the courier has been credited their full salary for this order.</summary>
     public static bool IsCourierSalaryPaid(Order o) =>
@@ -105,7 +169,7 @@ public static class OrderFinance
     public static bool HasCourierTransferedAmount(Order o)
     {
         decimal transferred = o.CodTransferedToCompanyByCourier ?? 0m;
-        decimal keptSalary  = o.IsCourierSalaryIncludedSpecialCase ? (o.CourierSalaryPaidAmount ?? 0m) : 0m;
+        decimal keptSalary  = CourierKeptSalaryFromCash(o) ? (o.CourierSalaryPaidAmount ?? 0m) : 0m;
         return ExpectedCourierCash(o) - transferred - keptSalary <= Epsilon;
     }
 }

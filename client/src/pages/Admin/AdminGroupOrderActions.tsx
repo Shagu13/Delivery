@@ -10,6 +10,7 @@ import {
     setGroupOrderPickupDate,
 } from '../../api/adminGroupOrders';
 import { sendOrderToCity, cancelOrderByAdmin } from '../../api/orders';
+import { assignReturnCourier } from '../../api/returnExchange';
 import type { Courier } from '../../api/couriers';
 import { useLanguage } from '../../contexts/useLanguage';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
@@ -139,10 +140,19 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
         }
     }
 
+    // A standalone Return order is surfaced here as a synthetic single-order "batch"
+    // whose id is the Order id (no GroupOrder exists). Its pickup courier lives on
+    // Order.CourierId and must be (re)assigned through the Return endpoint — the
+    // group-order route would 404 on the order id.
+    const isStandaloneReturn =
+        groupOrder.isStandalone === true && groupOrder.orders[0]?.orderType === 'Return';
+
     async function handleAssignGroupCourier() {
         if (!selectedCourierId) return;
         await run(
-            () => assignCourierToGroupOrder(token, groupOrder.id, selectedCourierId),
+            () => isStandaloneReturn
+                ? assignReturnCourier(token, groupOrder.id, selectedCourierId)
+                : assignCourierToGroupOrder(token, groupOrder.id, selectedCourierId),
             t.goAssignedPickup
         );
         setShowCourierPicker(false);

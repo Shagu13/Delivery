@@ -14,9 +14,11 @@ public sealed class CompanyFinanceController : BaseController
     public async Task<IActionResult> GetOverview(
         [FromQuery] DateOnly from,
         [FromQuery] DateOnly to,
+        [FromQuery] string? city,
+        [FromQuery] string? district,
         CancellationToken ct)
     {
-        var result = await Sender.Send(new GetCompanyFinanceOverviewQuery(from, to), ct);
+        var result = await Sender.Send(new GetCompanyFinanceOverviewQuery(from, to, city, district), ct);
         return Ok(result);
     }
 }

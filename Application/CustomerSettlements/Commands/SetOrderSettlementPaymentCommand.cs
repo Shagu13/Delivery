@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Finance;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -103,7 +104,11 @@ public sealed class SetOrderSettlementPaymentCommandHandler
 
         if (request.ServicePaid is bool servicePaid)
         {
-            if (order.WhoPaysForCompanyService != ServicePayer.Sender)
+            // The fee is invoiced to the sender for sender-pays orders and for billable failed
+            // deliveries (the recipient declined, so the fee shifts to the sender) — even when
+            // the order was originally recipient-pays.
+            if (order.WhoPaysForCompanyService != ServicePayer.Sender
+                && !OrderFinance.IsBillableFailedDelivery(order))
                 throw new ConflictException(
                     "The service fee for this order is collected from the recipient at delivery, not invoiced to the sender.");
 

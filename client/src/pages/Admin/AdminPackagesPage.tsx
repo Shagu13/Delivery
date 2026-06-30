@@ -309,6 +309,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   });
   const [editing,         setEditing]         = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic id for the in-flight data load. Only the most recently issued request may
+  // write to state, so a slow/stale response (initial load, realtime refetch) can never
+  // overwrite a newer search — which otherwise made results flicker in then vanish.
+  const loadSeqRef = useRef(0);
 
   const [selectedDate,     setSelectedDate]     = useState<Date | null>(null);
   const [rangeEnd,         setRangeEnd]         = useState<Date | null>(null);
@@ -390,14 +394,17 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   // ── Data loading ────────────────────────────────────────────────────────────
   const load = useCallback(async (term: string) => {
+    const seq = ++loadSeqRef.current;
     try {
       const data = await fetchGroupOrders(token ?? '', term || undefined);
+      if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
       setGroupOrders(data);
       setError(null);
     } catch (e: unknown) {
+      if (seq !== loadSeqRef.current) return;
       setError(e instanceof Error ? e.message : t.goLoadingOrders);
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [token]);
 

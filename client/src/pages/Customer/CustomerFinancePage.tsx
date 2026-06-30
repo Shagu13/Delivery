@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
+import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { fetchMyOrderFinance } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -65,24 +67,41 @@ const headCell: React.CSSProperties = {
 
 function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number }) {
     const { t, lang } = useLanguage();
-    const cod = line.codAmount ?? 0;
-    const isSenderPays = line.whoPaysForCompanyService === 'Sender';
+    const { locCity, locDistrict } = usePlaceLocalizer();
+    // Localized order-type label (Send / Return / Exchange).
+    const orderTypeLabel = line.orderType === 'Return' ? t.aopOrderTypeReturn
+        : line.orderType === 'Exchange' ? t.aopOrderTypeExchange
+        : t.aopOrderTypeSend;
+    const place = [locCity(line.recipientCity), locDistrict(line.recipientDistrict)].filter(Boolean).join(', ');
+    // A failed delivery collected no COD, so nothing is owed back even if a package amount was set.
+    const cod = line.isBillableFailedDelivery ? 0 : (line.codAmount ?? 0);
+    // Use the server's computed truth: a failed delivery shifts the fee to the sender even when
+    // the order was originally recipient-pays.
+    const isSenderPays = line.senderOwesService;
     const servicePaid = line.companyServicePaymentStatus === 'Paid';
     // COD is only owed back to the customer when there is a package amount to collect.
     // Orders with no COD (codAmount null/0) have nothing to pay back → no paid/unpaid label.
     const hasCod = cod > 0.005;
     const statusMeta = getStatusMeta(line.status, lang);
     const [statusBg, statusFg] = STATUS_COLORS[line.status] ?? ['var(--color-bg-3)', 'var(--color-text-subtle)'];
+    // Short payment date shown under the paid badge (no separate column).
+    const fmtPaidDate = (iso: string) =>
+        new Date(iso).toLocaleDateString(lang === 'ka' ? 'ka-GE' : 'en-US',
+            { year: 'numeric', month: 'short', day: 'numeric' });
+    const paidDateStyle: React.CSSProperties = { fontSize: '0.66rem', color: 'var(--color-text-subtle)', marginTop: 2 };
 
     return (
         <tr style={{ background: index % 2 ? 'var(--color-bg)' : 'var(--color-bg-2)' }}>
             <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>{index + 1}</td>
             <td style={{ ...cell, fontWeight: 700 }}>{line.trackingNumber}</td>
             <td style={cell}>
-                {recipientDisplayName(line.recipientName, t.recipientUnknown)}
-                <span style={{ color: 'var(--color-text-subtle)' }}> · {line.recipientCity}</span>
+                <div>{recipientDisplayName(line.recipientName, t.recipientUnknown)}</div>
+                {place && <div style={{ color: 'var(--color-text-subtle)', fontSize: '0.72rem' }}>{place}</div>}
+                {line.recipientAddress && (
+                    <div style={{ color: 'var(--color-text-subtle)', fontSize: '0.72rem' }}>{line.recipientAddress}</div>
+                )}
             </td>
-            <td style={cell}>{line.orderType}</td>
+            <td style={cell}>{orderTypeLabel}</td>
             <td style={cell}>
                 <span title={statusMeta.description} style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: statusBg, color: statusFg }}>
                     {statusMeta.short}
@@ -96,6 +115,9 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                         ? <Badge text={t.ofinPaid} tone="paid" />
                         : hasCod && <Badge text={t.ofinUnpaid} tone="unpaid" />}
                 </div>
+                {line.isCollectedCodPaidToCustomer && line.codPaidToCustomerAt && (
+                    <div style={paidDateStyle}>{fmtPaidDate(line.codPaidToCustomerAt)}</div>
+                )}
             </td>
             {/* Service fee — always show the amount so the customer knows the cost */}
             <td style={{ ...cell, textAlign: 'right' }}>
@@ -105,6 +127,9 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                         ? <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
                         : <Badge text={t.ofinRecipientPays} tone="muted" />}
                 </div>
+                {isSenderPays && servicePaid && line.servicePaidByCustomerAt && (
+                    <div style={paidDateStyle}>{fmtPaidDate(line.servicePaidByCustomerAt)}</div>
+                )}
             </td>
         </tr>
     );
@@ -121,6 +146,10 @@ export function CustomerFinancePage() {
     // (CodPaidToCustomerAt) — only orders whose COD was paid out are shown.
     const [mode, setMode] = useState<'placed' | 'payments'>('placed');
     const [date, setDate] = useState(toDateStr(new Date()));   // defaults to today ('' = all dates)
+    // Recipient-location narrowing, applied client-side over the loaded orders.
+    const [city, setCity] = useState('');
+    const [district, setDistrict] = useState('');
+    const [address, setAddress] = useState('');
     const [items, setItems] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -143,12 +172,21 @@ export function CustomerFinancePage() {
     });
     const atToday = date !== '' && date >= todayStr;
 
-    // Totals across the listed orders
-    const codOutstanding = items.reduce((s, i) => s + ((i.codAmount ?? 0) - (i.codPaidToCustomerAmount ?? 0)), 0);
+    // Narrow the loaded orders by recipient city/district/address before counting/showing.
+    const filtered = items.filter(i =>
+        (!city || i.recipientCity === city)
+        && (!district || i.recipientDistrict === district)
+        && (!address || (i.recipientAddress ?? '').toLowerCase().includes(address.trim().toLowerCase())));
+    const hasLocationFilter = !!city || !!district || !!address.trim();
+
+    // Totals across the filtered orders. Failed deliveries collected no COD (nothing owed back),
+    // and the sender owes their service fee even if it was originally recipient-pays.
+    const codOutstanding = filtered.reduce(
+        (s, i) => i.isBillableFailedDelivery ? s : s + ((i.codAmount ?? 0) - (i.codPaidToCustomerAmount ?? 0)), 0);
     // COD the company has already paid out to the customer.
-    const codPaid = items.reduce((s, i) => s + (i.codPaidToCustomerAmount ?? 0), 0);
-    const serviceOutstanding = items.reduce(
-        (s, i) => i.whoPaysForCompanyService === 'Sender'
+    const codPaid = filtered.reduce((s, i) => s + (i.codPaidToCustomerAmount ?? 0), 0);
+    const serviceOutstanding = filtered.reduce(
+        (s, i) => i.senderOwesService
             ? s + (i.companyServicePrice - (i.servicePaidByCustomerAmount ?? 0))
             : s, 0);
 
@@ -182,6 +220,24 @@ export function CustomerFinancePage() {
                 <button onClick={load} className="btn-ghost btn-ghost--sm" style={{ marginLeft: 4 }}>{t.statRefresh}</button>
             </div>
 
+            {/* Recipient-location filter (client-side over the loaded orders): city/district + address */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 480 }}>
+                    <CityDistrictPicker
+                        cityValue={city}
+                        districtValue={district}
+                        onCityChange={c => { setCity(c); setDistrict(''); }}
+                        onDistrictChange={setDistrict}
+                    />
+                </div>
+                <input type="text" value={address} placeholder={t.ofinSearchAddress}
+                    onChange={e => setAddress(e.target.value)}
+                    style={{ flex: '1 1 200px', minWidth: 160, maxWidth: 320, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }} />
+                {hasLocationFilter && (
+                    <button onClick={() => { setCity(''); setDistrict(''); setAddress(''); }} className="btn-ghost btn-ghost--sm">{t.statAllDates}</button>
+                )}
+            </div>
+
             {loading ? (
                 <div className="dashboard__loader">{t.statLoading}</div>
             ) : error ? (
@@ -192,11 +248,16 @@ export function CustomerFinancePage() {
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>{date ? t.ofinNoneDay : t.ofinNoneAll}</div>
                     <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t.statNoRecordsHint}</div>
                 </div>
+            ) : filtered.length === 0 ? (
+                <div className="dashboard__empty" style={{ marginTop: 40 }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🔍</div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.reNoOrders}</div>
+                </div>
             ) : (
                 <>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
                         {[
-                            { label: t.ofinSumOrders,     value: items.length.toString(), accent: false },
+                            { label: t.ofinSumOrders,     value: filtered.length.toString(), accent: false },
                             { label: t.ofinSumCodOut,     value: gel(codOutstanding),     accent: true  },
                             { label: t.ofinSumCodPaidOut, value: gel(codPaid),            accent: false },
                             { label: t.ofinSumServiceOut, value: gel(serviceOutstanding), accent: false },
@@ -221,7 +282,7 @@ export function CustomerFinancePage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {items.map((line, i) => <OrderTableRow key={line.orderId} line={line} index={i} />)}
+                                {filtered.map((line, i) => <OrderTableRow key={line.orderId} line={line} index={i} />)}
                             </tbody>
                         </table>
                     </div>

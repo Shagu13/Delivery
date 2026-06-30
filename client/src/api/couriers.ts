@@ -31,6 +31,8 @@ export interface Courier {
 export interface CourierOrder {
     id: string;
     trackingNumber: string;
+    /** Owning store (sender) business name — shown on the Admin Couriers delivery view. */
+    senderBusinessName: string;
     recipientName: string;
     recipientPhone: string;
     recipientCity: string;

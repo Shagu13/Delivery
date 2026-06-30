@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Finance;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -95,8 +96,9 @@ public sealed class GetSettlementInvoiceDataQueryHandler
             createdAt = order.CreatedAt;
         }
 
+        // Active orders plus billable failed deliveries (the sender still owes their fee).
         List<Domain.Order> activeOrders = allOrders
-            .Where(o => !CancelledStatuses.Contains(o.Status))
+            .Where(o => !CancelledStatuses.Contains(o.Status) || OrderFinance.IsBillableFailedDelivery(o))
             .ToList();
 
         List<InvoiceOrderRow> rows = activeOrders
@@ -117,10 +119,12 @@ public sealed class GetSettlementInvoiceDataQueryHandler
             ))
             .ToList();
 
-        decimal totalCod     = activeOrders.Sum(o => o.AmountToCollectForPackage ?? 0m);
+        // Failed deliveries collected no COD; they only carry a sender service-fee receivable.
+        decimal totalCod     = activeOrders.Where(o => !OrderFinance.IsBillableFailedDelivery(o))
+                                           .Sum(o => o.AmountToCollectForPackage ?? 0m);
         decimal codPaid      = activeOrders.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
 
-        var senderPays       = activeOrders.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender).ToList();
+        var senderPays       = activeOrders.Where(OrderFinance.SenderOwesService).ToList();
         decimal totalService = senderPays.Sum(o => o.CompanyServicePrice);
         decimal servicePaid  = senderPays.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
 

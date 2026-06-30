@@ -325,13 +325,29 @@ public sealed class OrdersController : BaseController
     }
 
     // ── PUT /api/orders/{id}/cancel-by-admin  (Admin) ────────────────────────
+    // No body (or no reason) → plain, no-charge cancel. A (non-warehouse) reason →
+    // "cancel & charge": bills the sender the service fee (the order must have reached a courier).
     [HttpPut("{id:guid}/cancel-by-admin")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CancelByAdmin(Guid id, CancellationToken ct)
+    public async Task<IActionResult> CancelByAdmin(
+        Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CancelByAdminRequest? request,
+        CancellationToken ct)
     {
-        await Sender.Send(new CancelOrderByAdminCommand(id), ct);
+        await Sender.Send(new CancelOrderByAdminCommand(id, request?.Reason, request?.Comment), ct);
+        return NoContent();
+    }
+
+    // ── PUT /api/orders/{id}/mark-send-returned-to-sender  (Admin) ───────────
+    [HttpPut("{id:guid}/mark-send-returned-to-sender")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> MarkSendReturnedToSender(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new MarkSendReturnedToSenderCommand(id), ct);
         return NoContent();
     }
 
@@ -383,17 +399,6 @@ public sealed class OrdersController : BaseController
     {
         var result = await Sender.Send(new GetCourierDailyDeliveriesQuery(courierId, date), ct);
         return Ok(result);
-    }
-
-    // ── PUT /api/orders/{id}/delivering  (Courier) ────────────────────────────
-    [HttpPut("{id:guid}/delivering")]
-    [Authorize(Roles = "Courier")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> MarkDelivering(Guid id, CancellationToken ct)
-    {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        await Sender.Send(new MarkOrderDeliveringCommand(id, userId), ct);
-        return NoContent();
     }
 
     // ── PUT /api/orders/{id}/delivered  (Courier) ─────────────────────────────
@@ -526,6 +531,8 @@ public sealed record AdminMarkDeliveredRequest(Guid? CourierId, decimal? Salary)
 public sealed record SetCompanyServicePriceRequest(decimal Price);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);
 public sealed record CancelDeliveryRequest(Domain.Enums.CancellationReason Reason, string? Comment);
+/// <summary>Optional body for admin cancel: a reason makes it a billable "cancel &amp; charge"; omit for a plain cancel.</summary>
+public sealed record CancelByAdminRequest(Domain.Enums.CancellationReason? Reason, string? Comment);
 public sealed record DeliveredPaidToSenderRequest(bool ServiceFeeAlsoPaidToSender);
 /// <summary>Body for correct-status: which mistaken-status correction to apply.</summary>
 public sealed record CorrectStatusRequest(Application.Orders.Commands.OrderStatusCorrection Correction);

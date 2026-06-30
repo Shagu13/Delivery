@@ -32,17 +32,27 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
         GetCustomersWithOutstandingBalancesQuery request,
         CancellationToken cancellationToken)
     {
-        // Per active order: the owning customer (via either ownership path), whether that
-        // customer belongs to a tenant, and the two outstanding money components.
+        // A billable failed delivery (mirrors OrderFinance.IsBillableFailedDelivery; inlined
+        // here because this filter runs in SQL): a Send/Exchange whose handler recorded an
+        // explicit (non-warehouse) CancellationReason when cancelling-and-charging or returning
+        // to sender. The sender still owes its service fee, so it must be included even though
+        // OrderNotAccepted / CancelledByAdmin are otherwise "cancelled".
         var raw = await _context.Orders
             .AsNoTracking()
-            .Where(o => !CancelledStatuses.Contains(o.Status))
+            .Where(o => !CancelledStatuses.Contains(o.Status)
+                     || (o.OrderType != OrderType.Return
+                         && o.CancellationReason != null
+                         && o.CancellationReason != CancellationReason.WarehouseNotReceived))
             .Select(o => new
             {
                 CustomerId = o.GroupOrder != null ? o.GroupOrder.CustomerId : o.CustomerId,
                 TenantId   = o.GroupOrder != null && o.GroupOrder.Customer != null
                                 ? o.GroupOrder.Customer.TenantId
                                 : (o.Customer != null ? o.Customer.TenantId : null),
+                // Billable failed delivery → recipient paid nothing: no COD collected, fee shifts to sender.
+                Billable    = o.OrderType != OrderType.Return
+                                && o.CancellationReason != null
+                                && o.CancellationReason != CancellationReason.WarehouseNotReceived,
                 Cod         = o.AmountToCollectForPackage ?? 0m,
                 CodPaid     = o.CodPaidToCustomerAmount ?? 0m,
                 SenderPays  = o.WhoPaysForCompanyService == ServicePayer.Sender,
@@ -57,8 +67,8 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
             .Select(g => new
             {
                 CustomerId         = g.Key,
-                OutstandingCod     = g.Sum(r => r.Cod - r.CodPaid),
-                OutstandingService = g.Sum(r => r.SenderPays ? r.Service - r.ServicePaid : 0m),
+                OutstandingCod     = g.Sum(r => r.Billable ? 0m : r.Cod - r.CodPaid),
+                OutstandingService = g.Sum(r => (r.SenderPays || r.Billable) ? r.Service - r.ServicePaid : 0m),
             })
             .Where(a => a.OutstandingCod > 0.005m || a.OutstandingService > 0.005m)
             .ToList();

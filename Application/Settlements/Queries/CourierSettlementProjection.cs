@@ -34,6 +34,24 @@ internal static class CourierSettlementProjection
                           && o.DeliveredToWarehouseAt >= fromDt && o.DeliveredToWarehouseAt < toDt)))
             .ToListAsync(ct);
 
+        // Billable failed deliveries (mirrors OrderFinance.IsBillableFailedDelivery; dated by the
+        // billing event = DeliveredAt ?? CancelledAt). The signal is an explicit (non-warehouse)
+        // CancellationReason recorded when the courier/admin cancelled-and-charged or returned to
+        // sender. The courier still earns salary on these, so they join the money set. Disjoint
+        // from `delivered`: a delivered order carries no reason, and a Send/Exchange ReturnedToSender
+        // has no DeliveredToWarehouseAt (that branch only catches Return drop-offs).
+        var billableFailed = await context.Orders
+            .AsNoTracking()
+            .Where(o => o.CourierId == courierId
+                     && o.OrderType != OrderType.Return
+                     && o.CancellationReason != null
+                     && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                     && (o.DeliveredAt ?? o.CancelledAt) >= fromDt
+                     && (o.DeliveredAt ?? o.CancelledAt) < toDt)
+            .ToListAsync(ct);
+
+        delivered = delivered.Concat(billableFailed).ToList();
+
         // Packages picked up per day (GroupOrder.PickedUpAt).
         var pickedUp = await context.GroupOrders
             .AsNoTracking()
@@ -59,7 +77,7 @@ internal static class CourierSettlementProjection
             .ToListAsync(ct);
 
         static DateOnly DeliveryDay(Order o) =>
-            DateOnly.FromDateTime((o.DeliveredAt ?? o.DeliveredToWarehouseAt)!.Value);
+            DateOnly.FromDateTime((o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt)!.Value);
 
         var deliveredByDay = delivered.GroupBy(DeliveryDay).ToDictionary(g => g.Key, g => g.ToList());
         var pickedByDay    = pickedUp.GroupBy(p => DateOnly.FromDateTime(p.PickedUpAt!.Value))

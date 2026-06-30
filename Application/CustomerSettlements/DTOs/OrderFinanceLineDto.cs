@@ -54,5 +54,20 @@ public sealed record OrderFinanceLineDto(
     // ── Derived company figures (live; never stored) ──────────────────────────
     decimal  CompanyRevenue,
     decimal  CompanyNetCash,
-    bool     IsCompanyServicePaid
+    bool     IsCompanyServicePaid,
+
+    /// <summary>
+    /// True when the customer (sender) owes the company the service fee for this order —
+    /// for sender-pays orders and for billable failed deliveries (the recipient declined, so
+    /// the fee shifts to the sender even if it was originally recipient-pays). Clients should
+    /// use this, not <see cref="WhoPaysForCompanyService"/>, to decide whether the fee is owed.
+    /// </summary>
+    bool     SenderOwesService,
+
+    /// <summary>
+    /// True when this is a billable failed delivery (courier declined / admin cancelled after
+    /// assignment / Send returned-to-sender). No COD was collected, so none is owed back to the
+    /// customer, but the sender still owes the service fee.
+    /// </summary>
+    bool     IsBillableFailedDelivery
 );

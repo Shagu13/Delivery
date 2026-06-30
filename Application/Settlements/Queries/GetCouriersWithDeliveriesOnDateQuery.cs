@@ -38,7 +38,15 @@ public sealed class GetCouriersWithDeliveriesOnDateQueryHandler
                        || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
                             || o.Status == OrderStatus.ReturnedToSender)
                           && o.DeliveredToWarehouseAt >= dayStart
-                          && o.DeliveredToWarehouseAt <= dayEnd)))
+                          && o.DeliveredToWarehouseAt <= dayEnd)
+                       // Billable failed deliveries (the courier earns salary, so the day is
+                       // "active"); mirrors OrderFinance.IsBillableFailedDelivery, dated by
+                       // the billing event = DeliveredAt ?? CancelledAt.
+                       || (o.OrderType != OrderType.Return
+                           && o.CancellationReason != null
+                           && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                           && (o.DeliveredAt ?? o.CancelledAt) >= dayStart
+                           && (o.DeliveredAt ?? o.CancelledAt) <= dayEnd)))
             .Select(o => o.CourierId!.Value)
             .Distinct()
             .ToListAsync(cancellationToken);

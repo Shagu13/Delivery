@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { formatGeorgianDateTime } from '../../utils/georgianTime';
+import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import {
@@ -16,6 +17,7 @@ import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
 import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 import { OutstandingBalancesModal } from './OutstandingBalancesModal';
+import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -140,17 +142,20 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
     const now = new Date();
     const [from, setFrom] = useState(isoDate(new Date(now.getFullYear(), now.getMonth(), 1)));
     const [to, setTo] = useState(isoDate(now));
+    // Optional recipient-location narrowing of every figure on this card.
+    const [city, setCity] = useState('');
+    const [district, setDistrict] = useState('');
     const [data, setData] = useState<CompanyFinanceOverview | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(() => {
         setLoading(true); setError(null);
-        fetchCompanyFinanceOverview(from, to, token)
+        fetchCompanyFinanceOverview(from, to, token, city || undefined, district || undefined)
             .then(setData)
             .catch(e => setError(e instanceof CompanyFinanceApiError ? e.message : t.finOvLoadFailed))
             .finally(() => setLoading(false));
-    }, [from, to, token, t.finOvLoadFailed]);
+    }, [from, to, city, district, token, t.finOvLoadFailed]);
 
     // Reload on date change AND whenever a settlement action bumps refreshSignal,
     // so the cash position reflects a just-recorded payment without a page refresh.
@@ -176,6 +181,26 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
                     <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finOvTo}</span>
                     <input type="date" value={to} min={from} max={isoDate(now)} onChange={e => setTo(e.target.value)} style={dateInputStyle} />
                 </div>
+            </div>
+
+            {/* Recipient-location filter — scopes every figure on this card. Clearing the
+                city field resets to all areas (district cascades clear). */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 360px', minWidth: 240 }}>
+                    <CityDistrictPicker
+                        cityValue={city}
+                        districtValue={district}
+                        onCityChange={c => { setCity(c); setDistrict(''); }}
+                        onDistrictChange={setDistrict}
+                    />
+                </div>
+                {(city || district) && (
+                    <button
+                        onClick={() => { setCity(''); setDistrict(''); }}
+                        title={t.finAllDates}
+                        style={{ ...dateInputStyle, cursor: 'pointer', color: 'var(--color-text-muted)', lineHeight: 1, fontSize: '1rem' }}
+                    >×</button>
+                )}
             </div>
 
             {error ? (
@@ -274,10 +299,13 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // settle card so both reason about "owed" identically.
 // COD is only owed back once the company has collected it (i.e. on delivery); a
 // not-yet-delivered order (surfaced for advance service payment) contributes 0.
-const serviceOutstanding = (o: OrderFinanceLine) => o.whoPaysForCompanyService === 'Sender'
+// Use the server's computed truth (senderOwesService) so failed deliveries — whose fee shifts
+// to the sender even when originally recipient-pays — are counted as owed.
+const serviceOutstanding = (o: OrderFinanceLine) => o.senderOwesService
     ? round2(Math.max(0, o.companyServicePrice - (o.servicePaidByCustomerAmount ?? 0)))
     : 0;
-const codOutstanding = (o: OrderFinanceLine) => o.deliveredAt
+// A failed delivery collected no COD, so nothing is owed back even though it is "dated".
+const codOutstanding = (o: OrderFinanceLine) => (o.deliveredAt && !o.isBillableFailedDelivery)
     ? round2(Math.max(0, (o.codAmount ?? 0) - (o.codPaidToCustomerAmount ?? 0)))
     : 0;
 
@@ -343,32 +371,51 @@ function PaymentFilterSwitch({ value, counts, onChange }: {
 function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () => void }) {
     const { t } = useLanguage();
     const [customer, setCustomer] = useState<AdminCustomer | null>(null);
-    const [mode, setMode] = useState<'daily' | 'monthly'>('daily');
-    const [date, setDate] = useState(isoDate(new Date())); // daily: a day; monthly: any day in the month; '' = all dates
+    // Date filter modes: a single Day, a whole Month, or an inclusive custom Range.
+    const [mode, setMode] = useState<'day' | 'month' | 'range'>('day');
+    const [date, setDate] = useState(isoDate(new Date())); // day: a day; month: any day in the month; '' = all
+    // Inclusive effective-date range (both blank = all dates). "23 to 26" includes the 26th.
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    // Recipient-location narrowing, applied client-side over the loaded lines.
+    const [city, setCity] = useState('');
+    const [district, setDistrict] = useState('');
+    const [address, setAddress] = useState('');
     const [payFilter, setPayFilter] = useState<PayFilter>('all');
     const [lines, setLines] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
 
-    // Per-bucket counts (over the loaded, date-scoped set) + the filtered subset shown.
+    // Narrow the loaded lines to the chosen recipient city/district/address before counting/showing.
+    const scoped = lines.filter(l =>
+        (!city || l.recipientCity === city)
+        && (!district || l.recipientDistrict === district)
+        && (!address || (l.recipientAddress ?? '').toLowerCase().includes(address.trim().toLowerCase())));
+
+    // Per-bucket counts (over the scoped set) + the filtered subset shown.
     const counts: Record<PayFilter, number> = {
-        all:     lines.length,
-        pending: lines.filter(isPendingLine).length,
-        paid:    lines.filter(isPaidLine).length,
+        all:     scoped.length,
+        pending: scoped.filter(isPendingLine).length,
+        paid:    scoped.filter(isPaidLine).length,
     };
-    const visibleLines = filterLines(lines, payFilter);
+    const visibleLines = filterLines(scoped, payFilter);
 
     const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3000); };
 
     const load = useCallback(() => {
         if (!customer) { setLines([]); return; }
         setLoading(true); setError(null);
-        fetchCustomerOrderFinance(customer.id, token, date || undefined, mode === 'monthly')
+        const opts = mode === 'range'
+            ? { from: from || undefined, to: to || undefined }
+            : mode === 'month'
+                ? { date: date || undefined, monthly: true }
+                : { date: date || undefined };
+        fetchCustomerOrderFinance(customer.id, token, opts)
             .then(setLines)
             .catch(e => setError(e instanceof OrderFinanceApiError ? e.message : t.ofinErrLoad))
             .finally(() => setLoading(false));
-    }, [customer, date, mode, token, t.ofinErrLoad]);
+    }, [customer, mode, date, from, to, token, t.ofinErrLoad]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -386,12 +433,14 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
         return isoDate(base);
     });
     // Disable "next" once we're at (or past) the current day / month.
-    const atToday = date !== '' && (mode === 'monthly' ? date.slice(0, 7) >= monthStr : date >= todayStr);
+    const atToday = date !== '' && (mode === 'month' ? date.slice(0, 7) >= monthStr : date >= todayStr);
+    const dateActive = mode === 'range' ? !!(from || to) : !!date;
+    const hasFilter = dateActive || !!city || !!district || !!address.trim();
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Toolbar: customer picker + delivery-date filter */}
-            <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5 }}>
+            {/* Toolbar: customer picker + inclusive from/to range + recipient city/district */}
+            <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     <CustomerPicker
                         token={token}
@@ -400,20 +449,21 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                         onClear={() => { setCustomer(null); setLines([]); setError(null); }}
                     />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
-                        {/* Daily / Monthly toggle */}
+                        {/* Day / Month / Range toggle */}
                         <div className="go-seg" style={{ display: 'inline-flex' }}>
-                            <button className={`go-seg__btn ${mode === 'daily' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('daily')}>{t.ofinViewDaily}</button>
-                            <button className={`go-seg__btn ${mode === 'monthly' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('monthly')}>{t.ofinViewMonthly}</button>
+                            <button className={`go-seg__btn ${mode === 'day' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('day')}>{t.ofinViewDaily}</button>
+                            <button className={`go-seg__btn ${mode === 'month' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('month')}>{t.ofinViewMonthly}</button>
+                            <button className={`go-seg__btn ${mode === 'range' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('range')}>{t.ofinViewRange}</button>
                         </div>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.ofinFilterDelivered}</span>
-                        {mode === 'daily' ? (
+                        {mode === 'day' && (
                             <>
                                 <button onClick={() => shiftDay(-1)} title={t.statPrevDay} style={dateNavBtn}>‹</button>
-                                <input type="date" value={date} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
+                                <input type="date" value={date} max={todayStr} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
                                 <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay}
                                     style={{ ...dateNavBtn, opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
                             </>
-                        ) : (
+                        )}
+                        {mode === 'month' && (
                             <>
                                 <button onClick={() => shiftMonth(-1)} title={t.ofinPrevMonth} style={dateNavBtn}>‹</button>
                                 <input type="month" value={date ? date.slice(0, 7) : ''} max={monthStr}
@@ -422,11 +472,37 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                                     style={{ ...dateNavBtn, opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
                             </>
                         )}
-                        {date && (
-                            <button onClick={() => setDate('')} title={t.finAllDates}
+                        {mode === 'range' && (
+                            <>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finOvFrom}</span>
+                                <input type="date" value={from} max={to || todayStr} onChange={e => setFrom(e.target.value)} style={dateInputStyle} />
+                                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finOvTo}</span>
+                                <input type="date" value={to} min={from || undefined} max={todayStr} onChange={e => setTo(e.target.value)} style={dateInputStyle} />
+                            </>
+                        )}
+                        {dateActive && (
+                            <button onClick={() => { setDate(''); setFrom(''); setTo(''); }} title={t.finAllDates}
                                 style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)', width: 28, height: 28, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
                         )}
                     </div>
+                </div>
+                {/* Recipient-location filter (client-side over the loaded orders): city/district + address */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 480 }}>
+                        <CityDistrictPicker
+                            cityValue={city}
+                            districtValue={district}
+                            onCityChange={c => { setCity(c); setDistrict(''); }}
+                            onDistrictChange={setDistrict}
+                        />
+                    </div>
+                    <input type="text" value={address} placeholder={t.ofinSearchAddress}
+                        onChange={e => setAddress(e.target.value)}
+                        style={{ ...dateInputStyle, flex: '1 1 200px', minWidth: 160, maxWidth: 320 }} />
+                    {(city || district || address) && (
+                        <button onClick={() => { setCity(''); setDistrict(''); setAddress(''); }} title={t.finAllDates}
+                            style={{ ...dateInputStyle, cursor: 'pointer', color: 'var(--color-text-muted)', lineHeight: 1, fontSize: '1rem' }}>×</button>
+                    )}
                 </div>
             </div>
 
@@ -449,9 +525,9 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                 <div className="content-card" style={{ padding: 40, textAlign: 'center' }}>
                     <div className="go-spinner" style={{ margin: '0 auto' }} />
                 </div>
-            ) : lines.length === 0 ? (
+            ) : scoped.length === 0 ? (
                 <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                    {!date ? t.ofinNoneAll : mode === 'monthly' ? t.ofinNoneMonth : t.ofinNoneDay}
+                    {!hasFilter ? t.ofinNoneAll : mode === 'month' ? t.ofinNoneMonth : t.ofinNoneDay}
                 </div>
             ) : visibleLines.length === 0 ? (
                 <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
@@ -459,7 +535,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                 </div>
             ) : (
                 <CustomerSettleCard
-                    key={customer.id + '|' + mode + '|' + date + '|' + payFilter}
+                    key={customer.id + '|' + mode + '|' + date + '|' + from + '|' + to + '|' + city + '|' + district + '|' + address + '|' + payFilter}
                     customerId={customer.id}
                     lines={visibleLines}
                     token={token}
@@ -530,15 +606,20 @@ function FlowBar({ f, payLabel, busy, onPay, onToggleAll, borderRight }: {
 }
 
 // One order's amount field for a single flow — checkbox + editable price, always available.
-function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmount }: {
+function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmount, paidAt }: {
     applicable: boolean; outstanding: number; checked: boolean; amount: string;
-    onToggle: () => void; onAmount: (v: string) => void;
+    onToggle: () => void; onAmount: (v: string) => void; paidAt?: string | null;
 }) {
     const { t } = useLanguage();
     if (!applicable)
         return <div style={{ minWidth: 160, textAlign: 'right' }}><span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)' }}>{t.ofinRecipientPays}</span></div>;
     if (outstanding <= 0.005)
-        return <div style={{ minWidth: 160, textAlign: 'right' }}><span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#059669' }}>{t.ofinPaid}</span></div>;
+        return (
+            <div style={{ minWidth: 160, textAlign: 'right' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#059669' }}>{t.ofinPaid}</span>
+                {paidAt && <div style={{ fontSize: '0.66rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{formatGeorgianDateTime(paidAt)}</div>}
+            </div>
+        );
 
     return (
         <div style={{ minWidth: 160, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
@@ -616,6 +697,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     onChanged: () => void;
 }) {
     const { t } = useLanguage();
+    const { locCity, locDistrict } = usePlaceLocalizer();
     const [expanded, setExpanded] = useState(false);
     const [busy, setBusy] = useState(false);
     const [selCod, setSelCod] = useState<Sel>({});
@@ -757,7 +839,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                     {lines.map(o => {
                         const so = svcOut(o);
                         const co = codOut(o);
-                        const isSenderPays = o.whoPaysForCompanyService === 'Sender';
+                        const isSenderPays = o.senderOwesService;
                         return (
                             <div key={o.orderId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
                                 <div style={{ flex: '1 1 160px', minWidth: 0 }}>
@@ -770,7 +852,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                     </div>
                                     {/* Full delivery address: city, district, street */}
                                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 1 }}>
-                                        {[o.recipientCity, o.recipientDistrict, o.recipientAddress].filter(Boolean).join(', ')}
+                                        {[locCity(o.recipientCity), locDistrict(o.recipientDistrict), o.recipientAddress].filter(Boolean).join(', ')}
                                     </div>
                                     {/* Placement + delivery timestamps (Georgian wall-clock) */}
                                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.68rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
@@ -783,13 +865,13 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                 </div>
 
                                 {/* Service — customer → company (sender-pays only) */}
-                                <AllocCell applicable={isSenderPays} outstanding={so}
+                                <AllocCell applicable={isSenderPays} outstanding={so} paidAt={o.servicePaidByCustomerAt}
                                     checked={selSvc[o.orderId]?.checked ?? false} amount={amountOf(selSvc, o, svcOut)}
                                     onToggle={() => toggle(setSelSvc, o.orderId, so)}
                                     onAmount={v => setAmt(setSelSvc, o.orderId, v)} />
 
                                 {/* COD — company → customer */}
-                                <AllocCell applicable={true} outstanding={co}
+                                <AllocCell applicable={true} outstanding={co} paidAt={o.codPaidToCustomerAt}
                                     checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
                                     onToggle={() => toggle(setSelCod, o.orderId, co)}
                                     onAmount={v => setAmt(setSelCod, o.orderId, v)} />
@@ -873,6 +955,6 @@ const dateInputStyle: React.CSSProperties = {
 
 const dateNavBtn: React.CSSProperties = {
     background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)',
-    fontSize: '0.95rem', lineHeight: 1, padding: '5px 10px', cursor: 'pointer',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.95rem',
+    width: 28, height: 28, cursor: 'pointer', lineHeight: 1,
 };

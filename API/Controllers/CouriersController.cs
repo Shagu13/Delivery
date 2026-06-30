@@ -178,6 +178,10 @@ public sealed class CouriersController : BaseController
                 courierId               = o.CourierId,
                 id                      = o.Id,
                 trackingNumber          = o.TrackingNumber,
+                // The owning store (sender) business name, via either ownership path.
+                senderBusinessName      = o.GroupOrder != null && o.GroupOrder.Customer != null
+                                            ? o.GroupOrder.Customer.BusinessName
+                                            : (o.Customer != null ? o.Customer.BusinessName : ""),
                 recipientName           = o.RecipientName,
                 recipientPhone          = o.RecipientPhone,
                 recipientCity           = o.RecipientCity,

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
-    markOrderDelivering, markOrderDelivered, markOrderDeliveredPaidToSender,
+    markOrderDelivered, markOrderDeliveredPaidToSender,
     postponeOrder, retryDelivery, cancelDelivery,
     markReturnPickedUp, markReturnDeliveredWarehouse,
 } from '../../../api/orders';
@@ -220,11 +220,8 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         {order.description && <div className="courier-card__note">{order.description}</div>}
                                     </div>
                                     <div className="courier-card__footer">
-                                        {order.status === 'CourierAssignedToDeliver' && (
-                                            <SwipeButton label={t.cdDeliverySwipeOnWay} variant="primary" disabled={isBusy}
-                                                onSwipe={() => handleAct(order.id, () => markOrderDelivering(token, order.id), t.cdDeliveryToastOnWay)} />
-                                        )}
-                                        {order.status === 'CourierDeliveringTheOrderToRecipient' && (
+                                        {(order.status === 'CourierAssignedToDeliver'
+                                          || order.status === 'CourierDeliveringTheOrderToRecipient') && (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                 <SwipeButton label={t.cdDeliverySwipeDelivered} variant="success" disabled={isBusy}
                                                     onSwipe={() => {

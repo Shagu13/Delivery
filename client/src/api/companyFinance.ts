@@ -36,9 +36,13 @@ export class CompanyFinanceApiError extends Error {
 
 export async function fetchCompanyFinanceOverview(
     from: string, to: string, token: string,
+    city?: string, district?: string,
 ): Promise<CompanyFinanceOverview> {
+    const qs = new URLSearchParams({ from, to });
+    if (city) qs.set('city', city);
+    if (district) qs.set('district', district);
     const res = await fetch(
-        `/api/companyfinance/overview?from=${from}&to=${to}`,
+        `/api/companyfinance/overview?${qs}`,
         { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' },
     );
     if (!res.ok) {

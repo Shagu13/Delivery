@@ -33,6 +33,7 @@
 .orm-item:hover:not(:disabled) { background: var(--color-bg-3); }
 .orm-item:disabled { opacity: 0.5; cursor: not-allowed; }
 .orm-item--deliver { color: #16a34a; }
+.orm-item--cancel { color: #dc2626; }
 .orm-chev { color: var(--color-text-subtle); font-size: 0.9rem; }
 
 .orm-sub { display: flex; flex-direction: column; gap: 6px; }

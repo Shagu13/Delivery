@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { assignCourierToOrder, setCourierSalary, adminMarkOrderDelivered } from '../../api/orders';
+import { assignCourierToOrder, setCourierSalary, adminMarkOrderDelivered, markSendReturnedToSender, cancelOrderByAdmin, CANCELLATION_REASON_LABELS } from '../../api/orders';
+import type { CancellationReason } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import type { Courier } from '../../api/couriers';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -32,7 +33,7 @@ interface Props {
   onError: (msg: string) => void;
 }
 
-type Panel = 'menu' | 'assign' | 'salary' | 'deliver';
+type Panel = 'menu' | 'assign' | 'salary' | 'deliver' | 'returnToSender' | 'cancelCharge';
 
 /**
  * Per-row kebab (⋮) menu for the Delivery / Packages tables. Bundles the single-order
@@ -48,6 +49,8 @@ export function OrderRowActionsMenu({
   const [panel, setPanel] = useState<Panel>('menu');
   const [busy, setBusy] = useState(false);
   const [salaryInput, setSalaryInput] = useState('');
+  const [cancelReason, setCancelReason] = useState<CancellationReason | null>(null);
+  const [cancelComment, setCancelComment] = useState('');
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -122,10 +125,25 @@ export function OrderRowActionsMenu({
     void run(() => setCourierSalary(token, order.id, v));
   };
   const markDelivered = () => run(() => adminMarkOrderDelivered(token, order.id));
+  const markReturned  = () => run(() => markSendReturnedToSender(token, order.id));
+  const cancelCharge  = () => {
+    if (!cancelReason) return;
+    void run(() => cancelOrderByAdmin(token, order.id, {
+      reason: cancelReason,
+      comment: cancelReason === 'Other' ? cancelComment.trim() : undefined,
+    }));
+  };
 
   const showAssign  = canManage && canAssign;
   const showSalary  = canManage;
   const showDeliver = canManage && canDeliver && !!order.courierId;
+  // Send/Exchange whose delivery failed (recipient refused) can be returned to the sender,
+  // from the same active delivery states as "mark delivered". The sender still owes the fee.
+  const showReturnToSender = canManage && canDeliver && !isReturn && !!order.courierId;
+  // Admin "cancel & charge": mirrors the courier's cancel-with-reason — only once the order
+  // reached a delivery courier. Records a billable CancellationReason so the sender is invoiced.
+  const showCancelCharge = canManage && canDeliver && !isReturn && !!order.courierId;
+  const canConfirmCancel = cancelReason !== null && (cancelReason !== 'Other' || cancelComment.trim().length > 0);
 
   return (
     <>
@@ -161,6 +179,16 @@ export function OrderRowActionsMenu({
               {showDeliver && (
                 <button className="orm-item orm-item--deliver" onClick={() => setPanel('deliver')}>
                   {t.aopModeDeliver} <span className="orm-chev">›</span>
+                </button>
+              )}
+              {showReturnToSender && (
+                <button className="orm-item" onClick={() => setPanel('returnToSender')}>
+                  {t.reMarkReturned} <span className="orm-chev">›</span>
+                </button>
+              )}
+              {showCancelCharge && (
+                <button className="orm-item orm-item--cancel" onClick={() => { setCancelReason(null); setCancelComment(''); setPanel('cancelCharge'); }}>
+                  {t.ormCancelCharge} <span className="orm-chev">›</span>
                 </button>
               )}
             </>
@@ -199,6 +227,40 @@ export function OrderRowActionsMenu({
             <div className="orm-sub">
               <button className="orm-sub-head" onClick={() => setPanel('menu')}>‹ {t.aopModeDeliver}</button>
               <button className="orm-confirm orm-confirm--deliver" disabled={busy} onClick={markDelivered}>
+                {busy ? t.aopSaving : t.goConfirm}
+              </button>
+            </div>
+          )}
+
+          {panel === 'returnToSender' && (
+            <div className="orm-sub">
+              <button className="orm-sub-head" onClick={() => setPanel('menu')}>‹ {t.reMarkReturned}</button>
+              <button className="orm-confirm" disabled={busy} onClick={markReturned}>
+                {busy ? t.aopSaving : t.goConfirm}
+              </button>
+            </div>
+          )}
+
+          {panel === 'cancelCharge' && (
+            <div className="orm-sub">
+              <button className="orm-sub-head" onClick={() => setPanel('menu')}>‹ {t.ormCancelCharge}</button>
+              <div className="orm-courier-list">
+                {(Object.keys(CANCELLATION_REASON_LABELS) as CancellationReason[]).map(reason => (
+                  <button key={reason} className="orm-item"
+                    style={cancelReason === reason ? { background: 'var(--color-accent-dim)', fontWeight: 600 } : undefined}
+                    onClick={() => setCancelReason(reason)}>
+                    {t.cdCancelReasons[reason]}
+                  </button>
+                ))}
+              </div>
+              {cancelReason === 'Other' && (
+                <div className="orm-field">
+                  <input type="text" autoFocus placeholder={t.cdCancelCommentPlaceholder} value={cancelComment}
+                    maxLength={500} onChange={e => setCancelComment(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && canConfirmCancel) cancelCharge(); }} />
+                </div>
+              )}
+              <button className="orm-confirm" disabled={busy || !canConfirmCancel} onClick={cancelCharge}>
                 {busy ? t.aopSaving : t.goConfirm}
               </button>
             </div>

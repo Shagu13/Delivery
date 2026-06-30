@@ -34,9 +34,10 @@ public sealed class OrderFinanceController : BaseController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetForCustomer(
         [FromQuery] Guid customerId, [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
         CancellationToken ct)
     {
-        var result = await Sender.Send(new GetCustomerOrderFinanceLinesQuery(customerId, date, monthly), ct);
+        var result = await Sender.Send(new GetCustomerOrderFinanceLinesQuery(customerId, date, monthly, from, to), ct);
         return Ok(result);
     }
 
