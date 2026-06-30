@@ -215,7 +215,7 @@ public sealed class GroupOrdersController : BaseController
 
     // ── GET /api/grouporders/customer-unattached?customerId=&date=  (grouping modal) ──
     [HttpGet("customer-unattached")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(IReadOnlyList<AdminOrderDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetCustomerUnattached(
         [FromQuery] Guid customerId, [FromQuery] DateTime date, CancellationToken ct)
@@ -228,7 +228,7 @@ public sealed class GroupOrdersController : BaseController
 
     // ── PUT /api/grouporders/attach  (Admin links unattached orders to a batch) ──
     [HttpPut("attach")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(CreateGroupOrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -254,7 +254,7 @@ public sealed class GroupOrdersController : BaseController
 
     // ── PUT /api/grouporders/merge  (Admin unites a customer's same-day batches) ──
     [HttpPut("merge")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(CreateGroupOrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> MergeGroupOrders(
@@ -277,7 +277,7 @@ public sealed class GroupOrdersController : BaseController
 
     // ── PUT /api/grouporders/move-order  (Admin moves one order between batches) ──
     [HttpPut("move-order")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]

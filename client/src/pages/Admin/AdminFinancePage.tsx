@@ -302,8 +302,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // nothing — it's listed only for transparency (shown with "—" amounts).
 const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
 const isCancelledNonBillable = (o: OrderFinanceLine) => CANCELLED_STATUSES.has(o.status) && !o.isBillableFailedDelivery;
-// No COD is owed back for a failed delivery or any cancelled order.
-const hasNoCod = (o: OrderFinanceLine) => o.isBillableFailedDelivery || CANCELLED_STATUSES.has(o.status);
+// No COD is owed/collected unless the order was actually delivered (excludes cancelled,
+// postponed and in-progress orders, plus failed deliveries) → those show "—".
+const hasNoCod = (o: OrderFinanceLine) => o.isBillableFailedDelivery || o.deliveredAt == null;
 
 // COD is only owed back once the company has collected it (i.e. on delivery); a
 // not-yet-delivered order (surfaced for advance service payment) contributes 0.
@@ -807,8 +808,6 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
         }
     };
 
-    const colLabel: React.CSSProperties = { minWidth: 120, textAlign: 'right', fontSize: '0.6rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' };
-
     return (
         <div className="content-card" style={{ padding: 0, overflow: 'hidden' }}>
             {/* Summary header (click to expand). Left = service (customer → company); right = COD (company → customer). */}
@@ -852,82 +851,117 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                     onPay={() => doPay(false, cod, selCod, codOut, setSelCod)} />
             </div>
 
-            {/* Expanded per-order list — each order always has a checkbox + price field for both flows */}
+            {/* Expanded per-order list — Excel-style grid. Fee (+edit) sits on the right next to
+                the COD breakdown; the Settle column carries the per-order pay controls. */}
             {expanded && (
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-2)' }}>
-                        <div style={{ flex: '1 1 160px' }} />
-                        <div style={colLabel}>{t.ofinColService}</div>
-                        <div style={colLabel}>{t.ofinColCod}</div>
-                    </div>
-                    {lines.map(o => {
-                        const so = svcOut(o);
-                        const co = codOut(o);
-                        const isSenderPays = o.senderOwesService;
-                        return (
-                            <div key={o.orderId} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
-                                <div style={{ flex: '1 1 160px', minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                                        <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--color-text)' }}>{o.trackingNumber}</span>
-                                        <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>
-                                            {o.orderType === 'Return' ? t.aopOrderTypeReturn : o.orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend}
-                                        </span>
-                                        {/* Cancelled / failed: show the reason (or status) so it's clear why amounts are "—"
-                                            or why a fee is charged. Red = billable (customer pays); green = no charge. */}
-                                        {(o.isBillableFailedDelivery || CANCELLED_STATUSES.has(o.status)) && (() => {
-                                            // All cancelled/failed orders flagged in red so they catch the admin's eye.
-                                            const label = o.cancellationReason
-                                                ? t.cdCancelReasons[o.cancellationReason] + (o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : '')
-                                                : getStatusMeta(o.status, lang).short;
-                                            return (
-                                                <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
-                                                    ✕ {label}
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
-                                        {recipientDisplayName(o.recipientName, t.recipientUnknown)}
-                                    </div>
-                                    {/* Full delivery address: city, district, street */}
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', marginTop: 1 }}>
-                                        {[locCity(o.recipientCity), locDistrict(o.recipientDistrict), o.recipientAddress].filter(Boolean).join(', ')}
-                                    </div>
-                                    {/* Placement + delivery timestamps (Georgian wall-clock) */}
-                                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.68rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
-                                        <span>{t.ofinColPlaced}: <strong style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{formatGeorgianDateTime(o.createdAt)}</strong></span>
-                                        <span>{t.ofinColDelivered}: <strong style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{o.deliveredAt ? formatGeorgianDateTime(o.deliveredAt) : t.ofinNotDelivered}</strong></span>
-                                    </div>
-                                    {/* Editable company service price — corrects a wrong rate and reflows all settlements */}
-                                    <ServicePriceEditor orderId={o.orderId} current={o.companyServicePrice}
-                                        token={token} onError={onError} onSaved={onChanged} />
-                                </div>
+                <div style={{ overflowX: 'auto', borderTop: '1px solid var(--color-border)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 940 }}>
+                        <thead>
+                            <tr>
+                                <th style={{ ...fhead, textAlign: 'center' }}>#</th>
+                                <th style={fhead}>{t.ofinColTracking}</th>
+                                <th style={fhead}>{t.ofinColType}</th>
+                                <th style={fhead}>{t.ofinColRecipient}</th>
+                                <th style={fhead}>{t.ofinColStatus}</th>
+                                <th style={{ ...fhead, textAlign: 'right' }}>{t.ofinColService}</th>
+                                <th style={{ ...fhead, textAlign: 'right' }}>{t.ofinColCod}</th>
+                                <th style={{ ...fhead, textAlign: 'right' }}>{t.ofinColSettle}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lines.map((o, idx) => {
+                                const so = svcOut(o);
+                                const co = codOut(o);
+                                const isSenderPays = o.senderOwesService;
+                                const cancelled = CANCELLED_STATUSES.has(o.status) || o.isBillableFailedDelivery;
+                                const postponed = o.status === 'DeliveryPostponed';
+                                const statusColor = cancelled ? '#dc2626' : postponed ? '#f97316' : (o.deliveredAt ? '#059669' : 'var(--color-text-muted)');
 
-                                {/* Service — customer → company. A non-billable cancellation owes nothing → "—". */}
-                                {isCancelledNonBillable(o) ? (
-                                    <div style={{ minWidth: 160, textAlign: 'right', color: 'var(--color-text-subtle)', fontSize: '0.78rem' }}>—</div>
-                                ) : (
-                                    <AllocCell applicable={isSenderPays} outstanding={so} paidAt={o.servicePaidByCustomerAt}
-                                        total={o.companyServicePrice} paid={o.servicePaidByCustomerAmount ?? 0}
-                                        checked={selSvc[o.orderId]?.checked ?? false} amount={amountOf(selSvc, o, svcOut)}
-                                        onToggle={() => toggle(setSelSvc, o.orderId, so)}
-                                        onAmount={v => setAmt(setSelSvc, o.orderId, v)} />
-                                )}
+                                // COD-collected breakdown (compact one-liner). Recipient-pays: COD + Fee = total
+                                // (cash the courier collected). Sender-pays: COD only, fee invoiced to the sender.
+                                const codVal = hasNoCod(o) ? 0 : (o.codAmount ?? 0);
+                                const fee = o.companyServicePrice;
+                                let breakdown = '—';
+                                // Only delivered orders (or billable failed deliveries, which still owe the fee)
+                                // have a "collected" breakdown; postponed / in-progress / cancelled show "—".
+                                if ((o.deliveredAt != null || o.isBillableFailedDelivery) && !isCancelledNonBillable(o)) {
+                                    if (codVal > 0 && !isSenderPays)      breakdown = `COD ${gel(codVal)} + ${t.ofinFeeShort} ${gel(fee)} = ${gel(round2(codVal + fee))}`;
+                                    else if (codVal > 0 && isSenderPays)  breakdown = `COD ${gel(codVal)} · ${t.ofinFeeShort} ${gel(fee)} (${t.ofinSenderShort})`;
+                                    else if (fee > 0 && isSenderPays)     breakdown = `${t.ofinFeeShort} ${gel(fee)} (${t.ofinSenderShort})`;
+                                    else if (fee > 0)                     breakdown = `${t.ofinFeeShort} ${gel(fee)}`;
+                                    else if (codVal > 0)                  breakdown = `COD ${gel(codVal)}`;
+                                }
 
-                                {/* COD — company → customer. No COD is owed back for a failed delivery or
-                                    any cancelled order: show "—" instead of a misleading ₾0/total. */}
-                                {hasNoCod(o) ? (
-                                    <div style={{ minWidth: 160, textAlign: 'right', color: 'var(--color-text-subtle)', fontSize: '0.78rem' }}>—</div>
-                                ) : (
-                                    <AllocCell applicable={true} outstanding={co} paidAt={o.codPaidToCustomerAt}
-                                        total={o.codAmount ?? 0} paid={o.codPaidToCustomerAmount ?? 0}
-                                        checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
-                                        onToggle={() => toggle(setSelCod, o.orderId, co)}
-                                        onAmount={v => setAmt(setSelCod, o.orderId, v)} />
-                                )}
-                            </div>
-                        );
-                    })}
+                                return (
+                                    <tr key={o.orderId}>
+                                        <td style={{ ...fcell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>{idx + 1}</td>
+                                        <td style={{ ...fcell, fontWeight: 700, whiteSpace: 'nowrap' }}>{o.trackingNumber}</td>
+                                        <td style={fcell}>
+                                            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)', whiteSpace: 'nowrap' }}>
+                                                {o.orderType === 'Return' ? t.aopOrderTypeReturn : o.orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend}
+                                            </span>
+                                        </td>
+                                        <td style={fcell}>
+                                            <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
+                                            <div style={{ color: 'var(--color-text-subtle)', marginTop: 1 }}>
+                                                {[locCity(o.recipientCity), locDistrict(o.recipientDistrict), o.recipientAddress].filter(Boolean).join(', ')}
+                                            </div>
+                                        </td>
+                                        <td style={fcell}>
+                                            <div style={{ fontWeight: 700, color: statusColor }}>{getStatusMeta(o.status, lang).short}</div>
+                                            {/* All cancelled/failed orders flagged in red so they catch the admin's eye. */}
+                                            {cancelled && o.cancellationReason && (
+                                                <div style={{ color: '#dc2626', fontSize: '0.66rem', fontWeight: 600 }}>
+                                                    {t.cdCancelReasons[o.cancellationReason]}{o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : ''}
+                                                </div>
+                                            )}
+                                            <div style={{ color: 'var(--color-text-subtle)', fontSize: '0.64rem', marginTop: 2, whiteSpace: 'nowrap' }}>
+                                                <div>{t.ofinColPlaced}: {formatGeorgianDateTime(o.createdAt)}</div>
+                                                <div>{t.ofinColDelivered}: {o.deliveredAt ? formatGeorgianDateTime(o.deliveredAt) : t.ofinNotDelivered}</div>
+                                            </div>
+                                        </td>
+                                        {/* Company fee + inline edit, with who pays it. */}
+                                        <td style={{ ...fcell, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                            <ServicePriceEditor orderId={o.orderId} current={o.companyServicePrice}
+                                                token={token} onError={onError} onSaved={onChanged} />
+                                            <div style={{ fontSize: '0.64rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+                                                {isSenderPays ? t.ofinSenderPays : t.ofinRecipientPays}
+                                            </div>
+                                        </td>
+                                        {/* COD collected breakdown. */}
+                                        <td style={{ ...fcell, textAlign: 'right', whiteSpace: 'nowrap', color: breakdown === '—' ? 'var(--color-text-subtle)' : 'var(--color-text)', fontWeight: 600 }}>
+                                            {breakdown}
+                                        </td>
+                                        {/* Settle: per-order pay controls for service + COD. */}
+                                        <td style={{ ...fcell, textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+                                                    <span style={settleLbl}>{t.ofinFeeShort}</span>
+                                                    {isCancelledNonBillable(o)
+                                                        ? <span style={{ minWidth: 160, textAlign: 'right', color: 'var(--color-text-subtle)' }}>—</span>
+                                                        : <AllocCell applicable={isSenderPays} outstanding={so} paidAt={o.servicePaidByCustomerAt}
+                                                            total={o.companyServicePrice} paid={o.servicePaidByCustomerAmount ?? 0}
+                                                            checked={selSvc[o.orderId]?.checked ?? false} amount={amountOf(selSvc, o, svcOut)}
+                                                            onToggle={() => toggle(setSelSvc, o.orderId, so)}
+                                                            onAmount={v => setAmt(setSelSvc, o.orderId, v)} />}
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+                                                    <span style={settleLbl}>COD</span>
+                                                    {hasNoCod(o)
+                                                        ? <span style={{ minWidth: 160, textAlign: 'right', color: 'var(--color-text-subtle)' }}>—</span>
+                                                        : <AllocCell applicable={true} outstanding={co} paidAt={o.codPaidToCustomerAt}
+                                                            total={o.codAmount ?? 0} paid={o.codPaidToCustomerAmount ?? 0}
+                                                            checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
+                                                            onToggle={() => toggle(setSelCod, o.orderId, co)}
+                                                            onAmount={v => setAmt(setSelCod, o.orderId, v)} />}
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
             )}
         </div>
@@ -1007,4 +1041,19 @@ const dateNavBtn: React.CSSProperties = {
     background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
     borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.95rem',
     width: 28, height: 28, cursor: 'pointer', lineHeight: 1,
+};
+
+// Excel-style grid cells for the per-order settlement table.
+const fcell: React.CSSProperties = {
+    border: '1px solid var(--color-border)', padding: '6px 8px',
+    fontSize: '0.74rem', color: 'var(--color-text)', verticalAlign: 'top',
+};
+const fhead: React.CSSProperties = {
+    ...fcell, background: 'var(--color-bg-2)', fontWeight: 700, fontSize: '0.62rem',
+    textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-subtle)',
+    whiteSpace: 'nowrap', textAlign: 'left',
+};
+const settleLbl: React.CSSProperties = {
+    fontSize: '0.6rem', fontWeight: 700, color: 'var(--color-text-subtle)',
+    textTransform: 'uppercase', minWidth: 26, textAlign: 'right',
 };

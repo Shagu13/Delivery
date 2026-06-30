@@ -191,6 +191,9 @@ export const setCourierSalary       = (token: string, id: string, salary: number
     orderAction(token, id, 'courier-salary', { salary });
 export const setCompanyServicePrice = (token: string, id: string, price: number) =>
     orderAction(token, id, 'company-service-price', { price });
+/** Admin postpones an assigned delivery (mirrors the courier action). */
+export const adminPostponeOrder = (token: string, id: string, reason: PostponeReason) =>
+    orderAction(token, id, 'admin-postpone', { reason });
 
 export async function updateOrder(token: string, id: string, data: UpdateOrderRequest): Promise<void> {
     const res = await fetch(`${BASE}/${id}`, {

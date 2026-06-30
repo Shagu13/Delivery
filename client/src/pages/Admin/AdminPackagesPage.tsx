@@ -281,7 +281,7 @@ function DistrictMultiPicker({ available, selected, onChange, districtGeoMap, lo
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage }: { canManage?: boolean; canAssignCourier?: boolean }) {
+export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage, canGroup = canManage }: { canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -990,7 +990,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
               onRefresh={() => load(searchRef.current)}
               canManage={canManage}
               showLabel={false} />
-            {canManage && moveDestinations.length > 0 && (
+            {canGroup && moveDestinations.length > 0 && (
               <MoveOrderControl orderId={o.id} destinations={moveDestinations} token={token ?? ''}
                 onMoved={() => { void load(searchRef.current); void loadSummary(); showToast(t.pickupMovedToast); }}
                 onError={msg => showToast(msg, 'err')} />
@@ -1040,7 +1040,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           onChange={(f, to) => { setSelectedDate(f); setRangeEnd(to); }}
           classPrefix="pickup-daynav"
         />
-        {canManage && (
+        {(canManage || canGroup) && (
           <div className="pickup-modes">
             <button className={`pickup-mode ${pickupMode === 'grouped' ? 'pickup-mode--active' : ''}`} onClick={() => setPickupMode('grouped')}>{t.pickupTabGrouped}</button>
             <button className={`pickup-mode ${pickupMode === 'ungrouped' ? 'pickup-mode--active' : ''}`} onClick={() => setPickupMode('ungrouped')}>{t.pickupTabUngrouped}</button>
@@ -1067,8 +1067,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
             const name = ungroupedCustomers.find(c => c.id === ungroupedCustomerFilter)?.name ?? summary?.businessName ?? '';
             return (
               <>
-                {mergeable.length >= 2 && <button className="pickup-cust__merge" onClick={() => setMergingCustomer({ name, batches: mergeable })}>{t.pickupMergeBtn}</button>}
-                {summary && summary.unattachedOrders > 0 && <button className="pickup-cust__group" onClick={() => { setGroupingDate(effectiveDay); setGroupingCustomer(summary ?? null); }}>{t.pickupGroupOrdersBtn}</button>}
+                {canGroup && mergeable.length >= 2 && <button className="pickup-cust__merge" onClick={() => setMergingCustomer({ name, batches: mergeable })}>{t.pickupMergeBtn}</button>}
+                {canGroup && summary && summary.unattachedOrders > 0 && <button className="pickup-cust__group" onClick={() => { setGroupingDate(effectiveDay); setGroupingCustomer(summary ?? null); }}>{t.pickupGroupOrdersBtn}</button>}
               </>
             );
           })()}
@@ -1366,11 +1366,11 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                             </div>
                           </div>
                           {go.isStandalone ? (
-                            canManage && go.customerId && (
+                            (canGroup || canManage) && go.customerId && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                <button className="go-action-btn go-action-btn--ghost" onClick={e => { e.stopPropagation(); setGroupingDate(new Date(georgianDateKeyOf(go.createdAt) + 'T00:00:00')); setGroupingCustomer({ customerId: go.customerId!, businessName: go.senderBusinessName, ordersPlaced: 1, unattachedOrders: 1 }); }}>{t.pickupGroupOrdersBtn}</button>
-                                <button className="go-action-btn go-action-btn--accept" onClick={e => { e.stopPropagation(); const bs = batchesFor(go.customerId!, georgianDateKeyOf(go.createdAt)); setAcceptTargetId(bs[0]?.id ?? ''); setAcceptStandalone(go); }}>{t.goAccept}</button>
-                                <button className="go-action-btn go-action-btn--warehouse" onClick={e => { e.stopPropagation(); setWhTargetId(''); setWhCourierId(''); setWhStandalone(go); }}>{t.goForceWarehouse}</button>
+                                {canGroup && <button className="go-action-btn go-action-btn--ghost" onClick={e => { e.stopPropagation(); setGroupingDate(new Date(georgianDateKeyOf(go.createdAt) + 'T00:00:00')); setGroupingCustomer({ customerId: go.customerId!, businessName: go.senderBusinessName, ordersPlaced: 1, unattachedOrders: 1 }); }}>{t.pickupGroupOrdersBtn}</button>}
+                                {canManage && <button className="go-action-btn go-action-btn--accept" onClick={e => { e.stopPropagation(); const bs = batchesFor(go.customerId!, georgianDateKeyOf(go.createdAt)); setAcceptTargetId(bs[0]?.id ?? ''); setAcceptStandalone(go); }}>{t.goAccept}</button>}
+                                {canManage && <button className="go-action-btn go-action-btn--warehouse" onClick={e => { e.stopPropagation(); setWhTargetId(''); setWhCourierId(''); setWhStandalone(go); }}>{t.goForceWarehouse}</button>}
                               </div>
                             )
                           ) : (

@@ -340,6 +340,18 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/{id}/admin-postpone  (Admin) ─────────────────────────
+    [HttpPut("{id:guid}/admin-postpone")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AdminPostpone(
+        Guid id, [FromBody] PostponeOrderRequest request, CancellationToken ct)
+    {
+        await Sender.Send(new AdminPostponeOrderCommand(id, request.Reason), ct);
+        return NoContent();
+    }
+
     // ── PUT /api/orders/{id}/mark-send-returned-to-sender  (Admin) ───────────
     [HttpPut("{id:guid}/mark-send-returned-to-sender")]
     [Authorize(Roles = "Admin")]
@@ -362,9 +374,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/courier-salary  (Admin) ──────────────────────────
+    // ── PUT /api/orders/{id}/courier-salary  (Admin/Operator) ─────────────────
     [HttpPut("{id:guid}/courier-salary")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetCourierSalary(
         Guid id,
@@ -375,9 +387,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/company-service-price  (Admin) ───────────────────
+    // ── PUT /api/orders/{id}/company-service-price  (Admin/Operator) ──────────
     [HttpPut("{id:guid}/company-service-price")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetOrderCompanyServicePrice(
         Guid id,
@@ -468,9 +480,9 @@ public sealed class OrdersController : BaseController
         return Ok(result);
     }
 
-    // ── GET /api/orders/return-exchange  (Admin) ──────────────────────────────
+    // ── GET /api/orders/return-exchange  (Admin/Operator) ─────────────────────
     [HttpGet("return-exchange")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(IReadOnlyList<ReturnExchangeOrderDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReturnExchangeOrders(CancellationToken ct)
     {
@@ -478,9 +490,9 @@ public sealed class OrdersController : BaseController
         return Ok(result);
     }
 
-    // ── PUT /api/orders/{id}/assign-return-courier  (Admin) ───────────────────
+    // ── PUT /api/orders/{id}/assign-return-courier  (Admin/Operator) ──────────
     [HttpPut("{id:guid}/assign-return-courier")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> AssignReturnCourier(
         Guid id,
@@ -513,9 +525,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/mark-returned-to-sender  (Admin) ─────────────────
+    // ── PUT /api/orders/{id}/mark-returned-to-sender  (Admin/Operator) ────────
     [HttpPut("{id:guid}/mark-returned-to-sender")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> MarkReturnedToSender(Guid id, CancellationToken ct)
     {

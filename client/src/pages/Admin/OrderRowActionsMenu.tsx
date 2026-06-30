@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { assignCourierToOrder, setCourierSalary, adminMarkOrderDelivered, markSendReturnedToSender, cancelOrderByAdmin, CANCELLATION_REASON_LABELS, NON_BILLABLE_CANCEL_REASONS } from '../../api/orders';
-import type { CancellationReason } from '../../api/orders';
+import { assignCourierToOrder, setCourierSalary, adminMarkOrderDelivered, markSendReturnedToSender, cancelOrderByAdmin, adminPostponeOrder, CANCELLATION_REASON_LABELS, NON_BILLABLE_CANCEL_REASONS, POSTPONE_REASON_LABELS } from '../../api/orders';
+import type { CancellationReason, PostponeReason } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import type { Courier } from '../../api/couriers';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -11,6 +11,7 @@ import './OrderRowActionsMenu.css';
 export interface RowMenuOrder {
   id: string;
   orderType: string;
+  status: string;
   courierId: string | null;
   courierSalary: number | null;
 }
@@ -33,7 +34,7 @@ interface Props {
   onError: (msg: string) => void;
 }
 
-type Panel = 'menu' | 'assign' | 'salary' | 'deliver' | 'returnToSender' | 'cancelCharge';
+type Panel = 'menu' | 'assign' | 'salary' | 'deliver' | 'returnToSender' | 'cancelCharge' | 'postpone';
 
 /**
  * Per-row kebab (⋮) menu for the Delivery / Packages tables. Bundles the single-order
@@ -51,6 +52,7 @@ export function OrderRowActionsMenu({
   const [salaryInput, setSalaryInput] = useState('');
   const [cancelReason, setCancelReason] = useState<CancellationReason | null>(null);
   const [cancelComment, setCancelComment] = useState('');
+  const [postponeReason, setPostponeReason] = useState<PostponeReason | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -133,6 +135,10 @@ export function OrderRowActionsMenu({
       comment: cancelReason === 'Other' ? cancelComment.trim() : undefined,
     }));
   };
+  const postpone = () => {
+    if (!postponeReason) return;
+    void run(() => adminPostponeOrder(token, order.id, postponeReason));
+  };
 
   const showAssign  = canManage && canAssign;
   const showSalary  = canManage;
@@ -144,6 +150,9 @@ export function OrderRowActionsMenu({
   // reached a delivery courier. Records a billable CancellationReason so the sender is invoiced.
   const showCancelCharge = canManage && canDeliver && !isReturn && !!order.courierId;
   const canConfirmCancel = cancelReason !== null && (cancelReason !== 'Other' || cancelComment.trim().length > 0);
+  // Admin postpone: once a courier is assigned (and while in-flight), mirroring the courier action.
+  const showPostpone = canManage && !isReturn
+    && (order.status === 'CourierAssignedToDeliver' || order.status === 'CourierDeliveringTheOrderToRecipient');
 
   return (
     <>
@@ -184,6 +193,11 @@ export function OrderRowActionsMenu({
               {showReturnToSender && (
                 <button className="orm-item" onClick={() => setPanel('returnToSender')}>
                   {t.reMarkReturned} <span className="orm-chev">›</span>
+                </button>
+              )}
+              {showPostpone && (
+                <button className="orm-item" onClick={() => { setPostponeReason(null); setPanel('postpone'); }}>
+                  {t.cdDeliveryBtnPostpone} <span className="orm-chev">›</span>
                 </button>
               )}
               {showCancelCharge && (
@@ -266,6 +280,25 @@ export function OrderRowActionsMenu({
                 </div>
               )}
               <button className="orm-confirm" disabled={busy || !canConfirmCancel} onClick={cancelCharge}>
+                {busy ? t.aopSaving : t.goConfirm}
+              </button>
+            </div>
+          )}
+
+          {panel === 'postpone' && (
+            <div className="orm-sub">
+              <button className="orm-sub-head" onClick={() => setPanel('menu')}>‹ {t.cdDeliveryBtnPostpone}</button>
+              <div className="orm-courier-list">
+                {(Object.keys(POSTPONE_REASON_LABELS) as PostponeReason[]).map(reason => (
+                  <button key={reason} className="orm-item"
+                    style={{ fontWeight: postponeReason === reason ? 700 : 500,
+                      background: postponeReason === reason ? 'var(--color-accent-dim)' : undefined }}
+                    onClick={() => setPostponeReason(reason)}>
+                    {t.cdPostponeReasons[reason]}
+                  </button>
+                ))}
+              </div>
+              <button className="orm-confirm" disabled={busy || postponeReason === null} onClick={postpone}>
                 {busy ? t.aopSaving : t.goConfirm}
               </button>
             </div>

@@ -25,6 +25,9 @@ public sealed record MarkOrderDeliveredPaidToSenderCommand(
 /// <summary>Courier marks a delivery attempt as failed. Order → DeliveryPostponed.</summary>
 public sealed record PostponeOrderCommand(Guid OrderId, string CourierUserId, PostponeReason Reason) : IRequest;
 
+/// <summary>Admin postpones an assigned delivery (no courier identity). Order → DeliveryPostponed.</summary>
+public sealed record AdminPostponeOrderCommand(Guid OrderId, PostponeReason Reason) : IRequest;
+
 /// <summary>Courier retries a postponed delivery. Order → CourierDeliveringTheOrderToRecipient.</summary>
 public sealed record RetryDeliveryCommand(Guid OrderId, string CourierUserId) : IRequest;
 

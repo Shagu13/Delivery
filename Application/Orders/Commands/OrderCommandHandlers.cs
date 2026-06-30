@@ -296,6 +296,31 @@ public sealed class PostponeOrderCommandHandler : IRequestHandler<PostponeOrderC
     }
 }
 
+// ── AdminPostponeOrder ────────────────────────────────────────────────────────
+// Admin postpones a delivery from the Delivery/Packages pages — same effect as the
+// courier action but without a courier identity (the order keeps its assigned courier).
+public sealed class AdminPostponeOrderCommandHandler : IRequestHandler<AdminPostponeOrderCommand>
+{
+    private readonly IAppDbContext _context;
+    public AdminPostponeOrderCommandHandler(IAppDbContext context) => _context = context;
+
+    public async Task Handle(AdminPostponeOrderCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        if (order.Status is not (OrderStatus.CourierAssignedToDeliver
+                              or OrderStatus.CourierDeliveringTheOrderToRecipient))
+            throw new ConflictException($"Can only postpone an assigned delivery. Current: {order.Status}.");
+
+        order.Status         = OrderStatus.DeliveryPostponed;
+        order.PostponeReason = request.Reason;
+        order.PostponedAt    = CustomTime.Now;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}
+
 // ── RetryDelivery ─────────────────────────────────────────────────────────────
 public sealed class RetryDeliveryCommandHandler : IRequestHandler<RetryDeliveryCommand>
 {

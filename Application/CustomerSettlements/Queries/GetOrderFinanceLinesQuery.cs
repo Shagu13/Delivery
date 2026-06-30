@@ -96,11 +96,12 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
                 && o.CancellationReason != null
                 && o.CancellationReason != CancellationReason.WarehouseNotReceived
                 && o.CancellationReason != CancellationReason.DidNotWant)
-            // Cancelled orders are listed too (shown with "—" amounts + reason/status) so the
+            // Cancelled and postponed orders are listed too (shown with "—" amounts + status) so the
             // admin sees the full picture and why a day has fewer billable orders.
             || o.Status == OrderStatus.CancelledByAdmin
             || o.Status == OrderStatus.CancelledBySender
-            || o.Status == OrderStatus.OrderNotAccepted);
+            || o.Status == OrderStatus.OrderNotAccepted
+            || o.Status == OrderStatus.DeliveryPostponed);
 
         // Drop orders with no company↔customer settlement: the recipient pays the
         // service fee (nothing invoiced to the sender) and there is no package COD
@@ -114,7 +115,8 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
                                   && o.CancellationReason != CancellationReason.DidNotWant)
                               || o.Status == OrderStatus.CancelledByAdmin
                               || o.Status == OrderStatus.CancelledBySender
-                              || o.Status == OrderStatus.OrderNotAccepted);
+                              || o.Status == OrderStatus.OrderNotAccepted
+                              || o.Status == OrderStatus.DeliveryPostponed);
 
         // Date by delivery when delivered, else by placement (for the not-yet-delivered
         // sender-paid orders) so both slot into the day/month navigation. A from/to range

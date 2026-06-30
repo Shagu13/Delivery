@@ -84,7 +84,7 @@ const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'pa
 
 // Views an Operator (partial-admin role) may open. Everything else is Admin-only.
 // The Delivery ('packages') page is read-only for Operators (see canManage below).
-const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest'];
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'returnExchange'];
 
 // Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
 // accept-only and Delivery is read-only (both via canManage=false); Finance renders the
@@ -322,6 +322,9 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.sidebarHistory}</span>
           </button>
+          </>)}
+          {/* Return & Exchange — available to Admins and Operators (not tenants). */}
+          {!isTenant && (
           <button
             className={`sidebar__link ${activeView === 'returnExchange' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('returnExchange')}
@@ -339,7 +342,7 @@ export function AdminDashboard() {
               </span>
             )}
           </button>
-          </>)}
+          )}
           <button
             className={`sidebar__link ${activeView === 'finance' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('finance')}
@@ -417,12 +420,12 @@ export function AdminDashboard() {
         <main className="dashboard__content">
           {activeView === 'overview'  && <AdminOverview token={token ?? ''} isOperator={isOperator} />}
           {/* Pick-Up: tenant co-admin is accept-only and can't assign couriers (like an Operator). */}
-          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isOperator && !isTenant} canAssignCourier={!isTenant} />}
+          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isOperator && !isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} />}
           {activeView === 'operators' && !isOperator && !isTenant && <AdminOperatorsPage token={token ?? ''} />}
           {/* Delivery: read-only for both Operators and tenant co-admins. */}
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isOperator && !isTenant} />}
           {/* TEST: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
-          {activeView === 'packagesTest' && <AdminPackagesPage canManage={!isOperator && !isTenant} canAssignCourier={!isTenant} />}
+          {activeView === 'packagesTest' && <AdminPackagesPage canManage={!isOperator && !isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
@@ -1012,7 +1015,7 @@ function DistrictMultiPicker({
   );
 }
 
-function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = canManage }: { initialStatus?: string; canManage?: boolean; canAssignCourier?: boolean }) {
+function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = canManage, canGroup = canManage }: { initialStatus?: string; canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -1442,7 +1445,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
           onChange={(f, to) => { setSelectedDate(f); setRangeEnd(to); }}
           classPrefix="pickup-daynav"
         />
-        {canManage && (
+        {(canManage || canGroup) && (
         <div className="pickup-modes">
           <button
             className={`pickup-mode ${pickupMode === 'grouped' ? 'pickup-mode--active' : ''}`}
@@ -1482,12 +1485,12 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
             const name      = ungroupedCustomers.find(c => c.id === ungroupedCustomerFilter)?.name ?? summary?.businessName ?? '';
             return (
               <>
-                {mergeable.length >= 2 && (
+                {canGroup && mergeable.length >= 2 && (
                   <button className="pickup-cust__merge" onClick={() => setMergingCustomer({ name, batches: mergeable })}>
                     {t.pickupMergeBtn}
                   </button>
                 )}
-                {summary && summary.unattachedOrders > 0 && (
+                {canGroup && summary && summary.unattachedOrders > 0 && (
                   <button className="pickup-cust__group" onClick={() => { setGroupingDate(effectiveDay); setGroupingCustomer(summary ?? null); }}>
                     {t.pickupGroupOrdersBtn}
                   </button>
@@ -1807,30 +1810,36 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                           </div>
                         </div>
                         {go.isStandalone ? (
-                          canManage && go.customerId && (
+                          (canGroup || canManage) && go.customerId && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                              <button className="go-action-btn go-action-btn--ghost"
-                                onClick={e => { e.stopPropagation(); setGroupingDate(new Date(georgianDateKeyOf(go.createdAt) + 'T00:00:00')); setGroupingCustomer({ customerId: go.customerId!, businessName: go.senderBusinessName, ordersPlaced: 1, unattachedOrders: 1 }); }}>
-                                {t.pickupGroupOrdersBtn}
-                              </button>
-                              <button className="go-action-btn go-action-btn--accept"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  const bs = batchesFor(go.customerId!, georgianDateKeyOf(go.createdAt));
-                                  setAcceptTargetId(bs[0]?.id ?? '');
-                                  setAcceptStandalone(go);
-                                }}>
-                                {t.goAccept}
-                              </button>
-                              <button className="go-action-btn go-action-btn--warehouse"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  setWhTargetId('');          // default: create a new 1-order batch
-                                  setWhCourierId('');
-                                  setWhStandalone(go);
-                                }}>
-                                {t.goForceWarehouse}
-                              </button>
+                              {canGroup && (
+                                <button className="go-action-btn go-action-btn--ghost"
+                                  onClick={e => { e.stopPropagation(); setGroupingDate(new Date(georgianDateKeyOf(go.createdAt) + 'T00:00:00')); setGroupingCustomer({ customerId: go.customerId!, businessName: go.senderBusinessName, ordersPlaced: 1, unattachedOrders: 1 }); }}>
+                                  {t.pickupGroupOrdersBtn}
+                                </button>
+                              )}
+                              {canManage && (
+                                <button className="go-action-btn go-action-btn--accept"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    const bs = batchesFor(go.customerId!, georgianDateKeyOf(go.createdAt));
+                                    setAcceptTargetId(bs[0]?.id ?? '');
+                                    setAcceptStandalone(go);
+                                  }}>
+                                  {t.goAccept}
+                                </button>
+                              )}
+                              {canManage && (
+                                <button className="go-action-btn go-action-btn--warehouse"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setWhTargetId('');          // default: create a new 1-order batch
+                                    setWhCourierId('');
+                                    setWhStandalone(go);
+                                  }}>
+                                  {t.goForceWarehouse}
+                                </button>
+                              )}
                             </div>
                           )
                         ) : (
@@ -1925,7 +1934,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                                             onRefresh={() => load(search)}
                                             canManage={canManage}
                                             onEdit={canManage ? () => openEditOrder(o, go) : undefined} />
-                                          {canManage && moveDestinations.length > 0 && (
+                                          {canGroup && moveDestinations.length > 0 && (
                                             <MoveOrderControl
                                               orderId={o.id}
                                               destinations={moveDestinations}
