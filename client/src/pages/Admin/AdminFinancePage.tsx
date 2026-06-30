@@ -3,6 +3,7 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { formatGeorgianDateTime } from '../../utils/georgianTime';
 import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
+import { getStatusMeta } from '../../utils/statusMeta';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import {
@@ -11,7 +12,7 @@ import {
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
-import { setCompanyServicePrice } from '../../api/orders';
+import { setCompanyServicePrice, NON_BILLABLE_CANCEL_REASONS } from '../../api/orders';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
@@ -297,11 +298,19 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // Outstanding per order for each flow — shared by the Payments status filter and the
 // settle card so both reason about "owed" identically.
+// Terminal cancelled statuses. A cancelled order that is NOT a billable failed delivery owes
+// nothing — it's listed only for transparency (shown with "—" amounts).
+const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
+const isCancelledNonBillable = (o: OrderFinanceLine) => CANCELLED_STATUSES.has(o.status) && !o.isBillableFailedDelivery;
+// No COD is owed back for a failed delivery or any cancelled order.
+const hasNoCod = (o: OrderFinanceLine) => o.isBillableFailedDelivery || CANCELLED_STATUSES.has(o.status);
+
 // COD is only owed back once the company has collected it (i.e. on delivery); a
 // not-yet-delivered order (surfaced for advance service payment) contributes 0.
 // Use the server's computed truth (senderOwesService) so failed deliveries — whose fee shifts
-// to the sender even when originally recipient-pays — are counted as owed.
-const serviceOutstanding = (o: OrderFinanceLine) => o.senderOwesService
+// to the sender even when originally recipient-pays — are counted as owed. A non-billable
+// cancellation owes nothing even if it was sender-pays.
+const serviceOutstanding = (o: OrderFinanceLine) => (o.senderOwesService && !isCancelledNonBillable(o))
     ? round2(Math.max(0, o.companyServicePrice - (o.servicePaidByCustomerAmount ?? 0)))
     : 0;
 // A failed delivery collected no COD, so nothing is owed back even though it is "dated".
@@ -711,7 +720,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     onError: (msg: string) => void;
     onChanged: () => void;
 }) {
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
     const { locCity, locDistrict } = usePlaceLocalizer();
     const [expanded, setExpanded] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -860,14 +869,26 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                 <div style={{ flex: '1 1 160px', minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                                         <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--color-text)' }}>{o.trackingNumber}</span>
-                                        <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>{o.orderType}</span>
-                                        {/* Cancelled-but-billed: show the reason in red so it's clear what the fee is for. */}
-                                        {o.isBillableFailedDelivery && o.cancellationReason && (
-                                            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
-                                                ✕ {t.cdCancelReasons[o.cancellationReason]}
-                                                {o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : ''}
-                                            </span>
-                                        )}
+                                        <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>
+                                            {o.orderType === 'Return' ? t.aopOrderTypeReturn : o.orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend}
+                                        </span>
+                                        {/* Cancelled / failed: show the reason (or status) so it's clear why amounts are "—"
+                                            or why a fee is charged. Red = billable (customer pays); green = no charge. */}
+                                        {(o.isBillableFailedDelivery || CANCELLED_STATUSES.has(o.status)) && (() => {
+                                            const billed = o.isBillableFailedDelivery;
+                                            const label  = o.cancellationReason
+                                                ? t.cdCancelReasons[o.cancellationReason] + (o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : '')
+                                                : getStatusMeta(o.status, lang).short;
+                                            const color  = billed ? '#dc2626'
+                                                : (o.cancellationReason && NON_BILLABLE_CANCEL_REASONS.has(o.cancellationReason)) ? '#059669'
+                                                : 'var(--color-text-muted)';
+                                            const bg     = billed ? 'rgba(220,38,38,0.12)' : 'var(--color-bg-3)';
+                                            return (
+                                                <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: bg, color }}>
+                                                    ✕ {label}
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
                                         {recipientDisplayName(o.recipientName, t.recipientUnknown)}
@@ -886,16 +907,20 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                         token={token} onError={onError} onSaved={onChanged} />
                                 </div>
 
-                                {/* Service — customer → company (sender-pays only) */}
-                                <AllocCell applicable={isSenderPays} outstanding={so} paidAt={o.servicePaidByCustomerAt}
-                                    total={o.companyServicePrice} paid={o.servicePaidByCustomerAmount ?? 0}
-                                    checked={selSvc[o.orderId]?.checked ?? false} amount={amountOf(selSvc, o, svcOut)}
-                                    onToggle={() => toggle(setSelSvc, o.orderId, so)}
-                                    onAmount={v => setAmt(setSelSvc, o.orderId, v)} />
+                                {/* Service — customer → company. A non-billable cancellation owes nothing → "—". */}
+                                {isCancelledNonBillable(o) ? (
+                                    <div style={{ minWidth: 160, textAlign: 'right', color: 'var(--color-text-subtle)', fontSize: '0.78rem' }}>—</div>
+                                ) : (
+                                    <AllocCell applicable={isSenderPays} outstanding={so} paidAt={o.servicePaidByCustomerAt}
+                                        total={o.companyServicePrice} paid={o.servicePaidByCustomerAmount ?? 0}
+                                        checked={selSvc[o.orderId]?.checked ?? false} amount={amountOf(selSvc, o, svcOut)}
+                                        onToggle={() => toggle(setSelSvc, o.orderId, so)}
+                                        onAmount={v => setAmt(setSelSvc, o.orderId, v)} />
+                                )}
 
-                                {/* COD — company → customer. A failed delivery collected no COD, so
-                                    there is nothing to pay back: show a dash instead of a misleading ₾0/total. */}
-                                {o.isBillableFailedDelivery ? (
+                                {/* COD — company → customer. No COD is owed back for a failed delivery or
+                                    any cancelled order: show "—" instead of a misleading ₾0/total. */}
+                                {hasNoCod(o) ? (
                                     <div style={{ minWidth: 160, textAlign: 'right', color: 'var(--color-text-subtle)', fontSize: '0.78rem' }}>—</div>
                                 ) : (
                                     <AllocCell applicable={true} outstanding={co} paidAt={o.codPaidToCustomerAt}

@@ -12,6 +12,9 @@ import '../../styles/dashboard.css';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
+// Terminal cancelled statuses — listed for transparency with "—" amounts (no money owed).
+const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
+
 /** Format a Date as a local "YYYY-MM-DD" string (matches the date-input value). */
 const toDateStr = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -78,11 +81,13 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
         : line.orderType === 'Exchange' ? t.aopOrderTypeExchange
         : t.aopOrderTypeSend;
     const place = [locCity(line.recipientCity), locDistrict(line.recipientDistrict)].filter(Boolean).join(', ');
-    // A failed delivery collected no COD, so nothing is owed back even if a package amount was set.
-    const cod = line.isBillableFailedDelivery ? 0 : (line.codAmount ?? 0);
+    // Cancelled (non-billable) orders are listed for transparency but owe/collect nothing → "—".
+    const isCancelledNonBillable = CANCELLED_STATUSES.has(line.status) && !line.isBillableFailedDelivery;
+    // A failed delivery or any cancelled order collected no COD, so nothing is owed back.
+    const cod = (line.isBillableFailedDelivery || isCancelledNonBillable) ? 0 : (line.codAmount ?? 0);
     // Use the server's computed truth: a failed delivery shifts the fee to the sender even when
-    // the order was originally recipient-pays.
-    const isSenderPays = line.senderOwesService;
+    // the order was originally recipient-pays. A non-billable cancellation owes nothing.
+    const isSenderPays = line.senderOwesService && !isCancelledNonBillable;
     const servicePaid = line.companyServicePaymentStatus === 'Paid';
     // COD is only owed back to the customer when there is a package amount to collect.
     // Orders with no COD (codAmount null/0) have nothing to pay back → no paid/unpaid label.
@@ -111,42 +116,55 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                 <span title={statusMeta.description} style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: statusBg, color: statusFg }}>
                     {statusMeta.short}
                 </span>
-                {/* Cancelled-but-billed: show the reason in red so the customer knows what the fee is for. */}
-                {line.isBillableFailedDelivery && line.cancellationReason && (
-                    <div style={{ marginTop: 3, fontSize: '0.66rem', fontWeight: 600, color: '#dc2626' }}>
+                {/* Cancelled / failed: show the reason in colour so the customer knows what's going on.
+                    Red = billable (they pay the fee); green = no charge. */}
+                {line.cancellationReason && (
+                    <div style={{ marginTop: 3, fontSize: '0.66rem', fontWeight: 600, color: line.isBillableFailedDelivery ? '#dc2626' : '#059669' }}>
                         {t.cdCancelReasons[line.cancellationReason]}
                         {line.cancellationReason === 'Other' && line.cancellationComment ? `: ${line.cancellationComment}` : ''}
                     </div>
                 )}
             </td>
-            {/* COD — company owes customer. Top: total owed + status. Below: amount paid + date. */}
+            {/* COD — company owes customer. "—" for cancelled/failed (nothing collected). */}
             <td style={{ ...cell, textAlign: 'right' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                    <span style={{ fontWeight: 700 }}>{gel(cod)}</span>
-                    {line.isCollectedCodPaidToCustomer
-                        ? <Badge text={t.ofinPaid} tone="paid" />
-                        : hasCod && <Badge text={t.ofinUnpaid} tone="unpaid" />}
-                </div>
-                {hasCod && (line.codPaidToCustomerAmount ?? 0) > 0.005 && (
-                    <div style={paidDateStyle}>
-                        {t.ofinPaid} {gel(line.codPaidToCustomerAmount ?? 0)}
-                        {line.codPaidToCustomerAt ? ` · ${fmtPaidDate(line.codPaidToCustomerAt)}` : ''}
-                    </div>
+                {(line.isBillableFailedDelivery || isCancelledNonBillable) ? (
+                    <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
+                ) : (
+                    <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                            <span style={{ fontWeight: 700 }}>{gel(cod)}</span>
+                            {line.isCollectedCodPaidToCustomer
+                                ? <Badge text={t.ofinPaid} tone="paid" />
+                                : hasCod && <Badge text={t.ofinUnpaid} tone="unpaid" />}
+                        </div>
+                        {hasCod && (line.codPaidToCustomerAmount ?? 0) > 0.005 && (
+                            <div style={paidDateStyle}>
+                                {t.ofinPaid} {gel(line.codPaidToCustomerAmount ?? 0)}
+                                {line.codPaidToCustomerAt ? ` · ${fmtPaidDate(line.codPaidToCustomerAt)}` : ''}
+                            </div>
+                        )}
+                    </>
                 )}
             </td>
-            {/* Service fee — top: total cost + status. Below: amount paid + date. */}
+            {/* Service fee — "—" for a non-billable cancellation (nothing owed). */}
             <td style={{ ...cell, textAlign: 'right' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                    <span style={{ fontWeight: 700 }}>{gel(line.companyServicePrice)}</span>
-                    {isSenderPays
-                        ? <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
-                        : <Badge text={t.ofinRecipientPays} tone="muted" />}
-                </div>
-                {isSenderPays && (line.servicePaidByCustomerAmount ?? 0) > 0.005 && (
-                    <div style={paidDateStyle}>
-                        {t.ofinPaid} {gel(line.servicePaidByCustomerAmount ?? 0)}
-                        {line.servicePaidByCustomerAt ? ` · ${fmtPaidDate(line.servicePaidByCustomerAt)}` : ''}
-                    </div>
+                {isCancelledNonBillable ? (
+                    <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
+                ) : (
+                    <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                            <span style={{ fontWeight: 700 }}>{gel(line.companyServicePrice)}</span>
+                            {isSenderPays
+                                ? <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
+                                : <Badge text={t.ofinRecipientPays} tone="muted" />}
+                        </div>
+                        {isSenderPays && (line.servicePaidByCustomerAmount ?? 0) > 0.005 && (
+                            <div style={paidDateStyle}>
+                                {t.ofinPaid} {gel(line.servicePaidByCustomerAmount ?? 0)}
+                                {line.servicePaidByCustomerAt ? ` · ${fmtPaidDate(line.servicePaidByCustomerAt)}` : ''}
+                            </div>
+                        )}
+                    </>
                 )}
             </td>
         </tr>
@@ -220,14 +238,20 @@ export function CustomerFinancePage() {
         && (!address || (i.recipientAddress ?? '').toLowerCase().includes(address.trim().toLowerCase())));
     const hasLocationFilter = !!city || !!district || !!address.trim();
 
-    // Totals across the filtered orders. Failed deliveries collected no COD (nothing owed back),
-    // and the sender owes their service fee even if it was originally recipient-pays.
+    // Whether an order is a cancelled, non-billable line (listed for transparency, owes nothing).
+    const cancelledNonBillable = (i: OrderFinanceLine) =>
+        CANCELLED_STATUSES.has(i.status) && !i.isBillableFailedDelivery;
+
+    // Totals across the filtered orders. Failed deliveries and cancelled orders collected no COD
+    // (nothing owed back), and the sender owes the service fee even if originally recipient-pays —
+    // except non-billable cancellations, which owe nothing.
     const codOutstanding = filtered.reduce(
-        (s, i) => i.isBillableFailedDelivery ? s : s + ((i.codAmount ?? 0) - (i.codPaidToCustomerAmount ?? 0)), 0);
+        (s, i) => (i.isBillableFailedDelivery || cancelledNonBillable(i))
+            ? s : s + ((i.codAmount ?? 0) - (i.codPaidToCustomerAmount ?? 0)), 0);
     // COD the company has already paid out to the customer.
     const codPaid = filtered.reduce((s, i) => s + (i.codPaidToCustomerAmount ?? 0), 0);
     const serviceOutstanding = filtered.reduce(
-        (s, i) => i.senderOwesService
+        (s, i) => (i.senderOwesService && !cancelledNonBillable(i))
             ? s + (i.companyServicePrice - (i.servicePaidByCustomerAmount ?? 0))
             : s, 0);
 

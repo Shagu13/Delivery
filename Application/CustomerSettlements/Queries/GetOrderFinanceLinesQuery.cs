@@ -95,18 +95,26 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
             || (o.OrderType != OrderType.Return
                 && o.CancellationReason != null
                 && o.CancellationReason != CancellationReason.WarehouseNotReceived
-                && o.CancellationReason != CancellationReason.DidNotWant));
+                && o.CancellationReason != CancellationReason.DidNotWant)
+            // Cancelled orders are listed too (shown with "—" amounts + reason/status) so the
+            // admin sees the full picture and why a day has fewer billable orders.
+            || o.Status == OrderStatus.CancelledByAdmin
+            || o.Status == OrderStatus.CancelledBySender
+            || o.Status == OrderStatus.OrderNotAccepted);
 
         // Drop orders with no company↔customer settlement: the recipient pays the
         // service fee (nothing invoiced to the sender) and there is no package COD
-        // for the company to pay back. Billable failed deliveries are kept — their fee
-        // shifts to the sender regardless of the original payer.
+        // for the company to pay back. Billable failed deliveries AND cancelled orders are
+        // kept (the latter shown with "—" amounts for transparency).
         query = query.Where(o => !(o.WhoPaysForCompanyService == ServicePayer.Recipient
                                 && o.AmountToCollectForPackage == null)
                               || (o.OrderType != OrderType.Return
                                   && o.CancellationReason != null
                                   && o.CancellationReason != CancellationReason.WarehouseNotReceived
-                                  && o.CancellationReason != CancellationReason.DidNotWant));
+                                  && o.CancellationReason != CancellationReason.DidNotWant)
+                              || o.Status == OrderStatus.CancelledByAdmin
+                              || o.Status == OrderStatus.CancelledBySender
+                              || o.Status == OrderStatus.OrderNotAccepted);
 
         // Date by delivery when delivered, else by placement (for the not-yet-delivered
         // sender-paid orders) so both slot into the day/month navigation. A from/to range
@@ -157,24 +165,29 @@ internal static class OrderFinanceQueries
     };
 
     /// <summary>
-    /// Billable orders with the navigations needed for mapping: active (non-cancelled) orders
+    /// Orders with the navigations needed for mapping. By default: active (non-cancelled) orders
     /// plus billable failed deliveries (mirrors OrderFinance.IsBillableFailedDelivery; inlined
     /// because this composes into SQL) — the sender still owes their fee / the courier their salary.
+    /// When <paramref name="includeCancelled"/> is true, ALL cancelled orders are also returned so
+    /// the customer/admin finance lists can show them (with "—" amounts + reason) for transparency.
+    /// The courier view keeps the default (false) — couriers never see non-billable cancellations.
     /// </summary>
-    public static IQueryable<Order> Base(IAppDbContext context) =>
+    public static IQueryable<Order> Base(IAppDbContext context, bool includeCancelled = false) =>
         context.Orders
             .AsNoTracking()
             .Include(o => o.GroupOrder)!.ThenInclude(g => g!.Customer)
             .Include(o => o.Customer)
-            .Where(o => !CancelledStatuses.Contains(o.Status)
+            .Where(o => includeCancelled
+                     || !CancelledStatuses.Contains(o.Status)
                      || (o.OrderType != OrderType.Return
                          && o.CancellationReason != null
                          && o.CancellationReason != CancellationReason.WarehouseNotReceived
                          && o.CancellationReason != CancellationReason.DidNotWant));
 
-    /// <summary>Active orders owned by a customer via either ownership path.</summary>
+    /// <summary>Orders owned by a customer via either ownership path, including cancelled ones
+    /// (shown with "—" amounts in the finance lists for transparency).</summary>
     public static IQueryable<Order> ForCustomer(IAppDbContext context, Guid customerId) =>
-        Base(context).Where(o => o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId);
+        Base(context, includeCancelled: true).Where(o => o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId);
 
     /// <summary>
     /// Narrows by placement date (CreatedAt). A from/to range (inclusive, either bound optional)
