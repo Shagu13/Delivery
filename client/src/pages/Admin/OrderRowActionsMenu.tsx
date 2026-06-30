@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { assignCourierToOrder, setCourierSalary, adminMarkOrderDelivered, markSendReturnedToSender, cancelOrderByAdmin, CANCELLATION_REASON_LABELS } from '../../api/orders';
+import { assignCourierToOrder, setCourierSalary, adminMarkOrderDelivered, markSendReturnedToSender, cancelOrderByAdmin, CANCELLATION_REASON_LABELS, NON_BILLABLE_CANCEL_REASONS } from '../../api/orders';
 import type { CancellationReason } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
 import type { Courier } from '../../api/couriers';
@@ -245,13 +245,18 @@ export function OrderRowActionsMenu({
             <div className="orm-sub">
               <button className="orm-sub-head" onClick={() => setPanel('menu')}>‹ {t.ormCancelCharge}</button>
               <div className="orm-courier-list">
-                {(Object.keys(CANCELLATION_REASON_LABELS) as CancellationReason[]).map(reason => (
+                {(Object.keys(CANCELLATION_REASON_LABELS) as CancellationReason[]).map(reason => {
+                  // Green = no charge to the customer (cancelled before delivery); red = billable.
+                  const reasonColor = NON_BILLABLE_CANCEL_REASONS.has(reason) ? '#059669' : '#dc2626';
+                  return (
                   <button key={reason} className="orm-item"
-                    style={cancelReason === reason ? { background: 'var(--color-accent-dim)', fontWeight: 600 } : undefined}
+                    style={{ color: reasonColor, fontWeight: cancelReason === reason ? 700 : 500,
+                      background: cancelReason === reason ? 'var(--color-accent-dim)' : undefined }}
                     onClick={() => setCancelReason(reason)}>
                     {t.cdCancelReasons[reason]}
                   </button>
-                ))}
+                  );
+                })}
               </div>
               {cancelReason === 'Other' && (
                 <div className="orm-field">

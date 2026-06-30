@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import type { CancellationReason } from '../../../api/orders';
-import { CANCELLATION_REASON_LABELS } from '../../../api/orders';
+import { CANCELLATION_REASON_LABELS, NON_BILLABLE_CANCEL_REASONS } from '../../../api/orders';
 
 interface CancelModalProps {
     isBusy: boolean;
@@ -22,16 +22,21 @@ export function CancelModal({ isBusy, onCancel, onConfirm }: CancelModalProps) {
             <div style={{ background: 'var(--color-bg)', borderRadius: '12px', padding: '20px', width: '100%', maxWidth: '340px', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
                 <h3 style={{ margin: '0 0 12px', fontSize: '1rem', fontWeight: 700 }}>{t.cdCancelTitle}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                    {(Object.keys(CANCELLATION_REASON_LABELS) as CancellationReason[]).map(reason => (
+                    {(Object.keys(CANCELLATION_REASON_LABELS) as CancellationReason[]).map(reason => {
+                        // Green = the customer is NOT charged (no delivery service rendered); red = billable.
+                        const reasonColor = NON_BILLABLE_CANCEL_REASONS.has(reason) ? '#059669' : '#dc2626';
+                        return (
                         <button key={reason} onClick={() => setSelected(reason)}
                             style={{ padding: '10px 12px', borderRadius: '8px',
-                                border: selected === reason ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
+                                border: selected === reason ? `2px solid ${reasonColor}` : '1px solid var(--color-border)',
                                 background: selected === reason ? 'var(--color-accent-dim)' : 'transparent',
                                 textAlign: 'left', cursor: 'pointer', fontSize: '0.875rem',
-                                fontWeight: selected === reason ? 600 : 400 }}>
+                                color: reasonColor,
+                                fontWeight: selected === reason ? 700 : 500 }}>
                             {t.cdCancelReasons[reason]}
                         </button>
-                    ))}
+                        );
+                    })}
                     {selected === 'Other' && (
                         <textarea
                             value={comment}

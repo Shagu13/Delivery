@@ -53,6 +53,7 @@ public sealed class GetSettlementPreviewQueryHandler
                      && o.OrderType != OrderType.Return
                      && o.CancellationReason != null
                      && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                     && o.CancellationReason != CancellationReason.DidNotWant
                      && (o.DeliveredAt ?? o.CancelledAt) >= dayStart
                      && (o.DeliveredAt ?? o.CancelledAt) <= dayEnd)
             .ToListAsync(cancellationToken);

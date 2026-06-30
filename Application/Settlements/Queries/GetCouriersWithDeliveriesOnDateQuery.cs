@@ -45,6 +45,7 @@ public sealed class GetCouriersWithDeliveriesOnDateQueryHandler
                        || (o.OrderType != OrderType.Return
                            && o.CancellationReason != null
                            && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                           && o.CancellationReason != CancellationReason.DidNotWant
                            && (o.DeliveredAt ?? o.CancelledAt) >= dayStart
                            && (o.DeliveredAt ?? o.CancelledAt) <= dayEnd)))
             .Select(o => o.CourierId!.Value)

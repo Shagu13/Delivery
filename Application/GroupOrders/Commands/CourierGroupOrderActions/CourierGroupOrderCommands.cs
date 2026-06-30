@@ -2,9 +2,6 @@ using MediatR;
 
 namespace Application.GroupOrders.Commands.CourierGroupOrderActions;
 
-/// <summary>Courier presses "Picking Up" — on the way to sender. GroupOrder + Orders → CourierOnTheWayToPickUp.</summary>
-public sealed record MarkPickingUpCommand(Guid GroupOrderId, string CourierUserId) : IRequest;
-
 /// <summary>Courier presses "Picked Up" — has collected from sender. GroupOrder + Orders → CourierDeliveringToWarehouse.</summary>
 public sealed record MarkPickedUpCommand(Guid GroupOrderId, string CourierUserId) : IRequest;
 

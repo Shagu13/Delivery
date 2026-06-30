@@ -883,7 +883,7 @@ const en = {
   cdCancelCommentPlaceholder: 'Please add a comment…',
   cdCancelReasons: {
     DidNotLike: 'Did not like',
-    DidNotWant: 'Did not want',
+    DidNotWant: 'Cancelled before arrival',
     WrongSize:  'Wrong size',
     Other:      'Other',
     WarehouseNotReceived: 'Warehouse did not receive package',
@@ -2670,7 +2670,7 @@ const ka: typeof en = {
   cdCancelCommentPlaceholder: 'გთხოვთ, დაამატოთ კომენტარი…',
   cdCancelReasons: {
     DidNotLike: 'არ მოეწონა',
-    DidNotWant: 'გადაიფიქრა',
+    DidNotWant: 'გაუქმდა მისვლამდე',
     WrongSize:  'არ მოერგო',
     Other:      'სხვა',
     WarehouseNotReceived: 'ამანათი საწყობში არ მიგვიღია',

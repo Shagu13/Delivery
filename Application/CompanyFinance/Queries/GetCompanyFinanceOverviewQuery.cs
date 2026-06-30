@@ -70,6 +70,7 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             .Where(o => o.OrderType != OrderType.Return
                      && o.CancellationReason != null
                      && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                     && o.CancellationReason != CancellationReason.DidNotWant
                      && (o.DeliveredAt ?? o.CancelledAt) >= fromDt
                      && (o.DeliveredAt ?? o.CancelledAt) < toDt)
             .Where(inArea);
@@ -145,6 +146,7 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             .Where(o => o.OrderType != OrderType.Return
                      && o.CancellationReason != null
                      && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                     && o.CancellationReason != CancellationReason.DidNotWant
                      && (o.DeliveredAt ?? o.CancelledAt) < toDt)
             .Where(inArea)
             .ToListAsync(cancellationToken);

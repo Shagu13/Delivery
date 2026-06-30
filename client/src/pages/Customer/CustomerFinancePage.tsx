@@ -29,6 +29,11 @@ const segBtn = (active: boolean): React.CSSProperties => ({
     fontSize: '0.8rem', fontWeight: active ? 700 : 500, padding: '7px 16px',
     whiteSpace: 'nowrap', transition: 'background .15s, color .15s',
 });
+const fDateInput: React.CSSProperties = {
+    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem',
+    padding: '6px 10px', outline: 'none',
+};
 
 function Badge({ text, tone }: { text: string; tone: 'paid' | 'unpaid' | 'muted' }) {
     const palette = {
@@ -106,8 +111,15 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                 <span title={statusMeta.description} style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: statusBg, color: statusFg }}>
                     {statusMeta.short}
                 </span>
+                {/* Cancelled-but-billed: show the reason in red so the customer knows what the fee is for. */}
+                {line.isBillableFailedDelivery && line.cancellationReason && (
+                    <div style={{ marginTop: 3, fontSize: '0.66rem', fontWeight: 600, color: '#dc2626' }}>
+                        {t.cdCancelReasons[line.cancellationReason]}
+                        {line.cancellationReason === 'Other' && line.cancellationComment ? `: ${line.cancellationComment}` : ''}
+                    </div>
+                )}
             </td>
-            {/* COD — company owes customer */}
+            {/* COD — company owes customer. Top: total owed + status. Below: amount paid + date. */}
             <td style={{ ...cell, textAlign: 'right' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                     <span style={{ fontWeight: 700 }}>{gel(cod)}</span>
@@ -115,11 +127,14 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                         ? <Badge text={t.ofinPaid} tone="paid" />
                         : hasCod && <Badge text={t.ofinUnpaid} tone="unpaid" />}
                 </div>
-                {line.isCollectedCodPaidToCustomer && line.codPaidToCustomerAt && (
-                    <div style={paidDateStyle}>{fmtPaidDate(line.codPaidToCustomerAt)}</div>
+                {hasCod && (line.codPaidToCustomerAmount ?? 0) > 0.005 && (
+                    <div style={paidDateStyle}>
+                        {t.ofinPaid} {gel(line.codPaidToCustomerAmount ?? 0)}
+                        {line.codPaidToCustomerAt ? ` · ${fmtPaidDate(line.codPaidToCustomerAt)}` : ''}
+                    </div>
                 )}
             </td>
-            {/* Service fee — always show the amount so the customer knows the cost */}
+            {/* Service fee — top: total cost + status. Below: amount paid + date. */}
             <td style={{ ...cell, textAlign: 'right' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                     <span style={{ fontWeight: 700 }}>{gel(line.companyServicePrice)}</span>
@@ -127,8 +142,11 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                         ? <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
                         : <Badge text={t.ofinRecipientPays} tone="muted" />}
                 </div>
-                {isSenderPays && servicePaid && line.servicePaidByCustomerAt && (
-                    <div style={paidDateStyle}>{fmtPaidDate(line.servicePaidByCustomerAt)}</div>
+                {isSenderPays && (line.servicePaidByCustomerAmount ?? 0) > 0.005 && (
+                    <div style={paidDateStyle}>
+                        {t.ofinPaid} {gel(line.servicePaidByCustomerAmount ?? 0)}
+                        {line.servicePaidByCustomerAt ? ` · ${fmtPaidDate(line.servicePaidByCustomerAt)}` : ''}
+                    </div>
                 )}
             </td>
         </tr>
@@ -145,7 +163,11 @@ export function CustomerFinancePage() {
     // 'placed' filters by order creation date; 'payments' by the COD-payment date
     // (CodPaidToCustomerAt) — only orders whose COD was paid out are shown.
     const [mode, setMode] = useState<'placed' | 'payments'>('placed');
-    const [date, setDate] = useState(toDateStr(new Date()));   // defaults to today ('' = all dates)
+    // Date granularity: a single Day, a whole Month, or an inclusive custom Range.
+    const [dateMode, setDateMode] = useState<'day' | 'month' | 'range'>('day');
+    const [date, setDate] = useState(toDateStr(new Date()));   // day/month: a day in the period ('' = all dates)
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
     // Recipient-location narrowing, applied client-side over the loaded orders.
     const [city, setCity] = useState('');
     const [district, setDistrict] = useState('');
@@ -157,20 +179,39 @@ export function CustomerFinancePage() {
     const load = useCallback(() => {
         if (!token) return;
         setLoading(true); setError(null);
-        fetchMyOrderFinance(token, date || undefined, mode === 'payments')
+        const opts = dateMode === 'range'
+            ? { from: from || undefined, to: to || undefined }
+            : dateMode === 'month'
+                ? { monthly: true }
+                : {};
+        const effDate = dateMode === 'range' ? undefined : (date || undefined);
+        fetchMyOrderFinance(token, effDate, mode === 'payments', opts)
             .then(data => { setItems(data); setLoading(false); })
             .catch(() => { setError(t.ofinErrLoad); setLoading(false); });
-    }, [token, date, mode, t.ofinErrLoad]);
+    }, [token, date, dateMode, from, to, mode, t.ofinErrLoad]);
 
     useEffect(() => { load(); }, [load]);
 
     const todayStr = toDateStr(new Date());
+    const monthStr = todayStr.slice(0, 7);
     const shiftDay = (delta: number) => setDate(prev => {
         const base = prev ? new Date(prev + 'T00:00:00') : new Date();
         base.setDate(base.getDate() + delta);
         return toDateStr(base);
     });
-    const atToday = date !== '' && date >= todayStr;
+    const shiftMonth = (delta: number) => setDate(prev => {
+        const base = prev ? new Date(prev + 'T00:00:00') : new Date();
+        base.setDate(1);
+        base.setMonth(base.getMonth() + delta);
+        return toDateStr(base);
+    });
+    const atToday = date !== '' && (dateMode === 'month' ? date.slice(0, 7) >= monthStr : date >= todayStr);
+    // Human label for the "showing" line, per active date mode.
+    const showingLabel = dateMode === 'range'
+        ? (from || to ? `${from || '…'} – ${to || '…'}` : t.statAllDates)
+        : dateMode === 'month'
+            ? (date ? date.slice(0, 7) : t.statAllDates)
+            : (date ? readableDate(date) : t.statAllDates);
 
     // Narrow the loaded orders by recipient city/district/address before counting/showing.
     const filtered = items.filter(i =>
@@ -201,22 +242,44 @@ export function CustomerFinancePage() {
                     <button style={segBtn(mode === 'payments')} onClick={() => setMode('payments')}>{t.ofinTabPayments}</button>
                 </div>
                 <span style={{ fontSize: '0.82rem', color: 'var(--color-text)', fontWeight: 600 }}>
-                    {t.ofinShowing(date ? readableDate(date) : t.statAllDates)}
+                    {t.ofinShowing(showingLabel)}
                 </span>
             </div>
 
-            {/* Date filter */}
+            {/* Date filter: Day / Month / Range */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{mode === 'payments' ? t.ofinPaidDate : t.ofinFilterPlaced}</span>
-                <button onClick={() => shiftDay(-1)} title={t.statPrevDay} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>‹</button>
-                <input
-                    type="date"
-                    value={date}
-                    onChange={e => setDate(e.target.value)}
-                    style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }}
-                />
-                <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>›</button>
-                {date && <button onClick={() => setDate('')} className="btn-ghost btn-ghost--sm">{t.statAllDates}</button>}
+                <div style={segWrap}>
+                    <button style={{ ...segBtn(dateMode === 'day'), borderRight: '1px solid var(--color-border)' }} onClick={() => setDateMode('day')}>{t.ofinViewDaily}</button>
+                    <button style={{ ...segBtn(dateMode === 'month'), borderRight: '1px solid var(--color-border)' }} onClick={() => setDateMode('month')}>{t.ofinViewMonthly}</button>
+                    <button style={segBtn(dateMode === 'range')} onClick={() => setDateMode('range')}>{t.ofinViewRange}</button>
+                </div>
+                {dateMode === 'day' && (
+                    <>
+                        <button onClick={() => shiftDay(-1)} title={t.statPrevDay} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>‹</button>
+                        <input type="date" value={date} max={todayStr} onChange={e => setDate(e.target.value)} style={fDateInput} />
+                        <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>›</button>
+                        {date && <button onClick={() => setDate('')} className="btn-ghost btn-ghost--sm">{t.statAllDates}</button>}
+                    </>
+                )}
+                {dateMode === 'month' && (
+                    <>
+                        <button onClick={() => shiftMonth(-1)} title={t.ofinPrevMonth} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>‹</button>
+                        <input type="month" value={date ? date.slice(0, 7) : ''} max={monthStr}
+                            onChange={e => setDate(e.target.value ? e.target.value + '-01' : '')} style={fDateInput} />
+                        <button onClick={() => !atToday && shiftMonth(1)} disabled={atToday} title={t.ofinNextMonth} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>›</button>
+                        {date && <button onClick={() => setDate('')} className="btn-ghost btn-ghost--sm">{t.statAllDates}</button>}
+                    </>
+                )}
+                {dateMode === 'range' && (
+                    <>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>{t.finOvFrom}</span>
+                        <input type="date" value={from} max={to || todayStr} onChange={e => setFrom(e.target.value)} style={fDateInput} />
+                        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>{t.finOvTo}</span>
+                        <input type="date" value={to} min={from || undefined} max={todayStr} onChange={e => setTo(e.target.value)} style={fDateInput} />
+                        {(from || to) && <button onClick={() => { setFrom(''); setTo(''); }} className="btn-ghost btn-ghost--sm">{t.statAllDates}</button>}
+                    </>
+                )}
                 <button onClick={load} className="btn-ghost btn-ghost--sm" style={{ marginLeft: 4 }}>{t.statRefresh}</button>
             </div>
 
@@ -245,7 +308,13 @@ export function CustomerFinancePage() {
             ) : items.length === 0 ? (
                 <div className="dashboard__empty" style={{ marginTop: 40 }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📊</div>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{date ? t.ofinNoneDay : t.ofinNoneAll}</div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                        {dateMode === 'range'
+                            ? (from || to ? t.ofinNoneDay : t.ofinNoneAll)
+                            : dateMode === 'month'
+                                ? (date ? t.ofinNoneMonth : t.ofinNoneAll)
+                                : (date ? t.ofinNoneDay : t.ofinNoneAll)}
+                    </div>
                     <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t.statNoRecordsHint}</div>
                 </div>
             ) : filtered.length === 0 ? (

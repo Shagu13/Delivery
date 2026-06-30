@@ -58,10 +58,17 @@ export type CancellationReason = 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Ot
 
 export const CANCELLATION_REASON_LABELS: Record<CancellationReason, string> = {
     DidNotLike: 'Did not like',
-    DidNotWant: 'Did not want',
+    DidNotWant: 'Cancelled before arrival',
     WrongSize:  'Wrong size',
     Other:      'Other',
 };
+
+/**
+ * Cancellation reasons that do NOT bill the sender the company service fee — the order was
+ * cancelled before any delivery service was rendered. Mirrors the backend's exclusions in
+ * OrderFinance.IsBillableFailedDelivery. Used to colour reason chips green (vs red billable).
+ */
+export const NON_BILLABLE_CANCEL_REASONS = new Set<string>(['DidNotWant', 'WarehouseNotReceived']);
 
 export interface CourierOrder {
     id: string;

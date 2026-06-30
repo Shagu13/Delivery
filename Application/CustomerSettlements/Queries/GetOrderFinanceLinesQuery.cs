@@ -18,7 +18,10 @@ namespace Application.CustomerSettlements.Queries;
 public sealed record GetMyOrderFinanceLinesQuery(
     string    CustomerUserId,
     DateOnly? Date,
-    bool      PaymentsMode
+    bool      PaymentsMode,
+    bool      Monthly = false,
+    DateOnly? From    = null,
+    DateOnly? To      = null
 ) : IRequest<IReadOnlyList<OrderFinanceLineDto>>;
 
 public sealed class GetMyOrderFinanceLinesQueryHandler
@@ -38,10 +41,10 @@ public sealed class GetMyOrderFinanceLinesQueryHandler
         var query = OrderFinanceQueries.ForCustomer(_context, customer.Id);
 
         if (request.PaymentsMode)
-            query = OrderFinanceQueries.FilterByCodPaidAt(query, request.Date)
+            query = OrderFinanceQueries.FilterByCodPaidAt(query, request.Date, request.Monthly, request.From, request.To)
                                        .OrderByDescending(o => o.CodPaidToCustomerAt);
         else
-            query = OrderFinanceQueries.FilterByCreatedAt(query, request.Date)
+            query = OrderFinanceQueries.FilterByCreatedAt(query, request.Date, request.Monthly, request.From, request.To)
                                        .OrderByDescending(o => o.CreatedAt);
 
         var orders = await query.ToListAsync(ct);
@@ -91,7 +94,8 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
             || (o.WhoPaysForCompanyService == ServicePayer.Sender && o.Status != OrderStatus.Pending)
             || (o.OrderType != OrderType.Return
                 && o.CancellationReason != null
-                && o.CancellationReason != CancellationReason.WarehouseNotReceived));
+                && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                && o.CancellationReason != CancellationReason.DidNotWant));
 
         // Drop orders with no company↔customer settlement: the recipient pays the
         // service fee (nothing invoiced to the sender) and there is no package COD
@@ -101,7 +105,8 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
                                 && o.AmountToCollectForPackage == null)
                               || (o.OrderType != OrderType.Return
                                   && o.CancellationReason != null
-                                  && o.CancellationReason != CancellationReason.WarehouseNotReceived));
+                                  && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                                  && o.CancellationReason != CancellationReason.DidNotWant));
 
         // Date by delivery when delivered, else by placement (for the not-yet-delivered
         // sender-paid orders) so both slot into the day/month navigation. A from/to range
@@ -164,33 +169,60 @@ internal static class OrderFinanceQueries
             .Where(o => !CancelledStatuses.Contains(o.Status)
                      || (o.OrderType != OrderType.Return
                          && o.CancellationReason != null
-                         && o.CancellationReason != CancellationReason.WarehouseNotReceived));
+                         && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                         && o.CancellationReason != CancellationReason.DidNotWant));
 
     /// <summary>Active orders owned by a customer via either ownership path.</summary>
     public static IQueryable<Order> ForCustomer(IAppDbContext context, Guid customerId) =>
         Base(context).Where(o => o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId);
 
-    public static IQueryable<Order> FilterByCreatedAt(IQueryable<Order> query, DateOnly? date)
+    /// <summary>
+    /// Narrows by placement date (CreatedAt). A from/to range (inclusive, either bound optional)
+    /// takes precedence over a single <paramref name="date"/>; <paramref name="monthly"/> widens
+    /// that date to its whole calendar month. No date and no range → no narrowing.
+    /// </summary>
+    public static IQueryable<Order> FilterByCreatedAt(
+        IQueryable<Order> query, DateOnly? date, bool monthly = false, DateOnly? from = null, DateOnly? to = null)
     {
+        if (from is not null || to is not null)
+        {
+            if (from is DateOnly f)
+                query = query.Where(o => o.CreatedAt >= f.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            if (to is DateOnly t)
+                query = query.Where(o => o.CreatedAt < t.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            return query;
+        }
         if (date is not DateOnly d) return query;
-        var start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var end   = start.AddDays(1);
+        DateTime start, end;
+        if (monthly) { start = new DateTime(d.Year, d.Month, 1, 0, 0, 0, DateTimeKind.Utc); end = start.AddMonths(1); }
+        else         { start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);           end = start.AddDays(1); }
         return query.Where(o => o.CreatedAt >= start && o.CreatedAt < end);
     }
 
     /// <summary>
-    /// Orders whose COD payout to the customer was recorded — i.e. paid orders. When a
-    /// date is given, narrows to payments made on that single day (by CodPaidToCustomerAt).
+    /// Orders whose COD payout to the customer was recorded — i.e. paid orders. Narrows by the
+    /// payment date (CodPaidToCustomerAt): a from/to range (inclusive) takes precedence over a
+    /// single <paramref name="date"/>; <paramref name="monthly"/> widens it to the whole month.
     /// </summary>
-    public static IQueryable<Order> FilterByCodPaidAt(IQueryable<Order> query, DateOnly? date)
+    public static IQueryable<Order> FilterByCodPaidAt(
+        IQueryable<Order> query, DateOnly? date, bool monthly = false, DateOnly? from = null, DateOnly? to = null)
     {
         query = query.Where(o => o.IsCollectedCodPaidToCustomer
                               && o.CodPaidToCustomerAt != null
                               && o.CodPaidToCustomerAmount != null);
 
+        if (from is not null || to is not null)
+        {
+            if (from is DateOnly f)
+                query = query.Where(o => o.CodPaidToCustomerAt >= f.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            if (to is DateOnly t)
+                query = query.Where(o => o.CodPaidToCustomerAt < t.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            return query;
+        }
         if (date is not DateOnly d) return query;
-        var start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var end   = start.AddDays(1);
+        DateTime start, end;
+        if (monthly) { start = new DateTime(d.Year, d.Month, 1, 0, 0, 0, DateTimeKind.Utc); end = start.AddMonths(1); }
+        else         { start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);           end = start.AddDays(1); }
         return query.Where(o => o.CodPaidToCustomerAt >= start && o.CodPaidToCustomerAt < end);
     }
 
@@ -317,7 +349,9 @@ internal static class OrderFinanceQueries
             CompanyNetCash:               OrderFinance.CompanyNetCash(o),
             IsCompanyServicePaid:         OrderFinance.IsCompanyServicePaid(o),
             SenderOwesService:            OrderFinance.SenderOwesService(o),
-            IsBillableFailedDelivery:     OrderFinance.IsBillableFailedDelivery(o)
+            IsBillableFailedDelivery:     OrderFinance.IsBillableFailedDelivery(o),
+            CancellationReason:           o.CancellationReason?.ToString(),
+            CancellationComment:          o.CancellationComment
         );
     }
 }

@@ -42,7 +42,8 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
             .Where(o => !CancelledStatuses.Contains(o.Status)
                      || (o.OrderType != OrderType.Return
                          && o.CancellationReason != null
-                         && o.CancellationReason != CancellationReason.WarehouseNotReceived))
+                         && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                         && o.CancellationReason != CancellationReason.DidNotWant))
             .Select(o => new
             {
                 CustomerId = o.GroupOrder != null ? o.GroupOrder.CustomerId : o.CustomerId,
@@ -52,7 +53,8 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
                 // Billable failed delivery → recipient paid nothing: no COD collected, fee shifts to sender.
                 Billable    = o.OrderType != OrderType.Return
                                 && o.CancellationReason != null
-                                && o.CancellationReason != CancellationReason.WarehouseNotReceived,
+                                && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                                && o.CancellationReason != CancellationReason.DidNotWant,
                 Cod         = o.AmountToCollectForPackage ?? 0m,
                 CodPaid     = o.CodPaidToCustomerAmount ?? 0m,
                 SenderPays  = o.WhoPaysForCompanyService == ServicePayer.Sender,

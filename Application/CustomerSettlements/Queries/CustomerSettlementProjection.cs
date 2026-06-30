@@ -48,7 +48,8 @@ internal static class CustomerSettlementProjection
                          // already passes the line above; the cancelled terminals are re-included here.
                          || (o.OrderType != OrderType.Return
                              && o.CancellationReason != null
-                             && o.CancellationReason != CancellationReason.WarehouseNotReceived)))
+                             && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                             && o.CancellationReason != CancellationReason.DidNotWant)))
             .ToListAsync(ct);
 
     /// <summary>The customer's per-batch invoice rows, newest first, optionally narrowed to a placement day.</summary>

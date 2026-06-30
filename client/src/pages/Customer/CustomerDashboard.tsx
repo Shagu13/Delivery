@@ -15,6 +15,7 @@ import {
   CustomerApiError,
 } from '../../api/customers';
 import type { Customer, CustomerGroupOrder, CustomerOrder } from '../../api/customers';
+import { NON_BILLABLE_CANCEL_REASONS } from '../../api/orders';
 import { CustomerEditOrderModal } from './CustomerEditOrderModal';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
@@ -763,7 +764,7 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                       <td style={{ padding: '10px 16px' }}>
                         <StatusBadge status={o.status} />
                         {CANCELLED_STATUSES.has(o.status) && o.cancellationReason && (
-                          <div style={{ marginTop: 4, fontSize: '0.72rem', color: '#ef4444', maxWidth: 200, lineHeight: 1.35 }}>
+                          <div style={{ marginTop: 4, fontSize: '0.72rem', color: NON_BILLABLE_CANCEL_REASONS.has(o.cancellationReason) ? '#059669' : '#ef4444', maxWidth: 200, lineHeight: 1.35 }}>
                             {t.cdCancelReasons[o.cancellationReason]}
                             {o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : ''}
                           </div>

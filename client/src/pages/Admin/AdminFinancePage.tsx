@@ -606,9 +606,12 @@ function FlowBar({ f, payLabel, busy, onPay, onToggleAll, borderRight }: {
 }
 
 // One order's amount field for a single flow — checkbox + editable price, always available.
-function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmount, paidAt }: {
+// `total` = full obligation, `paid` = amount settled so far (shown so an admin sees how much it
+// was vs how much is paid, without an extra column).
+function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmount, paidAt, total, paid }: {
     applicable: boolean; outstanding: number; checked: boolean; amount: string;
     onToggle: () => void; onAmount: (v: string) => void; paidAt?: string | null;
+    total?: number; paid?: number;
 }) {
     const { t } = useLanguage();
     if (!applicable)
@@ -617,20 +620,32 @@ function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmoun
         return (
             <div style={{ minWidth: 160, textAlign: 'right' }}>
                 <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#059669' }}>{t.ofinPaid}</span>
-                {paidAt && <div style={{ fontSize: '0.66rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{formatGeorgianDateTime(paidAt)}</div>}
+                {/* how much is paid / how much it was */}
+                {total != null && (
+                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: 1 }}>
+                        {gel(paid ?? 0)} / {gel(total)}
+                    </div>
+                )}
+                {paidAt && <div style={{ fontSize: '0.66rem', color: 'var(--color-text-subtle)', marginTop: 1 }}>{formatGeorgianDateTime(paidAt)}</div>}
             </div>
         );
 
     return (
-        <div style={{ minWidth: 160, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-            <input type="checkbox" checked={checked} onChange={onToggle}
-                style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }} />
-            {/* Actual amount owed, always shown next to the editable field. */}
-            <span title={t.ofinOutstandingCol} style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{gel(outstanding)}</span>
-            <input type="number" min="0" step="0.01" max={outstanding}
-                value={amount}
-                onChange={e => onAmount(e.target.value)}
-                style={{ width: 80, textAlign: 'right', background: checked ? 'var(--color-bg-3)' : 'transparent', border: `1px solid ${checked ? 'var(--color-accent)' : 'var(--color-border)'}`, borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.8rem', padding: '3px 6px', outline: 'none' }} />
+        <div style={{ minWidth: 160, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                <input type="checkbox" checked={checked} onChange={onToggle}
+                    style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }} />
+                {/* Actual amount owed (outstanding), always shown next to the editable field. */}
+                <span title={t.ofinOutstandingCol} style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{gel(outstanding)}</span>
+                <input type="number" min="0" step="0.01" max={outstanding}
+                    value={amount}
+                    onChange={e => onAmount(e.target.value)}
+                    style={{ width: 80, textAlign: 'right', background: checked ? 'var(--color-bg-3)' : 'transparent', border: `1px solid ${checked ? 'var(--color-accent)' : 'var(--color-border)'}`, borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.8rem', padding: '3px 6px', outline: 'none' }} />
+            </div>
+            {/* how much is paid / how much it was — shown when something is partially paid */}
+            {total != null && (paid ?? 0) > 0.005 && (
+                <span style={{ fontSize: '0.68rem', color: 'var(--color-text-subtle)' }}>{gel(paid ?? 0)} / {gel(total)}</span>
+            )}
         </div>
     );
 }
@@ -846,6 +861,13 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                                         <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--color-text)' }}>{o.trackingNumber}</span>
                                         <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)' }}>{o.orderType}</span>
+                                        {/* Cancelled-but-billed: show the reason in red so it's clear what the fee is for. */}
+                                        {o.isBillableFailedDelivery && o.cancellationReason && (
+                                            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
+                                                ✕ {t.cdCancelReasons[o.cancellationReason]}
+                                                {o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : ''}
+                                            </span>
+                                        )}
                                     </div>
                                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
                                         {recipientDisplayName(o.recipientName, t.recipientUnknown)}
@@ -866,15 +888,22 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
 
                                 {/* Service — customer → company (sender-pays only) */}
                                 <AllocCell applicable={isSenderPays} outstanding={so} paidAt={o.servicePaidByCustomerAt}
+                                    total={o.companyServicePrice} paid={o.servicePaidByCustomerAmount ?? 0}
                                     checked={selSvc[o.orderId]?.checked ?? false} amount={amountOf(selSvc, o, svcOut)}
                                     onToggle={() => toggle(setSelSvc, o.orderId, so)}
                                     onAmount={v => setAmt(setSelSvc, o.orderId, v)} />
 
-                                {/* COD — company → customer */}
-                                <AllocCell applicable={true} outstanding={co} paidAt={o.codPaidToCustomerAt}
-                                    checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
-                                    onToggle={() => toggle(setSelCod, o.orderId, co)}
-                                    onAmount={v => setAmt(setSelCod, o.orderId, v)} />
+                                {/* COD — company → customer. A failed delivery collected no COD, so
+                                    there is nothing to pay back: show a dash instead of a misleading ₾0/total. */}
+                                {o.isBillableFailedDelivery ? (
+                                    <div style={{ minWidth: 160, textAlign: 'right', color: 'var(--color-text-subtle)', fontSize: '0.78rem' }}>—</div>
+                                ) : (
+                                    <AllocCell applicable={true} outstanding={co} paidAt={o.codPaidToCustomerAt}
+                                        total={o.codAmount ?? 0} paid={o.codPaidToCustomerAmount ?? 0}
+                                        checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
+                                        onToggle={() => toggle(setSelCod, o.orderId, co)}
+                                        onAmount={v => setAmt(setSelCod, o.orderId, v)} />
+                                )}
                             </div>
                         );
                     })}

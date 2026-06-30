@@ -46,6 +46,7 @@ internal static class CourierSettlementProjection
                      && o.OrderType != OrderType.Return
                      && o.CancellationReason != null
                      && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                     && o.CancellationReason != CancellationReason.DidNotWant
                      && (o.DeliveredAt ?? o.CancelledAt) >= fromDt
                      && (o.DeliveredAt ?? o.CancelledAt) < toDt)
             .ToListAsync(ct);

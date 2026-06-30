@@ -475,16 +475,6 @@ public sealed class GroupOrdersController : BaseController
 
 
     // ── Courier endpoints ──────────────────────────────────────────────────────
-    [HttpPut("{id:guid}/picking-up")]
-    [Authorize(Roles = "Courier")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> MarkPickingUp(Guid id, CancellationToken ct)
-    {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        await Sender.Send(new MarkPickingUpCommand(id, userId), ct);
-        return NoContent();
-    }
-
     [HttpPut("{id:guid}/picked-up")]
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

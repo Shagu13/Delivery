@@ -43,16 +43,19 @@ public static class OrderFinance
     /// / "returned to sender" actions. The company still bills the <b>sender</b> for the service
     /// fee and still pays the courier their salary, exactly as if the order had been sender-pays.
     ///
-    /// Excluded: standalone Returns (their own flow), and the <see cref="CancellationReason.WarehouseNotReceived"/>
-    /// reason (the parcel never physically arrived, so nothing is owed). A plain admin/customer
-    /// cancellation records no reason and is therefore never billable, which is what lets an
-    /// order be cancelled early without charging. The reason is cleared whenever an order is
-    /// un-cancelled back into the flow, so a later-delivered order never carries a stale one.
+    /// Excluded (non-billable reasons): standalone Returns (their own flow),
+    /// <see cref="CancellationReason.WarehouseNotReceived"/> (the parcel never physically arrived),
+    /// and <see cref="CancellationReason.DidNotWant"/> (cancelled before the courier reached the
+    /// recipient — no delivery service was rendered). A plain admin/customer cancellation records
+    /// no reason and is therefore never billable, which is what lets an order be cancelled early
+    /// without charging. The reason is cleared whenever an order is un-cancelled back into the
+    /// flow, so a later-delivered order never carries a stale one.
     /// </summary>
     public static bool IsBillableFailedDelivery(Order o) =>
         o.OrderType != OrderType.Return
         && o.CancellationReason != null
-        && o.CancellationReason != CancellationReason.WarehouseNotReceived;
+        && o.CancellationReason != CancellationReason.WarehouseNotReceived
+        && o.CancellationReason != CancellationReason.DidNotWant;
 
     /// <summary>
     /// When the settlement/billing event for a billable failed delivery happened, used to date

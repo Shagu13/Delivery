@@ -33,27 +33,6 @@ file static class CourierGuard
     }
 }
 
-// ── Handler: MarkPickingUp ────────────────────────────────────────────────────
-public sealed class MarkPickingUpCommandHandler : IRequestHandler<MarkPickingUpCommand>
-{
-    private readonly IAppDbContext _context;
-    public MarkPickingUpCommandHandler(IAppDbContext context) => _context = context;
-
-    public async Task Handle(MarkPickingUpCommand request, CancellationToken cancellationToken)
-    {
-        var go = await CourierGuard.LoadAndVerifyAsync(
-            _context, request.GroupOrderId, request.CourierUserId, cancellationToken);
-
-        if (go.Status != OrderStatus.CourierAssignedToPickUp)
-            throw new ConflictException($"Expected CourierAssignedToPickUp. Current: {go.Status}.");
-
-        go.Status = OrderStatus.CourierOnTheWayToPickUp;
-        foreach (var o in go.Orders) o.Status = OrderStatus.CourierOnTheWayToPickUp;
-
-        await _context.SaveChangesAsync(cancellationToken);
-    }
-}
-
 // ── Handler: MarkPickedUp ─────────────────────────────────────────────────────
 public sealed class MarkPickedUpCommandHandler : IRequestHandler<MarkPickedUpCommand>
 {
@@ -65,8 +44,11 @@ public sealed class MarkPickedUpCommandHandler : IRequestHandler<MarkPickedUpCom
         var go = await CourierGuard.LoadAndVerifyAsync(
             _context, request.GroupOrderId, request.CourierUserId, cancellationToken);
 
-        if (go.Status != OrderStatus.CourierOnTheWayToPickUp)
-            throw new ConflictException($"Expected CourierOnTheWayToPickUp. Current: {go.Status}.");
+        // The separate "on my way" pickup step was removed — the courier confirms pickup in one
+        // swipe from CourierAssignedToPickUp. CourierOnTheWayToPickUp is still accepted for any
+        // batches left mid-flight under the old two-step process.
+        if (go.Status is not (OrderStatus.CourierAssignedToPickUp or OrderStatus.CourierOnTheWayToPickUp))
+            throw new ConflictException($"Expected CourierAssignedToPickUp. Current: {go.Status}.");
 
         go.Status      = OrderStatus.CourierDeliveringToWarehouse;
         go.PickedUpAt  = CustomTime.Now;

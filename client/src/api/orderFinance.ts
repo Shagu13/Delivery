@@ -55,6 +55,10 @@ export interface OrderFinanceLine {
     senderOwesService: boolean;
     /** Billable failed delivery: no COD owed back, but the sender still owes the service fee. */
     isBillableFailedDelivery: boolean;
+    /** Cancellation reason (enum name) when set — used to label why a failed delivery is charged. */
+    cancellationReason: string | null;
+    /** Free-text comment for the "Other" cancellation reason, if any. */
+    cancellationComment: string | null;
 }
 
 export interface OrderPaymentRequest {
@@ -94,10 +98,14 @@ const jsonHeaders = (token: string) => ({ 'Content-Type': 'application/json', ..
 // Payments view (paymentsMode): only paid orders, `date` narrows by CodPaidToCustomerAt.
 export async function fetchMyOrderFinance(
     token: string, date?: string, paymentsMode = false,
+    opts: { monthly?: boolean; from?: string; to?: string } = {},
 ): Promise<OrderFinanceLine[]> {
     const params = new URLSearchParams();
     if (date) params.set('date', date);
     if (paymentsMode) params.set('paymentsMode', 'true');
+    if (opts.monthly) params.set('monthly', 'true');
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
     const q = params.toString() ? `?${params}` : '';
     const res = await fetch(`/api/orderfinance/my${q}`, { headers: authHeaders(token), cache: 'no-store' });
     return handle<OrderFinanceLine[]>(res, 'Failed to load orders');

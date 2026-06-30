@@ -21,9 +21,13 @@ public sealed class OrderFinanceController : BaseController
     public async Task<IActionResult> GetMy(
         [FromQuery] DateOnly? date,
         [FromQuery] bool paymentsMode,
+        [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
         CancellationToken ct)
     {
-        var result = await Sender.Send(new GetMyOrderFinanceLinesQuery(CurrentUserId, date, paymentsMode), ct);
+        var result = await Sender.Send(
+            new GetMyOrderFinanceLinesQuery(CurrentUserId, date, paymentsMode, monthly, from, to), ct);
         return Ok(result);
     }
 

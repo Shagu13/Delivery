@@ -69,5 +69,11 @@ public sealed record OrderFinanceLineDto(
     /// assignment / Send returned-to-sender). No COD was collected, so none is owed back to the
     /// customer, but the sender still owes the service fee.
     /// </summary>
-    bool     IsBillableFailedDelivery
+    bool     IsBillableFailedDelivery,
+
+    /// <summary>Cancellation reason (enum name) when set, so the UI can show why a billable
+    /// failed delivery is charged. Null for normal orders.</summary>
+    string?  CancellationReason,
+    /// <summary>Free-text comment for the "Other" cancellation reason, if any.</summary>
+    string?  CancellationComment
 );

@@ -267,7 +267,6 @@ export async function groupAndWarehouseStandalone(
     }
 }
 
-export const markPickingUp = (token: string, id: string) => groupOrderAction(token, id, 'picking-up');
 export const markPickedUp = (token: string, id: string) => groupOrderAction(token, id, 'picked-up');
 export const markDeliveredToWarehouse = (token: string, id: string) => groupOrderAction(token, id, 'delivered-to-warehouse');
 

@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
 import {
-    markPickingUp, markPickedUp, markDeliveredToWarehouse,
+    markPickedUp, markDeliveredToWarehouse,
 } from '../../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../../api/adminGroupOrders';
 import { SwipeButton } from './SwipeButton';
@@ -30,8 +30,9 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     // A bulk action is offered only when every selected pickup shares one status.
     const bulkActionFor = (status: string) => {
         switch (status) {
+            // The "on my way" pickup step was removed — Picked-up is the first action now.
+            // CourierOnTheWayToPickUp is still handled for any batches left mid-flight.
             case 'CourierAssignedToPickUp':
-                return { fn: (id: string) => markPickingUp(token, id),          label: t.cdPickupSwipeOnWay,      toast: t.cdPickupToastOnWay,      variant: 'primary' as const };
             case 'CourierOnTheWayToPickUp':
                 return { fn: (id: string) => markPickedUp(token, id),            label: t.cdPickupSwipePickedUp,   toast: t.cdPickupToastPickedUp,   variant: 'primary' as const };
             case 'CourierDeliveringToWarehouse':
@@ -260,18 +261,13 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                         {go.note && <div className="courier-card__note">{go.note}</div>}
                                     </div>
                                     <div className="courier-card__footer">
-                                        {go.status === 'CourierAssignedToPickUp' && (
-                                            <SwipeButton label={t.cdPickupSwipeOnWay} variant="primary" disabled={busyId === go.id}
-                                                onSwipe={() => onAct(go.id, () => markPickingUp(token, go.id), t.cdPickupToastOnWay)} />
-                                        )}
-                                        {go.status === 'CourierOnTheWayToPickUp' && (
+                                        {(go.status === 'CourierAssignedToPickUp' || go.status === 'CourierOnTheWayToPickUp') && (
                                             <SwipeButton label={t.cdPickupSwipePickedUp} variant="primary" disabled={busyId === go.id}
                                                 onSwipe={() => onAct(go.id, () => markPickedUp(token, go.id), t.cdPickupToastPickedUp)} />
                                         )}
                                         {go.status === 'CourierDeliveringToWarehouse' && (
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                ✅ {t.cdPickupAwaitingWarehouse}
-                                            </span>
+                                            <SwipeButton label={t.cdPickupSwipeToWarehouse} variant="success" disabled={busyId === go.id}
+                                                onSwipe={() => onAct(go.id, () => markDeliveredToWarehouse(token, go.id), t.cdPickupToastToWarehouse)} />
                                         )}
                                     </div>
                                 </>
