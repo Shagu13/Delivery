@@ -116,10 +116,9 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                 <span title={statusMeta.description} style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: statusBg, color: statusFg }}>
                     {statusMeta.short}
                 </span>
-                {/* Cancelled / failed: show the reason in colour so the customer knows what's going on.
-                    Red = billable (they pay the fee); green = no charge. */}
+                {/* Cancelled / failed: show the reason in red so it's clearly visible. */}
                 {line.cancellationReason && (
-                    <div style={{ marginTop: 3, fontSize: '0.66rem', fontWeight: 600, color: line.isBillableFailedDelivery ? '#dc2626' : '#059669' }}>
+                    <div style={{ marginTop: 3, fontSize: '0.66rem', fontWeight: 600, color: '#dc2626' }}>
                         {t.cdCancelReasons[line.cancellationReason]}
                         {line.cancellationReason === 'Other' && line.cancellationComment ? `: ${line.cancellationComment}` : ''}
                     </div>

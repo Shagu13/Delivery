@@ -12,7 +12,7 @@ import {
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
-import { setCompanyServicePrice, NON_BILLABLE_CANCEL_REASONS } from '../../api/orders';
+import { setCompanyServicePrice } from '../../api/orders';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
@@ -875,16 +875,12 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                         {/* Cancelled / failed: show the reason (or status) so it's clear why amounts are "—"
                                             or why a fee is charged. Red = billable (customer pays); green = no charge. */}
                                         {(o.isBillableFailedDelivery || CANCELLED_STATUSES.has(o.status)) && (() => {
-                                            const billed = o.isBillableFailedDelivery;
-                                            const label  = o.cancellationReason
+                                            // All cancelled/failed orders flagged in red so they catch the admin's eye.
+                                            const label = o.cancellationReason
                                                 ? t.cdCancelReasons[o.cancellationReason] + (o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : '')
                                                 : getStatusMeta(o.status, lang).short;
-                                            const color  = billed ? '#dc2626'
-                                                : (o.cancellationReason && NON_BILLABLE_CANCEL_REASONS.has(o.cancellationReason)) ? '#059669'
-                                                : 'var(--color-text-muted)';
-                                            const bg     = billed ? 'rgba(220,38,38,0.12)' : 'var(--color-bg-3)';
                                             return (
-                                                <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: bg, color }}>
+                                                <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
                                                     ✕ {label}
                                                 </span>
                                             );
