@@ -30,10 +30,27 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
     const [postponingId, setPostponingId] = useState<string | null>(null);
     const [cancellingId, setCancellingId] = useState<string | null>(null);
     const [collectConfirmOrderId, setCollectConfirmOrderId] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
+
+    // Free-text search over the store (sender) business name, recipient name/address,
+    // recipient city/district, and order type (raw value + localized label).
+    const q = search.trim().toLowerCase();
+    const filtered = useMemo(() => {
+        if (!q) return deliveries;
+        const typeWord = (ty: string) => (ty === 'Return' ? t.aopOrderTypeReturn : ty === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend);
+        return deliveries.filter(o => {
+            const hay: (string | null | undefined)[] = [
+                o.senderBusinessName, o.recipientName, o.recipientPhone,
+                o.recipientAddress, o.recipientCity, o.recipientDistrict,
+                o.orderType, typeWord(o.orderType), o.trackingNumber,
+            ];
+            return hay.some(v => (v ?? '').toString().toLowerCase().includes(q));
+        });
+    }, [deliveries, q, t]);
 
     const addresses = useMemo(
-        () => deliveries.map(o => ({ address: o.recipientAddress, district: o.recipientDistrict, city: o.recipientCity })),
-        [deliveries]
+        () => filtered.map(o => ({ address: o.recipientAddress, district: o.recipientDistrict, city: o.recipientCity })),
+        [filtered]
     );
     const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation, refreshLocation } = useGeoSort(addresses);
 
@@ -59,7 +76,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
         return distanceToAddress(coords, o.recipientAddress, o.recipientDistrict, o.recipientCity, geocodeCache);
     };
 
-    const sortedDeliveries = [...deliveries].sort((a, b) =>
+    const sortedDeliveries = [...filtered].sort((a, b) =>
         sortMode === 'nearest'
             ? distanceTo(a) - distanceTo(b)
             : a.recipientDistrict.localeCompare(b.recipientDistrict)
@@ -114,6 +131,27 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                     )}
                 </div>
             </div>
+            {/* Free-text search: store name, recipient/address, city/district, order type. */}
+            <div style={{ position: 'relative', marginBottom: 10 }}>
+                <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder={t.cdSearchPh}
+                    autoComplete="off"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 30px 9px 12px', borderRadius: 10,
+                        border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)',
+                        fontSize: '0.85rem', outline: 'none' }}
+                />
+                {search && (
+                    <button onClick={() => setSearch('')} aria-label={t.cancel}
+                        style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none',
+                            border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', fontSize: '1.1rem', lineHeight: 1, padding: 0 }}>
+                        ×
+                    </button>
+                )}
+            </div>
+            {sortedDeliveries.length === 0 && <div className="dashboard__empty">{t.cdSearchNoMatch}</div>}
             <div className="courier-cards">
                 {sortedDeliveries.map(order => {
                     const isBusy = busyId === order.id;

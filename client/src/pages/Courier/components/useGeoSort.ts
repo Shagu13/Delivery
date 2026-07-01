@@ -13,7 +13,7 @@ export interface GeoSortState {
     refreshLocation: () => void;
 }
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -153,6 +153,12 @@ export function useGeoSort(addresses: { address: string; district: string; city:
     }, [coords, addresses]);
 
     return { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation: startWatch, refreshLocation };
+}
+
+/** Best-effort coordinates for an address from the shared geocode cache (null if never geocoded). */
+export function lookupGeocode(address: string, district: string, city: string): [number, number] | null {
+    const key = `${address}, ${district}, ${city}, Georgia`.toLowerCase();
+    return globalGeocodeCache.get(key) ?? null;
 }
 
 export function distanceToAddress(

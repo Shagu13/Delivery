@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -14,6 +14,21 @@ import { CourierSettlementsPage } from './CourierSettlementsPage';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { useRefreshOnResume } from '../../hooks/useRefreshOnResume';
+import { NewOrderAlert } from './components/NewOrderAlert';
+import type { NewOrderAlertItem } from './components/NewOrderAlert';
+import { primeAudio, playChime, vibrate } from './components/newOrderAlert';
+import { lookupGeocode, haversineKm } from './components/useGeoSort';
+
+// Persist the last-seen order ids per courier (localStorage) so the heads-up can also fire on
+// reopen for orders assigned while the app was fully closed — the in-memory diff only covers an
+// already-open session. Keyed per courier so a shared device doesn't leak one courier's ids.
+function loadSeenIds(key: string): Set<string> | null {
+    try { const raw = localStorage.getItem(key); return raw ? new Set(JSON.parse(raw) as string[]) : null; }
+    catch { return null; }
+}
+function saveSeenIds(key: string, ids: Set<string>): void {
+    try { localStorage.setItem(key, JSON.stringify([...ids])); } catch { /* storage unavailable — ignore */ }
+}
 
 // Mobile bottom-tab label: split the leading emoji (icon) from the word so the
 // icon sits on its own line above a single-line, non-wrapping label. Keeps all
@@ -65,24 +80,125 @@ export function CourierDashboard() {
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3500); };
 
+    // ── New-order heads-up ───────────────────────────────────────────────────────
+    // Only assignment adds an order to a courier's list (their own actions only remove/
+    // change status), so a newly-appearing id ⇒ a freshly-assigned order. We diff each
+    // refetch against the last-seen ids (initialised silently on first load, so no alert
+    // fires for the orders already there) and surface anything new with a popup + chime +
+    // vibration (+ an OS notification when the app is backgrounded and permitted).
+    const [newOrders, setNewOrders] = useState<NewOrderAlertItem[]>([]);
+    const seenPickupIdsRef = useRef<Set<string> | null>(null);
+    const seenDeliveryIdsRef = useRef<Set<string> | null>(null);
+    const courierPosRef = useRef<{ lat: number; lng: number } | null>(null);
+    // Persisted-baseline keys, scoped per courier so reopen surfaces orders assigned while closed.
+    const seenKeyPickup = `courier_seen_pickup_v1_${user?.username ?? 'anon'}`;
+    const seenKeyDeliv  = `courier_seen_delivery_v1_${user?.username ?? 'anon'}`;
+
+    const fireAlert = useCallback((items: NewOrderAlertItem[]) => {
+        if (items.length === 0) return;
+        setNewOrders(prev => {
+            const ids = new Set(prev.map(i => i.id));
+            return [...prev, ...items.filter(i => !ids.has(i.id))];
+        });
+        playChime();
+        vibrate();
+        // OS notification only when the app is backgrounded-but-alive (foreground shows the popup).
+        try {
+            if (typeof document !== 'undefined' && document.hidden
+                && 'Notification' in window && Notification.permission === 'granted') {
+                const title = items.length > 1 ? t.cdNewOrdersTitle(items.length) : t.cdNewOrderTitle;
+                const f = items[0];
+                const body = [f.store, [f.city, f.district].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+                new Notification(title, { body, tag: 'dilo-new-order' });
+            }
+        } catch { /* notifications unavailable — ignore */ }
+    }, [t]);
+
+    const distTo = (c: [number, number] | null): number | null => {
+        const p = courierPosRef.current;
+        return p && c ? haversineKm(p.lat, p.lng, c[0], c[1]) : null;
+    };
+
+    const detectNewPickups = useCallback((data: AdminGroupOrder[]) => {
+        const ids = new Set(data.map(go => go.id));
+        // Baseline = this session's snapshot, else the persisted set from last time the app was
+        // open (so orders assigned while closed surface on reopen). null = first-ever use → silent.
+        const baseline = seenPickupIdsRef.current ?? loadSeenIds(seenKeyPickup);
+        const added = baseline ? data.filter(go => !baseline.has(go.id)) : [];
+        seenPickupIdsRef.current = ids;
+        saveSeenIds(seenKeyPickup, ids);
+        if (added.length === 0) return;
+        fireAlert(added.map(go => ({
+            id: go.id, kind: 'pickup' as const,
+            store: go.senderBusinessName || `${go.senderFirstName} ${go.senderLastName}`.trim(),
+            address: go.pickUpAddress, city: go.pickUpCity, district: go.pickUpDistrict,
+            type: go.orders[0]?.orderType ?? 'Send',
+            distanceKm: distTo(lookupGeocode(go.pickUpAddress, go.pickUpDistrict, go.pickUpCity)),
+        })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fireAlert]);
+
+    const detectNewDeliveries = useCallback((data: CourierOrder[]) => {
+        const ids = new Set(data.map(o => o.id));
+        const baseline = seenDeliveryIdsRef.current ?? loadSeenIds(seenKeyDeliv);
+        const added = baseline ? data.filter(o => !baseline.has(o.id)) : [];
+        seenDeliveryIdsRef.current = ids;
+        saveSeenIds(seenKeyDeliv, ids);
+        if (added.length === 0) return;
+        fireAlert(added.map(o => ({
+            id: o.id, kind: 'delivery' as const,
+            store: o.senderBusinessName ?? '',
+            address: o.recipientAddress, city: o.recipientCity, district: o.recipientDistrict,
+            type: o.orderType,
+            distanceKm: distTo(o.latitude != null && o.longitude != null
+                ? [o.latitude, o.longitude]
+                : lookupGeocode(o.recipientAddress, o.recipientDistrict, o.recipientCity)),
+        })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fireAlert]);
+
     const loadPickups = useCallback(async (silent = false) => {
         if (!token) return;
         if (!silent) { setPickupLoading(true); setPickupError(null); }
-        try { setPickups(await fetchMyPickups(token)); }
+        try { const data = await fetchMyPickups(token); detectNewPickups(data); setPickups(data); }
         catch { if (!silent) setPickupError(t.cdPickupsLoading); }
         finally { if (!silent) setPickupLoading(false); }
-    }, [token, t.cdPickupsLoading]);
+    }, [token, t.cdPickupsLoading, detectNewPickups]);
 
     const loadDeliveries = useCallback(async (silent = false) => {
         if (!token) return;
         if (!silent) { setDeliveriesLoading(true); setDeliveriesError(null); }
-        try { setDeliveries(await fetchMyDeliveries(token)); }
+        try { const data = await fetchMyDeliveries(token); detectNewDeliveries(data); setDeliveries(data); }
         catch { if (!silent) setDeliveriesError(t.cdDeliveriesLoading); }
         finally { if (!silent) setDeliveriesLoading(false); }
-    }, [token, t.cdDeliveriesLoading]);
+    }, [token, t.cdDeliveriesLoading, detectNewDeliveries]);
 
     useEffect(() => { loadPickups(); }, [loadPickups]);
     useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
+
+    // Track the courier's position so the heads-up can show how far a new order is.
+    useEffect(() => {
+        if (!navigator.geolocation) return;
+        const id = navigator.geolocation.watchPosition(
+            pos => { courierPosRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+            () => { /* denied/unavailable — distance just won't show */ },
+            { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 },
+        );
+        return () => navigator.geolocation.clearWatch(id);
+    }, []);
+
+    // Unlock audio + ask for notification permission on the courier's first tap (browser rules
+    // require a user gesture for both). After that the chime and OS notifications can fire.
+    useEffect(() => {
+        const onFirstTap = () => {
+            primeAudio();
+            try {
+                if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission();
+            } catch { /* ignore */ }
+        };
+        window.addEventListener('pointerdown', onFirstTap, { once: true });
+        return () => window.removeEventListener('pointerdown', onFirstTap);
+    }, []);
 
     // Live refresh: when the admin assigns (or reassigns) a pickup/delivery to this
     // courier, refetch both lists silently so the new order appears without a refresh.
@@ -124,6 +240,15 @@ export function CourierDashboard() {
     const pickupProps = { pickups, loading: pickupLoading, error: pickupError, onRefresh: loadPickups, busyId, token: token!, onAct: act, onBulkAct: actBulk };
     const deliveryProps = { deliveries, loading: deliveriesLoading, error: deliveriesError, busyId, token: token!, onAct: act };
 
+    // Heads-up popup for freshly-assigned orders (rendered in both layouts; null when none).
+    const newOrderAlert = (
+        <NewOrderAlert
+            items={newOrders}
+            onDismiss={() => setNewOrders([])}
+            onView={kind => { setView(kind === 'pickup' ? 'pickups' : 'deliveries'); setNewOrders([]); }}
+        />
+    );
+
     // ── Mobile ─────────────────────────────────────────────────────────────────
     if (isMobile) {
         return (
@@ -158,6 +283,7 @@ export function CourierDashboard() {
                     {view === 'history'     && <CourierHistoryPage />}
                     {view === 'settlements' && <CourierSettlementsPage />}
                 </main>
+                {newOrderAlert}
             </div>
         );
     }
@@ -205,6 +331,7 @@ export function CourierDashboard() {
                 {view === 'history'     && <CourierHistoryPage />}
                 {view === 'settlements' && <CourierSettlementsPage />}
             </main>
+            {newOrderAlert}
         </div>
     );
 }

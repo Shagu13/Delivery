@@ -25,6 +25,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkBusy, setBulkBusy] = useState(false);
+    const [search, setSearch] = useState('');
 
     // The three pickup stages, each with its API call + button label + success toast.
     // A bulk action is offered only when every selected pickup shares one status.
@@ -42,9 +43,25 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
         }
     };
 
+    // Free-text search over the sender's business name, the pickup address/city/district,
+    // and the order type (matches both the raw value and the localized label).
+    const q = search.trim().toLowerCase();
+    const filtered = useMemo(() => {
+        if (!q) return pickups;
+        const typeWord = (ty: string) => (ty === 'Return' ? t.aopOrderTypeReturn : ty === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend);
+        return pickups.filter(go => {
+            const hay: (string | null | undefined)[] = [
+                go.senderBusinessName, go.senderFirstName, go.senderLastName, go.senderPhone,
+                go.pickUpAddress, go.pickUpCity, go.pickUpCityGeo, go.pickUpDistrict, go.pickUpDistrictGeo,
+                ...go.orders.flatMap(o => [o.orderType, typeWord(o.orderType), o.trackingNumber, o.recipientName]),
+            ];
+            return hay.some(v => (v ?? '').toString().toLowerCase().includes(q));
+        });
+    }, [pickups, q, t]);
+
     const addresses = useMemo(
-        () => pickups.map(go => ({ address: go.pickUpAddress, district: go.pickUpDistrict, city: go.pickUpCity })),
-        [pickups]
+        () => filtered.map(go => ({ address: go.pickUpAddress, district: go.pickUpDistrict, city: go.pickUpCity })),
+        [filtered]
     );
     const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation, refreshLocation } = useGeoSort(addresses);
 
@@ -65,7 +82,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     // Picked-up batches (awaiting the warehouse drop-off) sink to the bottom so the next
     // batch to head to rises to the top; within each group keep the chosen sort.
     const stageRank = (go: AdminGroupOrder) => (go.status === 'CourierDeliveringToWarehouse' ? 1 : 0);
-    const sortedPickups = [...pickups].sort((a, b) => {
+    const sortedPickups = [...filtered].sort((a, b) => {
         const s = stageRank(a) - stageRank(b);
         if (s !== 0) return s;
         return sortMode === 'nearest'
@@ -95,12 +112,12 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     // single tap can select every pickup belonging to the same customer.
     const customerKey = (go: AdminGroupOrder) => `${go.senderBusinessName}|${go.senderPhone}`;
     const customerCounts: Record<string, number> = {};
-    for (const p of pickups) { const k = customerKey(p); customerCounts[k] = (customerCounts[k] ?? 0) + 1; }
+    for (const p of filtered) { const k = customerKey(p); customerCounts[k] = (customerCounts[k] ?? 0) + 1; }
     const selectCustomer = (go: AdminGroupOrder) => {
         const key = customerKey(go);
         setSelectedIds(prev => {
             const n = new Set(prev);
-            pickups.forEach(p => { if (customerKey(p) === key) n.add(p.id); });
+            filtered.forEach(p => { if (customerKey(p) === key) n.add(p.id); });
             return n;
         });
     };
@@ -142,6 +159,26 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                     )}
                 </div>
             </div>
+            {/* Free-text search: store name, pickup address, city/district, order type. */}
+            <div style={{ position: 'relative', marginBottom: 10 }}>
+                <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder={t.cdSearchPh}
+                    autoComplete="off"
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 30px 9px 12px', borderRadius: 10,
+                        border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)',
+                        fontSize: '0.85rem', outline: 'none' }}
+                />
+                {search && (
+                    <button onClick={() => setSearch('')} aria-label={t.cancel}
+                        style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none',
+                            border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', fontSize: '1.1rem', lineHeight: 1, padding: 0 }}>
+                        ×
+                    </button>
+                )}
+            </div>
             {pickedUpIds.length > 0 && (
                 <button
                     onClick={() => setSelectedIds(new Set(pickedUpIds))}
@@ -174,6 +211,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                     )}
                 </div>
             )}
+            {sortedPickups.length === 0 && <div className="dashboard__empty">{t.cdSearchNoMatch}</div>}
             <div className="courier-cards">
                 {sortedPickups.map((go, i) => {
                     const isExpanded = expandedIds.has(go.id);
