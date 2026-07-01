@@ -10,8 +10,13 @@ public sealed class AssignCourierToGroupOrderCommandHandler
     : IRequestHandler<AssignCourierToGroupOrderCommand>
 {
     private readonly IAppDbContext _context;
+    private readonly IWebPushService _push;
 
-    public AssignCourierToGroupOrderCommandHandler(IAppDbContext context) => _context = context;
+    public AssignCourierToGroupOrderCommandHandler(IAppDbContext context, IWebPushService push)
+    {
+        _context = context;
+        _push = push;
+    }
 
     public async Task Handle(AssignCourierToGroupOrderCommand request, CancellationToken cancellationToken)
     {
@@ -47,5 +52,11 @@ public sealed class AssignCourierToGroupOrderCommandHandler
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Heads-up push so the courier notices the new pickup even with the app closed.
+        var location = $"{groupOrder.PickUpCity}, {groupOrder.PickUpDistrict}";
+        var body = string.IsNullOrWhiteSpace(groupOrder.SenderBusinessName)
+            ? location : $"{groupOrder.SenderBusinessName} — {location}";
+        await _push.NotifyNewOrderAsync(courier.Id, "ახალი ასაღები · New pickup", body, "/", cancellationToken);
     }
 }

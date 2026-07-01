@@ -92,6 +92,10 @@ public static class DependencyInjectionInfrastructure
         services.AddScoped<IRecipientNotificationSmsService, RecipientNotificationSmsService>();
         services.AddScoped<IPasswordResetSmsService,         PasswordResetSmsService>();
 
+        // ── Web Push (VAPID) — courier "new order" notifications when the app is closed ──
+        services.Configure<Infrastructure.Push.WebPushOptions>(configuration.GetSection("WebPush"));
+        services.AddScoped<IWebPushService, Infrastructure.Push.WebPushService>();
+
         return services;
     }
 }

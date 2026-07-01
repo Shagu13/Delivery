@@ -20,5 +20,6 @@ public interface IAppDbContext
     DbSet<PartnerApiKey>        PartnerApiKeys       { get; }
     DbSet<PartnerWebhook>       PartnerWebhooks      { get; }
     DbSet<WebhookDelivery>      WebhookDeliveries    { get; }
+    DbSet<PushSubscription>     PushSubscriptions    { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

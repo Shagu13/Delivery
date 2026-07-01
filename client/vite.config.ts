@@ -33,6 +33,9 @@ export default defineConfig({
                 ],
             },
             workbox: {
+                // Layer our Web Push handlers onto the generated Workbox service worker
+                // (push + notificationclick) — keeps all the precache/offline behaviour intact.
+                importScripts: ['/push-sw.js'],
                 // Don't let the SW cache API/SignalR traffic — always hit the network.
                 navigateFallbackDenylist: [/^\/api/, /^\/hubs/],
                 globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}'],

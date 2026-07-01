@@ -38,17 +38,20 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
     private readonly IAppDbContext _context;
     private readonly IRecipientNotificationSmsService _recipientSms;
     private readonly IRealtimeNotifier _notifier;
+    private readonly IWebPushService _push;
     private readonly ILogger<AssignCourierToOrderCommandHandler> _logger;
 
     public AssignCourierToOrderCommandHandler(
         IAppDbContext context,
         IRecipientNotificationSmsService recipientSms,
         IRealtimeNotifier notifier,
+        IWebPushService push,
         ILogger<AssignCourierToOrderCommandHandler> logger)
     {
         _context = context;
         _recipientSms = recipientSms;
         _notifier = notifier;
+        _push = push;
         _logger = logger;
     }
 
@@ -106,6 +109,16 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         if (previousCourierId is Guid prev && prev != courier.Id)
             _notifier.NotifyCourierOrdersChanged(prev);
         _notifier.NotifyAdminsOrdersChanged();
+
+        // Heads-up push so the courier notices the new delivery even with the app closed.
+        // Only on a genuinely new assignment (not a re-assign back to the same courier).
+        if (previousCourierId != courier.Id)
+        {
+            var location = $"{order.RecipientCity}, {order.RecipientDistrict}";
+            var store = order.GroupOrder?.SenderBusinessName;
+            var body = string.IsNullOrWhiteSpace(store) ? location : $"{store} — {location}";
+            await _push.NotifyNewOrderAsync(courier.Id, "ახალი მისატანი · New delivery", body, "/", cancellationToken);
+        }
 
         // ── Notify recipient via SMS ──────────────────────────────────────────
         // Fire-and-forget inside a try/catch so SMS failure never rolls back the assignment.

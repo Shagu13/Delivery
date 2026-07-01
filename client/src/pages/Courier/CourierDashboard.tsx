@@ -18,6 +18,7 @@ import { NewOrderAlert } from './components/NewOrderAlert';
 import type { NewOrderAlertItem } from './components/NewOrderAlert';
 import { primeAudio, playChime, vibrate } from './components/newOrderAlert';
 import { lookupGeocode, haversineKm } from './components/useGeoSort';
+import { enablePush, pushSupported, isIos, isStandalone } from '../../realtime/pushNotifications';
 
 // Persist the last-seen order ids per courier (localStorage) so the heads-up can also fire on
 // reopen for orders assigned while the app was fully closed — the in-memory diff only covers an
@@ -176,6 +177,19 @@ export function CourierDashboard() {
     useEffect(() => { loadPickups(); }, [loadPickups]);
     useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
 
+    // ── Push notifications enablement (alerts even when the app is closed) ────────
+    const [showPushPrompt, setShowPushPrompt] = useState(false);
+    const [showIosInstall, setShowIosInstall] = useState(false);
+    useEffect(() => {
+        if (!token) return;
+        // iOS only allows Web Push from an installed (Home Screen) PWA — nudge them to install.
+        if (isIos() && !isStandalone()) { setShowIosInstall(true); return; }
+        if (!pushSupported()) return;
+        if (Notification.permission === 'granted') { void enablePush(token); }   // keep subscription fresh
+        else if (Notification.permission === 'default') { setShowPushPrompt(true); }
+        // 'denied' → respect the choice, show nothing.
+    }, [token]);
+
     // Track the courier's position so the heads-up can show how far a new order is.
     useEffect(() => {
         if (!navigator.geolocation) return;
@@ -240,6 +254,29 @@ export function CourierDashboard() {
     const pickupProps = { pickups, loading: pickupLoading, error: pickupError, onRefresh: loadPickups, busyId, token: token!, onAct: act, onBulkAct: actBulk };
     const deliveryProps = { deliveries, loading: deliveriesLoading, error: deliveriesError, busyId, token: token!, onAct: act };
 
+    // "Enable notifications" nudge (or iOS install hint) — rendered in both layouts.
+    const pushBanner = (showPushPrompt || showIosInstall) ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            background: 'var(--color-accent-dim)', border: '1px solid var(--color-accent)',
+            borderRadius: 10, padding: '10px 12px', margin: '0 0 10px', fontSize: '0.85rem', color: 'var(--color-text)' }}>
+            <span style={{ flex: 1, minWidth: 180 }}>🔔 {showIosInstall ? t.cdPushIosHint : t.cdPushPrompt}</span>
+            {showPushPrompt && (
+                <button
+                    onClick={async () => {
+                        const r = await enablePush(token!);
+                        if (r !== 'error') setShowPushPrompt(false);
+                        if (r === 'not-configured') showToast(t.cdToastFailed);
+                    }}
+                    style={{ background: 'var(--color-accent)', color: '#fff', border: 'none', borderRadius: 8,
+                        padding: '8px 14px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {t.cdPushEnable}
+                </button>
+            )}
+            <button onClick={() => { setShowPushPrompt(false); setShowIosInstall(false); }} aria-label={t.cancel}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', fontSize: '1.2rem', lineHeight: 1 }}>×</button>
+        </div>
+    ) : null;
+
     // Heads-up popup for freshly-assigned orders (rendered in both layouts; null when none).
     const newOrderAlert = (
         <NewOrderAlert
@@ -272,6 +309,7 @@ export function CourierDashboard() {
                 </header>
                 <main className="mobile-content">
                     {toast && <div className="dashboard__toast">{toast}</div>}
+                    {pushBanner}
                     <div className="mobile-tabs">
                         <button className={`mobile-tab${view === 'pickups'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('pickups')}><MobileTabLabel raw={t.cdTabPickups} /></button>
                         <button className={`mobile-tab${view === 'deliveries'  ? ' mobile-tab--active' : ''}`} onClick={() => setView('deliveries')}><MobileTabLabel raw={t.cdTabDeliveries} /></button>
@@ -326,6 +364,7 @@ export function CourierDashboard() {
             </aside>
             <main className="dashboard__main">
                 {toast && <div className="dashboard__toast">{toast}</div>}
+                {pushBanner}
                 {view === 'pickups'     && <PickupsPanel    {...pickupProps} />}
                 {view === 'deliveries'  && <DeliveriesPanel {...deliveryProps} />}
                 {view === 'history'     && <CourierHistoryPage />}

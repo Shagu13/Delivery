@@ -25,6 +25,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<PartnerApiKey>    PartnerApiKeys    => Set<PartnerApiKey>();
     public DbSet<PartnerWebhook>   PartnerWebhooks   => Set<PartnerWebhook>();
     public DbSet<WebhookDelivery>  WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +33,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
 
         modelBuilder.HasSequence<long>("TrackingNumberSeq", "dbo")
             .StartsAt(1).IncrementsBy(1);
+
+        // ── PushSubscription ─────────────────────────────────────────────────
+        modelBuilder.Entity<PushSubscription>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.Property(p => p.Endpoint).IsRequired().HasMaxLength(1000);
+            e.Property(p => p.P256dh).IsRequired().HasMaxLength(400);
+            e.Property(p => p.Auth).IsRequired().HasMaxLength(200);
+            e.HasIndex(p => p.Endpoint).IsUnique();
+            e.HasIndex(p => p.CourierId);
+            e.HasOne(p => p.Courier).WithMany().HasForeignKey(p => p.CourierId).OnDelete(DeleteBehavior.Cascade);
+        });
 
         // ── Courier ──────────────────────────────────────────────────────────
         modelBuilder.Entity<Courier>(e =>
