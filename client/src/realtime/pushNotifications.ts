@@ -1,11 +1,13 @@
 // Web Push subscription for couriers — registers the device with the backend so "new order"
 // pushes arrive even when the PWA is closed / phone locked. Safe no-op where unsupported.
 
-function urlBase64ToUint8Array(base64: string): Uint8Array {
+function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
     const padding = '='.repeat((4 - (base64.length % 4)) % 4);
     const normalized = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
     const raw = atob(normalized);
-    const out = new Uint8Array(raw.length);
+    // Allocate over a concrete ArrayBuffer so the result is a valid BufferSource
+    // (avoids the Uint8Array<ArrayBufferLike> vs ArrayBuffer mismatch on TS 5.7+).
+    const out = new Uint8Array(new ArrayBuffer(raw.length));
     for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
     return out;
 }

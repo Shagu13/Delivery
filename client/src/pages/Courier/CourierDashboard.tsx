@@ -16,7 +16,7 @@ import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { useRefreshOnResume } from '../../hooks/useRefreshOnResume';
 import { NewOrderAlert } from './components/NewOrderAlert';
 import type { NewOrderAlertItem } from './components/NewOrderAlert';
-import { primeAudio, playChime, vibrate } from './components/newOrderAlert';
+import { primeAudio, playChime, vibrate } from './components/newOrderSound';
 import { lookupGeocode, haversineKm } from './components/useGeoSort';
 import { enablePush, pushSupported, isIos, isStandalone } from '../../realtime/pushNotifications';
 
@@ -282,7 +282,7 @@ export function CourierDashboard() {
         <NewOrderAlert
             items={newOrders}
             onDismiss={() => setNewOrders([])}
-            onView={kind => { setView(kind === 'pickup' ? 'pickups' : 'deliveries'); setNewOrders([]); }}
+            onView={(kind: 'pickup' | 'delivery') => { setView(kind === 'pickup' ? 'pickups' : 'deliveries'); setNewOrders([]); }}
         />
     );
 
