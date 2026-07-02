@@ -9,5 +9,6 @@ public interface IJwtTokenGenerator
         string          role,
         Guid?           courierId  = null,
         Guid?           customerId = null,
-        Guid?           tenantId   = null);
+        Guid?           tenantId   = null,
+        int?            expiryMinutesOverride = null);
 }

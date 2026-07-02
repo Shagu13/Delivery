@@ -19,7 +19,8 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
         string          role,
         Guid?           courierId  = null,
         Guid?           customerId = null,
-        Guid?           tenantId   = null)
+        Guid?           tenantId   = null,
+        int?            expiryMinutesOverride = null)
     {
         var claims = new List<Claim>
         {
@@ -52,7 +53,7 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
             audience:           _settings.Audience,
             claims:             claims,
             notBefore:          DateTime.UtcNow,
-            expires:            DateTime.UtcNow.AddMinutes(_settings.ExpiryMinutes),
+            expires:            DateTime.UtcNow.AddMinutes(expiryMinutesOverride ?? _settings.ExpiryMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

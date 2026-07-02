@@ -84,9 +84,15 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
             tenantId = tenant.Id;
         }
 
-        // 6. Generate token
-        var expiresAt = CustomTime.Now.AddMinutes(480);
-        var token = _jwtGenerator.GenerateToken(user, role, courierId, customerId, tenantId);
+        // 6. Generate token. Couriers get a long-lived session (they work in a phone PWA and
+        // must stay logged in to receive order alerts); everyone else keeps the standard 8h.
+        // The client `expiresAt` is kept in sync with the JWT's own expiry.
+        const int courierExpiryMinutes = 180 * 24 * 60; // 180 days
+        const int defaultExpiryMinutes = 480;           // 8 hours
+        var expiryMinutes = role == "Courier" ? courierExpiryMinutes : defaultExpiryMinutes;
+
+        var expiresAt = CustomTime.Now.AddMinutes(expiryMinutes);
+        var token = _jwtGenerator.GenerateToken(user, role, courierId, customerId, tenantId, expiryMinutes);
 
         // The dedicated "systemadmin" account is the only Admin that owns the
         // white-label Tenants management page (create/edit tenants).

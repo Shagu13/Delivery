@@ -214,6 +214,18 @@ export function CourierDashboard() {
         return () => window.removeEventListener('pointerdown', onFirstTap);
     }, []);
 
+    // Ask the browser to keep our storage (the saved login) persistent so it isn't evicted
+    // under storage pressure or by iOS's inactivity cleanup — keeps couriers logged in.
+    useEffect(() => {
+        (async () => {
+            try {
+                if (navigator.storage?.persist && navigator.storage.persisted) {
+                    if (!(await navigator.storage.persisted())) await navigator.storage.persist();
+                }
+            } catch { /* not supported — ignore */ }
+        })();
+    }, []);
+
     // Live refresh: when the admin assigns (or reassigns) a pickup/delivery to this
     // courier, refetch both lists silently so the new order appears without a refresh.
     useOrdersChangedSignal(token ?? null, 'courierOrdersChanged', () => {
