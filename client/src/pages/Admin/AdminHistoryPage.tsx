@@ -394,13 +394,20 @@ export default function AdminHistoryPage({ token }: { token: string }) {
         .hist-daynav__arrow:disabled { opacity: 0.4; cursor: not-allowed; }
         .hist-daynav__date { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.82rem; font-weight: 600; padding: 5px 8px; cursor: pointer; font-family: inherit; }
         .hist-daynav__date:disabled { opacity: 0.5; cursor: not-allowed; }
-        .hist-table { width: 100%; border-collapse: collapse; table-layout: auto; }
-        .hist-table th { text-align: left; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-subtle); padding: 8px 10px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
-        .hist-table td { padding: 8px 10px; font-size: 0.8rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; white-space: nowrap; }
-        .hist-table tbody tr:last-child td { border-bottom: none; }
-        .hist-table tbody tr:hover { background: rgba(255,255,255,0.02); }
-        .hist-table th.num, .hist-table td.num { text-align: right; }
-        .hist-table .hist-totals td { background: var(--color-bg-3); border-top: 2px solid var(--color-border); border-bottom: none; font-weight: 700; font-size: 0.74rem; }
+        /* Excel-style bordered grid. border-collapse:separate keeps the sticky header's
+           borders from vanishing on scroll; every cell carries right+bottom rules, the
+           table's own left/top edges close the outer frame. */
+        .hist-scroll { overflow-x: auto; }
+        .hist-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: auto; font-variant-numeric: tabular-nums; }
+        .hist-table th, .hist-table td { border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); padding: 7px 10px; vertical-align: middle; }
+        .hist-table th:first-child, .hist-table td:first-child { border-left: 1px solid var(--color-border); }
+        .hist-table thead th { border-top: 1px solid var(--color-border); }
+        .hist-table th { text-align: left; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-subtle); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+        .hist-table td { font-size: 0.8rem; color: var(--color-text); background: var(--color-bg-2); }
+        .hist-table tbody tr:nth-child(even) td { background: var(--color-bg); }
+        .hist-table tbody tr:hover td { background: var(--color-bg-3); }
+        .hist-table th.num, .hist-table td.num { text-align: right; white-space: nowrap; }
+        .hist-table .hist-totals td { background: var(--color-bg-3); font-weight: 700; font-size: 0.74rem; border-top: 2px solid var(--color-text-subtle); }
         .hist-table .hist-totals td:first-child { font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-subtle); }
         .hist-fix-btn { font-size: 0.72rem; font-weight: 600; padding: 4px 9px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text-subtle); cursor: pointer; white-space: nowrap; transition: all var(--transition); }
         .hist-fix-btn:hover:not(:disabled) { background: var(--color-bg-3); color: var(--color-text); border-color: var(--color-text-subtle); }
@@ -491,7 +498,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
 
       {/* Group-orders picked-up: one row per batch brought to the warehouse, with courier */}
       {!loading && !error && isPickedUp && resultCount > 0 && (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="hist-scroll">
           <table className="hist-table">
             <thead>
               <tr>
@@ -529,7 +536,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
 
       {/* Flat single-order table */}
       {!loading && !error && !isPickedUp && visible.length > 0 && (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="hist-scroll">
           <table className="hist-table">
             <thead>
               <tr>
@@ -574,7 +581,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                         {locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}
                       </div>
                       {o.recipientAddress && (
-                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', maxWidth: 220, whiteSpace: 'normal' }}>{o.recipientAddress}</div>
                       )}
                     </td>
                     <td><StatusBadge status={o.status} /></td>
