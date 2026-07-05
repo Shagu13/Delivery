@@ -588,9 +588,12 @@ interface FlowVM {
 }
 
 // One money flow's pay bar: select-all + selected total + Pay button.
-function FlowBar({ f, payLabel, busy, onPay, onToggleAll, borderRight }: {
+// `netTotal`/`netFormula` (COD bar only) override the "Selected" figure so it reflects the
+// cash actually handed over — selected COD minus selected service — with a breakdown.
+function FlowBar({ f, payLabel, busy, onPay, onToggleAll, borderRight, netTotal, netFormula }: {
     f: FlowVM; payLabel: string; busy: boolean;
     onPay: () => void; onToggleAll: (check: boolean) => void; borderRight?: boolean;
+    netTotal?: number; netFormula?: string;
 }) {
     const { t } = useLanguage();
     const settled = f.owed <= 0.005;
@@ -608,7 +611,10 @@ function FlowBar({ f, payLabel, busy, onPay, onToggleAll, borderRight }: {
                 {settled
                     ? <span style={{ color: '#059669', fontWeight: 600 }}>{t.ofinAllSettled}</span>
                     : f.selCount > 0
-                        ? <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>{t.ofinSelectedTotal(gel(f.selTotal))}</span>
+                        ? <span style={{ color: 'var(--color-accent)', fontWeight: 600 }}>
+                            {t.ofinSelectedTotal(gel(netTotal ?? f.selTotal))}
+                            {netFormula && <span style={{ color: 'var(--color-text-subtle)', fontWeight: 500, marginLeft: 6 }}>{netFormula}</span>}
+                          </span>
                         : <span style={{ color: 'var(--color-text-subtle)' }}>{t.ofinSelectToAllocate}</span>}
             </div>
         </div>
@@ -800,10 +806,22 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     const selNet = round2(cod.selTotal - svc.selTotal);
     const hasSelection = cod.selCount > 0 || svc.selCount > 0;
 
+    // Settle net only touches what's ticked: COD ticks settle COD, service ticks settle
+    // service, both settle both. Amounts honour any inline edits, capped at what's owed.
     const settleNet = async () => {
-        const codAllocs = cod.payable.map(o => ({ orderId: o.orderId, amount: codOut(o) }));
-        const svcAllocs = svc.payable.map(o => ({ orderId: o.orderId, amount: svcOut(o) }));
-        if (codAllocs.length === 0 && svcAllocs.length === 0) return;
+        const codChosen = cod.payable.filter(o => selCod[o.orderId]?.checked);
+        const svcChosen = svc.payable.filter(o => selSvc[o.orderId]?.checked);
+        if (codChosen.length === 0 && svcChosen.length === 0) { onError(t.ofinErrSelectOrders); return; }
+        for (const o of codChosen) {
+            const a = Number(amountOf(selCod, o, codOut));
+            if (isNaN(a) || a <= 0 || a > codOut(o) + 0.005) { onError(t.ofinErrAllocInvalid); return; }
+        }
+        for (const o of svcChosen) {
+            const a = Number(amountOf(selSvc, o, svcOut));
+            if (isNaN(a) || a <= 0 || a > svcOut(o) + 0.005) { onError(t.ofinErrAllocInvalid); return; }
+        }
+        const codAllocs = codChosen.map(o => ({ orderId: o.orderId, amount: round2(Number(amountOf(selCod, o, codOut))) }));
+        const svcAllocs = svcChosen.map(o => ({ orderId: o.orderId, amount: round2(Number(amountOf(selSvc, o, svcOut))) }));
         setBusy(true);
         try {
             if (codAllocs.length > 0) await payCustomerOrders(customerId, false, codAllocs, token);
@@ -861,7 +879,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                 </div>
                 {bothSettled
                     ? <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>{t.ofinAllSettled}</span>
-                    : <button className="btn-primary" disabled={busy} onClick={settleNet}>{t.ofinSettleNet}</button>}
+                    : <button className="btn-primary" disabled={busy || !hasSelection} onClick={settleNet}>{t.ofinSettleNet}</button>}
             </div>
 
             {/* Pay bars: service (left), COD (right) */}
@@ -870,6 +888,8 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                     onToggleAll={check => toggleAll(setSelSvc, svc.payable, svcOut, check)}
                     onPay={() => doPay(true, svc, selSvc, svcOut, setSelSvc)} />
                 <FlowBar f={cod} payLabel={t.ofinPayCod} busy={busy}
+                    netTotal={selNet}
+                    netFormula={svc.selCount > 0 ? t.ofinNetFormula(gel(cod.selTotal), gel(svc.selTotal)) : undefined}
                     onToggleAll={check => toggleAll(setSelCod, cod.payable, codOut, check)}
                     onPay={() => doPay(false, cod, selCod, codOut, setSelCod)} />
             </div>
