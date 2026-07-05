@@ -933,8 +933,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
             <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{go.senderFirstName} {go.senderLastName}</div>
           </td>
         )}
-        <td><div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div></td>
-        <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
+        <td>
+          <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
+          <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{o.recipientPhone}</div>
+        </td>
         <td>
           <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}</div>
@@ -957,7 +959,26 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           )}
         </td>
         <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-          {o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : <span style={{ opacity: 0.4 }}>—</span>}
+          {(() => {
+            // What the courier actually collects from the recipient: the product COD
+            // (only when unpaid) plus the company service fee (only when the recipient
+            // pays it). Shown stacked — COD, + fee, = total — when both parts apply.
+            const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
+            const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
+            const total = cod + fee;
+            if (total <= 0) return <span style={{ opacity: 0.4 }}>—</span>;
+            // Only break the figure apart when both a product COD and a recipient-paid
+            // fee are collected; a single component is just shown as its own amount.
+            // Operators (no canManage) must not see the service fee — they get the total only.
+            if (!canManage || !(cod > 0 && fee > 0)) return <span>₾{total.toFixed(2)}</span>;
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3, alignItems: 'flex-start' }}>
+                <span>{t.goCodLbl} ₾{cod.toFixed(2)}</span>
+                <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-subtle)' }}>{t.goFeeLbl} ₾{fee.toFixed(2)}</span>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 1, marginTop: 1 }}>{t.goTotalLbl} ₾{total.toFixed(2)}</span>
+              </div>
+            );
+          })()}
         </td>
         {showPricesEff && (
           <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -1044,7 +1065,6 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         {showTracking && <th>{t.goThTracking}</th>}
         {showStore && <th>{t.goSender}</th>}
         <th>{t.goThRecipient}</th>
-        <th>{t.goThPhone}</th>
         <th>{t.goThCityDistrict}</th>
         <th>{t.goThAddress}</th>
         <th>{t.goThDescription}</th>

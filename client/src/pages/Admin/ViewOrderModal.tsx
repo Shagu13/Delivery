@@ -141,10 +141,25 @@ export function ViewOrderModal({ order, open, onClose, showFinancials = true }: 
                         {order.amountToCollectForPackage != null && (
                             <Row label={t.vomLblCodAmount} value={`₾${order.amountToCollectForPackage.toFixed(2)}`} />
                         )}
+                        {order.amountOfCashCollected != null && (
+                            <Row label={t.vomLblCashCollected} value={`₾${order.amountOfCashCollected.toFixed(2)}`} />
+                        )}
                         {showFinancials && <Row label={t.vomLblServicePrice}  value={order.companyServicePrice > 0 ? `₾${order.companyServicePrice.toFixed(2)}` : '—'} />}
                         {showFinancials && <Row label={t.vomLblSalary}        value={order.courierSalary != null ? `₾${order.courierSalary.toFixed(2)}` : '—'} />}
                         {showFinancials && <Row label={t.vomLblRevenue}       value={revenue} />}
                     </Section>
+
+                    {(order.cancellationReason || order.cancellationComment) && (
+                        <Section title={t.vomSecCancellation}>
+                            {order.cancellationReason && (
+                                <Row label={t.vomLblCancelReason}
+                                     value={(t.cdCancelReasons as Record<string, string>)[order.cancellationReason] ?? order.cancellationReason} />
+                            )}
+                            {order.cancellationComment && (
+                                <Row label={t.vomLblCancelComment} value={order.cancellationComment} />
+                            )}
+                        </Section>
+                    )}
 
                 </div>
 

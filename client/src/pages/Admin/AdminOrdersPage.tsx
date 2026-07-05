@@ -54,6 +54,11 @@ export interface AdminOrderItem {
   createdAt: string;
   deliveredAt: string | null;
   postponeReason: string | null;
+  // Optional extras — populated by the History view for a full order picture; the
+  // Delivery list leaves them undefined, so the modal simply omits those rows.
+  amountOfCashCollected?: number | null;
+  cancellationReason?: string | null;
+  cancellationComment?: string | null;
 }
 
 interface PagedResult {
@@ -1478,7 +1483,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                 {showTracking && <th className="aop-th">{t.aopThTracking}</th>}
                 <th className="aop-th">{t.aopThSender}</th>
                 <th className="aop-th">{t.aopThRecipient}</th>
-                <th className="aop-th">{t.aopThPhone}</th>
                 <th className="aop-th">{t.aopThCityDistrict}</th>
                 <th className="aop-th">{t.aopThStatus}</th>
                 <th className="aop-th aop-th--num">{t.aopThCod}</th>
@@ -1523,9 +1527,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                     </td>
                     <td className="aop-td">
                       <div className="aop-name">{recipientDisplayName(order.recipientName, t.recipientUnknown)}</div>
+                      <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{order.recipientPhone}</div>
                       <div className="aop-addr">{order.recipientAddress}</div>
                     </td>
-                    <td className="aop-td aop-td--mono">{order.recipientPhone}</td>
                     <td className="aop-td">
                       <div className="aop-city">{lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity}</div>
                       <div className="aop-district">{lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict}</div>
@@ -1555,10 +1559,24 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                       )}
                     </td>
                     <td className="aop-td aop-td--num">
-                      {order.amountToCollectForPackage != null
-                        ? <span className="aop-price">₾{order.amountToCollectForPackage.toFixed(2)}</span>
-                        : <span className="aop-price aop-price--empty">—</span>
-                      }
+                      {(() => {
+                        // Cash the courier collects from the recipient: product COD (when
+                        // unpaid) + company service fee (when the recipient pays it). Shown
+                        // stacked — COD, + fee, = total — when both apply. Operators (no
+                        // canManage) must not see the service fee, so they get the total only.
+                        const cod = order.productPaymentStatus === 'NotPaid' ? (order.amountToCollectForPackage ?? 0) : 0;
+                        const fee = order.whoPaysForCompanyService === 'Recipient' ? (order.companyServicePrice ?? 0) : 0;
+                        const total = cod + fee;
+                        if (total <= 0) return <span className="aop-price aop-price--empty">—</span>;
+                        if (!canManage || !(cod > 0 && fee > 0)) return <span className="aop-price">₾{total.toFixed(2)}</span>;
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3, alignItems: 'flex-end' }}>
+                            <span className="aop-price">{t.goCodLbl} ₾{cod.toFixed(2)}</span>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-subtle)' }}>{t.goFeeLbl} ₾{fee.toFixed(2)}</span>
+                            <span className="aop-price" style={{ fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 1, marginTop: 1 }}>{t.goTotalLbl} ₾{total.toFixed(2)}</span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     {showPricesEff && (
                       <td className="aop-td aop-td--num">

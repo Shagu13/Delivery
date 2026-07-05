@@ -6,8 +6,13 @@ import type { AdminGroupOrder, AdminOrder, OrderStatus } from '../../api/adminGr
 import { fetchReturnExchangeOrders } from '../../api/returnExchange';
 import type { ReturnExchangeOrder } from '../../api/returnExchange';
 import { correctOrderStatus } from '../../api/orders';
+import { fetchCouriers } from '../../api/couriers';
+import type { Courier } from '../../api/couriers';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { georgianToday, toDateKey, georgianDateKeyOf } from '../../utils/georgianTime';
+import { DateRangeNav } from '../../components/ui/DateRangeNav';
+import { ViewOrderModal } from './ViewOrderModal';
+import type { AdminOrderItem } from './AdminOrdersPage';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -135,6 +140,7 @@ function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
 // parent's sender info for display.
 interface FlatHistoryOrder {
   order: AdminOrder;
+  go: AdminGroupOrder;
   senderBusinessName: string;
   senderName: string;
   category: HistoryFilter;
@@ -165,13 +171,17 @@ export default function AdminHistoryPage({ token }: { token: string }) {
 
   const [groupOrders,   setGroupOrders]  = useState<AdminGroupOrder[]>([]);
   const [returnOrders,  setReturnOrders] = useState<AdminGroupOrder[]>([]);
+  const [couriers,      setCouriers]     = useState<Courier[]>([]);
   const [loading,       setLoading]      = useState(true);
   const [error,         setError]        = useState<string | null>(null);
   const [search,        setSearch]       = useState('');
   const [filterStatus,  setFilterStatus] = useState<HistoryFilter>('delivered');
-  // Day navigator — filters by completion date (delivery date, or created date when
-  // cancelled). Defaults to today, mirrors the Pick-Up / Delivery day selectors.
-  const [selectedDate,  setSelectedDate] = useState<Date>(() => georgianToday());
+  // Date navigator — filters by completion date (delivery date, or created date when
+  // cancelled). `rangeFrom` is the single day / range start (defaults to today);
+  // `rangeTo` (inclusive) widens it into a custom range, null = single day / All.
+  const [rangeFrom,     setRangeFrom]    = useState<Date | null>(() => georgianToday());
+  const [rangeTo,       setRangeTo]      = useState<Date | null>(null);
+  const [viewingOrder,  setViewingOrder] = useState<AdminOrderItem | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async (term: string) => {
@@ -203,6 +213,56 @@ export default function AdminHistoryPage({ token }: { token: string }) {
       .catch(() => setReturnOrders([]));
   }, [token]);
 
+  // Courier roster — only to resolve a last-mile courier's name for the View modal.
+  useEffect(() => { fetchCouriers(token).then(setCouriers).catch(() => {}); }, [token]);
+  const courierNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    couriers.forEach(c => m.set(c.courierId, c.fullName));
+    return m;
+  }, [couriers]);
+
+  // Map a history order (+ its real/wrapped parent) into the AdminOrderItem the shared
+  // ViewOrderModal expects, carrying the extra fields (cash collected, cancellation
+  // reason/comment) that make the History view complete.
+  const toOrderItem = (o: AdminOrder, go: AdminGroupOrder): AdminOrderItem => ({
+    id: o.id,
+    trackingNumber: o.trackingNumber,
+    senderBusinessName: go.senderBusinessName,
+    senderFirstName: go.senderFirstName,
+    senderLastName: go.senderLastName,
+    senderPhone: go.senderPhone,
+    alternativeSenderPhone: go.alternativeSenderPhone ?? null,
+    recipientName: o.recipientName,
+    recipientPhone: o.recipientPhone,
+    recipientCity: o.recipientCity,
+    recipientCityGeo: o.recipientCityGeo,
+    recipientDistrict: o.recipientDistrict,
+    recipientDistrictGeo: o.recipientDistrictGeo,
+    recipientAddress: o.recipientAddress,
+    description: o.description,
+    isFragile: o.isFragile,
+    orderType: o.orderType,
+    status: o.status,
+    productPaymentStatus: o.productPaymentStatus,
+    whoPaysForCompanyService: o.whoPaysForCompanyService,
+    companyServicePrice: o.companyServicePrice,
+    isCompanyServicePriceIncluded: o.isCompanyServicePriceIncluded,
+    courierSalary: o.courierSalary,
+    companyRevenue: o.companyRevenue,
+    amountToCollectForPackage: o.amountToCollectForPackage,
+    returnPickupCity: o.returnPickupCity ?? null,
+    returnPickupDistrict: o.returnPickupDistrict ?? null,
+    returnPickupAddress: o.returnPickupAddress ?? null,
+    courierId: o.courierId,
+    courierFullName: o.courierId ? (courierNameById.get(o.courierId) ?? go.courierFullName ?? null) : null,
+    createdAt: o.createdAt,
+    deliveredAt: o.deliveredAt,
+    postponeReason: null,
+    amountOfCashCollected: o.amountOfCashCollected,
+    cancellationReason: o.cancellationReason ?? null,
+    cancellationComment: o.cancellationComment ?? null,
+  });
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -211,12 +271,15 @@ export default function AdminHistoryPage({ token }: { token: string }) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [search, load]);
 
-  // ── Day navigator ─────────────────────────────────────────────────────────
-  const shiftDay = (delta: number) => setSelectedDate(prev => {
-    const d = new Date(prev); d.setDate(d.getDate() + delta); d.setHours(0, 0, 0, 0); return d;
-  });
-  const isToday = toDateKey(selectedDate) === toDateKey(georgianToday());
-  const dayKey  = toDateKey(selectedDate);
+  // ── Date navigator ────────────────────────────────────────────────────────
+  // null `rangeFrom` = All days; otherwise an inclusive [fromKey..toKey] window.
+  // Date keys are 'yyyy-MM-dd', so lexical comparison is chronological.
+  const fromKey = rangeFrom ? toDateKey(rangeFrom) : null;
+  const toKey   = rangeTo ? toDateKey(rangeTo) : fromKey;
+  const inRange = useCallback(
+    (iso: string) => { if (!fromKey) return true; const k = georgianDateKeyOf(iso); return k >= fromKey && k <= toKey!; },
+    [fromKey, toKey],
+  );
 
   // Flatten every terminal order out of its group/wrapped return. Group orders are
   // already search-filtered server-side; the wrapped returns are filtered here.
@@ -229,6 +292,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
         if (!category) continue;
         result.push({
           order: o,
+          go,
           senderBusinessName: go.senderBusinessName,
           senderName: `${go.senderFirstName} ${go.senderLastName}`.trim(),
           category,
@@ -239,10 +303,10 @@ export default function AdminHistoryPage({ token }: { token: string }) {
     return result;
   }, [groupOrders, returnOrders, search]);
 
-  // Narrow to the selected completion day.
+  // Narrow to the selected completion day / range.
   const dayOrders = useMemo(
-    () => flatOrders.filter(f => georgianDateKeyOf(f.completedAt) === dayKey),
-    [flatOrders, dayKey],
+    () => flatOrders.filter(f => inRange(f.completedAt)),
+    [flatOrders, inRange],
   );
 
   // Group orders (real batches, not standalone singles) that reached the warehouse on
@@ -251,9 +315,9 @@ export default function AdminHistoryPage({ token }: { token: string }) {
     () => groupOrders
       .filter(go => !go.isStandalone
                  && WAREHOUSE_STATUSES.has(go.status)
-                 && georgianDateKeyOf(pickedUpDateOf(go)) === dayKey)
+                 && inRange(pickedUpDateOf(go)))
       .sort((a, b) => new Date(pickedUpDateOf(b)).getTime() - new Date(pickedUpDateOf(a)).getTime()),
-    [groupOrders, dayKey],
+    [groupOrders, inRange],
   );
 
   const counts = useMemo(() => ({
@@ -327,6 +391,9 @@ export default function AdminHistoryPage({ token }: { token: string }) {
         .hist-daynav__today { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent); background: var(--color-accent-dim); border-radius: 100px; padding: 2px 8px; }
         .hist-daynav__jump { margin-left: 4px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.76rem; font-weight: 600; padding: 6px 12px; cursor: pointer; transition: all var(--transition); }
         .hist-daynav__jump:hover { background: var(--color-bg-3); color: var(--color-text); }
+        .hist-daynav__arrow:disabled { opacity: 0.4; cursor: not-allowed; }
+        .hist-daynav__date { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.82rem; font-weight: 600; padding: 5px 8px; cursor: pointer; font-family: inherit; }
+        .hist-daynav__date:disabled { opacity: 0.5; cursor: not-allowed; }
         .hist-table { width: 100%; border-collapse: collapse; table-layout: auto; }
         .hist-table th { text-align: left; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-subtle); padding: 8px 10px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-3); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
         .hist-table td { padding: 8px 10px; font-size: 0.8rem; color: var(--color-text); border-bottom: 1px solid var(--color-border); vertical-align: middle; white-space: nowrap; }
@@ -341,28 +408,14 @@ export default function AdminHistoryPage({ token }: { token: string }) {
         .hist-fix-btn--confirm { background: var(--color-accent-dim); color: var(--color-accent); border-color: rgba(196,127,23,0.4); }
       `}</style>
 
-      {/* Day navigator — filters by completion (delivery) date */}
-      <div className="hist-daynav">
-        <button className="hist-daynav__arrow" onClick={() => shiftDay(-1)} aria-label={t.pickupPrevDay} title={t.pickupPrevDay}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        </button>
-        <div className="hist-daynav__label">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-            <path d="M4 1v2M10 1v2M1 6h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          <span>{selectedDate.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</span>
-          {isToday && <span className="hist-daynav__today">{t.pickupToday}</span>}
-        </div>
-        <button className="hist-daynav__arrow" onClick={() => shiftDay(1)} aria-label={t.pickupNextDay} title={t.pickupNextDay}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        </button>
-        {!isToday && (
-          <button className="hist-daynav__jump" onClick={() => setSelectedDate(georgianToday())}>
-            {t.pickupToday}
-          </button>
-        )}
-      </div>
+      {/* Date navigator — All ↔ single day ↔ custom inclusive from→to range.
+          Filters by completion (delivery) date. */}
+      <DateRangeNav
+        from={rangeFrom}
+        to={rangeTo}
+        onChange={(f, to) => { setRangeFrom(f); setRangeTo(to); }}
+        classPrefix="hist-daynav"
+      />
 
       {/* Search */}
       <div className="go-toolbar go-toolbar--search" style={{ gap: 10, alignItems: 'center' }}>
@@ -559,6 +612,14 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                       {o.deliveredAt ? formatDate(o.deliveredAt) : <span style={{ opacity: 0.35 }}>—</span>}
                     </td>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="hist-fix-btn"
+                        onClick={() => setViewingOrder(toOrderItem(o, f.go))}
+                      >
+                        {t.aopView}
+                      </button>
                       {correction && (
                         confirmId === o.id ? (
                           <span style={{ display: 'inline-flex', gap: 4 }}>
@@ -590,6 +651,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                           </button>
                         )
                       )}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -611,6 +673,10 @@ export default function AdminHistoryPage({ token }: { token: string }) {
           </table>
         </div>
       )}
+
+      {/* Full order view — reused from the Delivery page, with cash-collected +
+          cancellation reason/comment shown when present. */}
+      <ViewOrderModal order={viewingOrder} open={!!viewingOrder} onClose={() => setViewingOrder(null)} />
     </div>
   );
 }

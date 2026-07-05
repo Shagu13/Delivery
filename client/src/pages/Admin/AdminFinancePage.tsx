@@ -567,10 +567,10 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Stat({ label, value, accent, color }: { label: string; value: string; accent?: boolean; color?: string }) {
     return (
         <div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: color ?? (accent ? 'var(--color-accent)' : 'var(--color-text)') }}>{value}</div>
             <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
         </div>
     );
@@ -640,13 +640,17 @@ function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmoun
             </div>
         );
 
+    // Pending amount is red; if part of the obligation has already been paid (partly
+    // paid) it turns purple to distinguish a partial from a fully-outstanding row.
+    const partlyPaid = (paid ?? 0) > 0.005;
+    const outColor = partlyPaid ? '#8b5cf6' : '#ef4444';
     return (
         <div style={{ minWidth: 160, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                 <input type="checkbox" checked={checked} onChange={onToggle}
                     style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }} />
                 {/* Actual amount owed (outstanding), always shown next to the editable field. */}
-                <span title={t.ofinOutstandingCol} style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{gel(outstanding)}</span>
+                <span title={t.ofinOutstandingCol} style={{ fontSize: '0.78rem', fontWeight: 700, color: outColor, whiteSpace: 'nowrap' }}>{gel(outstanding)}</span>
                 <input type="number" min="0" step="0.01" max={outstanding}
                     value={amount}
                     onChange={e => onAmount(e.target.value)}
@@ -791,6 +795,11 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     const net = round2(cod.owed - svc.owed);
     const bothSettled = cod.owed <= 0.005 && svc.owed <= 0.005;
 
+    // Net of just the currently-ticked orders: selected COD to pay out − selected
+    // service to receive. Shown in the sticky header once the admin picks anything.
+    const selNet = round2(cod.selTotal - svc.selTotal);
+    const hasSelection = cod.selCount > 0 || svc.selCount > 0;
+
     const settleNet = async () => {
         const codAllocs = cod.payable.map(o => ({ orderId: o.orderId, amount: codOut(o) }));
         const svcAllocs = svc.payable.map(o => ({ orderId: o.orderId, amount: svcOut(o) }));
@@ -809,18 +818,21 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     };
 
     return (
-        <div className="content-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="content-card" style={{ padding: 0, overflow: 'visible' }}>
+          {/* Sticky control header — the summary, net bar and pay bars follow the admin
+              down the (potentially long) per-order list; only the table below scrolls. */}
+          <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--color-bg-2)', borderTopLeftRadius: 'var(--radius-lg)', borderTopRightRadius: 'var(--radius-lg)' }}>
             {/* Summary header (click to expand). Left = service (customer → company); right = COD (company → customer). */}
             <button onClick={() => setExpanded(x => !x)}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', gap: 18 }}>
-                        <Stat label={t.ofinServiceToCollect} value={gel(svc.owed)} />
-                        <Stat label={t.ofinServicePaidLbl} value={gel(svc.paid)} />
+                        <Stat label={t.ofinServiceToCollect} value={gel(svc.owed)} color={svc.owed > 0.005 ? '#ef4444' : undefined} />
+                        <Stat label={t.ofinServicePaidLbl} value={gel(svc.paid)} color={svc.paid > 0.005 ? '#059669' : undefined} />
                     </div>
                     <div style={{ display: 'flex', gap: 18 }}>
-                        <Stat label={t.ofinCodToPay} value={gel(cod.owed)} accent />
-                        <Stat label={t.ofinCodPaidLbl} value={gel(cod.paid)} />
+                        <Stat label={t.ofinCodToPay} value={gel(cod.owed)} color={cod.owed > 0.005 ? '#ef4444' : undefined} />
+                        <Stat label={t.ofinCodPaidLbl} value={gel(cod.paid)} color={cod.paid > 0.005 ? '#059669' : undefined} />
                     </div>
                 </div>
                 <span style={{ fontSize: '1.2rem', color: 'var(--color-text-subtle)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
@@ -829,12 +841,23 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
             {/* Net settlement bar — the cash physically handed over = COD owed − service owed.
                 One click settles both flows in full per order. */}
             <div style={{ borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 16px', background: 'var(--color-bg-2)', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-subtle)' }}>
-                        {net >= 0 ? t.ofinNetToHandOver : t.ofinNetCustomerOwes}
-                    </span>
-                    <span style={{ fontSize: '1.15rem', fontWeight: 800, color: net >= 0 ? 'var(--color-accent)' : '#b45309' }}>{gel(Math.abs(net))}</span>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--color-text-subtle)' }}>{t.ofinNetFormula(gel(cod.owed), gel(svc.owed))}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-subtle)' }}>
+                            {net >= 0 ? t.ofinNetToHandOver : t.ofinNetCustomerOwes}
+                        </span>
+                        <span style={{ fontSize: '1.15rem', fontWeight: 800, color: net >= 0 ? 'var(--color-accent)' : '#b45309' }}>{gel(Math.abs(net))}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--color-text-subtle)' }}>{t.ofinNetFormula(gel(cod.owed), gel(svc.owed))}</span>
+                    </div>
+                    {hasSelection && (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-accent)', fontWeight: 700 }}>
+                                {t.ofinSelectedNet}
+                            </span>
+                            <span style={{ fontSize: '1.05rem', fontWeight: 800, color: selNet >= 0 ? 'var(--color-accent)' : '#b45309' }}>{gel(selNet)}</span>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--color-text-subtle)' }}>{t.ofinNetFormula(gel(cod.selTotal), gel(svc.selTotal))}</span>
+                        </div>
+                    )}
                 </div>
                 {bothSettled
                     ? <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>{t.ofinAllSettled}</span>
@@ -850,6 +873,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                     onToggleAll={check => toggleAll(setSelCod, cod.payable, codOut, check)}
                     onPay={() => doPay(false, cod, selCod, codOut, setSelCod)} />
             </div>
+          </div>{/* end sticky control header */}
 
             {/* Expanded per-order list — Excel-style grid. Fee (+edit) sits on the right next to
                 the COD breakdown; the Settle column carries the per-order pay controls. */}
@@ -860,7 +884,6 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                             <tr>
                                 <th style={{ ...fhead, textAlign: 'center' }}>#</th>
                                 <th style={fhead}>{t.ofinColTracking}</th>
-                                <th style={fhead}>{t.ofinColType}</th>
                                 <th style={fhead}>{t.ofinColRecipient}</th>
                                 <th style={fhead}>{t.ofinColStatus}</th>
                                 <th style={{ ...fhead, textAlign: 'right' }}>{t.ofinColService}</th>
@@ -895,11 +918,14 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                 return (
                                     <tr key={o.orderId}>
                                         <td style={{ ...fcell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>{idx + 1}</td>
-                                        <td style={{ ...fcell, fontWeight: 700, whiteSpace: 'nowrap' }}>{o.trackingNumber}</td>
-                                        <td style={fcell}>
-                                            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)', whiteSpace: 'nowrap' }}>
-                                                {o.orderType === 'Return' ? t.aopOrderTypeReturn : o.orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend}
-                                            </span>
+                                        <td style={{ ...fcell, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                            <div>{o.trackingNumber}</div>
+                                            {/* Order type shown beneath the tracking number (its own column was removed). */}
+                                            <div style={{ marginTop: 3 }}>
+                                                <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '1px 6px', borderRadius: 100, background: o.isReturn ? 'rgba(139,92,246,0.12)' : 'var(--color-accent-dim)', color: o.isReturn ? '#8b5cf6' : 'var(--color-accent)', whiteSpace: 'nowrap' }}>
+                                                    {o.orderType === 'Return' ? t.aopOrderTypeReturn : o.orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td style={fcell}>
                                             <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
