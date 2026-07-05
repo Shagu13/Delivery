@@ -16,6 +16,9 @@
 		<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.14.0" />
 		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
 		<PackageReference Include="WebPush" Version="1.0.12" />
+		<!-- Direct pin to override WebPush's vulnerable transitive Newtonsoft.Json 10.0.3
+		     (GHSA-5crp-9r3c-p9vr). 13.x is API-compatible with WebPush's usage. -->
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 	</ItemGroup>
 
 	<ItemGroup>

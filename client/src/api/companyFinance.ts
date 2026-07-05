@@ -36,11 +36,15 @@ export class CompanyFinanceApiError extends Error {
 
 export async function fetchCompanyFinanceOverview(
     from: string, to: string, token: string,
-    city?: string, district?: string,
+    // Recipient-area narrowing: any number of city-only or city+district entries. A blank
+    // areaDistrict (aligned by position with areaCity) means "whole city". Empty = all areas.
+    areas: { city: string; district?: string }[] = [],
 ): Promise<CompanyFinanceOverview> {
     const qs = new URLSearchParams({ from, to });
-    if (city) qs.set('city', city);
-    if (district) qs.set('district', district);
+    for (const a of areas) {
+        qs.append('areaCity', a.city);
+        qs.append('areaDistrict', a.district ?? '');
+    }
     const res = await fetch(
         `/api/companyfinance/overview?${qs}`,
         { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' },

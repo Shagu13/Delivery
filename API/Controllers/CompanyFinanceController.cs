@@ -14,11 +14,24 @@ public sealed class CompanyFinanceController : BaseController
     public async Task<IActionResult> GetOverview(
         [FromQuery] DateOnly from,
         [FromQuery] DateOnly to,
-        [FromQuery] string? city,
-        [FromQuery] string? district,
+        [FromQuery] string[]? areaCity,
+        [FromQuery] string[]? areaDistrict,
         CancellationToken ct)
     {
-        var result = await Sender.Send(new GetCompanyFinanceOverviewQuery(from, to, city, district), ct);
+        // areaCity / areaDistrict are aligned by position: a blank district means "whole city".
+        var areas = new List<AreaFilterSpec>();
+        if (areaCity is not null)
+        {
+            for (int i = 0; i < areaCity.Length; i++)
+            {
+                var c = areaCity[i]?.Trim();
+                if (string.IsNullOrEmpty(c)) continue;
+                var d = (areaDistrict is not null && i < areaDistrict.Length) ? areaDistrict[i]?.Trim() : null;
+                areas.Add(new AreaFilterSpec(c, string.IsNullOrEmpty(d) ? null : d));
+            }
+        }
+
+        var result = await Sender.Send(new GetCompanyFinanceOverviewQuery(from, to, areas), ct);
         return Ok(result);
     }
 }

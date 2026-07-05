@@ -15,14 +15,20 @@ namespace Application.CompanyFinance.Queries;
 /// on accepted-but-undelivered orders, since that cash is already in hand.
 /// </summary>
 /// <summary>
-/// <paramref name="City"/>/<paramref name="District"/> optionally scope every figure to orders
-/// delivered to that recipient location (district requires a city). Null/blank = no narrowing.
+/// One recipient-area filter entry. <paramref name="District"/> null = the whole city;
+/// otherwise the specific city+district.
+/// </summary>
+public sealed record AreaFilterSpec(string City, string? District);
+
+/// <summary>
+/// <paramref name="Areas"/> optionally scopes every figure to orders delivered to any of the
+/// listed recipient locations (a city-only entry matches every district in that city). An
+/// empty list = no narrowing.
 /// </summary>
 public sealed record GetCompanyFinanceOverviewQuery(
     DateOnly From,
     DateOnly To,
-    string?  City     = null,
-    string?  District = null
+    IReadOnlyList<AreaFilterSpec>? Areas = null
 ) : IRequest<CompanyFinanceOverviewDto>;
 
 public sealed class GetCompanyFinanceOverviewQueryHandler
@@ -38,12 +44,25 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         var fromDt = request.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var toDt   = request.To.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc); // exclusive upper bound
 
-        // Optional recipient-location narrowing. District requires a city; either may be omitted.
-        string? city     = string.IsNullOrWhiteSpace(request.City)     ? null : request.City.Trim();
-        string? district = string.IsNullOrWhiteSpace(request.District) ? null : request.District.Trim();
+        // Optional recipient-location narrowing over any number of areas. A city-only entry
+        // matches every district in that city; a city+district entry matches only that district.
+        // Encoded for SQL as two IN lists: whole-city names, and city+district pair keys joined
+        // by a unit-separator control char that can't occur in a place name. Empty = no narrowing.
+        const string sep = "\u001F";
+        List<AreaFilterSpec> areas = (request.Areas ?? Array.Empty<AreaFilterSpec>())
+            .Where(a => !string.IsNullOrWhiteSpace(a.City))
+            .Select(a => new AreaFilterSpec(
+                a.City.Trim(),
+                string.IsNullOrWhiteSpace(a.District) ? null : a.District!.Trim()))
+            .ToList();
+        List<string> cityOnly = areas.Where(a => a.District is null).Select(a => a.City).ToList();
+        List<string> pairKeys = areas.Where(a => a.District is not null).Select(a => a.City + sep + a.District).ToList();
+
         System.Linq.Expressions.Expression<Func<Domain.Order, bool>> inArea =
-            o => (city == null     || o.RecipientCity == city)
-              && (district == null || o.RecipientDistrict == district);
+            areas.Count == 0
+                ? o => true
+                : o => cityOnly.Contains(o.RecipientCity!)
+                    || pairKeys.Contains(o.RecipientCity + sep + o.RecipientDistrict);
 
         // Delivered orders for the range — same definition as CourierSettlement:
         // last-mile deliveries (DeliveredAt) and return drop-offs (DeliveredToWarehouseAt).
