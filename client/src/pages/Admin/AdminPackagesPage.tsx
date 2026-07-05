@@ -333,7 +333,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   // ── Delivery state (mirrors AdminOrdersPage) ────────────────────────────────
   const [selected,      setSelected]      = useState<Set<string>>(new Set());
-  const [showPrices,    setShowPrices]    = useState(true);
+  const [showTracking,  setShowTracking]  = useState(false);
+  const [showPrices,    setShowPrices]    = useState(false);
   const [exporting,     setExporting]     = useState(false);
   const [viewingOrder,  setViewingOrder]  = useState<AdminOrderItem | null>(null);
   const [filterCourier, setFilterCourier] = useState<string>('');   // delivery courierId; '' = all
@@ -709,6 +710,23 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const rowSelectable = (o: AdminOrderItem) =>
     bulkMode === 'assign' ? isAssignable(o) : bulkMode === 'deliver' ? isDeliverable(o) : true;
 
+  // Per-batch select-all: the ids of just this expanded group order's currently-selectable
+  // packages (respecting the active bulk mode + location/delivery filters). Toggling scopes
+  // selection to exactly this batch instead of every visible package.
+  const groupSelectableIds = (go: AdminGroupOrder) =>
+    visibleOrdersFor(go).filter(o => rowSelectable(toOrderItem(o, go, null))).map(o => o.id);
+
+  const toggleGroupAll = (go: AdminGroupOrder) => {
+    const ids = groupSelectableIds(go);
+    if (ids.length === 0) return;
+    setSelected(prev => {
+      const allIn = ids.every(id => prev.has(id));
+      const next = new Set(prev);
+      ids.forEach(id => (allIn ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  };
+
   const actionPool = useMemo(() => {
     const picked = [...selected].map(id => itemById.get(id)).filter((o): o is AdminOrderItem => !!o);
     if (bulkMode === 'assign')  return picked.filter(isAssignable);
@@ -896,17 +914,19 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
               onChange={() => selectable && toggleOne(o.id)} />
           </td>
         )}
-        <td>
-          <span className="tn-badge">{o.trackingNumber}</span>
-          {warehouseSelectable && canManage && o.status === 'DeliveredToWarehouse' && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.7rem', color: 'var(--color-text-subtle)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              <input type="checkbox" style={{ cursor: 'pointer' }}
-                checked={!absentPkgs.has(o.id)}
-                onChange={() => togglePkgPresent(o.id)} />
-              {t.goWarehousePresent}
-            </label>
-          )}
-        </td>
+        {showTracking && (
+          <td>
+            <span className="tn-badge">{o.trackingNumber}</span>
+            {warehouseSelectable && canManage && o.status === 'DeliveredToWarehouse' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.7rem', color: 'var(--color-text-subtle)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                <input type="checkbox" style={{ cursor: 'pointer' }}
+                  checked={!absentPkgs.has(o.id)}
+                  onChange={() => togglePkgPresent(o.id)} />
+                {t.goWarehousePresent}
+              </label>
+            )}
+          </td>
+        )}
         {showStore && (
           <td>
             <div style={{ fontWeight: 600 }}>{go.senderBusinessName || '—'}</div>
@@ -1004,11 +1024,24 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // Shared <thead> for the package tables. `showStore` adds a Sender/store column —
   // used in the flat (recipient + location) single-order view where the batch's sender
   // isn't otherwise visible.
-  const packageHead = (showStore = false) => (
+  const packageHead = (showStore = false, selectAllGo?: AdminGroupOrder) => (
     <thead>
       <tr>
-        {canManage && <th style={{ width: 36 }} />}
-        <th>{t.goThTracking}</th>
+        {canManage && (
+          <th style={{ width: 36 }}>
+            {selectAllGo && (() => {
+              const ids = groupSelectableIds(selectAllGo);
+              const allIn  = ids.length > 0 && ids.every(id => selected.has(id));
+              const someIn = ids.some(id => selected.has(id));
+              return (
+                <input type="checkbox" className="aop-checkbox" checked={allIn} disabled={ids.length === 0}
+                  ref={el => { if (el) el.indeterminate = someIn && !allIn; }}
+                  onChange={() => toggleGroupAll(selectAllGo)} />
+              );
+            })()}
+          </th>
+        )}
+        {showTracking && <th>{t.goThTracking}</th>}
         {showStore && <th>{t.goSender}</th>}
         <th>{t.goThRecipient}</th>
         <th>{t.goThPhone}</th>
@@ -1154,6 +1187,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         {/* Delivery controls row */}
         {canManage && (
           <div className="go-toolbar pkg-delivery-toolbar">
+            <label className="aop-col-toggle"><input type="checkbox" checked={showTracking} onChange={e => setShowTracking(e.target.checked)} />{t.aopShowTracking}</label>
             <label className="aop-col-toggle"><input type="checkbox" checked={showPrices} onChange={e => setShowPrices(e.target.checked)} />{t.aopShowPrices}</label>
 
             <div className="go-select-wrap">
@@ -1392,7 +1426,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                             ) : (
                               <div style={{ overflowX: 'auto' }}>
                                 <table className="go-orders-table">
-                                  {packageHead()}
+                                  {packageHead(false, go)}
                                   <tbody>{filteredOrders.map(o => renderOrderRow(o, go, moveDestinations, true))}</tbody>
                                 </table>
                               </div>

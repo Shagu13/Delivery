@@ -187,8 +187,12 @@ function PackageDetail({
 
   const handlePaymentStatusChange = (val: string) => {
     onChange(index, 'productPaymentStatus', val);
-    if (val === 'NotPaid') onChange(index, 'whoPaysForCompanyService', 'Recipient');
-    else onChange(index, 'amountToCollectForPackage', 0);
+    if (val === 'NotPaid') {
+      onChange(index, 'whoPaysForCompanyService', 'Recipient');
+    } else {
+      onChange(index, 'whoPaysForCompanyService', 'Sender');
+      onChange(index, 'amountToCollectForPackage', 0);
+    }
   };
 
   // Scroll detail body to top whenever the package index changes
