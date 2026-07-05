@@ -798,11 +798,11 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     // Net settlement: the cash that physically changes hands is the COD the company owes
     // the customer minus the sender-paid service the customer owes the company. One click
     // settles BOTH flows in full per order (the books still record each flow separately).
-    const net = round2(cod.owed - svc.owed);
     const bothSettled = cod.owed <= 0.005 && svc.owed <= 0.005;
 
-    // Net of just the currently-ticked orders: selected COD to pay out − selected
-    // service to receive. Shown in the sticky header once the admin picks anything.
+    // The net bar reflects only the currently-ticked orders — Settle net settles exactly
+    // what's selected, so the headline figure = selected COD to pay out − selected service
+    // to receive (not the grand total across every order).
     const selNet = round2(cod.selTotal - svc.selTotal);
     const hasSelection = cod.selCount > 0 || svc.selCount > 0;
 
@@ -862,20 +862,11 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-subtle)' }}>
-                            {net >= 0 ? t.ofinNetToHandOver : t.ofinNetCustomerOwes}
+                            {selNet >= 0 ? t.ofinNetToHandOver : t.ofinNetCustomerOwes}
                         </span>
-                        <span style={{ fontSize: '1.15rem', fontWeight: 800, color: net >= 0 ? 'var(--color-accent)' : '#b45309' }}>{gel(Math.abs(net))}</span>
-                        <span style={{ fontSize: '0.68rem', color: 'var(--color-text-subtle)' }}>{t.ofinNetFormula(gel(cod.owed), gel(svc.owed))}</span>
+                        <span style={{ fontSize: '1.15rem', fontWeight: 800, color: selNet >= 0 ? 'var(--color-accent)' : '#b45309' }}>{gel(Math.abs(selNet))}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--color-text-subtle)' }}>{t.ofinNetFormula(gel(cod.selTotal), gel(svc.selTotal))}</span>
                     </div>
-                    {hasSelection && (
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-accent)', fontWeight: 700 }}>
-                                {t.ofinSelectedNet}
-                            </span>
-                            <span style={{ fontSize: '1.05rem', fontWeight: 800, color: selNet >= 0 ? 'var(--color-accent)' : '#b45309' }}>{gel(selNet)}</span>
-                            <span style={{ fontSize: '0.68rem', color: 'var(--color-text-subtle)' }}>{t.ofinNetFormula(gel(cod.selTotal), gel(svc.selTotal))}</span>
-                        </div>
-                    )}
                 </div>
                 {bothSettled
                     ? <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#059669' }}>{t.ofinAllSettled}</span>
