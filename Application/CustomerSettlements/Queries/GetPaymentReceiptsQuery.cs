@@ -1,0 +1,119 @@
+using Application.Common.Exceptions;
+using Application.Common.Interfaces;
+using Application.CustomerSettlements.DTOs;
+using Domain;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace Application.CustomerSettlements.Queries;
+
+// ── Customer: own payment receipts, by paid date ──────────────────────────────────
+public sealed record GetMyPaymentReceiptsQuery(
+    string    CustomerUserId,
+    DateOnly? Date,
+    bool      Monthly = false,
+    DateOnly? From    = null,
+    DateOnly? To      = null
+) : IRequest<IReadOnlyList<PaymentReceiptDto>>;
+
+public sealed class GetMyPaymentReceiptsQueryHandler
+    : IRequestHandler<GetMyPaymentReceiptsQuery, IReadOnlyList<PaymentReceiptDto>>
+{
+    private readonly IAppDbContext _context;
+    public GetMyPaymentReceiptsQueryHandler(IAppDbContext context) => _context = context;
+
+    public async Task<IReadOnlyList<PaymentReceiptDto>> Handle(
+        GetMyPaymentReceiptsQuery request, CancellationToken ct)
+    {
+        var customer = await _context.Customers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CustomerUserId, ct)
+            ?? throw new NotFoundException("Customer", request.CustomerUserId);
+
+        var query = PaymentReceiptQueries.FilterByPaidAt(
+            PaymentReceiptQueries.Base(_context).Where(p => p.CustomerId == customer.Id),
+            request.Date, request.Monthly, request.From, request.To)
+            .OrderByDescending(p => p.PaidAt);
+
+        var receipts = await query.ToListAsync(ct);
+        return receipts.Select(PaymentReceiptQueries.ToDto).ToList();
+    }
+}
+
+// ── Admin: a customer's payment receipts, by paid date ─────────────────────────────
+public sealed record GetCustomerPaymentReceiptsQuery(
+    Guid      CustomerId,
+    DateOnly? Date,
+    bool      Monthly = false,
+    DateOnly? From    = null,
+    DateOnly? To      = null
+) : IRequest<IReadOnlyList<PaymentReceiptDto>>;
+
+public sealed class GetCustomerPaymentReceiptsQueryHandler
+    : IRequestHandler<GetCustomerPaymentReceiptsQuery, IReadOnlyList<PaymentReceiptDto>>
+{
+    private readonly IAppDbContext _context;
+    public GetCustomerPaymentReceiptsQueryHandler(IAppDbContext context) => _context = context;
+
+    public async Task<IReadOnlyList<PaymentReceiptDto>> Handle(
+        GetCustomerPaymentReceiptsQuery request, CancellationToken ct)
+    {
+        _ = await _context.Customers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == request.CustomerId, ct)
+            ?? throw new NotFoundException("Customer", request.CustomerId);
+
+        var query = PaymentReceiptQueries.FilterByPaidAt(
+            PaymentReceiptQueries.Base(_context).Where(p => p.CustomerId == request.CustomerId),
+            request.Date, request.Monthly, request.From, request.To)
+            .OrderByDescending(p => p.PaidAt);
+
+        var receipts = await query.ToListAsync(ct);
+        return receipts.Select(PaymentReceiptQueries.ToDto).ToList();
+    }
+}
+
+// ── Shared shaping + mapping ──────────────────────────────────────────────────────
+internal static class PaymentReceiptQueries
+{
+    public static IQueryable<PaymentReceipt> Base(IAppDbContext context) =>
+        context.PaymentReceipts
+            .AsNoTracking()
+            .Include(p => p.Allocations).ThenInclude(a => a.Order);
+
+    /// <summary>
+    /// Narrows by paid date (PaidAt). A from/to range (inclusive, either bound optional)
+    /// takes precedence over a single <paramref name="date"/>; <paramref name="monthly"/>
+    /// widens that date to its whole calendar month. No date and no range → no narrowing.
+    /// </summary>
+    public static IQueryable<PaymentReceipt> FilterByPaidAt(
+        IQueryable<PaymentReceipt> query, DateOnly? date, bool monthly = false, DateOnly? from = null, DateOnly? to = null)
+    {
+        if (from is not null || to is not null)
+        {
+            if (from is DateOnly f)
+                query = query.Where(p => p.PaidAt >= f.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            if (to is DateOnly t)
+                query = query.Where(p => p.PaidAt < t.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            return query;
+        }
+        if (date is not DateOnly d) return query;
+        DateTime start, end;
+        if (monthly) { start = new DateTime(d.Year, d.Month, 1, 0, 0, 0, DateTimeKind.Utc); end = start.AddMonths(1); }
+        else         { start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);           end = start.AddDays(1); }
+        return query.Where(p => p.PaidAt >= start && p.PaidAt < end);
+    }
+
+    public static PaymentReceiptDto ToDto(PaymentReceipt p) => new(
+        Id:          p.Id,
+        IsService:   p.IsService,
+        TotalAmount: p.TotalAmount,
+        PaidAt:      p.PaidAt.ToString("o"),
+        Orders:      p.Allocations.Select(a => new PaymentReceiptOrderDto(
+            OrderId:        a.OrderId,
+            TrackingNumber: a.Order?.TrackingNumber ?? string.Empty,
+            RecipientName:  a.Order?.RecipientName ?? string.Empty,
+            Amount:         a.Amount
+        )).ToList()
+    );
+}

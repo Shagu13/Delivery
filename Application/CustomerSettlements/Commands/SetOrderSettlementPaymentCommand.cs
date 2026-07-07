@@ -43,6 +43,7 @@ public sealed class SetOrderSettlementPaymentCommandHandler
         CancellationToken cancellationToken)
     {
         var order = await _context.Orders
+            .Include(o => o.GroupOrder)
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
 
@@ -129,7 +130,30 @@ public sealed class SetOrderSettlementPaymentCommandHandler
             }
         }
 
+        // Persist a receipt for each flow actually paid here (not on clear/unset — a
+        // reversal isn't a payment). Mirrors PayCustomerOrdersCommandHandler: an auto-netted
+        // service settlement (Case 3, above) doesn't get its own receipt, only the flow the
+        // caller explicitly toggled does.
+        var customerId = order.GroupOrder?.CustomerId ?? order.CustomerId;
+        if (customerId is Guid resolvedCustomerId)
+        {
+            if (request.CodPaid == true && (order.CodPaidToCustomerAmount ?? 0m) > 0m)
+                _context.PaymentReceipts.Add(BuildReceipt(
+                    resolvedCustomerId, isService: false, order.Id, order.CodPaidToCustomerAmount!.Value, now));
+
+            if (request.ServicePaid == true && (order.ServicePaidByCustomerAmount ?? 0m) > 0m)
+                _context.PaymentReceipts.Add(BuildReceipt(
+                    resolvedCustomerId, isService: true, order.Id, order.ServicePaidByCustomerAmount!.Value, now));
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
         return order.Id;
+    }
+
+    private static PaymentReceipt BuildReceipt(Guid customerId, bool isService, Guid orderId, decimal amount, DateTime now)
+    {
+        var receipt = new PaymentReceipt { CustomerId = customerId, IsService = isService, TotalAmount = amount, PaidAt = now };
+        receipt.Allocations.Add(new PaymentReceiptAllocation { OrderId = orderId, Amount = amount });
+        return receipt;
     }
 }

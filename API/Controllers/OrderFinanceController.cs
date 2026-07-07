@@ -134,6 +134,33 @@ public sealed class OrderFinanceController : BaseController
             new PayCustomerOrdersCommand(request.CustomerId, request.Service, allocations), ct);
         return Ok(new { paid });
     }
+
+    // ── GET /api/orderfinance/payment-receipts  (Admin) — a customer's payment history ──
+    [HttpGet("payment-receipts")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<PaymentReceiptDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPaymentReceiptsForCustomer(
+        [FromQuery] Guid customerId, [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCustomerPaymentReceiptsQuery(customerId, date, monthly, from, to), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/orderfinance/payment-receipts/my  (Customer) — own payment history ──
+    [HttpGet("payment-receipts/my")]
+    [Authorize(Roles = "Customer")]
+    [ProducesResponseType(typeof(IReadOnlyList<PaymentReceiptDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyPaymentReceipts(
+        [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetMyPaymentReceiptsQuery(CurrentUserId, date, monthly, from, to), ct);
+        return Ok(result);
+    }
 }
 
 public sealed record PayRequest(Guid CustomerId, bool Service, List<PayAllocationRequest> Allocations);

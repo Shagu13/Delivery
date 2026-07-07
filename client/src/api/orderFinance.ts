@@ -205,3 +205,60 @@ export async function payCourierOrders(
     });
     return handle<{ paid: number }>(res, 'Failed to record courier payment');
 }
+
+// ── Payment receipts (mirror Application.CustomerSettlements.DTOs.PaymentReceiptDto) ──
+// One admin pay/settle action — a COD payout or service-fee collection covering one or
+// more orders in a single click — browsable by date on both the admin and customer
+// finance pages.
+
+export interface PaymentReceiptOrder {
+    orderId: string;
+    trackingNumber: string;
+    recipientName: string;
+    amount: number;
+}
+
+export interface PaymentReceipt {
+    id: string;
+    /** false = COD payout (company → customer); true = service fee collected (customer → company). */
+    isService: boolean;
+    totalAmount: number;
+    /** When the payment was recorded (ISO-8601). */
+    paidAt: string;
+    orders: PaymentReceiptOrder[];
+}
+
+interface PaymentReceiptDateOpts { date?: string; monthly?: boolean; from?: string; to?: string; }
+
+function paymentReceiptParams(opts: PaymentReceiptDateOpts): URLSearchParams {
+    const params = new URLSearchParams();
+    if (opts.date) params.set('date', opts.date);
+    if (opts.monthly) params.set('monthly', 'true');
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    return params;
+}
+
+// ── Admin — a customer's payment history ──────────────────────────────────────────
+export async function fetchCustomerPaymentReceipts(
+    customerId: string, token: string, opts: PaymentReceiptDateOpts = {},
+): Promise<PaymentReceipt[]> {
+    const params = paymentReceiptParams(opts);
+    params.set('customerId', customerId);
+    const res = await fetch(`/api/orderfinance/payment-receipts?${params}`, {
+        headers: authHeaders(token), cache: 'no-store',
+    });
+    return handle<PaymentReceipt[]>(res, 'Failed to load payment history');
+}
+
+// ── Customer — own payment history ────────────────────────────────────────────────
+export async function fetchMyPaymentReceipts(
+    token: string, opts: PaymentReceiptDateOpts = {},
+): Promise<PaymentReceipt[]> {
+    const params = paymentReceiptParams(opts);
+    const q = params.toString() ? `?${params}` : '';
+    const res = await fetch(`/api/orderfinance/payment-receipts/my${q}`, {
+        headers: authHeaders(token), cache: 'no-store',
+    });
+    return handle<PaymentReceipt[]>(res, 'Failed to load payment history');
+}

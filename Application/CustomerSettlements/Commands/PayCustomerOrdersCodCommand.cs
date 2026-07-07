@@ -54,6 +54,8 @@ public sealed class PayCustomerOrdersCommandHandler
         var byId = orders.ToDictionary(o => o.Id);
         var now  = CustomTime.Now;
 
+        var applied = new List<OrderPaymentAllocation>();
+
         foreach (var alloc in request.Allocations)
         {
             if (alloc.Amount <= 0m) continue;
@@ -65,6 +67,26 @@ public sealed class PayCustomerOrdersCommandHandler
                 ApplyService(order, alloc.Amount, now);
             else
                 ApplyCod(order, alloc.Amount, now);
+
+            applied.Add(alloc);
+        }
+
+        // Persist an immutable receipt of this action — "on this date we paid/collected
+        // $Y across these orders" — so admin/customer can browse payment history by date.
+        // Order-level fields above are overwritten in place on the next payment and carry
+        // no history on their own.
+        if (applied.Count > 0)
+        {
+            var receipt = new PaymentReceipt
+            {
+                CustomerId  = request.CustomerId,
+                IsService   = request.Service,
+                TotalAmount = applied.Sum(a => a.Amount),
+                PaidAt      = now,
+            };
+            foreach (var a in applied)
+                receipt.Allocations.Add(new PaymentReceiptAllocation { OrderId = a.OrderId, Amount = a.Amount });
+            _context.PaymentReceipts.Add(receipt);
         }
 
         await _context.SaveChangesAsync(ct);

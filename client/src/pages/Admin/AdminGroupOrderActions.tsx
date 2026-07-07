@@ -123,8 +123,6 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
     const [confirm, setConfirm] = useState<null | {
         title: string; message: string; confirmLabel: string; confirmTone: string; action: () => void;
     }>(null);
-    // Marking in warehouse with no pickup courier yet — prompt to choose one first.
-    const [warehouseAssign, setWarehouseAssign] = useState(false);
     const { t } = useLanguage();
 
     async function run(fn: () => Promise<void>, successMsg: string) {
@@ -306,11 +304,10 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 <button className="go-action-btn go-action-btn--warehouse" disabled={busy}
                     title={t.goForceWarehouseConfirm}
                     onClick={() => {
-                        // No pickup courier yet → make the admin choose one before warehousing.
-                        if (!groupOrder.courierId) { setSelectedCourierId(''); setWarehouseAssign(true); return; }
+                        // No pickup courier yet → confirm proceeding without one, no forced assignment.
                         setConfirm({
                             title: t.goForceWarehouseTitle,
-                            message: t.goForceWarehouseConfirm,
+                            message: groupOrder.courierId ? t.goForceWarehouseConfirm : t.goForceWarehouseNoCourierConfirm,
                             confirmLabel: t.goForceWarehouse,
                             confirmTone: 'warehouse',
                             action: () => run(() => acceptGroupOrderInWarehouse(token, groupOrder.id), t.goAcceptedInWarehouse),
@@ -357,42 +354,6 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                     busy={busy}
                     onCancel={() => setConfirm(null)}
                     onConfirm={() => { const act = confirm.action; setConfirm(null); act(); }}
-                />
-            )}
-
-            {warehouseAssign && (
-                <ConfirmDialog
-                    title={t.goForceWarehouseTitle}
-                    message={t.goWarehouseNeedsCourier}
-                    confirmLabel={t.goForceWarehouse}
-                    confirmTone="warehouse"
-                    cancelLabel={t.cancel}
-                    busy={busy}
-                    confirmDisabled={!selectedCourierId}
-                    body={
-                        <select className="go-select" value={selectedCourierId}
-                            onChange={e => setSelectedCourierId(e.target.value)}
-                            style={{ width: '100%' }}>
-                            <option value="">{t.goChooseCourierOption}</option>
-                            {couriers.filter(c => !c.isDeleted).map(c => (
-                                <option key={c.courierId} value={c.courierId}>
-                                    {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
-                                </option>
-                            ))}
-                        </select>
-                    }
-                    onCancel={() => { setWarehouseAssign(false); setSelectedCourierId(''); }}
-                    onConfirm={() => {
-                        const cid = selectedCourierId;
-                        if (!cid) return;
-                        void run(async () => {
-                            await assignCourierToGroupOrder(token, groupOrder.id, cid);
-                            await acceptGroupOrderInWarehouse(token, groupOrder.id);
-                        }, t.goAcceptedInWarehouse).then(() => {
-                            setWarehouseAssign(false);
-                            setSelectedCourierId('');
-                        });
-                    }}
                 />
             )}
         </div>

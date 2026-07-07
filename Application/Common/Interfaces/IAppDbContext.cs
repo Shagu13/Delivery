@@ -21,5 +21,7 @@ public interface IAppDbContext
     DbSet<PartnerWebhook>       PartnerWebhooks      { get; }
     DbSet<WebhookDelivery>      WebhookDeliveries    { get; }
     DbSet<PushSubscription>     PushSubscriptions    { get; }
+    DbSet<PaymentReceipt>           PaymentReceipts           { get; }
+    DbSet<PaymentReceiptAllocation> PaymentReceiptAllocations { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -4,8 +4,8 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
-import { fetchMyOrderFinance } from '../../api/orderFinance';
-import type { OrderFinanceLine } from '../../api/orderFinance';
+import { fetchMyOrderFinance, fetchMyPaymentReceipts } from '../../api/orderFinance';
+import type { OrderFinanceLine, PaymentReceipt } from '../../api/orderFinance';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import '../../styles/dashboard.css';
@@ -178,8 +178,9 @@ export function CustomerFinancePage() {
         new Date(s + 'T00:00:00').toLocaleDateString(lang === 'ka' ? 'ka-GE' : 'en-US',
             { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     // 'placed' filters by order creation date; 'payments' by the COD-payment date
-    // (CodPaidToCustomerAt) — only orders whose COD was paid out are shown.
-    const [mode, setMode] = useState<'placed' | 'payments'>('placed');
+    // (CodPaidToCustomerAt) — only orders whose COD was paid out are shown; 'receipts'
+    // shows the immutable payment history (PaymentReceipt) by the date it was paid.
+    const [mode, setMode] = useState<'placed' | 'payments' | 'receipts'>('placed');
     // Date granularity: a single Day, a whole Month, or an inclusive custom Range.
     const [dateMode, setDateMode] = useState<'day' | 'month' | 'range'>('day');
     const [date, setDate] = useState(toDateStr(new Date()));   // day/month: a day in the period ('' = all dates)
@@ -190,6 +191,8 @@ export function CustomerFinancePage() {
     const [district, setDistrict] = useState('');
     const [address, setAddress] = useState('');
     const [items, setItems] = useState<OrderFinanceLine[]>([]);
+    const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
+    const [expandedReceiptId, setExpandedReceiptId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -202,9 +205,15 @@ export function CustomerFinancePage() {
                 ? { monthly: true }
                 : {};
         const effDate = dateMode === 'range' ? undefined : (date || undefined);
-        fetchMyOrderFinance(token, effDate, mode === 'payments', opts)
-            .then(data => { setItems(data); setLoading(false); })
-            .catch(() => { setError(t.ofinErrLoad); setLoading(false); });
+        if (mode === 'receipts') {
+            fetchMyPaymentReceipts(token, { ...opts, date: effDate })
+                .then(data => { setReceipts(data); setLoading(false); })
+                .catch(() => { setError(t.ofinErrLoad); setLoading(false); });
+        } else {
+            fetchMyOrderFinance(token, effDate, mode === 'payments', opts)
+                .then(data => { setItems(data); setLoading(false); })
+                .catch(() => { setError(t.ofinErrLoad); setLoading(false); });
+        }
     }, [token, date, dateMode, from, to, mode, t.ofinErrLoad]);
 
     useEffect(() => { load(); }, [load]);
@@ -262,7 +271,8 @@ export function CustomerFinancePage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
                 <div style={segWrap}>
                     <button style={{ ...segBtn(mode === 'placed'), borderRight: '1px solid var(--color-border)' }} onClick={() => setMode('placed')}>{t.ofinTabPlaced}</button>
-                    <button style={segBtn(mode === 'payments')} onClick={() => setMode('payments')}>{t.ofinTabPayments}</button>
+                    <button style={{ ...segBtn(mode === 'payments'), borderRight: '1px solid var(--color-border)' }} onClick={() => setMode('payments')}>{t.ofinTabPayments}</button>
+                    <button style={segBtn(mode === 'receipts')} onClick={() => setMode('receipts')}>{t.ofinTabReceipts}</button>
                 </div>
                 <span style={{ fontSize: '0.82rem', color: 'var(--color-text)', fontWeight: 600 }}>
                     {t.ofinShowing(showingLabel)}
@@ -307,27 +317,94 @@ export function CustomerFinancePage() {
             </div>
 
             {/* Recipient-location filter (client-side over the loaded orders): city/district + address */}
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 480 }}>
-                    <CityDistrictPicker
-                        cityValue={city}
-                        districtValue={district}
-                        onCityChange={c => { setCity(c); setDistrict(''); }}
-                        onDistrictChange={setDistrict}
-                    />
+            {mode !== 'receipts' && (
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 360px', minWidth: 240, maxWidth: 480 }}>
+                        <CityDistrictPicker
+                            cityValue={city}
+                            districtValue={district}
+                            onCityChange={c => { setCity(c); setDistrict(''); }}
+                            onDistrictChange={setDistrict}
+                        />
+                    </div>
+                    <input type="text" value={address} placeholder={t.ofinSearchAddress}
+                        onChange={e => setAddress(e.target.value)}
+                        style={{ flex: '1 1 200px', minWidth: 160, maxWidth: 320, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }} />
+                    {hasLocationFilter && (
+                        <button onClick={() => { setCity(''); setDistrict(''); setAddress(''); }} className="btn-ghost btn-ghost--sm">{t.statAllDates}</button>
+                    )}
                 </div>
-                <input type="text" value={address} placeholder={t.ofinSearchAddress}
-                    onChange={e => setAddress(e.target.value)}
-                    style={{ flex: '1 1 200px', minWidth: 160, maxWidth: 320, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.85rem', padding: '6px 10px', outline: 'none' }} />
-                {hasLocationFilter && (
-                    <button onClick={() => { setCity(''); setDistrict(''); setAddress(''); }} className="btn-ghost btn-ghost--sm">{t.statAllDates}</button>
-                )}
-            </div>
+            )}
 
             {loading ? (
                 <div className="dashboard__loader">{t.statLoading}</div>
             ) : error ? (
                 <div className="dashboard__error">{error} <button onClick={load}>{t.statRetry}</button></div>
+            ) : mode === 'receipts' ? (
+                receipts.length === 0 ? (
+                    <div className="dashboard__empty" style={{ marginTop: 40 }}>
+                        <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🧾</div>
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.finPayHistNone}</div>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{t.statNoRecordsHint}</div>
+                    </div>
+                ) : (
+                    <>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 20 }}>
+                            {[
+                                { label: t.finPayHistCodTotal,     value: gel(receipts.filter(r => !r.isService).reduce((s, r) => s + r.totalAmount, 0)), accent: false },
+                                { label: t.finPayHistServiceTotal, value: gel(receipts.filter(r => r.isService).reduce((s, r) => s + r.totalAmount, 0)),  accent: true  },
+                            ].map(({ label, value, accent }) => (
+                                <div key={label} style={{ background: accent ? 'var(--color-accent-dim)' : 'var(--color-bg-2)', border: `1px solid ${accent ? 'rgba(196,127,23,0.25)' : 'var(--color-border)'}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+                            {receipts.map(r => {
+                                const expanded = expandedReceiptId === r.id;
+                                return (
+                                    <div key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                        <button
+                                            onClick={() => setExpandedReceiptId(expanded ? null : r.id)}
+                                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-bg-2)', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                                        >
+                                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text)', minWidth: 150 }}>
+                                                {new Date(r.paidAt).toLocaleString(lang === 'ka' ? 'ka-GE' : 'en-US')}
+                                            </span>
+                                            <Badge text={r.isService ? t.finPayHistService : t.finPayHistCod} tone={r.isService ? 'unpaid' : 'paid'} />
+                                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finPayHistOrderCount(r.orders.length)}</span>
+                                            <span style={{ marginLeft: 'auto', fontSize: '0.9rem', fontWeight: 800, color: 'var(--color-text)' }}>{gel(r.totalAmount)}</span>
+                                            <span style={{ fontSize: '1rem', color: 'var(--color-text-subtle)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
+                                        </button>
+                                        {expanded && (
+                                            <div style={{ overflowX: 'auto', padding: '0 14px 12px', background: 'var(--color-bg)' }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
+                                                    <thead>
+                                                        <tr>
+                                                            <th style={headCell}>{t.finPayHistThTracking}</th>
+                                                            <th style={headCell}>{t.finPayHistThRecipient}</th>
+                                                            <th style={{ ...headCell, textAlign: 'right' }}>{t.finPayHistThAmount}</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {r.orders.map(o => (
+                                                            <tr key={o.orderId}>
+                                                                <td style={cell}>{o.trackingNumber}</td>
+                                                                <td style={cell}>{o.recipientName}</td>
+                                                                <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>{gel(o.amount)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                )
             ) : items.length === 0 ? (
                 <div className="dashboard__empty" style={{ marginTop: 40 }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📊</div>

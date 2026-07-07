@@ -26,6 +26,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<PartnerWebhook>   PartnerWebhooks   => Set<PartnerWebhook>();
     public DbSet<WebhookDelivery>  WebhookDeliveries => Set<WebhookDelivery>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<PaymentReceipt>           PaymentReceipts           => Set<PaymentReceipt>();
+    public DbSet<PaymentReceiptAllocation> PaymentReceiptAllocations => Set<PaymentReceiptAllocation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -131,6 +133,27 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(s => s.AmountOfCollectedCodPaidToTenant).HasColumnType("decimal(18,2)");
             e.Property(s => s.TotalAmountPaidToCompanyForCompanyService).HasColumnType("decimal(18,2)");
             e.Property(s => s.AmountPaidToCompanyForCompanyService).HasColumnType("decimal(18,2)");
+        });
+
+        // ── PaymentReceipt ───────────────────────────────────────────────────
+        modelBuilder.Entity<PaymentReceipt>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.HasIndex(p => p.CustomerId);
+            e.HasIndex(p => p.PaidAt);
+            e.HasOne(p => p.Customer).WithMany()
+             .HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(p => p.TotalAmount).HasColumnType("decimal(18,2)");
+            e.HasMany(p => p.Allocations).WithOne(a => a.PaymentReceipt)
+             .HasForeignKey(a => a.PaymentReceiptId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<PaymentReceiptAllocation>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.HasIndex(a => a.OrderId);
+            e.HasOne(a => a.Order).WithMany()
+             .HasForeignKey(a => a.OrderId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(a => a.Amount).HasColumnType("decimal(18,2)");
         });
 
         // ── Warehouse ────────────────────────────────────────────────────────

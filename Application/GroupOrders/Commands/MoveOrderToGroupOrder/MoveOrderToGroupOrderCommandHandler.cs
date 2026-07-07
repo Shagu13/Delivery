@@ -56,22 +56,10 @@ public sealed class MoveOrderToGroupOrderCommandHandler
         target.NumberOfPackages++;
         source.NumberOfPackages = Math.Max(0, source.NumberOfPackages - 1);
 
-        var remaining = source.Orders.ToList();
-
-        if (remaining.Count <= 1)
-        {
-            // A one-order "batch" is pointless: turn the last order back into a standalone
-            // order owned directly by the customer, and drop the batch entirely.
-            if (remaining.Count == 1)
-            {
-                var last = remaining[0];
-                last.GroupOrderId = null;
-                last.CustomerId   = source.CustomerId;
-                source.Orders.Remove(last);   // detach so deleting the batch can't cascade it
-            }
-
+        // Every Send/Exchange order always belongs to a GroupOrder — a one-order remainder
+        // stays a valid batch. Only drop the source once it's actually empty.
+        if (source.Orders.Count == 0)
             _context.GroupOrders.Remove(source);
-        }
 
         await _context.SaveChangesAsync(cancellationToken);
 

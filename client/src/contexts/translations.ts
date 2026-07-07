@@ -549,8 +549,8 @@ const en = {
   goWarehouseNonePresent:  'Tick at least one package that arrived, or cancel the whole batch.',
   goForceWarehouse:        '⤓ Mark in Warehouse',
   goForceWarehouseTitle:   'Mark batch in warehouse?',
-  goWarehouseNeedsCourier: 'No pickup courier is assigned to this batch. Choose the courier who collected it — they will be recorded as the pickup courier and the batch marked in the warehouse.',
   goForceWarehouseConfirm: 'Move this batch straight to the warehouse, skipping the remaining pickup steps? Each package becomes ready for last-mile delivery.',
+  goForceWarehouseNoCourierConfirm: 'No pickup courier is assigned to this batch. Mark it as received in the warehouse without a courier?',
   goAssignPackagesHint:    '↓ Assign each package below',
   goCancelGroup:           'Cancel',
   goCancelGroupConfirm:    'Cancel this entire group order and all its packages?',
@@ -1517,6 +1517,7 @@ const en = {
     finTabCustomers:     'Customers',
     finTabCouriers:      'Couriers',
     finTabHistory:       'History',
+    finTabPaymentHistory: 'Payment History',
     finCourierSelect:    'Select courier',
     finCourierSearch:    'Search courier by name…',
     // Admin Finance — Overview / Payments toggle + payment-status filter
@@ -1577,6 +1578,17 @@ const en = {
     finHisThSvcPaid:        'Service paid',
     finHisThSvcOut:         'Service outstanding',
 
+    // Admin Finance — Payment history (PaymentReceipt browsing, by date)
+    finPayHistNone:          'No payments recorded for the selected period.',
+    finPayHistCodTotal:      'COD paid out',
+    finPayHistServiceTotal:  'Service fees collected',
+    finPayHistCod:           'COD payout',
+    finPayHistService:       'Service fee',
+    finPayHistOrderCount:    (n: number) => `${n} order${n !== 1 ? 's' : ''}`,
+    finPayHistThTracking:    'Tracking',
+    finPayHistThRecipient:   'Recipient',
+    finPayHistThAmount:      'Amount',
+
     // Per-order finance (reworked settlement pages)
     ofinColTracking:     'Tracking',
     ofinColRecipient:    'Recipient',
@@ -1619,6 +1631,7 @@ const en = {
     ofinNotDelivered:    'Not delivered',
     ofinTabPlaced:       'Placed',
     ofinTabPayments:     'Payments',
+    ofinTabReceipts:     'Receipts',
     ofinShowing:         (d: string) => `Showing: ${d}`,
     ofinPaidDate:        'Payment date',
     ofinCodToPay:        'COD to pay',
@@ -2362,8 +2375,8 @@ const ka: typeof en = {
   goWarehouseNonePresent:  'მონიშნეთ მინიმუმ ერთი მიღებული ამანათი, ან გააუქმეთ მთლიანი შეკვეთა.',
   goForceWarehouse:        '⤓ საწყობში გადატანა',
   goForceWarehouseTitle:   'პარტია გადავიდეს საწყობში?',
-  goWarehouseNeedsCourier: 'ამ პარტიას არ ჰყავს მიმღები კურიერი. აირჩიეთ კურიერი, რომელმაც აიღო — ის დაფიქსირდება აღების კურიერად და პარტია მოინიშნება საწყობში.',
   goForceWarehouseConfirm: 'გადავიდეს ეს პარტია პირდაპირ საწყობში, აღების დარჩენილი ეტაპების გამოტოვებით? თითოეული ამანათი მზად იქნება ბოლო ეტაპის მიტანისთვის.',
+  goForceWarehouseNoCourierConfirm: 'ამ პარტიას არ ჰყავს მიმღები კურიერი. მოინიშნოს საწყობში მიღებულად კურიერის გარეშე?',
   goAssignPackagesHint:    '↓ დაუნიშნეთ კურიერი ქვემოთ',
   goCancelGroup:           'გაუქმება',
   goCancelGroupConfirm:    'გაუქმდეს მთლიანი ჯგუფური შეკვეთა და ყველა ამანათი?',
@@ -3328,6 +3341,7 @@ const ka: typeof en = {
     finTabCustomers:     'მომხმარებლები',
     finTabCouriers:      'კურიერები',
     finTabHistory:       'ისტორია',
+    finTabPaymentHistory: 'გადახდების ისტორია',
     finCourierSelect:    'აირჩიეთ კურიერი',
     finCourierSearch:    'მოძებნეთ კურიერი სახელით…',
     // Admin Finance — Overview / Payments toggle + payment-status filter
@@ -3388,6 +3402,17 @@ const ka: typeof en = {
     finHisThSvcPaid:        'მომსახ. გადახდილი',
     finHisThSvcOut:         'მომსახ. ნაშთი',
 
+    // Admin Finance — Payment history (PaymentReceipt browsing, by date)
+    finPayHistNone:          'არჩეულ პერიოდში გადახდები არ დაფიქსირებულა.',
+    finPayHistCodTotal:      'გადახდილი COD',
+    finPayHistServiceTotal:  'მიღებული საკურიერო',
+    finPayHistCod:           'COD გადახდა',
+    finPayHistService:       'საკურიერო',
+    finPayHistOrderCount:    (n: number) => `${n} შეკვეთა`,
+    finPayHistThTracking:    'თრექინგი',
+    finPayHistThRecipient:   'მიმღები',
+    finPayHistThAmount:      'თანხა',
+
     // Per-order finance (reworked settlement pages)
     ofinColTracking:     'თრექინგი',
     ofinColRecipient:    'მიმღები',
@@ -3430,6 +3455,7 @@ const ka: typeof en = {
     ofinNotDelivered:    'არ არის მიტანილი',
     ofinTabPlaced:       'განთავსებული',
     ofinTabPayments:     'ჩარიცხვები',
+    ofinTabReceipts:     'ქვითრები',
     ofinShowing:         (d: string) => `არჩეული: ${d}`,
     ofinPaidDate:        'ჩარიცხვის თარიღი',
     ofinCodToPay:        'გადასახდელი COD',

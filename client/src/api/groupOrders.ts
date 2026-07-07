@@ -38,8 +38,9 @@ export async function createGroupOrder(
 }
 
 /**
- * Places the customer's cart. The backend creates a single standalone order when the
- * cart holds one package, or one group order when it holds several.
+ * Places the customer's cart. The backend always groups the packages into a GroupOrder
+ * (even a single package), folding into the customer's still-open same-day batch at the
+ * same pickup address when one exists, or starting a new batch otherwise.
  */
 export async function checkoutCart(
     data: CreateGroupOrderRequest,

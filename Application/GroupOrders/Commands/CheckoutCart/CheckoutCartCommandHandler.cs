@@ -66,45 +66,69 @@ public sealed class CheckoutCartCommandHandler
             }
         }
 
-        // ── A lone Send/Exchange stays standalone (admin links it to a batch later);
-        //    two or more form one new GroupOrder holding them. ──
+        // ── Every Send/Exchange order always belongs to a GroupOrder — even a lone one.
+        //    Same-day orders from this customer fold into their still-open batch (any
+        //    GroupOrderAppendPolicy.Appendable status, i.e. before the courier marks it
+        //    picked up) as long as the pickup address matches; otherwise a fresh batch
+        //    is started, same as if no open batch existed. ──
         GroupOrder? groupOrder = null;
+        var isNewGroupOrder = false;
 
-        if (batchOrders.Count == 1)
+        if (batchOrders.Count > 0)
         {
-            var order = batchOrders[0];
-            order.CustomerId = dto.CustomerId;
-            _context.Orders.Add(order);
-        }
-        else if (batchOrders.Count >= 2)
-        {
-            groupOrder = new GroupOrder
+            if (dto.CustomerId is Guid customerId)
             {
-                CustomerId         = dto.CustomerId,
-                SenderFirstName    = dto.SenderFirstName,
-                SenderLastName     = dto.SenderLastName,
-                SenderIdNumber     = dto.SenderIdNumber,
-                SenderBusinessName = dto.SenderBusinessName,
-                SenderPhone        = dto.SenderPhone,
-                AlternativeSenderPhone = string.IsNullOrWhiteSpace(dto.AlternativeSenderPhone)
-                    ? null
-                    : dto.AlternativeSenderPhone.Trim(),
-                PickUpCity         = dto.PickUpCity,
-                PickUpDistrict     = dto.PickUpDistrict,
-                PickUpAddress      = dto.PickUpAddress,
-                Note               = dto.Note,
-                NumberOfPackages   = batchOrders.Count,
-            };
+                var today = CustomTime.Today;
+                var todaysBatches = await _context.GroupOrders
+                    .Include(g => g.Orders)
+                    .Where(g => g.CustomerId == customerId && g.CreatedAt.Date == today)
+                    .ToListAsync(cancellationToken);
 
-            foreach (var order in batchOrders)
-                groupOrder.Orders.Add(order);
+                groupOrder = todaysBatches.FirstOrDefault(g =>
+                    GroupOrderAppendPolicy.Appendable.Contains(g.Status) && AddressMatches(g, dto));
+            }
 
-            _context.GroupOrders.Add(groupOrder);
+            if (groupOrder is not null)
+            {
+                foreach (var order in batchOrders)
+                    order.GroupOrderId = groupOrder.Id;
+                groupOrder.NumberOfPackages += batchOrders.Count;
+                foreach (var order in batchOrders)
+                    _context.Orders.Add(order);
+            }
+            else
+            {
+                isNewGroupOrder = true;
+                groupOrder = new GroupOrder
+                {
+                    CustomerId         = dto.CustomerId,
+                    SenderFirstName    = dto.SenderFirstName,
+                    SenderLastName     = dto.SenderLastName,
+                    SenderIdNumber     = dto.SenderIdNumber,
+                    SenderBusinessName = dto.SenderBusinessName,
+                    SenderPhone        = dto.SenderPhone,
+                    AlternativeSenderPhone = string.IsNullOrWhiteSpace(dto.AlternativeSenderPhone)
+                        ? null
+                        : dto.AlternativeSenderPhone.Trim(),
+                    PickUpCity         = dto.PickUpCity,
+                    PickUpDistrict     = dto.PickUpDistrict,
+                    PickUpAddress      = dto.PickUpAddress,
+                    Note               = dto.Note,
+                    NumberOfPackages   = batchOrders.Count,
+                };
+
+                foreach (var order in batchOrders)
+                    groupOrder.Orders.Add(order);
+
+                _context.GroupOrders.Add(groupOrder);
+            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        if (groupOrder is not null)
+        // Only a genuinely new batch gets the admin SMS — packages silently folded into an
+        // already-announced open batch don't need a second notification.
+        if (isNewGroupOrder && groupOrder is not null)
         {
             try
             {
@@ -124,4 +148,12 @@ public sealed class CheckoutCartCommandHandler
                 .Select(o => new CreatedOrderDto(o.Id, o.TrackingNumber, o.RecipientName))
                 .ToList());
     }
+
+    // Same physical pickup location as the batch already open today — the courier only
+    // goes to one address per batch, so a differing address starts a fresh batch instead
+    // of silently folding in under the wrong pickup location.
+    private static bool AddressMatches(GroupOrder groupOrder, CreateGroupOrderDto dto) =>
+        string.Equals(groupOrder.PickUpCity.Trim(), dto.PickUpCity.Trim(), StringComparison.OrdinalIgnoreCase)
+        && string.Equals(groupOrder.PickUpDistrict.Trim(), dto.PickUpDistrict.Trim(), StringComparison.OrdinalIgnoreCase)
+        && string.Equals(groupOrder.PickUpAddress.Trim(), dto.PickUpAddress.Trim(), StringComparison.OrdinalIgnoreCase);
 }

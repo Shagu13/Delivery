@@ -788,6 +788,57 @@ namespace Persistence.Migrations
                     b.ToTable("PasswordResetTokens");
                 });
 
+            modelBuilder.Entity("Domain.PaymentReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsService")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("PaidAt");
+
+                    b.ToTable("PaymentReceipts");
+                });
+
+            modelBuilder.Entity("Domain.PaymentReceiptAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PaymentReceiptId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("PaymentReceiptId");
+
+                    b.ToTable("PaymentReceiptAllocations");
+                });
+
             modelBuilder.Entity("Domain.PushSubscription", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1340,6 +1391,36 @@ namespace Persistence.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("Domain.PaymentReceipt", b =>
+                {
+                    b.HasOne("Domain.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Domain.PaymentReceiptAllocation", b =>
+                {
+                    b.HasOne("Domain.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PaymentReceipt", "PaymentReceipt")
+                        .WithMany("Allocations")
+                        .HasForeignKey("PaymentReceiptId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+
+                    b.Navigation("PaymentReceipt");
+                });
+
             modelBuilder.Entity("Domain.PushSubscription", b =>
                 {
                     b.HasOne("Domain.Courier", "Courier")
@@ -1463,6 +1544,11 @@ namespace Persistence.Migrations
             modelBuilder.Entity("Domain.Order", b =>
                 {
                     b.Navigation("TrackingEvents");
+                });
+
+            modelBuilder.Entity("Domain.PaymentReceipt", b =>
+                {
+                    b.Navigation("Allocations");
                 });
 
             modelBuilder.Entity("Domain.Tenant", b =>

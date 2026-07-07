@@ -8,6 +8,8 @@ import { fetchCustomerSettlements, CustomerSettlementApiError } from '../../api/
 import type { CustomerSettlement } from '../../api/customerSettlements';
 import { fetchCourierSettlementsAdmin, SettlementApiError } from '../../api/settlements';
 import type { AdminCourierSettlementItem } from '../../api/settlements';
+import { fetchCustomerPaymentReceipts, OrderFinanceApiError } from '../../api/orderFinance';
+import type { PaymentReceipt } from '../../api/orderFinance';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -363,21 +365,177 @@ function CourierLedger({ token }: { token: string }) {
     );
 }
 
+// ── Payment history: what the company paid/collected, by date ─────────────────
+
+const dateInputStyle: React.CSSProperties = {
+    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.82rem',
+    padding: '5px 8px', outline: 'none',
+};
+
+const isoToday = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+function PaymentReceiptsSection({ token }: { token: string }) {
+    const { t } = useLanguage();
+    const [customer, setCustomer] = useState<AdminCustomer | null>(null);
+    const [mode, setMode] = useState<'day' | 'month' | 'range'>('month');
+    const [date, setDate] = useState(isoToday());
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const load = useCallback(() => {
+        if (!customer) { setReceipts([]); return; }
+        setLoading(true); setError(null);
+        const opts = mode === 'range'
+            ? { from: from || undefined, to: to || undefined }
+            : { date: date || undefined, monthly: mode === 'month' };
+        fetchCustomerPaymentReceipts(customer.id, token, opts)
+            .then(setReceipts)
+            .catch(e => setError(e instanceof OrderFinanceApiError ? e.message : t.finErrLoad))
+            .finally(() => setLoading(false));
+    }, [customer, mode, date, from, to, token, t.finErrLoad]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const totalCod = receipts.filter(r => !r.isService).reduce((s, r) => s + r.totalAmount, 0);
+    const totalService = receipts.filter(r => r.isService).reduce((s, r) => s + r.totalAmount, 0);
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Picker + date filter */}
+            <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <CustomerPicker token={token} selected={customer} onSelect={setCustomer} onClear={() => { setCustomer(null); setReceipts([]); setError(null); }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                    <div className="go-seg" style={{ display: 'inline-flex' }}>
+                        <button className={`go-seg__btn ${mode === 'day' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('day')}>{t.ofinViewDaily}</button>
+                        <button className={`go-seg__btn ${mode === 'month' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('month')}>{t.ofinViewMonthly}</button>
+                        <button className={`go-seg__btn ${mode === 'range' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('range')}>{t.ofinViewRange}</button>
+                    </div>
+                    {mode === 'day' && (
+                        <input type="date" value={date} max={isoToday()} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
+                    )}
+                    {mode === 'month' && (
+                        <input type="month" value={date.slice(0, 7)} max={isoToday().slice(0, 7)}
+                            onChange={e => setDate(e.target.value ? e.target.value + '-01' : '')} style={dateInputStyle} />
+                    )}
+                    {mode === 'range' && (
+                        <>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finOvFrom}</span>
+                            <input type="date" value={from} max={to || isoToday()} onChange={e => setFrom(e.target.value)} style={dateInputStyle} />
+                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finOvTo}</span>
+                            <input type="date" value={to} min={from || undefined} max={isoToday()} onChange={e => setTo(e.target.value)} style={dateInputStyle} />
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {error && (
+                <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 'var(--radius-sm)', color: '#ef4444', fontSize: '0.82rem' }}>
+                    {error}
+                </div>
+            )}
+
+            {!customer ? (
+                <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+                    {t.finHisSelectCustomer}
+                </div>
+            ) : loading ? (
+                <div className="content-card" style={{ padding: 40, textAlign: 'center' }}>
+                    <div className="go-spinner" style={{ margin: '0 auto' }} />
+                </div>
+            ) : receipts.length === 0 ? (
+                <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+                    {t.finPayHistNone}
+                </div>
+            ) : (
+                <div className="content-card" style={{ padding: 0, overflow: 'hidden' }}>
+                    {/* Summary totals over the visible receipts */}
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <SummaryChip label={t.finPayHistCodTotal} value={gel(totalCod)} tone="good" />
+                        <SummaryChip label={t.finPayHistServiceTotal} value={gel(totalService)} tone="accent" />
+                    </div>
+
+                    {/* Receipt rows */}
+                    <div>
+                        {receipts.map(r => {
+                            const expanded = expandedId === r.id;
+                            return (
+                                <div key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                    <button
+                                        onClick={() => setExpandedId(expanded ? null : r.id)}
+                                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                                    >
+                                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text)', minWidth: 150 }}>
+                                            {new Date(r.paidAt).toLocaleString()}
+                                        </span>
+                                        <span style={{
+                                            fontSize: '0.66rem', fontWeight: 700, letterSpacing: '0.04em', padding: '2px 8px', borderRadius: 100,
+                                            background: r.isService ? 'var(--color-accent-dim)' : 'rgba(5,150,105,0.1)',
+                                            color: r.isService ? 'var(--color-accent)' : '#059669',
+                                            border: `1px solid ${r.isService ? 'var(--color-accent)' : 'rgba(5,150,105,0.2)'}`,
+                                        }}>
+                                            {r.isService ? t.finPayHistService : t.finPayHistCod}
+                                        </span>
+                                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finPayHistOrderCount(r.orders.length)}</span>
+                                        <span style={{ marginLeft: 'auto', fontSize: '0.9rem', fontWeight: 800, color: 'var(--color-text)' }}>{gel(r.totalAmount)}</span>
+                                        <span style={{ fontSize: '1rem', color: 'var(--color-text-subtle)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
+                                    </button>
+                                    {expanded && (
+                                        <div style={{ overflowX: 'auto', padding: '0 14px 12px' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
+                                                <thead>
+                                                    <tr>
+                                                        <TH>{t.finPayHistThTracking}</TH>
+                                                        <TH>{t.finPayHistThRecipient}</TH>
+                                                        <TH>{t.finPayHistThAmount}</TH>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {r.orders.map(o => (
+                                                        <tr key={o.orderId}>
+                                                            <TD>{o.trackingNumber}</TD>
+                                                            <TD>{o.recipientName}</TD>
+                                                            <TD bold>{gel(o.amount)}</TD>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ── History tab root ───────────────────────────────────────────────────────────
 
 export function AdminFinanceHistoryTab({ token }: { token: string }) {
     const { t } = useLanguage();
-    const [view, setView] = useState<'customers' | 'couriers'>('customers');
+    const [view, setView] = useState<'customers' | 'couriers' | 'payments'>('customers');
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="go-seg" style={{ display: 'inline-flex', alignSelf: 'flex-start' }}>
                 <button className={`go-seg__btn ${view === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setView('customers')}>{t.finTabCustomers}</button>
                 <button className={`go-seg__btn ${view === 'couriers'  ? 'go-seg__btn--active' : ''}`} onClick={() => setView('couriers')}>{t.finTabCouriers}</button>
+                <button className={`go-seg__btn ${view === 'payments'  ? 'go-seg__btn--active' : ''}`} onClick={() => setView('payments')}>{t.finTabPaymentHistory}</button>
             </div>
 
             {view === 'customers' && <CustomerLedger token={token} />}
             {view === 'couriers'  && <CourierLedger  token={token} />}
+            {view === 'payments'  && <PaymentReceiptsSection token={token} />}
         </div>
     );
 }
