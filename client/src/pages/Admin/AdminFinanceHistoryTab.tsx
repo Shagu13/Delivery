@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
@@ -113,17 +113,17 @@ function CustomerPicker({ token, selected, onSelect, onClear }: {
 
 // ── Table header cell ──────────────────────────────────────────────────────────
 
-function TH({ children }: { children: React.ReactNode }) {
+function TH({ children, align }: { children: React.ReactNode; align?: 'left' | 'right' | 'center' }) {
     return (
-        <th style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 700, fontSize: '0.65rem', letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap', background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
+        <th style={{ padding: '9px 12px', textAlign: align ?? 'left', fontWeight: 700, fontSize: '0.65rem', letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap', background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
             {children}
         </th>
     );
 }
 
-function TD({ children, color, bold }: { children: React.ReactNode; color?: string; bold?: boolean }) {
+function TD({ children, color, bold, align, colSpan }: { children: React.ReactNode; color?: string; bold?: boolean; align?: 'left' | 'right' | 'center'; colSpan?: number }) {
     return (
-        <td style={{ padding: '9px 12px', fontSize: '0.82rem', color: color ?? 'var(--color-text)', fontWeight: bold ? 700 : 400, borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>
+        <td colSpan={colSpan} style={{ padding: '9px 12px', fontSize: '0.82rem', color: color ?? 'var(--color-text)', fontWeight: bold ? 700 : 400, borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap', textAlign: align ?? 'left' }}>
             {children}
         </td>
     );
@@ -406,6 +406,7 @@ function PaymentReceiptsSection({ token }: { token: string }) {
 
     const totalCod = receipts.filter(r => !r.isService).reduce((s, r) => s + r.totalAmount, 0);
     const totalService = receipts.filter(r => r.isService).reduce((s, r) => s + r.totalAmount, 0);
+    const totalNetPaid = totalCod - totalService;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -460,58 +461,88 @@ function PaymentReceiptsSection({ token }: { token: string }) {
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--color-border)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <SummaryChip label={t.finPayHistCodTotal} value={gel(totalCod)} tone="good" />
                         <SummaryChip label={t.finPayHistServiceTotal} value={gel(totalService)} tone="accent" />
+                        <SummaryChip label={t.finPayHistNetPaid} value={gel(totalNetPaid)} tone="good" />
                     </div>
 
-                    {/* Receipt rows */}
-                    <div>
-                        {receipts.map(r => {
-                            const expanded = expandedId === r.id;
-                            return (
-                                <div key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                    <button
-                                        onClick={() => setExpandedId(expanded ? null : r.id)}
-                                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-                                    >
-                                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text)', minWidth: 150 }}>
-                                            {new Date(r.paidAt).toLocaleString()}
-                                        </span>
-                                        <span style={{
-                                            fontSize: '0.66rem', fontWeight: 700, letterSpacing: '0.04em', padding: '2px 8px', borderRadius: 100,
-                                            background: r.isService ? 'var(--color-accent-dim)' : 'rgba(5,150,105,0.1)',
-                                            color: r.isService ? 'var(--color-accent)' : '#059669',
-                                            border: `1px solid ${r.isService ? 'var(--color-accent)' : 'rgba(5,150,105,0.2)'}`,
-                                        }}>
-                                            {r.isService ? t.finPayHistService : t.finPayHistCod}
-                                        </span>
-                                        <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finPayHistOrderCount(r.orders.length)}</span>
-                                        <span style={{ marginLeft: 'auto', fontSize: '0.9rem', fontWeight: 800, color: 'var(--color-text)' }}>{gel(r.totalAmount)}</span>
-                                        <span style={{ fontSize: '1rem', color: 'var(--color-text-subtle)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
-                                    </button>
-                                    {expanded && (
-                                        <div style={{ overflowX: 'auto', padding: '0 14px 12px' }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
-                                                <thead>
-                                                    <tr>
-                                                        <TH>{t.finPayHistThTracking}</TH>
-                                                        <TH>{t.finPayHistThRecipient}</TH>
-                                                        <TH>{t.finPayHistThAmount}</TH>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {r.orders.map(o => (
-                                                        <tr key={o.orderId}>
-                                                            <TD>{o.trackingNumber}</TD>
-                                                            <TD>{o.recipientName}</TD>
-                                                            <TD bold>{gel(o.amount)}</TD>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                    {/* Receipt grid, Excel-style, with a totals footer row */}
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+                            <thead>
+                                <tr>
+                                    <TH align="center">#</TH>
+                                    <TH>{t.finPayHistThDate}</TH>
+                                    <TH>{t.finPayHistThType}</TH>
+                                    <TH align="right">{t.finPayHistThOrders}</TH>
+                                    <TH align="right">{t.finPayHistCodTotal}</TH>
+                                    <TH align="right">{t.finPayHistServiceTotal}</TH>
+                                    <TH> </TH>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {receipts.map((r, i) => {
+                                    const expanded = expandedId === r.id;
+                                    return (
+                                        <Fragment key={r.id}>
+                                            <tr onClick={() => setExpandedId(expanded ? null : r.id)} style={{ cursor: 'pointer' }}>
+                                                <TD align="center" color="var(--color-text-subtle)">{i + 1}</TD>
+                                                <TD bold>{new Date(r.paidAt).toLocaleString()}</TD>
+                                                <TD>
+                                                    <span style={{
+                                                        fontSize: '0.66rem', fontWeight: 700, letterSpacing: '0.04em', padding: '2px 8px', borderRadius: 100,
+                                                        background: r.isService ? 'var(--color-accent-dim)' : 'rgba(5,150,105,0.1)',
+                                                        color: r.isService ? 'var(--color-accent)' : '#059669',
+                                                        border: `1px solid ${r.isService ? 'var(--color-accent)' : 'rgba(5,150,105,0.2)'}`,
+                                                    }}>
+                                                        {r.isService ? t.finPayHistService : t.finPayHistCod}
+                                                    </span>
+                                                </TD>
+                                                <TD align="right">{r.orders.length}</TD>
+                                                <TD align="right" bold>{!r.isService ? gel(r.totalAmount) : <span style={{ color: 'var(--color-text-subtle)', fontWeight: 400 }}>—</span>}</TD>
+                                                <TD align="right" bold>{r.isService ? gel(r.totalAmount) : <span style={{ color: 'var(--color-text-subtle)', fontWeight: 400 }}>—</span>}</TD>
+                                                <TD align="center" color="var(--color-text-subtle)">
+                                                    <span style={{ display: 'inline-block', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
+                                                </TD>
+                                            </tr>
+                                            {expanded && (
+                                                <tr>
+                                                    <td colSpan={7} style={{ padding: 0, borderBottom: '1px solid var(--color-border)' }}>
+                                                        <div style={{ overflowX: 'auto', padding: '0 14px 12px' }}>
+                                                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
+                                                                <thead>
+                                                                    <tr>
+                                                                        <TH>{t.finPayHistThTracking}</TH>
+                                                                        <TH>{t.finPayHistThRecipient}</TH>
+                                                                        <TH align="right">{t.finPayHistThAmount}</TH>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {r.orders.map(o => (
+                                                                        <tr key={o.orderId}>
+                                                                            <TD>{o.trackingNumber}</TD>
+                                                                            <TD>{o.recipientName}</TD>
+                                                                            <TD align="right" bold>{gel(o.amount)}</TD>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    );
+                                })}
+                            </tbody>
+                            <tfoot>
+                                <tr style={{ background: 'var(--color-bg-3)' }}>
+                                    <TD colSpan={3} bold>{t.finPayHistTotal}</TD>
+                                    <TD align="right" bold>{receipts.reduce((s, r) => s + r.orders.length, 0)}</TD>
+                                    <TD align="right" bold color="#059669">{gel(totalCod)}</TD>
+                                    <TD align="right" bold color="var(--color-accent)">{gel(totalService)}</TD>
+                                    <TD> </TD>
+                                </tr>
+                            </tfoot>
+                        </table>
                     </div>
                 </div>
             )}

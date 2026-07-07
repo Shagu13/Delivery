@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
@@ -263,6 +263,12 @@ export function CustomerFinancePage() {
             ? s + (i.companyServicePrice - (i.servicePaidByCustomerAmount ?? 0))
             : s, 0);
 
+    // Receipts-mode totals: gross paid out per type, and the net cash handed to the customer
+    // (COD paid out minus service fees collected).
+    const receiptsCodTotal = receipts.filter(r => !r.isService).reduce((s, r) => s + r.totalAmount, 0);
+    const receiptsServiceTotal = receipts.filter(r => r.isService).reduce((s, r) => s + r.totalAmount, 0);
+    const receiptsNetPaid = receiptsCodTotal - receiptsServiceTotal;
+
     return (
         <div className="dashboard__section">
             <h2 className="dashboard__title">{t.statTitle}</h2>
@@ -349,59 +355,90 @@ export function CustomerFinancePage() {
                     </div>
                 ) : (
                     <>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 20 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
                             {[
-                                { label: t.finPayHistCodTotal,     value: gel(receipts.filter(r => !r.isService).reduce((s, r) => s + r.totalAmount, 0)), accent: false },
-                                { label: t.finPayHistServiceTotal, value: gel(receipts.filter(r => r.isService).reduce((s, r) => s + r.totalAmount, 0)),  accent: true  },
-                            ].map(({ label, value, accent }) => (
-                                <div key={label} style={{ background: accent ? 'var(--color-accent-dim)' : 'var(--color-bg-2)', border: `1px solid ${accent ? 'rgba(196,127,23,0.25)' : 'var(--color-border)'}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
-                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</div>
+                                { label: t.finPayHistCodTotal,     value: gel(receiptsCodTotal),     accent: false },
+                                { label: t.finPayHistServiceTotal, value: gel(receiptsServiceTotal),  accent: true  },
+                                { label: t.finPayHistNetPaid,      value: gel(receiptsNetPaid),       accent: false, highlight: true },
+                            ].map(({ label, value, accent, highlight }) => (
+                                <div key={label} style={{ background: highlight ? 'rgba(5,150,105,0.08)' : accent ? 'var(--color-accent-dim)' : 'var(--color-bg-2)', border: `1px solid ${highlight ? 'rgba(5,150,105,0.25)' : accent ? 'rgba(196,127,23,0.25)' : 'var(--color-border)'}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: highlight ? '#059669' : accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</div>
                                     <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
                                 </div>
                             ))}
                         </div>
-                        <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
-                            {receipts.map(r => {
-                                const expanded = expandedReceiptId === r.id;
-                                return (
-                                    <div key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                        <button
-                                            onClick={() => setExpandedReceiptId(expanded ? null : r.id)}
-                                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--color-bg-2)', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-                                        >
-                                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text)', minWidth: 150 }}>
-                                                {new Date(r.paidAt).toLocaleString(lang === 'ka' ? 'ka-GE' : 'en-US')}
-                                            </span>
-                                            <Badge text={r.isService ? t.finPayHistService : t.finPayHistCod} tone={r.isService ? 'unpaid' : 'paid'} />
-                                            <span style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{t.finPayHistOrderCount(r.orders.length)}</span>
-                                            <span style={{ marginLeft: 'auto', fontSize: '0.9rem', fontWeight: 800, color: 'var(--color-text)' }}>{gel(r.totalAmount)}</span>
-                                            <span style={{ fontSize: '1rem', color: 'var(--color-text-subtle)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
-                                        </button>
-                                        {expanded && (
-                                            <div style={{ overflowX: 'auto', padding: '0 14px 12px', background: 'var(--color-bg)' }}>
-                                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
-                                                    <thead>
-                                                        <tr>
-                                                            <th style={headCell}>{t.finPayHistThTracking}</th>
-                                                            <th style={headCell}>{t.finPayHistThRecipient}</th>
-                                                            <th style={{ ...headCell, textAlign: 'right' }}>{t.finPayHistThAmount}</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {r.orders.map(o => (
-                                                            <tr key={o.orderId}>
-                                                                <td style={cell}>{o.trackingNumber}</td>
-                                                                <td style={cell}>{o.recipientName}</td>
-                                                                <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>{gel(o.amount)}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                        <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ ...headCell, textAlign: 'center', width: 36 }}>#</th>
+                                        <th style={headCell}>{t.finPayHistThDate}</th>
+                                        <th style={headCell}>{t.finPayHistThType}</th>
+                                        <th style={{ ...headCell, textAlign: 'right' }}>{t.finPayHistThOrders}</th>
+                                        <th style={{ ...headCell, textAlign: 'right' }}>{t.finPayHistCodTotal}</th>
+                                        <th style={{ ...headCell, textAlign: 'right' }}>{t.finPayHistServiceTotal}</th>
+                                        <th style={{ ...headCell, width: 28 }} />
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {receipts.map((r, i) => {
+                                        const expanded = expandedReceiptId === r.id;
+                                        return (
+                                            <Fragment key={r.id}>
+                                                <tr
+                                                    onClick={() => setExpandedReceiptId(expanded ? null : r.id)}
+                                                    style={{ background: i % 2 ? 'var(--color-bg)' : 'var(--color-bg-2)', cursor: 'pointer' }}
+                                                >
+                                                    <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>{i + 1}</td>
+                                                    <td style={cell}>{new Date(r.paidAt).toLocaleString(lang === 'ka' ? 'ka-GE' : 'en-US')}</td>
+                                                    <td style={cell}><Badge text={r.isService ? t.finPayHistService : t.finPayHistCod} tone={r.isService ? 'unpaid' : 'paid'} /></td>
+                                                    <td style={{ ...cell, textAlign: 'right' }}>{r.orders.length}</td>
+                                                    <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>{!r.isService ? gel(r.totalAmount) : <span style={{ color: 'var(--color-text-subtle)', fontWeight: 400 }}>—</span>}</td>
+                                                    <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>{r.isService ? gel(r.totalAmount) : <span style={{ color: 'var(--color-text-subtle)', fontWeight: 400 }}>—</span>}</td>
+                                                    <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>
+                                                        <span style={{ display: 'inline-block', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
+                                                    </td>
+                                                </tr>
+                                                {expanded && (
+                                                    <tr>
+                                                        <td colSpan={7} style={{ padding: 0, border: '1px solid var(--color-border)' }}>
+                                                            <div style={{ overflowX: 'auto', padding: '10px 14px', background: 'var(--color-bg)' }}>
+                                                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
+                                                                    <thead>
+                                                                        <tr>
+                                                                            <th style={headCell}>{t.finPayHistThTracking}</th>
+                                                                            <th style={headCell}>{t.finPayHistThRecipient}</th>
+                                                                            <th style={{ ...headCell, textAlign: 'right' }}>{t.finPayHistThAmount}</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        {r.orders.map(o => (
+                                                                            <tr key={o.orderId}>
+                                                                                <td style={cell}>{o.trackingNumber}</td>
+                                                                                <td style={cell}>{o.recipientName}</td>
+                                                                                <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>{gel(o.amount)}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </Fragment>
+                                        );
+                                    })}
+                                </tbody>
+                                <tfoot>
+                                    <tr style={{ background: 'var(--color-bg-3)', fontWeight: 800 }}>
+                                        <td colSpan={3} style={cell}>{t.finPayHistTotal}</td>
+                                        <td style={{ ...cell, textAlign: 'right' }}>{receipts.reduce((s, r) => s + r.orders.length, 0)}</td>
+                                        <td style={{ ...cell, textAlign: 'right', color: '#059669' }}>{gel(receiptsCodTotal)}</td>
+                                        <td style={{ ...cell, textAlign: 'right', color: 'var(--color-accent)' }}>{gel(receiptsServiceTotal)}</td>
+                                        <td style={cell} />
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
                     </>
                 )
