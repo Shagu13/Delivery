@@ -1518,6 +1518,7 @@ const en = {
     finTabCouriers:      'Couriers',
     finTabHistory:       'History',
     finCourierSelect:    'Select courier',
+    finCourierSearch:    'Search courier by name…',
     // Admin Finance — Overview / Payments toggle + payment-status filter
     finViewOverview:     'Overview',
     finViewPayments:     'Payments',
@@ -3328,6 +3329,7 @@ const ka: typeof en = {
     finTabCouriers:      'კურიერები',
     finTabHistory:       'ისტორია',
     finCourierSelect:    'აირჩიეთ კურიერი',
+    finCourierSearch:    'მოძებნეთ კურიერი სახელით…',
     // Admin Finance — Overview / Payments toggle + payment-status filter
     finViewOverview:     'მიმოხილვა',
     finViewPayments:     'გადახდები',

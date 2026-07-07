@@ -30,7 +30,9 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
     const [selectedId, setSelectedId] = useState('');
     const [open, setOpen] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
+    const [courierSearch, setCourierSearch] = useState('');
     const pickerRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchCouriers(token).then(setCouriers).catch(() => setCouriers([]));
@@ -44,6 +46,12 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    // Focus the search box when the dropdown opens; clear the search on close.
+    useEffect(() => {
+        if (pickerOpen) searchInputRef.current?.focus();
+        else setCourierSearch('');
+    }, [pickerOpen]);
 
     // When a date is chosen, load which couriers delivered that day; clear the filter
     // (show all) when the date is emptied.
@@ -75,6 +83,11 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
     const selected = visibleCouriers.find(c => c.courierId === selectedId) ?? null;
     const noneForDate = !!date && !loadingIds && visibleCouriers.length === 0;
 
+    // Couriers shown in the open dropdown, narrowed by the search box.
+    const searchedCouriers = courierSearch.trim()
+        ? visibleCouriers.filter(c => c.fullName.toLowerCase().includes(courierSearch.trim().toLowerCase()))
+        : visibleCouriers;
+
     return (
         <div className="content-card" style={{ padding: 16, overflow: 'visible' }}>
             {/* Date filter */}
@@ -95,7 +108,7 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
                 {loadingIds && <span className="go-spinner" style={{ width: 14, height: 14 }} />}
             </div>
 
-            {/* Courier picker — custom dropdown so the list opens upward, above the field */}
+            {/* Courier picker — custom dropdown that opens downward, below the field */}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <div ref={pickerRef} style={{ position: 'relative', minWidth: 240 }}>
                     <button
@@ -116,17 +129,32 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
                         </svg>
                     </button>
                     {pickerOpen && visibleCouriers.length > 0 && (
-                        <div style={{ position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50, background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 -8px 28px rgba(0,0,0,0.16)', maxHeight: 260, overflowY: 'auto' }}>
-                            {visibleCouriers.map(c => (
-                                <button
-                                    key={c.courierId}
-                                    type="button"
-                                    onClick={() => { setSelectedId(c.courierId); setPickerOpen(false); }}
-                                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: selectedId === c.courierId ? 'var(--color-accent-dim)' : 'transparent', border: 'none', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', color: 'var(--color-text)', fontSize: '0.85rem' }}
-                                >
-                                    {c.fullName}{c.isDeleted ? ' (inactive)' : ''}
-                                </button>
-                            ))}
+                        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50, background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 28px rgba(0,0,0,0.16)', overflow: 'hidden' }}>
+                            <div style={{ padding: 6, borderBottom: '1px solid var(--color-border)' }}>
+                                <input
+                                    ref={searchInputRef}
+                                    type="text"
+                                    value={courierSearch}
+                                    onChange={e => setCourierSearch(e.target.value)}
+                                    placeholder={t.finCourierSearch}
+                                    autoComplete="off"
+                                    style={{ ...dateInputStyle, width: '100%' }}
+                                />
+                            </div>
+                            <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                                {searchedCouriers.length === 0 ? (
+                                    <div style={{ padding: '10px 12px', fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>{t.finCourierSelect}</div>
+                                ) : searchedCouriers.map(c => (
+                                    <button
+                                        key={c.courierId}
+                                        type="button"
+                                        onClick={() => { setSelectedId(c.courierId); setPickerOpen(false); }}
+                                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: selectedId === c.courierId ? 'var(--color-accent-dim)' : 'transparent', border: 'none', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', color: 'var(--color-text)', fontSize: '0.85rem' }}
+                                    >
+                                        {c.fullName}{c.isDeleted ? ' (inactive)' : ''}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
