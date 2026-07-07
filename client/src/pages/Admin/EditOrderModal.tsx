@@ -40,9 +40,11 @@ interface Props {
     onActioned?: () => void;
     /** When provided, selecting a delivery district auto-fills the service price by territory. */
     customerPricing?: CustomerServicePricing | null;
+    /** Company margin preview is hidden when false (operators may edit price/salary but not see margin). */
+    canSeeRevenue?: boolean;
 }
 
-export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDelivered, canMarkWarehouse, couriers = [], onActioned, customerPricing }: Props) {
+export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDelivered, canMarkWarehouse, couriers = [], onActioned, customerPricing, canSeeRevenue = true }: Props) {
     // ── Form state ────────────────────────────────────────────────────────────
     const [name,        setName]        = useState('');
     const [phone,       setPhone]       = useState('');
@@ -586,7 +588,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         <input className="eom-input eom-input--currency" type="number" min="0" step="0.01" value={salary} onChange={e => { setSalary(e.target.value); clearErr('salary'); }} placeholder="0.00" />
                                     </div>
                                 </Field>
-                                {svcPrice && salary && (
+                                {canSeeRevenue && svcPrice && salary && (
                                     <div className="eom-col-2 eom-revenue-preview">
                                         <span>{t.eomRevenuePreview}</span>
                                         <strong style={{ color: (parseFloat(svcPrice) - parseFloat(salary)) >= 0 ? '#10b981' : '#ef4444' }}>

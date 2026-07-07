@@ -40,8 +40,9 @@ public sealed class OrdersController : BaseController
         CancellationToken ct = default)
     {
         // A tenant co-admin sees only their own tenant's orders (scope from the JWT claim).
+        // Operators run the delivery flow but must not see internal company margin.
         var result = await Sender.Send(
-            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date, dateTo, CurrentTenantId), ct);
+            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date, dateTo, CurrentTenantId, HideCompanyRevenue: User.IsInRole("Operator")), ct);
         return Ok(result);
     }
 
@@ -60,9 +61,9 @@ public sealed class OrdersController : BaseController
         return Ok(result);
     }
 
-    // ── GET /api/orders/export  (Admin — Excel of all matching, or a selected subset) ──
+    // ── GET /api/orders/export  (Admin/Operator — Excel of all matching, or a selected subset) ──
     [HttpGet("export")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportExcel(
         [FromQuery] string? city      = null,
@@ -81,7 +82,8 @@ public sealed class OrdersController : BaseController
         var result = await Sender.Send(new GetAllOrdersQuery(
             city, district, search, courierId,
             OrderType: null, Unpriced: unpriced, ActiveOnly: false, Postponed: false,
-            Page: 1, PageSize: int.MaxValue, Assigned: assigned, Date: date, DateTo: dateTo), ct);
+            Page: 1, PageSize: int.MaxValue, Assigned: assigned, Date: date, DateTo: dateTo,
+            TenantId: null, HideCompanyRevenue: User.IsInRole("Operator")), ct);
 
         IEnumerable<AdminOrderListDto> rows = result.Items;
         if (!string.IsNullOrWhiteSpace(ids))
@@ -193,9 +195,9 @@ public sealed class OrdersController : BaseController
         return Ok(result);
     }
 
-    // ── PUT /api/orders/{id}  (Admin — edit all fields) ──────────────────────
+    // ── PUT /api/orders/{id}  (Admin/Operator — edit all fields) ──────────────
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -276,9 +278,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/send-to-city  (Admin) ───────────────────────────
+    // ── PUT /api/orders/{id}/send-to-city  (Admin/Operator) ──────────────────
     [HttpPut("{id:guid}/send-to-city")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SendToCity(Guid id, CancellationToken ct)
     {
@@ -286,9 +288,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/assign-courier  (Admin) ─────────────────────────
+    // ── PUT /api/orders/{id}/assign-courier  (Admin/Operator) ────────────────
     [HttpPut("{id:guid}/assign-courier")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> AssignCourier(
         Guid id,
@@ -299,9 +301,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/admin-mark-delivered  (Admin) ───────────────────
+    // ── PUT /api/orders/{id}/admin-mark-delivered  (Admin/Operator) ──────────
     [HttpPut("{id:guid}/admin-mark-delivered")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AdminMarkDelivered(
@@ -313,9 +315,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/admin-mark-at-warehouse  (Admin) ─────────────────
+    // ── PUT /api/orders/{id}/admin-mark-at-warehouse  (Admin/Operator) ────────
     [HttpPut("{id:guid}/admin-mark-at-warehouse")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AdminMarkAtWarehouse(Guid id, CancellationToken ct)
@@ -328,7 +330,7 @@ public sealed class OrdersController : BaseController
     // No body (or no reason) → plain, no-charge cancel. A (non-warehouse) reason →
     // "cancel & charge": bills the sender the service fee (the order must have reached a courier).
     [HttpPut("{id:guid}/cancel-by-admin")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CancelByAdmin(
@@ -340,9 +342,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/admin-postpone  (Admin) ─────────────────────────
+    // ── PUT /api/orders/{id}/admin-postpone  (Admin/Operator) ────────────────
     [HttpPut("{id:guid}/admin-postpone")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AdminPostpone(
@@ -352,9 +354,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/mark-send-returned-to-sender  (Admin) ───────────
+    // ── PUT /api/orders/{id}/mark-send-returned-to-sender  (Admin/Operator) ──
     [HttpPut("{id:guid}/mark-send-returned-to-sender")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> MarkSendReturnedToSender(Guid id, CancellationToken ct)
@@ -363,9 +365,9 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/orders/{id}/correct-status  (Admin) ─────────────────────────
+    // ── PUT /api/orders/{id}/correct-status  (Admin/Operator) ────────────────
     [HttpPut("{id:guid}/correct-status")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CorrectStatus(Guid id, [FromBody] CorrectStatusRequest request, CancellationToken ct)

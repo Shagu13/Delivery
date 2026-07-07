@@ -41,9 +41,9 @@ public sealed class CustomersController : BaseController
                 $"{request.FirstName} {request.LastName}"));
     }
 
-    // ── POST /api/customers  (Admin — any tenant; TenantAdmin — own tenant) ───
+    // ── POST /api/customers  (Admin/Operator — any tenant; TenantAdmin — own tenant) ───
     [HttpPost]
-    [Authorize(Roles = "Admin,TenantAdmin")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
     public async Task<IActionResult> Create(
         [FromBody] CreateCustomerRequest request, CancellationToken ct)
     {
@@ -117,9 +117,9 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
-    // ── GET /api/customers  (Admin — all; TenantAdmin — own tenant) ──────────
+    // ── GET /api/customers  (Admin/Operator — all; TenantAdmin — own tenant) ──────────
     [HttpGet]
-    [Authorize(Roles = "Admin,TenantAdmin")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
         [FromQuery] string search = "", CancellationToken ct = default)
@@ -129,9 +129,9 @@ public sealed class CustomersController : BaseController
         return Ok(result);
     }
 
-    // ── GET /api/customers/{id}  (Admin — includes company price) ────────────
+    // ── GET /api/customers/{id}  (Admin/Operator — includes company price) ────────────
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "Admin,Customer")]
+    [Authorize(Roles = "Admin,Operator,Customer")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
         var dto = await Sender.Send(new GetCustomerByIdQuery(id), ct);
@@ -145,7 +145,7 @@ public sealed class CustomersController : BaseController
     /// district's default rate for that tier.
     /// </summary>
     [HttpPut("{id:guid}/company-price")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetCompanyPrice(
@@ -162,9 +162,9 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/customers/{id}  (Admin — any; TenantAdmin — own tenant's customer) ──
+    // ── PUT /api/customers/{id}  (Admin/Operator — any; TenantAdmin — own tenant's customer) ──
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin,TenantAdmin")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AdminUpdate(
@@ -204,7 +204,7 @@ public sealed class CustomersController : BaseController
     /// password directly without requiring the current one.
     /// </summary>
     [HttpPut("{id:guid}/password")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AdminSetPassword(
@@ -219,9 +219,9 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/customers/{id}/active  (Admin soft-delete / activate) ────────
+    // ── PUT /api/customers/{id}/active  (Admin/Operator soft-delete / activate) ────────
     [HttpPut("{id:guid}/active")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetActive(

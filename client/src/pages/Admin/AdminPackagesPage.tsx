@@ -281,7 +281,7 @@ function DistrictMultiPicker({ available, selected, onChange, districtGeoMap, lo
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage, canGroup = canManage }: { canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean }) {
+export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage, canGroup = canManage, canSeeRevenue = true }: { canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean; canSeeRevenue?: boolean }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -365,6 +365,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const [resumeAction,      setResumeAction]      = useState<null | 'assign' | 'deliver'>(null);
 
   const showPricesEff = canManage && showPrices;
+  // Revenue column additionally requires canSeeRevenue (hidden from operators).
+  const showRevenueEff = showPricesEff && canSeeRevenue;
 
   // Grouping/summary stay anchored to a single day (the chosen "from" day, else today);
   // the optional range only widens which batches are listed.
@@ -990,7 +992,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
             {o.courierSalary == null ? <span className="aop-missing">{t.aopNotSet}</span> : <span className="aop-price">₾{o.courierSalary.toFixed(2)}</span>}
           </td>
         )}
-        {showPricesEff && (
+        {showRevenueEff && (
           <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
             {o.companyRevenue != null ? <span className="aop-price">₾{o.companyRevenue.toFixed(2)}</span> : <span style={{ opacity: 0.4 }}>—</span>}
           </td>
@@ -1072,7 +1074,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         <th>{t.goThCollect}</th>
         {showPricesEff && <th style={{ textAlign: 'right' }}>{t.aopThSvcPrice}</th>}
         {showPricesEff && <th style={{ textAlign: 'right' }}>{t.aopThSalary}</th>}
-        {showPricesEff && <th style={{ textAlign: 'right' }}>{t.aopThRevenue}</th>}
+        {showRevenueEff && <th style={{ textAlign: 'right' }}>{t.aopThRevenue}</th>}
         <th>{t.goThPaid}</th>
         <th>{t.goThActions}</th>
       </tr>
@@ -1504,7 +1506,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                     <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopColAddress}</th>
                     <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSvcPrice}</th>
                     <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSalary}</th>
-                    <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThRevenue}</th>
+                    {canSeeRevenue && <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThRevenue}</th>}
                   </tr></thead>
                   <tbody>
                     {missingSalaryOrders.map(o => {
@@ -1529,7 +1531,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                               <input type="number" min="0" step="0.01" placeholder="0.00" value={salaryDrafts[o.id] ?? ''} onChange={e => { setSalaryDrafts(prev => ({ ...prev, [o.id]: e.target.value })); if (e.target.value) setSalaryChecked(prev => { const n = new Set(prev); n.add(o.id); return n; }); }} style={{ width: 72, textAlign: 'right', padding: '3px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', fontSize: '0.83rem' }} />
                             </div>
                           </td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{revenue !== null ? <span style={{ color: revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{revenue.toFixed(2)}</span> : <span style={{ color: 'var(--color-text-subtle)' }}>—</span>}</td>
+                          {canSeeRevenue && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{revenue !== null ? <span style={{ color: revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{revenue.toFixed(2)}</span> : <span style={{ color: 'var(--color-text-subtle)' }}>—</span>}</td>}
                         </tr>
                       );
                     })}
@@ -1613,10 +1615,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
       {/* Edit modal (package edit) */}
       <EditOrderModal order={editing?.item ?? null} open={!!editing} onClose={() => setEditing(null)}
         onSaved={() => { setEditing(null); void load(searchRef.current); }} token={token ?? ''} couriers={couriers}
-        customerPricing={editing?.pricing ?? null} />
+        customerPricing={editing?.pricing ?? null} canSeeRevenue={canSeeRevenue} />
 
       {/* View modal */}
-      <ViewOrderModal order={viewingOrder} open={viewingOrder !== null} onClose={() => setViewingOrder(null)} showFinancials={canManage} />
+      <ViewOrderModal order={viewingOrder} open={viewingOrder !== null} onClose={() => setViewingOrder(null)} showFinancials={canManage} showRevenue={canSeeRevenue} />
 
       {/* Grouping modal */}
       {groupingCustomer && (

@@ -175,8 +175,8 @@ public sealed class GetAllOrdersQueryHandler
                 CompanyServicePrice:      o.CompanyServicePrice,
                 IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded,
                 CourierSalary:            o.CourierSalary,
-                // Company margin is dilo-internal — never shown to a tenant co-admin.
-                CompanyRevenue:           request.TenantId.HasValue ? null : o.CompanyRevenue,
+                // Company margin is dilo-internal — never shown to a tenant co-admin or an operator.
+                CompanyRevenue:           request.TenantId.HasValue || request.HideCompanyRevenue ? null : o.CompanyRevenue,
                 CourierId:                o.CourierId,
                 CourierFullName:          o.Courier == null ? null : $"{o.Courier.FirstName} {o.Courier.LastName}".Trim(),
                 CreatedAt:                o.CreatedAt,

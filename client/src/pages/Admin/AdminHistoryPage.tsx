@@ -164,7 +164,7 @@ function returnMatchesSearch(go: AdminGroupOrder, term: string): boolean {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function AdminHistoryPage({ token }: { token: string }) {
+export default function AdminHistoryPage({ token, canSeeRevenue = true }: { token: string; canSeeRevenue?: boolean }) {
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -550,7 +550,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                 <th className="num" title="Cash actually collected by courier">Collected ₾</th>
                 <th className="num" title="Company service price">Svc ₾</th>
                 <th className="num" title="Courier salary">Salary ₾</th>
-                <th className="num" title="Company revenue">Revenue ₾</th>
+                {canSeeRevenue && <th className="num" title="Company revenue">Revenue ₾</th>}
                 <th className="num" title="Created date">Created</th>
                 <th className="num" title="Completion (delivery) date">Completed</th>
                 <th></th>
@@ -606,12 +606,14 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                     </td>
                     <td className="num" style={{ fontWeight: 600 }}>{money(o.companyServicePrice)}</td>
                     <td className="num" style={{ color: '#f97316', fontWeight: 600 }}>{money(o.courierSalary)}</td>
+                    {canSeeRevenue && (
                     <td className="num" style={{
                       fontWeight: 600,
                       color: o.companyRevenue != null ? (o.companyRevenue >= 0 ? '#10b981' : '#ef4444') : undefined,
                     }}>
                       {money(o.companyRevenue)}
                     </td>
+                    )}
                     <td className="num" style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
                       {formatDate(o.createdAt)}
                     </td>
@@ -672,7 +674,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
                   <td className="num">{totals.cash > 0 ? `₾${totals.cash.toFixed(2)}` : <span style={{ opacity: 0.35 }}>—</span>}</td>
                   <td className="num">₾{totals.svc.toFixed(2)}</td>
                   <td className="num" style={{ color: '#f97316' }}>₾{totals.salary.toFixed(2)}</td>
-                  <td className="num" style={{ color: totals.revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{totals.revenue.toFixed(2)}</td>
+                  {canSeeRevenue && <td className="num" style={{ color: totals.revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{totals.revenue.toFixed(2)}</td>}
                   <td /><td /><td />
                 </tr>
               </tfoot>
@@ -683,7 +685,7 @@ export default function AdminHistoryPage({ token }: { token: string }) {
 
       {/* Full order view — reused from the Delivery page, with cash-collected +
           cancellation reason/comment shown when present. */}
-      <ViewOrderModal order={viewingOrder} open={!!viewingOrder} onClose={() => setViewingOrder(null)} />
+      <ViewOrderModal order={viewingOrder} open={!!viewingOrder} onClose={() => setViewingOrder(null)} showRevenue={canSeeRevenue} />
     </div>
   );
 }

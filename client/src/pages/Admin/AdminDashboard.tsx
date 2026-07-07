@@ -82,9 +82,11 @@ type AdminView = 'overview' | 'orders' | 'packages' | 'packagesTest' | 'couriers
 
 const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage'];
 
-// Views an Operator (partial-admin role) may open. Everything else is Admin-only.
-// The Delivery ('packages') page is read-only for Operators (see canManage below).
-const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'returnExchange'];
+// Views an Operator (partial-admin role) may open. Operators now have full admin-level
+// access to these pages (create/edit/assign/etc.); only company revenue/margin figures
+// stay hidden (stripped server-side + revenue columns hidden via canSeeRevenue below).
+// Still Admin-only: Finance, Operators management, Partner API, Weight Tiers, Tenants.
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'couriers', 'customers', 'cities', 'history', 'returnExchange'];
 
 // Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
 // accept-only and Delivery is read-only (both via canManage=false); Finance renders the
@@ -238,7 +240,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">ამანათები</span>
           </button>
-          {!isOperator && (<>
+          {/* Couriers — Admin + Operator (full management). */}
           {!isTenant && (
           <button className={`sidebar__link ${activeView === 'couriers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('couriers')} title={t.sidebarCouriers}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -249,6 +251,7 @@ export function AdminDashboard() {
             {couriers.length > 0 && <span className="sidebar__badge sidebar__badge--count">{couriers.length}</span>}
           </button>
           )}
+          {/* Customers — Admin + Operator + Tenant co-admin. */}
           <button className={`sidebar__link ${activeView === 'customers' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('customers')} title={t.sidebarCustomers}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
@@ -257,7 +260,8 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.sidebarCustomers}</span>
           </button>
-          {!isTenant && (<>
+          {/* Cities — Admin + Operator. */}
+          {!isTenant && (
           <button className={`sidebar__link ${activeView === 'cities' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('cities')} title={t.sidebarCities}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="7" width="14" height="8" rx="1" stroke="currentColor" strokeWidth="1.4" />
@@ -266,6 +270,9 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.sidebarCities}</span>
           </button>
+          )}
+          {/* Pricing / integrations / tenancy — Admin only. */}
+          {!isOperator && !isTenant && (<>
           <button
             className={`sidebar__link ${activeView === 'weightTiers' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('weightTiers')}
@@ -311,6 +318,9 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Tenant Settlements</span>
           </button>
+          </>)}
+          {/* History — Admin + Operator. */}
+          {!isTenant && (
           <button
             className={`sidebar__link ${activeView === 'history' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('history')}
@@ -322,7 +332,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.sidebarHistory}</span>
           </button>
-          </>)}
+          )}
           {/* Return & Exchange — available to Admins and Operators (not tenants). */}
           {!isTenant && (
           <button
@@ -343,6 +353,8 @@ export function AdminDashboard() {
             )}
           </button>
           )}
+          {/* Finance — Admin + Tenant co-admin; company P&L stays hidden from operators. */}
+          {!isOperator && (
           <button
             className={`sidebar__link ${activeView === 'finance' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('finance')}
@@ -354,7 +366,9 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.navFinance}</span>
           </button>
-          {!isTenant && (
+          )}
+          {/* Operators management — Admin only. */}
+          {!isOperator && !isTenant && (
           <button
             className={`sidebar__link ${activeView === 'operators' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('operators')}
@@ -368,7 +382,6 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">{t.sidebarOperators}</span>
           </button>
           )}
-          </>)}
         </nav>
         <div className="sidebar__footer">
           <LanguageToggle className="sidebar__lang-toggle" />
@@ -419,14 +432,14 @@ export function AdminDashboard() {
         </div>
         <main className="dashboard__content">
           {activeView === 'overview'  && <AdminOverview token={token ?? ''} isOperator={isOperator} />}
-          {/* Pick-Up: tenant co-admin is accept-only and can't assign couriers (like an Operator). */}
-          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isOperator && !isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} />}
+          {/* Pick-Up: tenant co-admin is accept-only and can't assign couriers. Operators now manage fully. */}
+          {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} />}
           {activeView === 'operators' && !isOperator && !isTenant && <AdminOperatorsPage token={token ?? ''} />}
-          {/* Delivery: read-only for both Operators and tenant co-admins. */}
-          {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isOperator && !isTenant} />}
+          {/* Delivery: read-only for tenant co-admins; operators manage fully but never see company revenue. */}
+          {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isTenant} canSeeRevenue={!isOperator} />}
           {/* TEST: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
-          {activeView === 'packagesTest' && <AdminPackagesPage canManage={!isOperator && !isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} />}
-          {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
+          {activeView === 'packagesTest' && <AdminPackagesPage canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} />}
+          {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} canSeeRevenue={!isOperator} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
                   {activeView === 'cities' && <AdminCitiesPage token={token ?? ''} />}
@@ -436,7 +449,7 @@ export function AdminDashboard() {
           {activeView === 'partners' && token && <AdminPartnersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && !isOperator && token && <AdminTenantSettlementsPage token={token} />}
-          {activeView === 'history' && <AdminHistoryPage token={token ?? ''} />}
+          {activeView === 'history' && <AdminHistoryPage token={token ?? ''} canSeeRevenue={!isOperator} />}
           {/* Finance: tenant co-admin sees the scoped tenant finance, never the company-wide P&L. */}
           {activeView === 'finance' && (isTenant ? <TenantFinanceView /> : <AdminFinancePage token={token ?? ''} />)}
           {/* Homepage: tenant co-admin edits their own white-label storefront. */}
@@ -1015,7 +1028,7 @@ function DistrictMultiPicker({
   );
 }
 
-function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = canManage, canGroup = canManage }: { initialStatus?: string; canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean }) {
+function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = canManage, canGroup = canManage, canSeeRevenue = true }: { initialStatus?: string; canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean; canSeeRevenue?: boolean }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -1980,6 +1993,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
         token={token ?? ''}
         couriers={couriers}
         customerPricing={editing?.pricing ?? null}
+        canSeeRevenue={canSeeRevenue}
       />
 
       {/* Group a customer's unattached orders for the day */}
@@ -2468,12 +2482,14 @@ function AdminCouriers({
   onAdd,
   onEdit,
   onActiveChanged,
+  canSeeRevenue = true,
 }: {
   couriers: Courier[];
   token: string;
   onAdd: () => void;
   onEdit: (courier: Courier) => void;
   onActiveChanged: (courierId: string, isActive: boolean) => void;
+  canSeeRevenue?: boolean;
 }) {
   const { t } = useLanguage();
   // Free-text courier search (name / username / phone / assigned area) for this view.
@@ -2674,6 +2690,7 @@ function AdminCouriers({
                 key={r.courier.courierId}
                 courier={r.courier}
                 orders={r.items as CourierDayDelivery[]}
+                canSeeRevenue={canSeeRevenue}
               />
             ))}
           </div>
@@ -2937,7 +2954,7 @@ function CourierPickupRow({ courier, pickups }: { courier: Courier; pickups: Cou
   );
 }
 
-function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrder[]; }) {
+function CourierRow({ courier, orders, canSeeRevenue = true }: { courier: Courier; orders: CourierOrder[]; canSeeRevenue?: boolean; }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useLanguage();
 
@@ -3015,7 +3032,7 @@ function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrde
                   <th>{t.aopThStatus}</th>
                   <th>{t.crwThSvcPrice}</th>
                   <th>{t.crwThCourierSalary}</th>
-                  <th>{t.aopThRevenue}</th>
+                  {canSeeRevenue && <th>{t.aopThRevenue}</th>}
                   <th>{t.crwThDelivered}</th>
                 </tr>
               </thead>
@@ -3039,11 +3056,13 @@ function CourierRow({ courier, orders }: { courier: Courier; orders: CourierOrde
                           ? <span style={{ color: '#f97316', fontWeight: 600 }}>₾{o.courierSalary.toFixed(2)}</span>
                           : <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>}
                       </td>
+                      {canSeeRevenue && (
                       <td>
                         {o.companyRevenue != null
                           ? <span style={{ color: o.companyRevenue >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>₾{o.companyRevenue.toFixed(2)}</span>
                           : <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>}
                       </td>
+                      )}
                       <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
                         {deliveredIso ? new Date(deliveredIso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
                       </td>

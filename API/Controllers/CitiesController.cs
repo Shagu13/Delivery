@@ -78,7 +78,7 @@ public sealed class CitiesController : ControllerBase
     // ── GET /api/cities/deleted  (Admin) ──────────────────────────────────────
     /// <summary>Returns soft-deleted cities so an admin can reactivate them.</summary>
     [HttpGet("deleted")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(IReadOnlyList<CityResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDeletedCities(CancellationToken ct)
     {
@@ -94,7 +94,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── POST /api/cities/{cityId}/restore  (Admin) ────────────────────────────
     [HttpPost("{cityId:guid}/restore")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -111,7 +111,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── POST /api/cities  (Admin) ─────────────────────────────────────────────
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(CityResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateCity(
@@ -129,7 +129,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── PUT /api/cities/{cityId}  (Admin) ─────────────────────────────────────
     [HttpPut("{cityId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -149,7 +149,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── DELETE /api/cities/{cityId}  (Admin) ──────────────────────────────────
     [HttpDelete("{cityId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteCity(Guid cityId, CancellationToken ct)
@@ -187,7 +187,7 @@ public sealed class CitiesController : ControllerBase
     // ── GET /api/cities/{cityId}/districts/deleted  (Admin) ───────────────────
     /// <summary>Returns soft-deleted districts of a city so an admin can reactivate them.</summary>
     [HttpGet("{cityId:guid}/districts/deleted")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(IReadOnlyList<DistrictResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDeletedDistricts(Guid cityId, CancellationToken ct)
     {
@@ -203,7 +203,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── POST /api/cities/districts/{districtId}/restore  (Admin) ──────────────
     [HttpPost("districts/{districtId:guid}/restore")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -220,7 +220,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── POST /api/cities/{cityId}/districts  (Admin) ──────────────────────────
     [HttpPost("{cityId:guid}/districts")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(DistrictResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -241,7 +241,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── PUT /api/cities/districts/{districtId}  (Admin) ───────────────────────
     [HttpPut("districts/{districtId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -261,7 +261,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── DELETE /api/cities/districts/{districtId}  (Admin) ────────────────────
     [HttpDelete("districts/{districtId:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteDistrict(Guid districtId, CancellationToken ct)
@@ -276,7 +276,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── PUT /api/cities/districts/{districtId}/service-price  (Admin) ─────────
     [HttpPut("districts/{districtId:guid}/service-price")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetDistrictServicePrice(
@@ -290,7 +290,7 @@ public sealed class CitiesController : ControllerBase
 
     // ── PUT /api/cities/districts/{districtId}/territory  (Admin) ─────────────
     [HttpPut("districts/{districtId:guid}/territory")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]

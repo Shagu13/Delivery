@@ -24,7 +24,7 @@ public sealed class CouriersController : BaseController
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(CreateCourierResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -85,14 +85,14 @@ public sealed class CouriersController : BaseController
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     public IActionResult GetById(Guid id) => Ok(new { id });
 
     // ── GET /api/couriers/{id}/orders  (Admin) ────────────────────────────────
     /// <summary>Returns all orders ever assigned to this courier, regardless of status.</summary>
     // ── PUT /api/couriers/{id} (Admin) ─────────────────────────────────────────
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -105,7 +105,7 @@ public sealed class CouriersController : BaseController
 
     // ── PATCH /api/couriers/{id}/active (Admin) ───────────────────────────────
     [HttpPatch("{id:guid}/active")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetActive(Guid id, [FromBody] SetCourierActiveStatusRequest request, CancellationToken ct)
@@ -115,7 +115,7 @@ public sealed class CouriersController : BaseController
     }
 
     [HttpGet("{id:guid}/orders")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCourierOrders(Guid id, CancellationToken ct)
@@ -123,6 +123,7 @@ public sealed class CouriersController : BaseController
         var exists = await _context.Couriers.AnyAsync(c => c.Id == id, ct);
         if (!exists) return NotFound();
 
+        bool hideRevenue = User.IsInRole("Operator");
         var orders = await _context.Orders
             .AsNoTracking()
             .Where(o => o.CourierId == id)
@@ -139,7 +140,8 @@ public sealed class CouriersController : BaseController
                 status                  = o.Status.ToString(),
                 companyServicePrice     = o.CompanyServicePrice,
                 courierSalary           = o.CourierSalary,
-                companyRevenue          = o.CompanyRevenue,
+                // Company margin is internal — hidden from operators.
+                companyRevenue          = hideRevenue ? (decimal?)null : o.CompanyRevenue,
                 orderType               = o.OrderType.ToString(),
                 deliveredAt             = o.DeliveredAt,
                 deliveredToWarehouseAt  = o.DeliveredToWarehouseAt,
@@ -159,7 +161,7 @@ public sealed class CouriersController : BaseController
     /// Dated by AssignedToCourierAt (the moment Order.CourierId was set).
     /// </summary>
     [HttpGet("assigned")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAssignedForRange(
         [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)
@@ -167,6 +169,7 @@ public sealed class CouriersController : BaseController
         var fromUtc = from.ToUniversalTime();
         var toUtc   = to.ToUniversalTime();
 
+        bool hideRevenue = User.IsInRole("Operator");
         var orders = await _context.Orders
             .AsNoTracking()
             .Where(o => o.CourierId != null
@@ -191,7 +194,8 @@ public sealed class CouriersController : BaseController
                 companyServicePrice     = o.CompanyServicePrice,
                 amountToCollectForPackage = o.AmountToCollectForPackage,
                 courierSalary           = o.CourierSalary,
-                companyRevenue          = o.CompanyRevenue,
+                // Company margin is internal — hidden from operators.
+                companyRevenue          = hideRevenue ? (decimal?)null : o.CompanyRevenue,
                 orderType               = o.OrderType.ToString(),
                 assignedToCourierAt     = o.AssignedToCourierAt,
                 deliveredAt             = o.DeliveredAt,
@@ -212,7 +216,7 @@ public sealed class CouriersController : BaseController
     /// GetAssignedForRange, but for the pickup (warehouse-collection) leg.
     /// </summary>
     [HttpGet("assigned-pickups")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAssignedPickupsForRange(
         [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)

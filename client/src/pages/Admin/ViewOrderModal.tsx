@@ -10,9 +10,12 @@ interface Props {
     order: AdminOrderItem | null;
     open: boolean;
     onClose: () => void;
-    // Internal money figures (service price, courier salary, company revenue) are
-    // hidden when false — read-only Operators must not see company margin.
+    // Money figures (service price, courier salary) are hidden when false — used for
+    // the read-only tenant view.
     showFinancials?: boolean;
+    // Company revenue/margin is hidden independently when false (operators): they may
+    // see price/salary but never the company margin.
+    showRevenue?: boolean;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -34,7 +37,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     );
 }
 
-export function ViewOrderModal({ order, open, onClose, showFinancials = true }: Props) {
+export function ViewOrderModal({ order, open, onClose, showFinancials = true, showRevenue = true }: Props) {
     const { lang, t } = useLanguage();
 
     useEffect(() => {
@@ -146,7 +149,7 @@ export function ViewOrderModal({ order, open, onClose, showFinancials = true }: 
                         )}
                         {showFinancials && <Row label={t.vomLblServicePrice}  value={order.companyServicePrice > 0 ? `₾${order.companyServicePrice.toFixed(2)}` : '—'} />}
                         {showFinancials && <Row label={t.vomLblSalary}        value={order.courierSalary != null ? `₾${order.courierSalary.toFixed(2)}` : '—'} />}
-                        {showFinancials && <Row label={t.vomLblRevenue}       value={revenue} />}
+                        {showFinancials && showRevenue && <Row label={t.vomLblRevenue}       value={revenue} />}
                     </Section>
 
                     {(order.cancellationReason || order.cancellationComment) && (

@@ -328,13 +328,13 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
 
 const PAGE_SIZE = 50;
 
-export default function AdminOrdersPage({ token: tokenProp, canManage = true }: { token: string; canManage?: boolean }) {
+export default function AdminOrdersPage({ token: tokenProp, canManage = true, canSeeRevenue = true }: { token: string; canManage?: boolean; canSeeRevenue?: boolean }) {
   const { token: authToken } = useAuth();
   const { t, lang } = useLanguage();
   const token = tokenProp || authToken || '';
-  // Operators get a read-only Delivery page: they can browse/search/filter and view
-  // orders, but every mutation (select → bulk assign/price/deliver, edit, export) and
-  // the internal financial columns (price/salary/revenue) are hidden. See showPricesEff.
+  // Tenant co-admins get a read-only Delivery page (canManage=false). Operators manage
+  // fully (canManage=true) but never see company revenue/margin: canSeeRevenue=false hides
+  // the Revenue column here and in the view/bulk modals (server also strips the value).
 
   const [data,            setData]            = useState<PagedResult | null>(null);
   const [loading,         setLoading]         = useState(true);
@@ -363,8 +363,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
   const [showTracking,  setShowTracking]  = useState(false);
   const [showPrices,    setShowPrices]    = useState(true);
   const [exporting,     setExporting]     = useState(false);
-  // Operators never see internal financials, regardless of the Show Prices toggle.
+  // Price/salary columns follow canManage + the Show Prices toggle. The Revenue column
+  // additionally requires canSeeRevenue (hidden from operators).
   const showPricesEff = canManage && showPrices;
+  const showRevenueEff = showPricesEff && canSeeRevenue;
 
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkPrice,     setBulkPrice]     = useState('');
@@ -1312,7 +1314,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                       <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopColAddress}</th>
                       <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSvcPrice}</th>
                       <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSalary}</th>
-                      <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThRevenue}</th>
+                      {canSeeRevenue && <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThRevenue}</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -1343,9 +1345,11 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                                 style={{ width: 72, textAlign: 'right', padding: '3px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', fontSize: '0.83rem' }} />
                             </div>
                           </td>
+                          {canSeeRevenue && (
                           <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>
                             {revenue !== null ? <span style={{ color: revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{revenue.toFixed(2)}</span> : <span style={{ color: 'var(--color-text-subtle)' }}>—</span>}
                           </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -1488,7 +1492,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                 <th className="aop-th aop-th--num">{t.aopThCod}</th>
                 {showPricesEff && <th className="aop-th aop-th--num">{t.aopThSvcPrice}</th>}
                 {showPricesEff && <th className="aop-th aop-th--num">{t.aopThSalary}</th>}
-                {showPricesEff && <th className="aop-th aop-th--num">{t.aopThRevenue}</th>}
+                {showRevenueEff && <th className="aop-th aop-th--num">{t.aopThRevenue}</th>}
                 <th className="aop-th">{t.aopThPaid}</th>
                 <th className="aop-th">{t.aopThActions}</th>
               </tr>
@@ -1594,7 +1598,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
                         }
                       </td>
                     )}
-                    {showPricesEff && (
+                    {showRevenueEff && (
                       <td className="aop-td aop-td--num">
                         {order.companyRevenue != null
                           ? <span className="aop-price">₾{order.companyRevenue.toFixed(2)}</span>
@@ -1650,6 +1654,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         open={viewingOrder !== null}
         onClose={() => setViewingOrder(null)}
         showFinancials={canManage}
+        showRevenue={canSeeRevenue}
       />
 
       {/* Edit order modal */}
@@ -1665,6 +1670,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true }: 
         canMarkDelivered={editingOrder != null && !['DeliveredToRecipient','ExchangeCompleted','DeliveredReturnOrderToWarehouse','ReturnedToSender','CancelledByAdmin','CancelledBySender','OrderNotAccepted','AllDelivered'].includes(editingOrder.status) && editingOrder.orderType !== 'Return'}
         canMarkWarehouse={editingOrder != null && !['DeliveredToRecipient','ExchangeCompleted','DeliveredReturnOrderToWarehouse','ReturnedToSender','CancelledByAdmin','CancelledBySender','OrderNotAccepted','AllDelivered'].includes(editingOrder.status) && editingOrder.orderType === 'Return'}
         couriers={couriers}
+        canSeeRevenue={canSeeRevenue}
         onActioned={async () => {
           await load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page });
         }}

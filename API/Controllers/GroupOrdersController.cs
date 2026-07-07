@@ -377,7 +377,7 @@ public sealed class GroupOrdersController : BaseController
     }
 
     [HttpPut("{id:guid}/decline")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Decline(Guid id, CancellationToken ct)
     {
@@ -398,7 +398,7 @@ public sealed class GroupOrdersController : BaseController
     }
 
     [HttpPut("{id:guid}/accept-in-warehouse")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> AcceptInWarehouse(
         Guid id,
@@ -423,9 +423,9 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/cancel-by-admin  (Admin — always available) ─
+    // ── PUT /api/grouporders/{id}/cancel-by-admin  (Admin/Operator — always available) ─
     [HttpPut("{id:guid}/cancel-by-admin")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CancelByAdmin(Guid id, CancellationToken ct)
@@ -434,9 +434,9 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}/pickup-date  (Admin sets scheduled pickup date) ─
+    // ── PUT /api/grouporders/{id}/pickup-date  (Admin/Operator sets scheduled pickup date) ─
     [HttpPut("{id:guid}/pickup-date")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetPickupDate(
         Guid id,
@@ -447,9 +447,9 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // ── PUT /api/grouporders/{id}  (Admin — edit sender + pickup info) ──────────
+    // ── PUT /api/grouporders/{id}  (Admin/Operator — edit sender + pickup info) ──
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
