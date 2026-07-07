@@ -485,7 +485,7 @@ function PaymentReceiptsSection({ token }: { token: string }) {
                                         <Fragment key={r.id}>
                                             <tr onClick={() => setExpandedId(expanded ? null : r.id)} style={{ cursor: 'pointer' }}>
                                                 <TD align="center" color="var(--color-text-subtle)">{i + 1}</TD>
-                                                <TD bold>{new Date(r.paidAt).toLocaleString()}</TD>
+                                                <TD bold>{new Date(r.paidAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', year: 'numeric', month: 'numeric', day: 'numeric' })}</TD>
                                                 <TD>
                                                     <span style={{
                                                         fontSize: '0.66rem', fontWeight: 700, letterSpacing: '0.04em', padding: '2px 8px', borderRadius: 100,

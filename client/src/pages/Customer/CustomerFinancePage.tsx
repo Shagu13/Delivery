@@ -390,7 +390,7 @@ export function CustomerFinancePage() {
                                                     style={{ background: i % 2 ? 'var(--color-bg)' : 'var(--color-bg-2)', cursor: 'pointer' }}
                                                 >
                                                     <td style={{ ...cell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>{i + 1}</td>
-                                                    <td style={cell}>{new Date(r.paidAt).toLocaleString(lang === 'ka' ? 'ka-GE' : 'en-US')}</td>
+                                                    <td style={cell}>{new Date(r.paidAt).toLocaleString(lang === 'ka' ? 'ka-GE' : 'en-US', { hour: '2-digit', minute: '2-digit', year: 'numeric', month: 'numeric', day: 'numeric' })}</td>
                                                     <td style={cell}><Badge text={r.isService ? t.finPayHistService : t.finPayHistCod} tone={r.isService ? 'unpaid' : 'paid'} /></td>
                                                     <td style={{ ...cell, textAlign: 'right' }}>{r.orders.length}</td>
                                                     <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>{!r.isService ? gel(r.totalAmount) : <span style={{ color: 'var(--color-text-subtle)', fontWeight: 400 }}>—</span>}</td>
