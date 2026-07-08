@@ -79,7 +79,7 @@ internal static class PaymentReceiptQueries
     public static IQueryable<PaymentReceipt> Base(IAppDbContext context) =>
         context.PaymentReceipts
             .AsNoTracking()
-            .Include(p => p.Allocations).ThenInclude(a => a.Order);
+            .Include(p => p.Allocations).ThenInclude(a => a.Order!).ThenInclude(o => o.Courier);
 
     /// <summary>
     /// Narrows by paid date (PaidAt). A from/to range (inclusive, either bound optional)
@@ -110,10 +110,16 @@ internal static class PaymentReceiptQueries
         TotalAmount: p.TotalAmount,
         PaidAt:      p.PaidAt.ToString("o"),
         Orders:      p.Allocations.Select(a => new PaymentReceiptOrderDto(
-            OrderId:        a.OrderId,
-            TrackingNumber: a.Order?.TrackingNumber ?? string.Empty,
-            RecipientName:  a.Order?.RecipientName ?? string.Empty,
-            Amount:         a.Amount
+            OrderId:          a.OrderId,
+            TrackingNumber:   a.Order?.TrackingNumber ?? string.Empty,
+            RecipientName:    a.Order?.RecipientName ?? string.Empty,
+            RecipientAddress: a.Order is null
+                ? string.Empty
+                : string.Join(", ", new[] { a.Order.RecipientAddress, a.Order.RecipientDistrict, a.Order.RecipientCity }
+                    .Where(s => !string.IsNullOrWhiteSpace(s))),
+            DeliveredAt:      (a.Order?.DeliveredAt ?? a.Order?.DeliveredToWarehouseAt)?.ToString("o"),
+            CourierName:      a.Order?.Courier is null ? null : $"{a.Order.Courier.FirstName} {a.Order.Courier.LastName}",
+            Amount:           a.Amount
         )).ToList()
     );
 }

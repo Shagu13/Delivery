@@ -403,11 +403,13 @@ export function CustomerFinancePage() {
                                                     <tr>
                                                         <td colSpan={7} style={{ padding: 0, border: '1px solid var(--color-border)' }}>
                                                             <div style={{ overflowX: 'auto', padding: '10px 14px', background: 'var(--color-bg)' }}>
-                                                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
+                                                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
                                                                     <thead>
                                                                         <tr>
                                                                             <th style={headCell}>{t.finPayHistThTracking}</th>
                                                                             <th style={headCell}>{t.finPayHistThRecipient}</th>
+                                                                            <th style={headCell}>{t.finPayHistThAddress}</th>
+                                                                            <th style={headCell}>{t.finPayHistThDelivered}</th>
                                                                             <th style={{ ...headCell, textAlign: 'right' }}>{t.finPayHistThAmount}</th>
                                                                         </tr>
                                                                     </thead>
@@ -416,6 +418,8 @@ export function CustomerFinancePage() {
                                                                             <tr key={o.orderId}>
                                                                                 <td style={cell}>{o.trackingNumber}</td>
                                                                                 <td style={cell}>{o.recipientName}</td>
+                                                                                <td style={cell}>{o.recipientAddress}</td>
+                                                                                <td style={cell}>{o.deliveredAt ? new Date(o.deliveredAt).toLocaleString(lang === 'ka' ? 'ka-GE' : 'en-US', { hour: '2-digit', minute: '2-digit', year: 'numeric', month: 'numeric', day: 'numeric' }) : '—'}</td>
                                                                                 <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>{gel(o.amount)}</td>
                                                                             </tr>
                                                                         ))}

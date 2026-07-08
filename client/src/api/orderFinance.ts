@@ -215,6 +215,11 @@ export interface PaymentReceiptOrder {
     orderId: string;
     trackingNumber: string;
     recipientName: string;
+    recipientAddress: string;
+    /** Delivery date (ISO-8601), or null if not yet delivered. */
+    deliveredAt: string | null;
+    /** Courier who delivered the order, or null if not yet assigned/delivered. */
+    courierName: string | null;
     amount: number;
 }
 

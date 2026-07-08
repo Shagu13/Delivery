@@ -1591,6 +1591,9 @@ const en = {
     finPayHistThOrders:      'Orders',
     finPayHistThTracking:    'Tracking',
     finPayHistThRecipient:   'Recipient',
+    finPayHistThAddress:     'Address',
+    finPayHistThDelivered:   'Delivered',
+    finPayHistThCourier:     'Courier',
     finPayHistThAmount:      'Amount',
     finPayHistTotal:         'Total',
 
@@ -3420,6 +3423,9 @@ const ka: typeof en = {
     finPayHistThOrders:      'შეკვეთები',
     finPayHistThTracking:    'თრექინგი',
     finPayHistThRecipient:   'მიმღები',
+    finPayHistThAddress:     'მისამართი',
+    finPayHistThDelivered:   'ჩაბარების თარიღი',
+    finPayHistThCourier:     'კურიერი',
     finPayHistThAmount:      'თანხა',
     finPayHistTotal:         'ჯამი',
 

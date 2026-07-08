@@ -14,5 +14,8 @@ public sealed record PaymentReceiptOrderDto(
     Guid    OrderId,
     string  TrackingNumber,
     string  RecipientName,
+    string  RecipientAddress,
+    string? DeliveredAt,
+    string? CourierName,
     decimal Amount
 );

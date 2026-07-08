@@ -373,10 +373,15 @@ const dateInputStyle: React.CSSProperties = {
     padding: '5px 8px', outline: 'none',
 };
 
-const isoToday = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const dateNavBtn: React.CSSProperties = {
+    background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.95rem',
+    width: 28, height: 28, cursor: 'pointer', lineHeight: 1,
 };
+
+const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const isoToday = () => isoDate(new Date());
 
 function PaymentReceiptsSection({ token }: { token: string }) {
     const { t } = useLanguage();
@@ -404,6 +409,20 @@ function PaymentReceiptsSection({ token }: { token: string }) {
 
     useEffect(() => { load(); }, [load]);
 
+    const shiftDay = (delta: number) => setDate(prev => {
+        const base = prev ? new Date(prev + 'T00:00:00') : new Date();
+        base.setDate(base.getDate() + delta);
+        return isoDate(base);
+    });
+    const shiftMonth = (delta: number) => setDate(prev => {
+        const base = prev ? new Date(prev + 'T00:00:00') : new Date();
+        base.setDate(1);
+        base.setMonth(base.getMonth() + delta);
+        return isoDate(base);
+    });
+    // Disable "next" once we're at (or past) the current day / month.
+    const atToday = mode === 'month' ? date.slice(0, 7) >= isoToday().slice(0, 7) : date >= isoToday();
+
     const totalCod = receipts.filter(r => !r.isService).reduce((s, r) => s + r.totalAmount, 0);
     const totalService = receipts.filter(r => r.isService).reduce((s, r) => s + r.totalAmount, 0);
     const totalNetPaid = totalCod - totalService;
@@ -420,11 +439,21 @@ function PaymentReceiptsSection({ token }: { token: string }) {
                         <button className={`go-seg__btn ${mode === 'range' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('range')}>{t.ofinViewRange}</button>
                     </div>
                     {mode === 'day' && (
-                        <input type="date" value={date} max={isoToday()} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
+                        <>
+                            <button onClick={() => shiftDay(-1)} title={t.statPrevDay} style={dateNavBtn}>‹</button>
+                            <input type="date" value={date} max={isoToday()} onChange={e => setDate(e.target.value)} style={dateInputStyle} />
+                            <button onClick={() => !atToday && shiftDay(1)} disabled={atToday} title={t.statNextDay}
+                                style={{ ...dateNavBtn, opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
+                        </>
                     )}
                     {mode === 'month' && (
-                        <input type="month" value={date.slice(0, 7)} max={isoToday().slice(0, 7)}
-                            onChange={e => setDate(e.target.value ? e.target.value + '-01' : '')} style={dateInputStyle} />
+                        <>
+                            <button onClick={() => shiftMonth(-1)} title={t.ofinPrevMonth} style={dateNavBtn}>‹</button>
+                            <input type="month" value={date.slice(0, 7)} max={isoToday().slice(0, 7)}
+                                onChange={e => setDate(e.target.value ? e.target.value + '-01' : '')} style={dateInputStyle} />
+                            <button onClick={() => !atToday && shiftMonth(1)} disabled={atToday} title={t.ofinNextMonth}
+                                style={{ ...dateNavBtn, opacity: atToday ? 0.4 : 1, cursor: atToday ? 'not-allowed' : 'pointer' }}>›</button>
+                        </>
                     )}
                     {mode === 'range' && (
                         <>
@@ -507,11 +536,14 @@ function PaymentReceiptsSection({ token }: { token: string }) {
                                                 <tr>
                                                     <td colSpan={7} style={{ padding: 0, borderBottom: '1px solid var(--color-border)' }}>
                                                         <div style={{ overflowX: 'auto', padding: '0 14px 12px' }}>
-                                                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
+                                                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
                                                                 <thead>
                                                                     <tr>
                                                                         <TH>{t.finPayHistThTracking}</TH>
                                                                         <TH>{t.finPayHistThRecipient}</TH>
+                                                                        <TH>{t.finPayHistThAddress}</TH>
+                                                                        <TH>{t.finPayHistThDelivered}</TH>
+                                                                        <TH>{t.finPayHistThCourier}</TH>
                                                                         <TH align="right">{t.finPayHistThAmount}</TH>
                                                                     </tr>
                                                                 </thead>
@@ -520,6 +552,9 @@ function PaymentReceiptsSection({ token }: { token: string }) {
                                                                         <tr key={o.orderId}>
                                                                             <TD>{o.trackingNumber}</TD>
                                                                             <TD>{o.recipientName}</TD>
+                                                                            <TD>{o.recipientAddress}</TD>
+                                                                            <TD>{o.deliveredAt ? new Date(o.deliveredAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', year: 'numeric', month: 'numeric', day: 'numeric' }) : '—'}</TD>
+                                                                            <TD>{o.courierName ?? '—'}</TD>
                                                                             <TD align="right" bold>{gel(o.amount)}</TD>
                                                                         </tr>
                                                                     ))}
