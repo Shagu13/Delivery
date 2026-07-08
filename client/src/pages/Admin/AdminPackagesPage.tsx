@@ -19,12 +19,12 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { georgianToday, georgianDateKeyOf, toDateKey } from '../../utils/georgianTime';
+import { resolveDateWindow } from '../../utils/dateWindow';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
-import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import {
-  fetchGroupOrders, fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup,
+  fetchGroupOrders, fetchGroupOrderLocations, fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup,
   mergeGroupOrders, moveOrderToGroup, groupAndAcceptStandalone, groupAndWarehouseStandalone,
 } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/adminGroupOrders';
@@ -32,7 +32,7 @@ import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
 import {
   setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders,
-  adminMarkOrderDelivered, exportOrdersExcel,
+  adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations,
 } from '../../api/orders';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
@@ -57,13 +57,10 @@ const pickupBucket = (groupStatus: string) => PICKUP_BUCKET[groupStatus] ?? 2;
 
 const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp']);
 
+const PAGE_SIZE = 30;
+
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
-
-const ORDER_LEVEL_STATUSES = new Set([
-  'OrderIsOnItsWayToRecipientsCity', 'CourierAssignedToDeliver',
-  'CourierDeliveringTheOrderToRecipient', 'DeliveredToRecipient', 'CancelledByAdmin',
-]);
 
 const STATUS_PILLS = [
   { value: '',                                label: 'pillAll' },
@@ -307,10 +304,18 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   // ── Pickup state (mirrors AdminOrders) ──────────────────────────────────────
   const [groupOrders, setGroupOrders] = useState<AdminGroupOrder[]>([]);
+  // Wide (non-30-paginated) same-window fetch feeding the merge/group cross-batch summaries
+  // — see loadWindowScoped below.
+  const [windowScopedOrders, setWindowScopedOrders] = useState<AdminGroupOrder[]>([]);
   const [couriers,    setCouriers]    = useState<Courier[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
   const [search,      setSearch]      = useState('');
+  // Server-side pagination — untouched/no-filter default is a rolling last-7-days window;
+  // any filter (or an explicit day/range pick) reaches the whole DB instead.
+  const [page,          setPage]          = useState(1);
+  const [totalPages,    setTotalPages]    = useState(1);
+  const [dateTouched,   setDateTouched]   = useState(false);
   const [filterParty,     setFilterParty]     = useState<'sender' | 'recipient'>('sender');
   const [filterCities,    setFilterCities]    = useState<string[]>([]);
   const [filterDistricts, setFilterDistricts] = useState<string[]>([]);
@@ -414,12 +419,36 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   };
 
   // ── Data loading ────────────────────────────────────────────────────────────
-  const load = useCallback(async (term: string) => {
+  // Any filter other than a typed search also releases the rolling-7-day default (mirrors
+  // AdminOrdersPage.tsx's search-only trigger, widened here per product ask): once the admin
+  // narrows by city/district/status/courier/unpriced/customer, the match must reach the whole
+  // DB, not just whatever the default 7-day window happens to contain.
+  const otherFiltersActive = filterCities.length > 0 || filterDistricts.length > 0
+    || !!filterStatus || !!filterCourier || filterUnpriced || !!customerFilter;
+
+  const load = useCallback(async (params: {
+    search?: string; cities?: string[]; districts?: string[]; party?: 'sender' | 'recipient';
+    status?: string; courierId?: string; unpriced?: boolean; date?: string; dateTo?: string; page?: number;
+  }) => {
     const seq = ++loadSeqRef.current;
     try {
-      const { items } = await fetchGroupOrders(token ?? '', { search: term || undefined, pageSize: 1000 });
+      const result = await fetchGroupOrders(token ?? '', {
+        search:           params.search || undefined,
+        cities:           params.cities,
+        districts:        params.districts,
+        party:            params.party,
+        status:           params.status || undefined,
+        courierId:        params.courierId || undefined,
+        unpriced:         params.unpriced || undefined,
+        date:             params.date,
+        dateTo:           params.dateTo,
+        excludeCompleted: true,
+        page:             params.page ?? 1,
+        pageSize:         PAGE_SIZE,
+      });
       if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
-      setGroupOrders(items);
+      setGroupOrders(result.items);
+      setTotalPages(result.totalPages);
       setError(null);
     } catch (e: unknown) {
       if (seq !== loadSeqRef.current) return;
@@ -427,7 +456,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [token]);
+  }, [token, t]);
 
   const loadSummary = useCallback(async () => {
     try { setDaySummary(await fetchPickupDay(token ?? '', effectiveDayKey)); }
@@ -435,26 +464,89 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   }, [token, effectiveDayKey]);
 
   useEffect(() => { void loadSummary(); }, [loadSummary]);
-  useEffect(() => { void (async () => { setLoading(true); await load(''); })(); }, [load]);
 
+  // Mirrors the main list's filters/date window, but with a generous pageSize instead of
+  // paginating — a batch count within one browsing window is realistically small. Feeds
+  // mergeableByCustomer/batchesFor/multiBatchCustomers/ungroupedCustomers, which need every
+  // batch for a day (not just whatever fits on the current 30-item page) to detect same-day
+  // merge candidates and unattached orders correctly.
+  const loadWindowScoped = useCallback(async () => {
+    try {
+      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive });
+      const { items } = await fetchGroupOrders(token ?? '', {
+        search: search || undefined,
+        date, dateTo,
+        cities: filterCities.length > 0 ? filterCities : undefined,
+        districts: filterDistricts.length > 0 ? filterDistricts : undefined,
+        party: filterParty,
+        status: filterStatus || undefined,
+        courierId: filterCourier || undefined,
+        unpriced: filterUnpriced || undefined,
+        excludeCompleted: true,
+        page: 1,
+        pageSize: 500,
+      });
+      setWindowScopedOrders(items);
+    } catch { setWindowScopedOrders([]); }
+  }, [token, dateTouched, search, selectedDate, rangeEnd, otherFiltersActive, filterCities, filterDistricts, filterParty, filterStatus, filterCourier, filterUnpriced]);
+
+  useEffect(() => { void loadWindowScoped(); }, [loadWindowScoped]);
+
+  // Reload with the current filters/page — used by realtime pings and after any mutation
+  // that doesn't itself change a filter (assign courier, save price/salary, move/merge/group…).
+  // Returns the load promise so callers that need the fresh data before proceeding can await it.
+  const reload = useCallback(() => {
+    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive });
+    return load({
+      search, cities: filterCities, districts: filterDistricts, party: filterParty,
+      status: filterStatus, courierId: filterCourier, unpriced: filterUnpriced, date, dateTo, page,
+    });
+  }, [load, dateTouched, search, selectedDate, rangeEnd, otherFiltersActive, filterCities, filterDistricts, filterParty, filterStatus, filterCourier, filterUnpriced, page]);
+
+  // Re-resolve the date window and (re)fetch whenever any filter, or the page, changes.
+  // Filter changes always jump back to page 1; only the search term is debounced.
+  const filterRef = useRef({ search: '', cities: '', districts: '', party: 'sender', status: '', courier: '', unpriced: false, date: '', dateTo: '', dateTouched: false });
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { void (async () => { setLoading(true); await load(search); })(); }, 350);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search, load]);
+    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive });
+    const prev = filterRef.current;
+    const next = {
+      search, cities: filterCities.join(','), districts: filterDistricts.join(','),
+      party: filterParty, status: filterStatus, courier: filterCourier, unpriced: filterUnpriced,
+      date: date ?? '', dateTo: dateTo ?? '', dateTouched,
+    };
+    const filterChanged =
+      prev.search    !== next.search    || prev.cities   !== next.cities   || prev.districts !== next.districts ||
+      prev.party     !== next.party     || prev.status   !== next.status   ||
+      prev.courier   !== next.courier   || prev.unpriced !== next.unpriced ||
+      prev.date      !== next.date      || prev.dateTo   !== next.dateTo   || prev.dateTouched !== next.dateTouched;
+    filterRef.current = next;
 
-  const searchRef = useRef(search);
-  useEffect(() => { searchRef.current = search; });
-  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(searchRef.current); void loadSummary(); });
+    const delay = filterChanged && next.search !== prev.search ? 350 : 0;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const targetPage = filterChanged ? 1 : page;
+      if (filterChanged && page !== 1) setPage(1);
+      setLoading(true);
+      void load({
+        search, cities: filterCities, districts: filterDistricts, party: filterParty,
+        status: filterStatus, courierId: filterCourier, unpriced: filterUnpriced, date, dateTo, page: targetPage,
+      });
+    }, delay);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filterCities, filterDistricts, filterParty, filterStatus, filterCourier, filterUnpriced, dateTouched, selectedDate, rangeEnd, otherFiltersActive, page, load]);
+
+  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { reload(); void loadSummary(); void loadWindowScoped(); });
 
   useEffect(() => { fetchCouriers(token ?? '').then(setCouriers).catch(() => {}); }, [token]);
 
   // After a delivery mutation: silently reload and clear the selection.
   const reloadAfterAction = useCallback(() => {
-    void load(searchRef.current);
+    reload();
     void loadSummary();
+    void loadWindowScoped();
     setSelected(new Set());
-  }, [load, loadSummary]);
+  }, [reload, loadSummary, loadWindowScoped]);
 
   // Esc leaves deliver mode (mirrors AdminOrdersPage).
   useEffect(() => {
@@ -475,88 +567,69 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const handlePartyChange  = (party: 'sender' | 'recipient') => { setFilterParty(party); setFilterCities([]); setFilterDistricts([]); };
   const handleCitiesChange = (cities: string[]) => { setFilterCities(cities); setFilterDistricts([]); };
 
-  // ── Derived: cities / districts / geo maps (copied) ─────────────────────────
-  const availableCities = useMemo(() => {
-    if (filterParty === 'sender') return [...new Set(groupOrders.map(go => go.pickUpCity))].sort();
-    return [...new Set(groupOrders.flatMap(go => go.orders.map(o => o.recipientCity)))].sort();
-  }, [groupOrders, filterParty]);
+  // ── Derived: cities / districts / geo maps ───────────────────────────────────
+  // Sourced from a dedicated locations endpoint (not the loaded `groupOrders` page) so the
+  // option list stays complete across the whole matching set instead of whatever happens to
+  // be on the currently paginated page. Party-aware: sender = pickup side (GroupOrder /
+  // standalone-order-customer), recipient = each order's own recipient (shared with the
+  // Delivery page). Scoped to the same resolved date window as the main list.
+  const [locationOptions, setLocationOptions] = useState<{ city: string; cityGeo?: string | null; district: string; districtGeo?: string | null }[]>([]);
+
+  useEffect(() => {
+    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive });
+    const fetcher = filterParty === 'recipient'
+      ? fetchOrderLocations(token ?? '', date, dateTo)
+      : fetchGroupOrderLocations(token ?? '', date, dateTo);
+    fetcher.then(setLocationOptions).catch(() => { /* keep filters empty on failure */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, filterParty, dateTouched, search, selectedDate, rangeEnd, otherFiltersActive]);
+
+  const availableCities = useMemo(() => [...new Set(locationOptions.map(l => l.city))].sort(), [locationOptions]);
 
   const cityGeoMap = useMemo(() => {
     const map: Record<string, string | undefined> = {};
-    groupOrders.forEach(go => {
-      if (go.pickUpCityGeo) map[go.pickUpCity] = go.pickUpCityGeo;
-      go.orders.forEach(o => { if (o.recipientCityGeo) map[o.recipientCity] = o.recipientCityGeo; });
-    });
+    locationOptions.forEach(l => { if (l.cityGeo) map[l.city] = l.cityGeo; });
     return map;
-  }, [groupOrders]);
+  }, [locationOptions]);
 
   const districtGeoMap = useMemo(() => {
     const map: Record<string, string | undefined> = {};
-    groupOrders.forEach(go => {
-      if (go.pickUpDistrictGeo) map[go.pickUpDistrict] = go.pickUpDistrictGeo;
-      go.orders.forEach(o => { if (o.recipientDistrictGeo) map[o.recipientDistrict] = o.recipientDistrictGeo; });
-    });
+    locationOptions.forEach(l => { if (l.districtGeo) map[l.district] = l.districtGeo; });
     return map;
-  }, [groupOrders]);
+  }, [locationOptions]);
 
   const availableDistricts = useMemo(() => {
     if (filterCities.length === 0) return [];
-    if (filterParty === 'sender') return [...new Set(groupOrders.filter(go => filterCities.includes(go.pickUpCity)).map(go => go.pickUpDistrict))].sort();
-    return [...new Set(groupOrders.flatMap(go => go.orders).filter(o => filterCities.includes(o.recipientCity)).map(o => o.recipientDistrict))].sort();
-  }, [groupOrders, filterParty, filterCities]);
+    return [...new Set(locationOptions.filter(l => filterCities.includes(l.city)).map(l => l.district))].sort();
+  }, [locationOptions, filterCities]);
 
-  // Unpriced badge — packages (non-terminal) with no company service price set.
+  // Unpriced badge — packages (non-terminal) missing a company service price or courier
+  // salary (mirrors the server's/Delivery page's "missing financials" definition).
   const unpricedCount = useMemo(() =>
     groupOrders.reduce((sum, go) => sum + go.orders.filter(o =>
-      !ACTIVE_ORDER_STATUSES_ONLY.has(o.status) && !o.companyServicePrice).length, 0),
+      !ACTIVE_ORDER_STATUSES_ONLY.has(o.status)
+      && (!o.companyServicePrice || o.courierSalary == null || o.courierSalary === 0)).length, 0),
   [groupOrders]);
 
   // ── Delivery-side per-package predicate (courier + unpriced filters) ────────
+  // The server already scopes which *batches* are returned by these two filters; this
+  // still narrows which *packages within an included batch* are shown/expanded — the same
+  // role city/district recipient-narrowing plays in visibleOrdersFor below.
   const matchesDeliveryFilters = useCallback((o: AdminOrder) => {
     if (filterCourier && o.courierId !== filterCourier) return false;
-    if (filterUnpriced && o.companyServicePrice) return false;
+    if (filterUnpriced && !(!o.companyServicePrice || o.courierSalary == null || o.courierSalary === 0)) return false;
     return true;
   }, [filterCourier, filterUnpriced]);
 
-  // ── Visible group orders (copied + delivery filters folded in) ──────────────
-  const visibleOrders = useMemo(() => {
-    return groupOrders.filter(go => {
-      if (isCompletedGroupOrder(go)) return false;
-      if (filterStatus) {
-        if (ORDER_LEVEL_STATUSES.has(filterStatus)) {
-          if (!go.orders.some(o => o.status === filterStatus)) return false;
-        } else if (go.status !== filterStatus) return false;
-      }
-      // When a delivery courier / unpriced filter is on, keep only batches with a matching package.
-      if ((filterCourier || filterUnpriced) && !go.orders.some(matchesDeliveryFilters)) return false;
-      if (filterCities.length === 0 && filterDistricts.length === 0) return true;
-      if (filterParty === 'sender') {
-        if (filterCities.length > 0 && !filterCities.includes(go.pickUpCity)) return false;
-        if (filterDistricts.length > 0 && !filterDistricts.includes(go.pickUpDistrict)) return false;
-        return true;
-      }
-      return go.orders.some(o => {
-        if (filterCities.length > 0 && !filterCities.includes(o.recipientCity)) return false;
-        if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
-        return true;
-      });
-    });
-  }, [groupOrders, filterStatus, filterCities, filterDistricts, filterParty, filterCourier, filterUnpriced, matchesDeliveryFilters]);
-
-  // Date filter: null = All; a single day; or an inclusive [from..to] range. Date keys are
-  // 'yyyy-MM-dd', so lexical string comparison is chronological.
-  const dayKey   = selectedDate ? toDateKey(selectedDate) : null;
-  const dayKeyTo = rangeEnd ? toDateKey(rangeEnd) : dayKey;
-  const dayOrders = useMemo(
-    () => (dayKey
-      ? visibleOrders.filter(go => { const k = georgianDateKeyOf(go.createdAt); return k >= dayKey && k <= dayKeyTo!; })
-      : visibleOrders),
-    [visibleOrders, dayKey, dayKeyTo],
-  );
+  // ── Visible group orders ─────────────────────────────────────────────────────
+  // The server already scopes `groupOrders` by date window, city/district, party, status,
+  // courier, unpriced, search, and completeness (excludeCompleted) — nothing further to
+  // filter here at the batch level.
+  const visibleOrders = groupOrders;
 
   const mergeableByCustomer = useMemo(() => {
     const m = new Map<string, AdminGroupOrder[]>();
-    for (const go of groupOrders) {
+    for (const go of windowScopedOrders) {
       if (go.isStandalone || !go.customerId) continue;
       if (georgianDateKeyOf(go.createdAt) !== effectiveDayKey) continue;
       if (!MERGEABLE_STATUSES.has(go.status)) continue;
@@ -566,29 +639,29 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     for (const arr of m.values())
       arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     return m;
-  }, [groupOrders, effectiveDayKey]);
+  }, [windowScopedOrders, effectiveDayKey]);
 
   const batchesFor = useCallback((customerId: string, dKey: string) =>
-    groupOrders
+    windowScopedOrders
       .filter(b => !b.isStandalone && b.customerId === customerId
         && georgianDateKeyOf(b.createdAt) === dKey && MERGEABLE_STATUSES.has(b.status))
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-  [groupOrders]);
+  [windowScopedOrders]);
 
   const groupedCustomers = useMemo(() => {
     const m = new Map<string, string>();
-    for (const go of dayOrders) if (go.customerId) m.set(go.customerId, go.senderBusinessName);
+    for (const go of visibleOrders) if (go.customerId) m.set(go.customerId, go.senderBusinessName);
     return [...m.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [dayOrders]);
+  }, [visibleOrders]);
 
   const listOrders = useMemo(
-    () => (customerFilter ? dayOrders.filter(go => go.customerId === customerFilter) : dayOrders),
-    [dayOrders, customerFilter],
+    () => (customerFilter ? visibleOrders.filter(go => go.customerId === customerFilter) : visibleOrders),
+    [visibleOrders, customerFilter],
   );
 
   const multiBatchCustomers = useMemo(() => {
     const counts = new Map<string, { name: string; n: number }>();
-    for (const go of groupOrders) {
+    for (const go of windowScopedOrders) {
       if (go.isStandalone || !go.customerId) continue;
       if (georgianDateKeyOf(go.createdAt) !== effectiveDayKey) continue;
       const e = counts.get(go.customerId);
@@ -597,7 +670,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     return [...counts.entries()].filter(([, v]) => v.n >= 2)
       .map(([id, v]) => ({ id, name: v.name, count: v.n }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [groupOrders, effectiveDayKey]);
+  }, [windowScopedOrders, effectiveDayKey]);
 
   const ungroupedCustomers = useMemo(() => {
     const map = new Map<string, { id: string; name: string; count: number }>();
@@ -613,14 +686,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   const ungroupedListOrders = useMemo(() => {
     const ids = new Set(ungroupedCustomers.map(c => c.id));
-    return groupOrders
+    return windowScopedOrders
       .filter(go => !!go.customerId && ids.has(go.customerId)
         && georgianDateKeyOf(go.createdAt) === effectiveDayKey
         && (!ungroupedCustomerFilter || go.customerId === ungroupedCustomerFilter))
       .sort((a, b) => a.customerId !== b.customerId
         ? a.senderBusinessName.localeCompare(b.senderBusinessName)
         : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }, [groupOrders, effectiveDayKey, ungroupedCustomers, ungroupedCustomerFilter]);
+  }, [windowScopedOrders, effectiveDayKey, ungroupedCustomers, ungroupedCustomerFilter]);
 
   const displayList = pickupMode === 'ungrouped' ? ungroupedListOrders : listOrders;
 
@@ -883,7 +956,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     setSalarySaving(true);
     let saved = false;
     // Await the reload so the resume below re-checks gating against fresh orders.
-    try { await Promise.all(toSave.map(id => setCourierSalary(token ?? '', id, parseFloat(salaryDrafts[id])))); await load(searchRef.current); saved = true; }
+    try { await Promise.all(toSave.map(id => setCourierSalary(token ?? '', id, parseFloat(salaryDrafts[id])))); await reload(); saved = true; }
     catch { /* best-effort */ }
     setSalarySaving(false); setShowSalaryModal(false);
     showToast(t.aopSalarySetToast(toSave.length));
@@ -897,7 +970,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     if (toSave.length === 0) { setShowPriceModal(false); return; }
     setPriceSaving(true);
     let saved = false;
-    try { await Promise.all(toSave.map(id => setCompanyServicePrice(token ?? '', id, parseFloat(priceDrafts[id])))); await load(searchRef.current); saved = true; }
+    try { await Promise.all(toSave.map(id => setCompanyServicePrice(token ?? '', id, parseFloat(priceDrafts[id])))); await reload(); saved = true; }
     catch { /* best-effort */ }
     setPriceSaving(false); setShowPriceModal(false);
     showToast(t.aopPriceSetToast(toSave.length));
@@ -1040,19 +1113,19 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
               onView={() => setViewingOrder(menuItem)}
               onEdit={() => openEditOrder(o, go)}
               onLabel={() => void printParcelLabels([buildAdminLabel(menuItem)])}
-              onChanged={() => load(searchRef.current)}
+              onChanged={() => reload()}
               onError={msg => showToast(msg, 'err')}
             />
             {/* Edit + Label now live in the kebab menu above; this keeps the pickup-only
                 actions (send-to-city, cancel). */}
             <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
               onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-              onRefresh={() => load(searchRef.current)}
+              onRefresh={() => reload()}
               canManage={canManage}
               showLabel={false} />
             {canGroup && moveDestinations.length > 0 && (
               <MoveOrderControl orderId={o.id} destinations={moveDestinations} token={token ?? ''}
-                onMoved={() => { void load(searchRef.current); void loadSummary(); showToast(t.pickupMovedToast); }}
+                onMoved={() => { void reload(); void loadSummary(); void loadWindowScoped(); showToast(t.pickupMovedToast); }}
                 onError={msg => showToast(msg, 'err')} />
             )}
           </div>
@@ -1064,12 +1137,19 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // Shared <thead> for the package tables. `showStore` adds a Sender/store column —
   // used in the flat (recipient + location) single-order view where the batch's sender
   // isn't otherwise visible.
-  const packageHead = (showStore = false, selectAllGo?: AdminGroupOrder) => (
+  // `selectAllGo === 'global'` is used by the flat (Recipient + city/district) view, which
+  // spans many customer batches at once — there's no single group to scope a checkbox to,
+  // so it drives the page-wide select-all instead of the per-batch one.
+  const packageHead = (showStore = false, selectAllGo?: AdminGroupOrder | 'global') => (
     <thead>
       <tr>
         {canManage && (
           <th style={{ width: 36 }}>
-            {selectAllGo && (() => {
+            {selectAllGo === 'global' ? (
+              <input type="checkbox" className="aop-checkbox" checked={allSelected} disabled={selectableOrders.length === 0}
+                ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                onChange={toggleAll} />
+            ) : selectAllGo && (() => {
               const ids = groupSelectableIds(selectAllGo);
               const allIn  = ids.length > 0 && ids.every(id => selected.has(id));
               const someIn = ids.some(id => selected.has(id));
@@ -1109,7 +1189,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         <DateRangeNav
           from={selectedDate}
           to={rangeEnd}
-          onChange={(f, to) => { setSelectedDate(f); setRangeEnd(to); }}
+          onChange={(f, to) => { setDateTouched(true); setSelectedDate(f); setRangeEnd(to); }}
           classPrefix="pickup-daynav"
         />
         {(canManage || canGroup) && (
@@ -1377,7 +1457,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           return (
             <div style={{ overflowX: 'auto' }}>
               <table className="go-orders-table">
-                {packageHead(true)}
+                {packageHead(true, 'global')}
                 <tbody>{flatRows.map(({ o, go }) => renderOrderRow(o, go, [], false, true))}</tbody>
               </table>
             </div>
@@ -1454,7 +1534,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                           ) : (
                             <AdminGroupOrderActions groupOrder={go} couriers={couriers} token={token ?? ''}
                               onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                              onRefresh={() => load(searchRef.current)} canManage={canManage} canAssignCourier={canAssignCourier}
+                              onRefresh={() => reload()} canManage={canManage} canAssignCourier={canAssignCourier}
                               warehousePresentIds={go.status === 'DeliveredToWarehouse'
                                 ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && !absentPkgs.has(o.id)).map(o => o.id)
                                 : undefined}
@@ -1487,6 +1567,20 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           </div>
         );
       })()}
+
+      {/* Pager — the server-paginated grouped list; ungrouped mode is a same-day cross-check
+          view over the same fetched page, so it doesn't get its own pager. */}
+      {pickupMode === 'grouped' && !loading && !error && totalPages > 1 && (
+        <div className="aop-pagination">
+          <button className="aop-page-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+            {t.aopPrevPage}
+          </button>
+          <span className="aop-page-info">{t.aopPageInfo(page, totalPages)}</span>
+          <button className="aop-page-btn" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+            {t.aopNextPage}
+          </button>
+        </div>
+      )}
 
       {/* Action toast */}
       {actionToast && <div className={`action-toast ${actionToast.type === 'err' ? 'action-toast--err' : ''}`} role="status">{actionToast.msg}</div>}
@@ -1636,7 +1730,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
       {/* Edit modal (package edit) */}
       <EditOrderModal order={editing?.item ?? null} open={!!editing} onClose={() => setEditing(null)}
-        onSaved={() => { setEditing(null); void load(searchRef.current); }} token={token ?? ''} couriers={couriers}
+        onSaved={() => { setEditing(null); void reload(); }} token={token ?? ''} couriers={couriers}
         customerPricing={editing?.pricing ?? null} canSeeRevenue={canSeeRevenue} />
 
       {/* View modal */}
@@ -1646,14 +1740,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
       {groupingCustomer && (
         <GroupingModal customer={groupingCustomer} date={groupingDate} batches={batchesFor(groupingCustomer.customerId, toDateKey(groupingDate))} token={token ?? ''}
           onClose={() => setGroupingCustomer(null)}
-          onGrouped={n => { setGroupingCustomer(null); showToast(t.pickupGroupedToast(n)); void load(searchRef.current); void loadSummary(); }} />
+          onGrouped={n => { setGroupingCustomer(null); showToast(t.pickupGroupedToast(n)); void reload(); void loadSummary(); void loadWindowScoped(); }} />
       )}
 
       {/* Merge modal */}
       {mergingCustomer && (
         <MergeModal customerName={mergingCustomer.name} batches={mergingCustomer.batches} token={token ?? ''}
           onClose={() => setMergingCustomer(null)}
-          onMerged={() => { setMergingCustomer(null); showToast(t.pickupMergedToast); void load(searchRef.current); void loadSummary(); }} />
+          onMerged={() => { setMergingCustomer(null); showToast(t.pickupMergedToast); void reload(); void loadSummary(); void loadWindowScoped(); }} />
       )}
 
       {/* Accept standalone */}
@@ -1687,7 +1781,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                     setAcceptBusy(true);
                     try {
                       await groupAndAcceptStandalone(token ?? '', acceptStandalone.id, acceptTargetId || undefined);
-                      setAcceptStandalone(null); showToast(t.pickupStandaloneAcceptedToast); void load(searchRef.current); void loadSummary();
+                      setAcceptStandalone(null); showToast(t.pickupStandaloneAcceptedToast); void reload(); void loadSummary(); void loadWindowScoped();
                     } catch (e) { showToast(e instanceof Error ? e.message : t.goActionFailed, 'err'); }
                     finally { setAcceptBusy(false); }
                   }}>{acceptBusy ? t.pickupStandaloneAccepting : t.pickupStandaloneAcceptConfirm}</button>
@@ -1741,7 +1835,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                     setWhBusy(true);
                     try {
                       await groupAndWarehouseStandalone(token ?? '', whStandalone.id, { targetGroupOrderId: whTargetId || undefined, courierId: whCourierId || undefined });
-                      setWhStandalone(null); showToast(t.pickupStandaloneWhToast); void load(searchRef.current); void loadSummary();
+                      setWhStandalone(null); showToast(t.pickupStandaloneWhToast); void reload(); void loadSummary(); void loadWindowScoped();
                     } catch (e) { showToast(e instanceof Error ? e.message : t.goActionFailed, 'err'); }
                     finally { setWhBusy(false); }
                   }}>{whBusy ? t.pickupStandaloneAccepting : t.goForceWarehouse}</button>
@@ -1787,6 +1881,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         .aop-bulk-currency { position: absolute; left: 10px; font-size: 0.85rem; color: var(--color-text-subtle); pointer-events: none; }
         .aop-bulk-input { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.875rem; padding: 7px 10px 7px 26px; width: 130px; outline: none; transition: border-color var(--transition); }
         .aop-bulk-input:focus { border-color: var(--color-accent); }
+
+        /* ── Pagination ── */
+        .aop-pagination { display: flex; align-items: center; gap: 14px; justify-content: center; padding: 16px 20px; border-top: 1px solid var(--color-border); }
+        .aop-page-btn { background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.82rem; font-weight: 600; padding: 7px 16px; cursor: pointer; transition: background var(--transition); }
+        .aop-page-btn:hover:not(:disabled) { background: var(--color-bg-2); }
+        .aop-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .aop-page-info { font-size: 0.82rem; color: var(--color-text-subtle); }
       `}</style>
     </div>
   );

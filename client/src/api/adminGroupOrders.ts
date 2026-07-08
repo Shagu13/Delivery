@@ -106,12 +106,17 @@ export interface FetchGroupOrdersParams {
     date?: string;
     /** Range end (inclusive). Omit → single day = date. */
     dateTo?: string;
-    /** Pickup city (party='sender', default) or recipient city (party='recipient'). */
-    city?: string;
+    /** Pickup cities (party='sender', default) or recipient cities (party='recipient'); any match. */
+    cities?: string[];
     /** Pickup districts (party='sender', default) or recipient districts (party='recipient'); any match. */
     districts?: string[];
     party?: 'sender' | 'recipient';
     status?: string;
+    /** Delivery courier (last-mile Order.CourierId) — matches any child order. */
+    courierId?: string;
+    /** Missing financials — matches any child order with no company service price or no
+     *  courier salary set. */
+    unpriced?: boolean;
     /** Hide fully completed batches/orders (they live in History). Default false. */
     excludeCompleted?: boolean;
     page?: number;
@@ -123,10 +128,12 @@ export async function fetchGroupOrders(token: string, params: FetchGroupOrdersPa
     if (params.search)                        qs.set('search', params.search);
     if (params.date)                          qs.set('date', params.date);
     if (params.dateTo)                        qs.set('dateTo', params.dateTo);
-    if (params.city)                          qs.set('city', params.city);
+    if (params.cities && params.cities.length > 0)       qs.set('city', params.cities.join(','));
     if (params.districts && params.districts.length > 0) qs.set('district', params.districts.join(','));
     if (params.party)                         qs.set('party', params.party);
     if (params.status)                        qs.set('status', params.status);
+    if (params.courierId)                     qs.set('courierId', params.courierId);
+    if (params.unpriced)                      qs.set('unpriced', 'true');
     if (params.excludeCompleted)              qs.set('excludeCompleted', 'true');
     if (params.page)                          qs.set('page', String(params.page));
     if (params.pageSize)                      qs.set('pageSize', String(params.pageSize));
@@ -135,6 +142,28 @@ export async function fetchGroupOrders(token: string, params: FetchGroupOrdersPa
         headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Failed to fetch group orders');
+    return res.json();
+}
+
+/** A distinct pickup city + district pair that appears in GroupOrders (sender/pickup side). */
+export interface GroupOrderLocation {
+    city: string;
+    cityGeo?: string | null;
+    district: string;
+    districtGeo?: string | null;
+}
+
+/** Admin/Operator/TenantAdmin: distinct pickup city/district pairs — drives the Packages page's
+ *  City/District filter (sender party) so its option list is complete across the whole DB, not
+ *  just the currently loaded page. Optionally scoped to a Georgian day/range. */
+export async function fetchGroupOrderLocations(token: string, date?: string, dateTo?: string): Promise<GroupOrderLocation[]> {
+    const qs = new URLSearchParams();
+    if (date)   qs.set('date', date);
+    if (dateTo) qs.set('dateTo', dateTo);
+    const res = await fetch(`${BASE}/pickup-locations${qs.toString() ? `?${qs}` : ''}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch pickup locations');
     return res.json();
 }
 

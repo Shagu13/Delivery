@@ -17,6 +17,8 @@ using Application.GroupOrders.Commands.SetGroupOrderPickupDate;
 using Application.GroupOrders.DTOs;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
 using Application.GroupOrders.Queries.GetCustomerGroupOrders;
+using Application.GroupOrders.Queries.GetGroupOrderLocations;
+using Application.Orders.Queries.GetOrderLocations;
 using ClosedXML.Excel;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -187,10 +189,12 @@ public sealed class GroupOrdersController : BaseController
         [FromQuery] string?   search,
         [FromQuery] DateTime? date      = null,
         [FromQuery] DateTime? dateTo    = null,
-        [FromQuery] string?   city      = null,
-        [FromQuery] string?   district  = null,
+        [FromQuery] string?   city      = null,   // comma-separated; any match (mirrors district)
+        [FromQuery] string?   district  = null,   // comma-separated; any match
         [FromQuery] string    party     = "sender",
         [FromQuery] string?   status    = null,
+        [FromQuery] Guid?     courierId = null,   // delivery courier (last-mile), any child order
+        [FromQuery] bool      unpriced  = false,  // missing financials, any child order
         [FromQuery] bool      excludeCompleted = false,
         [FromQuery] int       page      = 1,
         [FromQuery] int       pageSize  = 30,
@@ -207,11 +211,25 @@ public sealed class GroupOrdersController : BaseController
             return Ok(new PagedResult<AdminGroupOrderResponse>(mapped, mapped.Count, 1, Math.Max(mapped.Count, 1)));
         }
 
-        var result = await Sender.Send(new GetAllGroupOrdersQuery(search, date, dateTo, city, district, party, status, excludeCompleted, page, pageSize), ct);
+        var result = await Sender.Send(new GetAllGroupOrdersQuery(search, date, dateTo, city, district, party, status, courierId, unpriced, excludeCompleted, page, pageSize), ct);
         // Operators run the pick-up flow but must not see internal company revenue.
         bool includeRevenue = !User.IsInRole("Operator");
         var items = result.Items.Select(go => MapToAdminResponse(go, includeRevenue)).ToList();
         return Ok(new PagedResult<AdminGroupOrderResponse>(items, result.TotalCount, result.Page, result.PageSize));
+    }
+
+    // ── GET /api/grouporders/pickup-locations  (Packages page City/District filter options,
+    //    sender/pickup side — recipient side reuses GET /api/orders/locations) ──────────
+    [HttpGet("pickup-locations")]
+    [Authorize(Roles = "Admin,Operator,TenantAdmin")]
+    [ProducesResponseType(typeof(List<OrderLocationDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPickupLocations(
+        [FromQuery] DateTime? date   = null,
+        [FromQuery] DateTime? dateTo = null,
+        CancellationToken ct = default)
+    {
+        var result = await Sender.Send(new GetGroupOrderLocationsQuery(date, dateTo), ct);
+        return Ok(result);
     }
 
     // ── GET /api/grouporders/pickup-day?date=  (Admin/Operator Pick-Up page summary) ───

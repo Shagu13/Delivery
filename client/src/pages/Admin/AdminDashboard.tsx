@@ -1182,7 +1182,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
       const result = await fetchGroupOrders(token ?? '', {
         search: search || undefined,
         date, dateTo,
-        city: filterCity || undefined,
+        cities: filterCity ? [filterCity] : undefined,
         districts: filterDistricts.length > 0 ? filterDistricts : undefined,
         party: filterParty,
         status: filterStatus || undefined,
@@ -1223,7 +1223,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
       const { items } = await fetchGroupOrders(token ?? '', {
         search: search || undefined,
         date, dateTo,
-        city: filterCity || undefined,
+        cities: filterCity ? [filterCity] : undefined,
         districts: filterDistricts.length > 0 ? filterDistricts : undefined,
         party: filterParty,
         status: filterStatus || undefined,

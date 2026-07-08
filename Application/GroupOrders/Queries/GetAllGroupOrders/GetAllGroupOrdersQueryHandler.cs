@@ -55,6 +55,9 @@ public sealed class GetAllGroupOrdersQueryHandler
         GetAllGroupOrdersQuery request,
         CancellationToken cancellationToken)
     {
+        var cities = string.IsNullOrWhiteSpace(request.Cities)
+            ? new HashSet<string>()
+            : request.Cities.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
         var districts = string.IsNullOrWhiteSpace(request.Districts)
             ? new HashSet<string>()
             : request.Districts.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
@@ -128,25 +131,25 @@ public sealed class GetAllGroupOrdersQueryHandler
         // ── City / District (sender = pickup side, recipient = each child order) ──
         if (recipientParty)
         {
-            if (!string.IsNullOrWhiteSpace(request.City))
-                goQuery = goQuery.Where(go => go.Orders.Any(o => o.RecipientCity == request.City));
+            if (cities.Count > 0)
+                goQuery = goQuery.Where(go => go.Orders.Any(o => cities.Contains(o.RecipientCity)));
             if (districts.Count > 0)
                 goQuery = goQuery.Where(go => go.Orders.Any(o => districts.Contains(o.RecipientDistrict)));
 
-            if (!string.IsNullOrWhiteSpace(request.City))
-                soQuery = soQuery.Where(o => o.RecipientCity == request.City);
+            if (cities.Count > 0)
+                soQuery = soQuery.Where(o => cities.Contains(o.RecipientCity));
             if (districts.Count > 0)
                 soQuery = soQuery.Where(o => districts.Contains(o.RecipientDistrict));
         }
         else
         {
-            if (!string.IsNullOrWhiteSpace(request.City))
-                goQuery = goQuery.Where(go => go.PickUpCity == request.City);
+            if (cities.Count > 0)
+                goQuery = goQuery.Where(go => cities.Contains(go.PickUpCity));
             if (districts.Count > 0)
                 goQuery = goQuery.Where(go => districts.Contains(go.PickUpDistrict));
 
-            if (!string.IsNullOrWhiteSpace(request.City))
-                soQuery = soQuery.Where(o => o.Customer != null && o.Customer.City == request.City);
+            if (cities.Count > 0)
+                soQuery = soQuery.Where(o => o.Customer != null && cities.Contains(o.Customer.City));
             if (districts.Count > 0)
                 soQuery = soQuery.Where(o => o.Customer != null && districts.Contains(o.Customer.District));
         }
@@ -159,6 +162,24 @@ public sealed class GetAllGroupOrdersQueryHandler
             goQuery = OrderLevelStatuses.Contains(status)
                 ? goQuery.Where(go => go.Orders.Any(o => o.Status == status))
                 : goQuery.Where(go => go.Status == status);
+        }
+
+        // ── Delivery courier (last-mile Order.CourierId — distinct from the GroupOrder's own
+        //    pickup courier) — keep a batch if any child order is assigned to them. ──────────
+        if (request.CourierId is Guid courierId)
+        {
+            goQuery = goQuery.Where(go => go.Orders.Any(o => o.CourierId == courierId));
+            soQuery = soQuery.Where(o => o.CourierId == courierId);
+        }
+
+        // ── Unpriced (missing financials) — mirrors GetAllOrdersQuery's Delivery-page
+        //    definition so both pages agree on what "unpriced" means. ─────────────────────
+        if (request.Unpriced)
+        {
+            goQuery = goQuery.Where(go => go.Orders.Any(o =>
+                o.CompanyServicePrice == 0 || o.CourierSalary == null || o.CourierSalary == 0));
+            soQuery = soQuery.Where(o =>
+                o.CompanyServicePrice == 0 || o.CourierSalary == null || o.CourierSalary == 0);
         }
 
         // ── Count + merge-paginate over lightweight (Id, CreatedAt) rows ──────────

@@ -12,6 +12,10 @@ export interface DateWindowInput {
     search: string;
     selectedDate: Date | null;
     rangeEnd: Date | null;
+    /** True when some other filter (city/district/status/courier/…) is active. Like a
+     *  search term, it releases the rolling-7-day cap so that filter reaches the whole DB
+     *  instead of silently missing matches older than a week. Default false. */
+    otherFiltersActive?: boolean;
 }
 
 export interface DateWindow {
@@ -21,17 +25,17 @@ export interface DateWindow {
 
 /**
  * - Navigator touched → send exactly what's chosen (both undefined = Show All → whole DB).
- * - Not touched, but a search term is present → no date bound (search reaches the whole DB).
- * - Not touched, no search → rolling last-7-days window (inclusive of today).
+ * - Not touched, but a search term or another filter is active → no date bound (reaches the whole DB).
+ * - Not touched, no search/filters → rolling last-7-days window (inclusive of today).
  */
-export function resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd }: DateWindowInput): DateWindow {
+export function resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive = false }: DateWindowInput): DateWindow {
     if (dateTouched) {
         return {
             date:   selectedDate ? toDateKey(selectedDate) : undefined,
             dateTo: rangeEnd     ? toDateKey(rangeEnd)      : undefined,
         };
     }
-    if (search.trim()) return {};
+    if (search.trim() || otherFiltersActive) return {};
 
     const to = georgianToday();
     const from = new Date(to);
