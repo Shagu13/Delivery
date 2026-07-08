@@ -1,7 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations, type OrderLocation } from '../../api/orders';
-import { assignReturnCourier } from '../../api/returnExchange';
+import { setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations, type OrderLocation } from '../../api/orders';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
 import { useAuth } from '../../contexts/useAuth';
@@ -783,18 +782,13 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       return !!o && isAssignable(o);
     });
     let ok = 0; let fail = 0;
-    await Promise.all(ids.map(async id => {
-      const o = findOrder(id);
-      try {
-        if (o?.orderType === 'Return') {
-          await assignReturnCourier(token, id, bulkCourierId);
-        } else {
-          await assignCourierToOrder(token, id, bulkCourierId);
-        }
-        ok++;
-      }
-      catch { fail++; }
-    }));
+    try {
+      const result = await bulkAssignCourierToOrders(token, ids, bulkCourierId);
+      ok = result.succeeded.length;
+      fail = result.failed.length;
+    } catch {
+      fail = ids.length;
+    }
     setBulkAssigning(false);
     // Clear the selection after assigning — otherwise these orders stay ticked and get
     // re-assigned to the next courier the admin picks for a different order.

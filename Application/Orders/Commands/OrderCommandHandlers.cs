@@ -3,7 +3,6 @@ using Application.Common.Interfaces;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 using Domain;
 namespace Application.Orders.Commands;
@@ -36,23 +35,17 @@ public sealed class SendOrderToCityCommandHandler : IRequestHandler<SendOrderToC
 public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignCourierToOrderCommand>
 {
     private readonly IAppDbContext _context;
-    private readonly IRecipientNotificationSmsService _recipientSms;
     private readonly IRealtimeNotifier _notifier;
-    private readonly IWebPushService _push;
-    private readonly ILogger<AssignCourierToOrderCommandHandler> _logger;
+    private readonly IOrderAssignmentNotifier _assignmentNotifier;
 
     public AssignCourierToOrderCommandHandler(
         IAppDbContext context,
-        IRecipientNotificationSmsService recipientSms,
         IRealtimeNotifier notifier,
-        IWebPushService push,
-        ILogger<AssignCourierToOrderCommandHandler> logger)
+        IOrderAssignmentNotifier assignmentNotifier)
     {
         _context = context;
-        _recipientSms = recipientSms;
         _notifier = notifier;
-        _push = push;
-        _logger = logger;
+        _assignmentNotifier = assignmentNotifier;
     }
 
     public async Task Handle(AssignCourierToOrderCommand request, CancellationToken cancellationToken)
@@ -110,33 +103,133 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             _notifier.NotifyCourierOrdersChanged(prev);
         _notifier.NotifyAdminsOrdersChanged();
 
-        // Heads-up push so the courier notices the new delivery even with the app closed.
-        // Only on a genuinely new assignment (not a re-assign back to the same courier).
+        // Heads-up push + recipient SMS for the courier's new delivery — real external
+        // network calls, run in the background (see IOrderAssignmentNotifier) so a slow
+        // gateway never adds to this request's latency. Only on a genuinely new
+        // assignment (not a re-assign back to the same courier).
         if (previousCourierId != courier.Id)
         {
-            var location = $"{order.RecipientCity}, {order.RecipientDistrict}";
-            var store = order.GroupOrder?.SenderBusinessName;
-            var body = string.IsNullOrWhiteSpace(store) ? location : $"{store} — {location}";
-            await _push.NotifyNewOrderAsync(courier.Id, "ახალი მისატანი · New delivery", body, "/", cancellationToken);
-        }
-
-        // ── Notify recipient via SMS ──────────────────────────────────────────
-        // Fire-and-forget inside a try/catch so SMS failure never rolls back the assignment.
-        try
-        {
-            await _recipientSms.SendCourierAssignedNotificationAsync(
+            _assignmentNotifier.NotifyCourierAssigned(
+                courier.Id,
                 order.RecipientPhone,
                 order.TrackingNumber,
-                order.GroupOrder?.SenderBusinessName ?? string.Empty,
-                cancellationToken);
+                order.GroupOrder?.SenderBusinessName,
+                order.RecipientCity,
+                order.RecipientDistrict);
         }
-        catch (Exception ex)
+    }
+}
+
+// ── BulkAssignCourierToOrders ───────────────────────────────────────────────────
+// One DB round trip for the whole batch (instead of the admin UI firing one HTTP
+// request per order): a single SaveChangesAsync covers every order, so the
+// SaveChanges interceptors (realtime dashboard pings, partner webhook outbox check)
+// also run once for the batch instead of once per order. Push/SMS notifications are
+// still one per newly assigned order, but run in the background via
+// IOrderAssignmentNotifier so they never gate the response.
+public sealed class BulkAssignCourierToOrdersCommandHandler
+    : IRequestHandler<BulkAssignCourierToOrdersCommand, BulkAssignCourierResultDto>
+{
+    private static readonly OrderStatus[] ValidSendStatuses =
+    {
+        OrderStatus.AdminAcceptedOrderInWareHouse,
+        OrderStatus.OrderIsOnItsWayToRecipientsCity,
+        // Already assigned but not yet picked up by the courier — allow the admin to
+        // re-assign it to a different courier.
+        OrderStatus.CourierAssignedToDeliver,
+    };
+
+    private readonly IAppDbContext _context;
+    private readonly IOrderAssignmentNotifier _assignmentNotifier;
+
+    public BulkAssignCourierToOrdersCommandHandler(
+        IAppDbContext context, IOrderAssignmentNotifier assignmentNotifier)
+    {
+        _context = context;
+        _assignmentNotifier = assignmentNotifier;
+    }
+
+    public async Task<BulkAssignCourierResultDto> Handle(
+        BulkAssignCourierToOrdersCommand request, CancellationToken cancellationToken)
+    {
+        var courier = await _context.Couriers
+            .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)
+            ?? throw new NotFoundException("Courier", request.CourierId);
+
+        var requestedIds = request.OrderIds.Distinct().ToList();
+
+        var orders = await _context.Orders
+            .Include(o => o.GroupOrder)
+            .Where(o => requestedIds.Contains(o.Id))
+            .ToListAsync(cancellationToken);
+
+        var succeeded = new List<Guid>();
+        var failed = new List<BulkAssignFailureDto>();
+        var toNotify = new List<(Guid CourierId, string Phone, string Tracking, string? Business, string City, string District)>();
+
+        var foundIds = orders.Select(o => o.Id).ToHashSet();
+        foreach (var missingId in requestedIds.Where(id => !foundIds.Contains(id)))
+            failed.Add(new BulkAssignFailureDto(missingId, "Order not found."));
+
+        var now = CustomTime.Now;
+
+        foreach (var order in orders)
         {
-            _logger.LogError(
-                ex,
-                "Failed to send recipient SMS notification for order {OrderId} (tracking: {TrackingNumber})",
-                order.Id, order.TrackingNumber);
+            if (order.OrderType == OrderType.Return)
+            {
+                order.CourierId = courier.Id;
+                order.AssignedToCourierAt = now;
+                order.Status = OrderStatus.CourierAssignedToPickUp;
+                succeeded.Add(order.Id);
+                continue;
+            }
+
+            if (!ValidSendStatuses.Contains(order.Status))
+            {
+                failed.Add(new BulkAssignFailureDto(
+                    order.Id, $"Cannot assign courier from status {order.Status}."));
+                continue;
+            }
+
+            // Capture the prior assignee so a re-assignment can drop the order from
+            // their active deliveries live (RealtimeDashboardInterceptor pings both).
+            var previousCourierId = order.CourierId;
+
+            order.CourierId = courier.Id;
+            order.AssignedToCourierAt = now;
+            order.Status = OrderStatus.CourierAssignedToDeliver;
+
+            // Guarded so a re-assignment doesn't overwrite an already-recorded pickup/window —
+            // mirrors AssignCourierToOrderCommandHandler.
+            order.PickedUpFromWarehouseAt ??= order.AssignedToCourierAt;
+            if (order.DeliveryDateFrom is null
+                && !order.RecipientCity.Equals("Tbilisi", StringComparison.OrdinalIgnoreCase))
+            {
+                order.DeliveryDateFrom = now.Date.AddDays(1);
+                order.DeliveryDateTo   = now.Date.AddDays(4);
+            }
+
+            succeeded.Add(order.Id);
+
+            // Only on a genuinely new assignment (not a re-assign back to the same courier).
+            if (previousCourierId != courier.Id)
+            {
+                toNotify.Add((
+                    courier.Id, order.RecipientPhone, order.TrackingNumber,
+                    order.GroupOrder?.SenderBusinessName, order.RecipientCity, order.RecipientDistrict));
+            }
         }
+
+        if (succeeded.Count > 0)
+            await _context.SaveChangesAsync(cancellationToken);
+
+        // Realtime admin/courier dashboard pings fire once for the whole batch via
+        // RealtimeDashboardInterceptor (reacts to the CourierId changes above) — no need
+        // to call IRealtimeNotifier explicitly here.
+        foreach (var n in toNotify)
+            _assignmentNotifier.NotifyCourierAssigned(n.CourierId, n.Phone, n.Tracking, n.Business, n.City, n.District);
+
+        return new BulkAssignCourierResultDto(succeeded, failed);
     }
 }
 

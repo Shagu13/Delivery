@@ -31,10 +31,9 @@ import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/a
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
 import {
-  setCourierSalary, setCompanyServicePrice, assignCourierToOrder,
+  setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders,
   adminMarkOrderDelivered, exportOrdersExcel,
 } from '../../api/orders';
-import { assignReturnCourier } from '../../api/returnExchange';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
@@ -834,14 +833,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     setBulkAssigning(true);
     const ids = [...selected].filter(id => { const o = itemById.get(id); return !!o && isAssignable(o); });
     let ok = 0, fail = 0;
-    await Promise.all(ids.map(async id => {
-      const o = itemById.get(id);
-      try {
-        if (o?.orderType === 'Return') await assignReturnCourier(token ?? '', id, bulkCourierId);
-        else await assignCourierToOrder(token ?? '', id, bulkCourierId);
-        ok++;
-      } catch { fail++; }
-    }));
+    try {
+      const result = await bulkAssignCourierToOrders(token ?? '', ids, bulkCourierId);
+      ok = result.succeeded.length;
+      fail = result.failed.length;
+    } catch {
+      fail = ids.length;
+    }
     setBulkAssigning(false); setBulkCourierId('');
     reloadAfterAction();
     showToast(fail === 0 ? t.aopAssignedToast(ok) : t.aopAssignedPartial(ok, fail), fail > 0 ? 'err' : 'ok');

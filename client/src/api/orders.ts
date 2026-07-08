@@ -148,6 +148,31 @@ async function orderAction(token: string, id: string, action: string, body?: obj
 export const sendOrderToCity        = (token: string, id: string) => orderAction(token, id, 'send-to-city');
 export const assignCourierToOrder   = (token: string, id: string, courierId: string) =>
     orderAction(token, id, 'assign-courier', { courierId });
+
+export interface BulkAssignCourierResult {
+    succeeded: string[];
+    failed: { orderId: string; error: string }[];
+}
+
+/**
+ * Assigns a courier to many orders (Send/Exchange delivery orders and standalone Return
+ * pickups may be mixed) in one request — a single DB write and background-fired
+ * notifications server-side, instead of one HTTP request per order.
+ */
+export async function bulkAssignCourierToOrders(
+    token: string, orderIds: string[], courierId: string,
+): Promise<BulkAssignCourierResult> {
+    const res = await fetch(`${BASE}/bulk-assign-courier`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds, courierId }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Unknown error' }));
+        throw new Error(err.title ?? 'Request failed');
+    }
+    return res.json();
+}
 /**
  * Admin cancels an order. With no `opts` it is a plain, no-charge cancel. Passing a `reason`
  * makes it a billable "cancel & charge" — the sender is invoiced the service fee and the courier

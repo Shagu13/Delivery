@@ -301,6 +301,23 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── POST /api/orders/bulk-assign-courier  (Admin/Operator) ───────────────
+    // One request for the whole selection instead of one per order — a single DB
+    // transaction and background-fired notifications, so bulk-assigning dozens of
+    // orders doesn't take minutes. Order type (Send/Exchange vs standalone Return)
+    // is resolved server-side, so a mixed selection is fine.
+    [HttpPost("bulk-assign-courier")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(BulkAssignCourierResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> BulkAssignCourier(
+        [FromBody] BulkAssignCourierRequest request,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(
+            new BulkAssignCourierToOrdersCommand(request.OrderIds, request.CourierId), ct);
+        return Ok(result);
+    }
+
     // ── PUT /api/orders/{id}/admin-mark-delivered  (Admin/Operator) ──────────
     [HttpPut("{id:guid}/admin-mark-delivered")]
     [Authorize(Roles = "Admin,Operator")]
@@ -566,6 +583,8 @@ public sealed record UpdateOrderRequest(
     decimal? CourierSalary,
     bool     IsCompanyServicePriceIncluded = false
 );
+
+public sealed record BulkAssignCourierRequest(IReadOnlyList<Guid> OrderIds, Guid CourierId);
 
 public sealed record CustomerUpdateOrderRequest(
     string   RecipientName,

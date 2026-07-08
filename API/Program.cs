@@ -1,4 +1,5 @@
 using API.Middleware;
+using API.Notifications;
 using API.Realtime;
 using Application;
 using Application.Common.Interfaces;
@@ -95,6 +96,7 @@ try
         });
     builder.Services.AddSingleton<IPendingCountsNotifier, PendingCountsNotifier>();
     builder.Services.AddSingleton<IRealtimeNotifier, RealtimeNotifier>();
+    builder.Services.AddSingleton<IOrderAssignmentNotifier, OrderAssignmentNotifier>();
 
     // ── Partner webhooks: outbound delivery worker ─────────────────────────────
     builder.Services.AddHttpClient("webhooks", c => c.Timeout = TimeSpan.FromSeconds(10));

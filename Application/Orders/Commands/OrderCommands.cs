@@ -9,6 +9,21 @@ public sealed record SendOrderToCityCommand(Guid OrderId) : IRequest;
 /// <summary>Admin assigns last-mile delivery courier.</summary>
 public sealed record AssignCourierToOrderCommand(Guid OrderId, Guid CourierId) : IRequest;
 
+/// <summary>
+/// Admin bulk-assigns a courier to many orders at once (Send/Exchange delivery orders and
+/// standalone Return pickups may be mixed in one call — each is routed to the matching flow).
+/// A single DB round trip for the whole batch instead of one request per order; notifications
+/// are still sent per order but run in the background (see IOrderAssignmentNotifier).
+/// </summary>
+public sealed record BulkAssignCourierToOrdersCommand(
+    IReadOnlyList<Guid> OrderIds, Guid CourierId) : IRequest<BulkAssignCourierResultDto>;
+
+public sealed record BulkAssignCourierResultDto(
+    IReadOnlyList<Guid> Succeeded,
+    IReadOnlyList<BulkAssignFailureDto> Failed);
+
+public sealed record BulkAssignFailureDto(Guid OrderId, string Error);
+
 /// <summary>Courier confirms delivery to recipient. Order → DeliveredToRecipient.</summary>
 public sealed record MarkOrderDeliveredCommand(Guid OrderId, string CourierUserId) : IRequest;
 
