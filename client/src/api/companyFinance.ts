@@ -25,6 +25,7 @@ export interface CompanyFinanceOverview {
     outstandingCodOwedToCustomers: number; // company owes customers
     outstandingServiceReceivable: number;  // customers owe company
     outstandingSalaryOwed: number;         // company owes couriers
+    outstandingCourierRemittance: number;  // couriers owe company (cash collected, not yet sent in)
 }
 
 export class CompanyFinanceApiError extends Error {

@@ -166,13 +166,23 @@ public static class OrderFinance
         (o.AmountToCollectForPackage ?? 0m) - (o.CodPaidToCustomerAmount ?? 0m) <= Epsilon;
 
     /// <summary>
-    /// True once the courier has accounted for all the cash they collected — via the cash
-    /// handed over plus, when applicable, the salary they kept out of it.
+    /// What the courier still has to send the company for this order: the cash they were
+    /// expected to collect, less whatever they've already transferred and (when applicable)
+    /// the salary they kept out of it instead of the company paying it separately. Zero once
+    /// fully accounted; never negative in the normal flow (a courier can't transfer more than
+    /// they collected).
     /// </summary>
-    public static bool HasCourierTransferedAmount(Order o)
+    public static decimal OutstandingCourierRemittance(Order o)
     {
         decimal transferred = o.CodTransferedToCompanyByCourier ?? 0m;
         decimal keptSalary  = CourierKeptSalaryFromCash(o) ? (o.CourierSalaryPaidAmount ?? 0m) : 0m;
-        return ExpectedCourierCash(o) - transferred - keptSalary <= Epsilon;
+        return ExpectedCourierCash(o) - transferred - keptSalary;
     }
+
+    /// <summary>
+    /// True once the courier has accounted for all the cash they collected — via the cash
+    /// handed over plus, when applicable, the salary they kept out of it.
+    /// </summary>
+    public static bool HasCourierTransferedAmount(Order o) =>
+        OutstandingCourierRemittance(o) <= Epsilon;
 }

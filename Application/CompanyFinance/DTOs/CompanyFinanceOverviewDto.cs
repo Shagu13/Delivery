@@ -40,5 +40,6 @@ public sealed record CompanyFinanceOverviewDto(
     // ── Outstanding balances (as of To) ───────────────────────────────────────
     decimal OutstandingCodOwedToCustomers, // COD collected but not yet paid back (company owes)
     decimal OutstandingServiceReceivable,  // sender service fees owed but not yet paid (owed to company)
-    decimal OutstandingSalaryOwed          // courier salary earned but not yet paid (company owes)
+    decimal OutstandingSalaryOwed,         // courier salary earned but not yet paid (company owes)
+    decimal OutstandingCourierRemittance   // cash couriers still have to send in (owed to company)
 );

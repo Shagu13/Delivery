@@ -484,6 +484,11 @@ const en = {
   goDistrict:              'District',
   goAllCities:             'All cities',
   goAllDistricts:          'All districts',
+  goLocationSearchPh:      'Type to search…',
+  goNLocationsSelected:    (n: number) => `${n} selected`,
+  goNoLocationMatches:     'No matches',
+  goSelect:                'Select',
+  goDeselect:              'Deselect',
   goStatus:                'Status',
   goClear:                 'Clear',
   goLoadingOrders:         'Loading group orders…',
@@ -1512,6 +1517,7 @@ const en = {
     finCashCodOwed:           'COD owed to customers',
     finCashServiceReceivable: 'Service receivable from senders',
     finCashSalaryOwed:        'Salary owed to couriers',
+    finCashCourierRemittance: 'Courier owes company',
 
     // Admin Finance — settlement scope tabs + courier section
     finTabCustomers:     'Customers',
@@ -2318,6 +2324,11 @@ const ka: typeof en = {
   goDistrict:              'რაიონი/სოფელი',
   goAllCities:             'ყველა ქალაქი',
   goAllDistricts:          'ყველა რაიონი/სოფელი',
+  goLocationSearchPh:      'აკრიფეთ საძიებოდ…',
+  goNLocationsSelected:    (n: number) => `არჩეულია ${n}`,
+  goNoLocationMatches:     'დამთხვევა ვერ მოიძებნა',
+  goSelect:                'არჩევა',
+  goDeselect:              'მოხსნა',
   goStatus:                'სტატუსი',
   goClear:                 'გასუფთავება',
   goLoadingOrders:         'შეკვეთები იტვირთება…',
@@ -3344,6 +3355,7 @@ const ka: typeof en = {
     finCashCodOwed:           'მომხმარებლების COD დავალიანება',
     finCashServiceReceivable: 'გამგზავნებისგან მისაღები საკურიერო',
     finCashSalaryOwed:        'კურიერების ხელფასის დავალიანება',
+    finCashCourierRemittance: 'კურიერებისგან ჩასარიცხი COD',
 
     // Admin Finance — settlement scope tabs + courier section
     finTabCustomers:     'მომხმარებლები',

@@ -259,6 +259,7 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
                                 <Row label={t.finCashCodOwed}           value={gel(data.outstandingCodOwedToCustomers)} tone="out" />
                                 <Row label={t.finCashServiceReceivable} value={gel(data.outstandingServiceReceivable)}  tone="paid" />
                                 <Row label={t.finCashSalaryOwed}        value={gel(data.outstandingSalaryOwed)}         tone="out" />
+                                <Row label={t.finCashCourierRemittance} value={gel(data.outstandingCourierRemittance)}  tone="paid" />
                             </div>
                         </div>
                     </div>

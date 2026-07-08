@@ -187,6 +187,10 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         var serviceOwedByCustomers   = senderUpTo.Sum(o => o.CompanyServicePrice)
                                      + prepaidUndelivered.Sum(o => o.CompanyServicePrice)
                                      + billableFailedUpTo.Sum(o => o.CompanyServicePrice);
+        // What couriers still have to send in for delivered orders: cash they were expected to
+        // collect, less what they've transferred and any salary they kept out of it. Billable
+        // failed deliveries never contribute (the courier collected no cash on those).
+        var outstandingCourierRemittance = deliveredUpTo.Sum(OrderFinance.OutstandingCourierRemittance);
 
         // Exact net cash via the single canonical per-order formula. Advance service
         // payments add their service inflow (COD/salary terms are zero pre-delivery); failed
@@ -212,7 +216,8 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             NetCashPosition:             netCashPosition,
             OutstandingCodOwedToCustomers: codCollectedForCustomers - codPaidToCustomers,
             OutstandingServiceReceivable:  serviceOwedByCustomers - senderServicePaid,
-            OutstandingSalaryOwed:         salaryEarned - salaryPaidToCouriers
+            OutstandingSalaryOwed:         salaryEarned - salaryPaidToCouriers,
+            OutstandingCourierRemittance:  outstandingCourierRemittance
         );
     }
 }
