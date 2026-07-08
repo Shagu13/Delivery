@@ -37,6 +37,7 @@ import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 import { georgianToday, georgianDateKeyOf } from '../../utils/georgianTime';
+import { resolveDateWindow } from '../../utils/dateWindow';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 
 // Terminal order statuses — these orders are hidden from the active Group Orders page
@@ -660,6 +661,11 @@ export function AdminDashboard() {
         .pickup-daynav__today { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent); background: var(--color-accent-dim); border-radius: 100px; padding: 2px 8px; }
         .pickup-daynav__jump { margin-left: 4px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.76rem; font-weight: 600; padding: 6px 12px; cursor: pointer; transition: all var(--transition); }
         .pickup-daynav__jump:hover { background: var(--color-bg-3); color: var(--color-text); }
+        .pickup-pagination { display: flex; align-items: center; gap: 14px; justify-content: center; padding: 16px 20px; border-top: 1px solid var(--color-border); }
+        .pickup-page-btn { background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.82rem; font-weight: 600; padding: 7px 16px; cursor: pointer; transition: background var(--transition); }
+        .pickup-page-btn:hover:not(:disabled) { background: var(--color-bg-2); }
+        .pickup-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pickup-page-info { font-size: 0.82rem; color: var(--color-text-subtle); }
         .pickup-modes { margin-left: auto; display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radius-sm); overflow: hidden; }
         .pickup-mode { background: none; border: none; color: var(--color-text-subtle); font-size: 0.8rem; font-weight: 600; padding: 7px 16px; cursor: pointer; transition: all var(--transition); white-space: nowrap; }
         .pickup-mode:not(:last-child) { border-right: 1px solid var(--color-border); }
@@ -766,7 +772,7 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
         if (!token) return;
         let cancelled = false;
         Promise.all([
-            fetchGroupOrders(token).catch(() => [] as AdminGroupOrder[]),
+            fetchGroupOrders(token, { pageSize: 1000 }).then(r => r.items).catch(() => [] as AdminGroupOrder[]),
             // Operators have no access to courier/SMS data — skip those fetches.
             isOperator ? Promise.resolve([] as Courier[]) : fetchCouriers(token).catch(() => [] as Courier[]),
             isOperator ? Promise.resolve(null as number | null) : fetchSmsBalance(token).catch(() => null as number | null),
@@ -1028,12 +1034,16 @@ function DistrictMultiPicker({
   );
 }
 
+const PICKUP_PAGE_SIZE = 30;
+
 function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = canManage, canGroup = canManage, canSeeRevenue = true }: { initialStatus?: string; canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean; canSeeRevenue?: boolean }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const [groupOrders, setGroupOrders]   = useState<AdminGroupOrder[]>([]);
+  const [totalCount,  setTotalCount]    = useState(0);
+  const [page,        setPage]          = useState(1);
   const [couriers,    setCouriers]      = useState<Courier[]>([]);
   const [loading,     setLoading]       = useState(true);
   const [error,       setError]         = useState<string | null>(null);
@@ -1062,11 +1072,21 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   const loadSeqRef = useRef(0);
 
   // ── Pick-Up day navigation + grouping ──────────────────────────────────────
-  // null = show ALL days (default); a date filters the list to that single day, and an
-  // optional rangeEnd widens it to an inclusive [selectedDate..rangeEnd] span.
+  // null = untouched/Show-All depending on dateTouched (see resolveDateWindow); a date
+  // filters the list to that single day, and an optional rangeEnd widens it to an
+  // inclusive [selectedDate..rangeEnd] span.
   const [selectedDate,     setSelectedDate]     = useState<Date | null>(null);
   const [rangeEnd,         setRangeEnd]         = useState<Date | null>(null);
+  // False until the admin interacts with the day/range navigator at all (including
+  // "Show All"/"Today"). Untouched + no search → default to a rolling last-7-days window.
+  const [dateTouched,      setDateTouched]      = useState(false);
   const [daySummary,       setDaySummary]       = useState<PickupDayCustomer[]>([]);
+  // Every batch/standalone order matching the current filters + date window (not just the
+  // current ~30-row page of `groupOrders`) — decoupled from the paginated main list so the
+  // merge/grouping tools below always see every batch for whatever day they operate on
+  // (the selected day, or the day of any order actually visible in the list), regardless
+  // of which page of the main feed it would otherwise land on.
+  const [windowScopedOrders,  setWindowScopedOrders]  = useState<AdminGroupOrder[]>([]);
   const [groupingCustomer, setGroupingCustomer] = useState<PickupDayCustomer | null>(null);
   // The day grouping/merge actions operate on. Falls back to today while showing All,
   // so the per-day Non-Grouped tools still work without a day chosen.
@@ -1144,12 +1164,28 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
     setTimeout(() => setActionToast(null), 4000);
   };
 
-  const load = useCallback(async (term: string) => {
+  const filterRef = useRef({ search: '', city: '', districts: '', party: 'sender', status: initialStatus, date: '', dateTo: '', dateTouched: false });
+
+  const load = useCallback(async (pageArg: number) => {
     const seq = ++loadSeqRef.current;
     try {
-      const data = await fetchGroupOrders(token ?? '', term || undefined);
+      // Untouched day navigator + no search → rolling last-7-days default; an explicit
+      // day/range pick or a search term reaches the whole DB.
+      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
+      const result = await fetchGroupOrders(token ?? '', {
+        search: search || undefined,
+        date, dateTo,
+        city: filterCity || undefined,
+        districts: filterDistricts.length > 0 ? filterDistricts : undefined,
+        party: filterParty,
+        status: filterStatus || undefined,
+        excludeCompleted: true,
+        page: pageArg,
+        pageSize: PICKUP_PAGE_SIZE,
+      });
       if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
-      setGroupOrders(data);
+      setGroupOrders(result.items);
+      setTotalCount(result.totalCount);
       setError(null);
     } catch (e: unknown) {
       if (seq !== loadSeqRef.current) return;
@@ -1157,7 +1193,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [token]);
+  }, [token, dateTouched, search, selectedDate, rangeEnd, filterCity, filterDistricts, filterParty, filterStatus, t.goLoadingOrders]);
 
   const loadSummary = useCallback(async () => {
     // The Non-Grouped tools are per-day; summarize the effective day (the chosen day,
@@ -1168,23 +1204,75 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
 
   useEffect(() => { void loadSummary(); }, [loadSummary]);
 
-  useEffect(() => {
-    void (async () => { setLoading(true); await load(''); })();
-  }, [load]);
+  const loadWindowScoped = useCallback(async () => {
+    // Mirrors the main list's filters/date window (search/city/districts/party/status +
+    // resolveDateWindow), but with a generous pageSize instead of paginating — a batch
+    // count within one browsing window is realistically small, unlike the whole history
+    // the old unpaginated fetch used to load. batchesFor/mergeableByCustomer/etc. only
+    // ever operate on a day that's within this same window (the selected day, "today", or
+    // the day of an order actually rendered from `groupOrders`), so this always covers them.
+    try {
+      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
+      const { items } = await fetchGroupOrders(token ?? '', {
+        search: search || undefined,
+        date, dateTo,
+        city: filterCity || undefined,
+        districts: filterDistricts.length > 0 ? filterDistricts : undefined,
+        party: filterParty,
+        status: filterStatus || undefined,
+        excludeCompleted: true,
+        page: 1,
+        pageSize: 500,
+      });
+      setWindowScopedOrders(items);
+    } catch { setWindowScopedOrders([]); }
+  }, [token, dateTouched, search, selectedDate, rangeEnd, filterCity, filterDistricts, filterParty, filterStatus]);
+
+  useEffect(() => { void loadWindowScoped(); }, [loadWindowScoped]);
 
   useEffect(() => {
+    const prev = filterRef.current;
+    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
+    const next = {
+      search,
+      city:      filterCity,
+      districts: filterDistricts.join(','),
+      party:     filterParty,
+      status:    filterStatus,
+      date:      date ?? '',
+      dateTo:    dateTo ?? '',
+      dateTouched,
+    };
+
+    const filterChanged =
+      prev.search      !== next.search      ||
+      prev.city        !== next.city        ||
+      prev.districts   !== next.districts   ||
+      prev.party       !== next.party       ||
+      prev.status      !== next.status      ||
+      prev.date        !== next.date        ||
+      prev.dateTo      !== next.dateTo      ||
+      prev.dateTouched !== next.dateTouched;
+
+    filterRef.current = next;
+
+    const delay = filterChanged && next.search !== prev.search ? 350 : 0;
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      void (async () => { setLoading(true); await load(search); })();
-    }, 350);
+      const targetPage = filterChanged ? 1 : page;
+      if (filterChanged && page !== 1) setPage(1);
+      setLoading(true);
+      void load(targetPage);
+    }, delay);
+
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search, load]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filterCity, filterDistricts, filterParty, filterStatus, selectedDate, rangeEnd, dateTouched, page, load]);
 
   // Live refresh: when any order is placed/changed, refetch silently (keep current
-  // search term, no spinner) so new customer orders appear without a manual refresh.
-  const searchRef = useRef(search);
-  useEffect(() => { searchRef.current = search; });
-  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(searchRef.current); void loadSummary(); });
+  // filters/page, no spinner) so new customer orders appear without a manual refresh.
+  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(page); void loadSummary(); void loadWindowScoped(); });
 
   useEffect(() => {
     fetchCouriers(token ?? '').then(setCouriers).catch(() => {});
@@ -1270,9 +1358,11 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   );
 
   // The still-open batches each customer has that day — drives the Merge chooser.
+  // Reads windowScopedOrders (not the paginated groupOrders) so every batch for the day is
+  // considered regardless of which page of the main list it would otherwise land on.
   const mergeableByCustomer = useMemo(() => {
     const m = new Map<string, AdminGroupOrder[]>();
-    for (const go of groupOrders) {
+    for (const go of windowScopedOrders) {
       if (go.isStandalone) continue;            // not a real batch — can't merge
       if (!go.customerId) continue;
       if (georgianDateKeyOf(go.createdAt) !== effectiveDayKey) continue;
@@ -1284,17 +1374,17 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
     for (const arr of m.values())
       arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     return m;
-  }, [groupOrders, effectiveDayKey]);
+  }, [windowScopedOrders, effectiveDayKey]);
 
   // Appendable real batches for a customer on a specific Georgian day. Used when grouping
   // a standalone order so its target batches match the order's own day — correct even in
   // All mode, where cards from several days are shown together.
   const batchesFor = useCallback((customerId: string, dKey: string) =>
-    groupOrders
+    windowScopedOrders
       .filter(b => !b.isStandalone && b.customerId === customerId
         && georgianDateKeyOf(b.createdAt) === dKey && MERGEABLE_STATUSES.has(b.status))
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-  [groupOrders]);
+  [windowScopedOrders]);
 
   // Customers that have batches on the selected day (for the Grouped-view dropdown).
   const groupedCustomers = useMemo(() => {
@@ -1313,7 +1403,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   // day, counted regardless of each batch's status or package count.
   const multiBatchCustomers = useMemo(() => {
     const counts = new Map<string, { name: string; n: number }>();
-    for (const go of groupOrders) {
+    for (const go of windowScopedOrders) {
       if (go.isStandalone) continue;            // standalone singles aren't batches
       if (!go.customerId) continue;
       if (georgianDateKeyOf(go.createdAt) !== effectiveDayKey) continue;
@@ -1324,7 +1414,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
       .filter(([, v]) => v.n >= 2)
       .map(([id, v]) => ({ id, name: v.name, count: v.n }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [groupOrders, effectiveDayKey]);
+  }, [windowScopedOrders, effectiveDayKey]);
 
   // Customers surfaced in the Non-grouped view: those with 2+ batches that day
   // (mergeable) AND those with standalone orders not yet attached to any batch
@@ -1350,7 +1440,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   // per-customer "Group orders" action, which lists them in a modal.)
   const ungroupedListOrders = useMemo(() => {
     const ids = new Set(ungroupedCustomers.map(c => c.id));
-    return groupOrders
+    return windowScopedOrders
       .filter(go => !!go.customerId
                  && ids.has(go.customerId)
                  && georgianDateKeyOf(go.createdAt) === effectiveDayKey
@@ -1359,7 +1449,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
         a.customerId !== b.customerId
           ? a.senderBusinessName.localeCompare(b.senderBusinessName)
           : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }, [groupOrders, effectiveDayKey, ungroupedCustomers, ungroupedCustomerFilter]);
+  }, [windowScopedOrders, effectiveDayKey, ungroupedCustomers, ungroupedCustomerFilter]);
 
   // The list the shared batch renderer draws, depending on the active toggle.
   const displayList = pickupMode === 'ungrouped' ? ungroupedListOrders : listOrders;
@@ -1455,7 +1545,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
         <DateRangeNav
           from={selectedDate}
           to={rangeEnd}
-          onChange={(f, to) => { setSelectedDate(f); setRangeEnd(to); }}
+          onChange={(f, to) => { setDateTouched(true); setSelectedDate(f); setRangeEnd(to); }}
           classPrefix="pickup-daynav"
         />
         {(canManage || canGroup) && (
@@ -1623,7 +1713,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                   const n = visibleOrders.reduce((sum, go) => sum + visibleOrdersFor(go).length, 0);
                   return `${n} order${n !== 1 ? 's' : ''}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`;
                 })()
-              : `${t.goOrderCount(visibleOrders.length, groupOrders.length)}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`
+              : `${t.goOrderCount(visibleOrders.length, totalCount)}${hasFilters ? ` ${t.goOrdersMatched}` : ''}`
             }
           </span>
         )}
@@ -1726,7 +1816,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                       <td>
                         <AdminOrderRowActions order={o} storeName={o._go.senderBusinessName} couriers={couriers} token={token ?? ''}
                           onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                          onRefresh={() => load(search)}
+                          onRefresh={() => load(page)}
                           canManage={canManage}
                           onEdit={canManage ? () => openEditOrder(o, o._go) : undefined} />
                       </td>
@@ -1859,7 +1949,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                           <AdminGroupOrderActions
                             groupOrder={go} couriers={couriers} token={token ?? ''}
                             onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                            onRefresh={() => load(search)}
+                            onRefresh={() => load(page)}
                             canManage={canManage}
                             canAssignCourier={canAssignCourier}
                             warehousePresentIds={go.status === 'DeliveredToWarehouse'
@@ -1944,7 +2034,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                           <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
                                             onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-                                            onRefresh={() => load(search)}
+                                            onRefresh={() => load(page)}
                                             canManage={canManage}
                                             onEdit={canManage ? () => openEditOrder(o, go) : undefined} />
                                           {canGroup && moveDestinations.length > 0 && (
@@ -1952,7 +2042,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                                               orderId={o.id}
                                               destinations={moveDestinations}
                                               token={token ?? ''}
-                                              onMoved={() => { void load(search); void loadSummary(); showToast(t.pickupMovedToast); }}
+                                              onMoved={() => { void load(page); void loadSummary(); showToast(t.pickupMovedToast); }}
                                               onError={msg => showToast(msg, 'err')}
                                             />
                                           )}
@@ -1989,7 +2079,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
         order={editing?.item ?? null}
         open={!!editing}
         onClose={() => setEditing(null)}
-        onSaved={() => { setEditing(null); load(search); }}
+        onSaved={() => { setEditing(null); load(page); }}
         token={token ?? ''}
         couriers={couriers}
         customerPricing={editing?.pricing ?? null}
@@ -2007,7 +2097,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
           onGrouped={n => {
             setGroupingCustomer(null);
             showToast(t.pickupGroupedToast(n));
-            void load(search);
+            void load(page);
             void loadSummary();
           }}
         />
@@ -2023,7 +2113,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
           onMerged={() => {
             setMergingCustomer(null);
             showToast(t.pickupMergedToast);
-            void load(search);
+            void load(page);
             void loadSummary();
           }}
         />
@@ -2072,7 +2162,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                       await groupAndAcceptStandalone(token ?? '', acceptStandalone.id, acceptTargetId || undefined);
                       setAcceptStandalone(null);
                       showToast(t.pickupStandaloneAcceptedToast);
-                      void load(search);
+                      void load(page);
                       void loadSummary();
                     } catch (e) {
                       showToast(e instanceof Error ? e.message : t.goActionFailed, 'err');
@@ -2149,7 +2239,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                       });
                       setWhStandalone(null);
                       showToast(t.pickupStandaloneWhToast);
-                      void load(search);
+                      void load(page);
                       void loadSummary();
                     } catch (e) {
                       showToast(e instanceof Error ? e.message : t.goActionFailed, 'err');
@@ -2165,6 +2255,19 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
           document.body,
         );
       })()}
+
+      {/* Pagination — the Grouped view's batch list is server-paginated. */}
+      {pickupMode === 'grouped' && totalCount > PICKUP_PAGE_SIZE && (
+        <div className="pickup-pagination">
+          <button className="pickup-page-btn" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+            {t.aopPrevPage}
+          </button>
+          <span className="pickup-page-info">{t.aopPageInfo(page, Math.max(1, Math.ceil(totalCount / PICKUP_PAGE_SIZE)))}</span>
+          <button className="pickup-page-btn" disabled={page >= Math.ceil(totalCount / PICKUP_PAGE_SIZE)} onClick={() => setPage(p => p + 1)}>
+            {t.aopNextPage}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

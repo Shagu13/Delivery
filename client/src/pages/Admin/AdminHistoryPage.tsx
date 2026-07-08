@@ -186,8 +186,8 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
 
   const load = useCallback(async (term: string) => {
     try {
-      const data = await fetchGroupOrders(token, term || undefined);
-      setGroupOrders(data);
+      const { items } = await fetchGroupOrders(token, { search: term || undefined, pageSize: 1000 });
+      setGroupOrders(items);
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load history.');

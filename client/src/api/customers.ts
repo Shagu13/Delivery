@@ -56,10 +56,7 @@ export interface AdminCustomer extends Customer {
   tenantDisplayName: string | null;
 }
 
-export interface PagedResult<T> {
-  items: T[]; totalCount: number; page: number; pageSize: number; totalPages: number;
-  hasNextPage: boolean; hasPreviousPage: boolean;
-}
+export type { PagedResult } from '../types/paging';
 
 // ── Order types ───────────────────────────────────────────────────────────────
 

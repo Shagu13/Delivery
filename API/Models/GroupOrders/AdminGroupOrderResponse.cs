@@ -30,7 +30,10 @@ public sealed record AdminGroupOrderResponse(
     decimal? CompanyServiceCapitalPrice,
     decimal? CompanyServiceCityPrice,
     decimal? CompanyServiceDistrictPrice,
-    IReadOnlyList<AdminOrderResponse> Orders
+    IReadOnlyList<AdminOrderResponse> Orders,
+    // True for a synthetic "batch" wrapping a single standalone order (GroupOrderId ==
+    // null) — the Id is the order's own id, not a real GroupOrder id.
+    bool IsStandalone = false
 );
 
 /// <summary>One package row inside an AdminGroupOrderResponse.</summary>

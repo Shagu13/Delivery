@@ -1,6 +1,7 @@
 using API.Models.GroupOrders;
 using API.Models.Orders;
 using Application.Common.Interfaces;
+using Application.Common.Models;
 using Application.Courier.Queries;
 using Application.GroupOrders.Commands.AcceptGroupOrder;
 using Application.GroupOrders.Commands.AcceptGroupOrderInWarehouse;
@@ -181,21 +182,36 @@ public sealed class GroupOrdersController : BaseController
     // ── GET /api/grouporders ─────────────────────────────────────────────────
     [HttpGet]
     [Authorize(Roles = "Admin,Operator,TenantAdmin")]
-    [ProducesResponseType(typeof(IReadOnlyList<AdminGroupOrderResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll([FromQuery] string? search, CancellationToken ct)
+    [ProducesResponseType(typeof(PagedResult<AdminGroupOrderResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string?   search,
+        [FromQuery] DateTime? date      = null,
+        [FromQuery] DateTime? dateTo    = null,
+        [FromQuery] string?   city      = null,
+        [FromQuery] string?   district  = null,
+        [FromQuery] string    party     = "sender",
+        [FromQuery] string?   status    = null,
+        [FromQuery] bool      excludeCompleted = false,
+        [FromQuery] int       page      = 1,
+        [FromQuery] int       pageSize  = 30,
+        CancellationToken ct = default)
     {
         // A tenant co-admin sees only their own tenant's batches, and never company revenue.
+        // That query is a plain unbounded list — wrap it as a single-page PagedResult so the
+        // response shape is consistent regardless of branch.
         if (CurrentTenantId is Guid tid)
         {
             var scoped = await Sender.Send(
                 new Application.GroupOrders.Queries.GetTenantGroupOrders.GetTenantGroupOrdersQuery(tid), ct);
-            return Ok(scoped.Select(go => MapToAdminResponse(go, includeRevenue: false)).ToList());
+            var mapped = scoped.Select(go => MapToAdminResponse(go, includeRevenue: false)).ToList();
+            return Ok(new PagedResult<AdminGroupOrderResponse>(mapped, mapped.Count, 1, Math.Max(mapped.Count, 1)));
         }
 
-        var result = await Sender.Send(new GetAllGroupOrdersQuery(search), ct);
+        var result = await Sender.Send(new GetAllGroupOrdersQuery(search, date, dateTo, city, district, party, status, excludeCompleted, page, pageSize), ct);
         // Operators run the pick-up flow but must not see internal company revenue.
         bool includeRevenue = !User.IsInRole("Operator");
-        return Ok(result.Select(go => MapToAdminResponse(go, includeRevenue)).ToList());
+        var items = result.Items.Select(go => MapToAdminResponse(go, includeRevenue)).ToList();
+        return Ok(new PagedResult<AdminGroupOrderResponse>(items, result.TotalCount, result.Page, result.PageSize));
     }
 
     // ── GET /api/grouporders/pickup-day?date=  (Admin/Operator Pick-Up page summary) ───
@@ -298,8 +314,7 @@ public sealed class GroupOrdersController : BaseController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var result = await Sender.Send(new GetAllGroupOrdersQuery(null), ct);
-        var go = result.FirstOrDefault(x => x.Id == id);
+        var go = await Sender.Send(new Application.GroupOrders.Queries.GetGroupOrderById.GetGroupOrderByIdQuery(id), ct);
         if (go is null) return NotFound();
         return Ok(MapToAdminResponse(go));
     }
@@ -999,7 +1014,8 @@ public sealed class GroupOrdersController : BaseController
                 DeliveredAt:                      o.DeliveredAt,
                 CancellationReason:               o.CancellationReason?.ToString(),
                 CancellationComment:              o.CancellationComment
-            )).ToList()
+            )).ToList(),
+            IsStandalone: go.IsStandalone
         );
 }
 

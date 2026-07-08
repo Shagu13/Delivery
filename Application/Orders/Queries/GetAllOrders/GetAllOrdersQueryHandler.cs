@@ -70,14 +70,14 @@ public sealed class GetAllOrdersQueryHandler
             query = query.Where(o => o.Status == OrderStatus.DeliveryPostponed);
 
         // ── Created-day filter (Delivery page day navigator) ─────────────────
-        // CreatedAt is stored as Georgian wall-clock, so a plain .Date comparison
-        // against the selected Georgian day is correct (mirrors the Pick-Up page).
-        // Date alone = single day; Date + DateTo = an inclusive [Date..DateTo] range.
+        // CreatedAt is stored as Georgian wall-clock. Compared directly (no .Date
+        // call) against an exclusive upper bound so the index on CreatedAt stays
+        // usable — Date alone = single day; Date + DateTo = an inclusive [Date..DateTo] range.
         if (request.Date.HasValue)
         {
             var from = request.Date.Value.Date;
-            var to   = (request.DateTo ?? request.Date).Value.Date;
-            query = query.Where(o => o.CreatedAt.Date >= from && o.CreatedAt.Date <= to);
+            var to   = (request.DateTo ?? request.Date).Value.Date.AddDays(1);
+            query = query.Where(o => o.CreatedAt >= from && o.CreatedAt < to);
         }
 
         // ── Active-only filter (exclude terminal statuses) ───────────────────

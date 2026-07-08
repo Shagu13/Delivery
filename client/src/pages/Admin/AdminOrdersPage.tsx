@@ -16,7 +16,9 @@ import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { toDateKey } from '../../utils/georgianTime';
+import { resolveDateWindow } from '../../utils/dateWindow';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
+import type { PagedResult } from '../../types/paging';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,14 +63,6 @@ export interface AdminOrderItem {
   cancellationComment?: string | null;
 }
 
-interface PagedResult {
-  items: AdminOrderItem[];
-  totalCount: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-
 // ── API ───────────────────────────────────────────────────────────────────────
 
 async function fetchAllOrders(
@@ -78,7 +72,7 @@ async function fetchAllOrders(
     courierId?: string; unpriced?: boolean; assigned?: boolean;
     date?: string; dateTo?: string; page?: number; pageSize?: number;
   }
-): Promise<PagedResult> {
+): Promise<PagedResult<AdminOrderItem>> {
   const qs = new URLSearchParams();
   if (params.city)       qs.set('city',      params.city);
   if (params.district)   qs.set('district',  params.district);
@@ -106,7 +100,7 @@ async function fetchUnpricedCount(token: string, courierId?: string, date?: stri
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) return 0;
-  const data: PagedResult = await res.json();
+  const data: PagedResult<AdminOrderItem> = await res.json();
   return data.totalCount;
 }
 
@@ -326,7 +320,7 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 30;
 
 export default function AdminOrdersPage({ token: tokenProp, canManage = true, canSeeRevenue = true }: { token: string; canManage?: boolean; canSeeRevenue?: boolean }) {
   const { token: authToken } = useAuth();
@@ -336,7 +330,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // fully (canManage=true) but never see company revenue/margin: canSeeRevenue=false hides
   // the Revenue column here and in the view/bulk modals (server also strips the value).
 
-  const [data,            setData]            = useState<PagedResult | null>(null);
+  const [data,            setData]            = useState<PagedResult<AdminOrderItem> | null>(null);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState<string | null>(null);
   const [search,          setSearch]          = useState('');
@@ -352,10 +346,15 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
   const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
   // Day navigator — mirrors the Pick-Up page; filters by Order.CreatedAt (Georgian day).
-  // selectedDate null = show ALL days (default); set = range start (single day when
-  // rangeEnd is null, else the inclusive span [selectedDate..rangeEnd]).
+  // selectedDate null = untouched/Show-All depending on dateTouched (see resolveDateWindow);
+  // set = range start (single day when rangeEnd is null, else the inclusive span
+  // [selectedDate..rangeEnd]).
   const [selectedDate,    setSelectedDate]    = useState<Date | null>(null);
   const [rangeEnd,        setRangeEnd]        = useState<Date | null>(null);
+  // False until the admin interacts with the day navigator at all (including "Show All"/
+  // "Today"). Untouched + no search → default to a rolling last-7-days window instead of
+  // showing every order ever placed.
+  const [dateTouched,     setDateTouched]     = useState(false);
   const [couriers,        setCouriers]        = useState<Courier[]>([]);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
@@ -410,7 +409,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // write to state, so a slow/stale response can never overwrite a newer search — which
   // otherwise made results flicker in then vanish.
   const loadSeqRef  = useRef(0);
-  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '', dateTo: '' });
+  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '', dateTo: '', dateTouched: false });
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
@@ -422,11 +421,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   }, [token]);
 
   const refreshUnpricedCount = useCallback(async () => {
-    const count = await fetchUnpricedCount(token, filterCourier?.courierId,
-      selectedDate ? toDateKey(selectedDate) : undefined,
-      rangeEnd ? toDateKey(rangeEnd) : undefined);
+    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
+    const count = await fetchUnpricedCount(token, filterCourier?.courierId, date, dateTo);
     setUnpricedCount(count);
-  }, [token, filterCourier, selectedDate, rangeEnd]);
+  }, [token, filterCourier, dateTouched, search, selectedDate, rangeEnd]);
 
   useEffect(() => { void refreshUnpricedCount(); }, [refreshUnpricedCount]);
 
@@ -438,12 +436,14 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     setLoading(true);
     setError(null);
     try {
-      // Scope to the selected Georgian day when one is chosen; otherwise (null) show
-      // every day. Threaded here so all reload paths honor the day navigator.
+      // Untouched day navigator + no search → rolling last-7-days default; an explicit
+      // day/range pick or a search term reaches the whole DB. Threaded here so all reload
+      // paths honor the same rule.
+      const { date, dateTo } = resolveDateWindow({ dateTouched, search: params.search ?? '', selectedDate, rangeEnd });
       const result = await fetchAllOrders(token, {
         ...params,
-        date:   selectedDate ? toDateKey(selectedDate) : undefined,
-        dateTo: rangeEnd ? toDateKey(rangeEnd) : undefined,
+        date,
+        dateTo,
         pageSize: PAGE_SIZE,
       });
       if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
@@ -454,7 +454,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [token, t, selectedDate, rangeEnd]);
+  }, [token, t, dateTouched, selectedDate, rangeEnd]);
 
   // Reload the current view with the active filters — used by per-row actions (the kebab
   // menu) that mutate a single order outside the bulk flow.
@@ -482,17 +482,19 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       assigned:  assignTab === 'assigned',
       date:      selectedDate ? toDateKey(selectedDate) : '',
       dateTo:    rangeEnd ? toDateKey(rangeEnd) : '',
+      dateTouched,
     };
 
     const filterChanged =
-      prev.city      !== next.city      ||
-      prev.district  !== next.district  ||
-      prev.search    !== next.search    ||
-      prev.courierId !== next.courierId ||
-      prev.unpriced  !== next.unpriced  ||
-      prev.assigned  !== next.assigned  ||
-      prev.date      !== next.date      ||
-      prev.dateTo    !== next.dateTo;
+      prev.city        !== next.city        ||
+      prev.district    !== next.district    ||
+      prev.search      !== next.search      ||
+      prev.courierId   !== next.courierId   ||
+      prev.unpriced    !== next.unpriced    ||
+      prev.assigned    !== next.assigned    ||
+      prev.date        !== next.date        ||
+      prev.dateTo      !== next.dateTo      ||
+      prev.dateTouched !== next.dateTouched;
 
     filterRef.current = next;
 
@@ -517,7 +519,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, selectedDate, rangeEnd, page, load]);
+  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, selectedDate, rangeEnd, dateTouched, page, load]);
 
   // Esc terminates the Mark-Delivered action: leave deliver mode and clear the selection.
   // Only active while in deliver mode, and never while a modal/warning dialog is open.
@@ -554,10 +556,11 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // whose orders sat on another page, e.g. Tskneti). Scoped to the selected Georgian day.
   useEffect(() => {
     if (!token) return;
-    fetchOrderLocations(token, selectedDate ? toDateKey(selectedDate) : undefined, rangeEnd ? toDateKey(rangeEnd) : undefined)
+    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
+    fetchOrderLocations(token, date, dateTo)
       .then(setOrderLocations)
       .catch(() => { /* keep filters empty on failure */ });
-  }, [token, selectedDate, rangeEnd]);
+  }, [token, dateTouched, search, selectedDate, rangeEnd]);
 
   // Filter value is the English name (what the backend matches on recipientCity/District);
   // the label shows the Georgian name when the UI is in Georgian.
@@ -596,7 +599,55 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
 
   const allSelected  = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id));
   const someSelected = selected.size > 0;
-  const toggleAll    = () => setSelected(allSelected ? new Set() : new Set(selectableOrders.map(o => o.id)));
+
+  // "Select all" must cover every order matching the active filters, not just the loaded
+  // page (PAGE_SIZE caps `orders` at 30) — otherwise a bulk assign silently drops whatever
+  // didn't fit on the current page. When more exists than what's loaded, fetch the whole
+  // filtered set unpaged and cache the extra items so downstream lookups (actionPool,
+  // doAssign, print labels) can resolve ids that live outside the current page.
+  const [selectAllCache, setSelectAllCache] = useState<Map<string, AdminOrderItem>>(new Map());
+  const [selectAllBusy,  setSelectAllBusy]  = useState(false);
+  const orderCache = useMemo(() => new Map(orders.map(o => [o.id, o])), [orders]);
+  const findOrder = useCallback(
+    (id: string) => orderCache.get(id) ?? selectAllCache.get(id),
+    [orderCache, selectAllCache],
+  );
+
+  const toggleAll = async () => {
+    if (allSelected) { setSelected(new Set()); return; }
+    if (!data || data.totalCount <= orders.length) {
+      setSelected(new Set(selectableOrders.map(o => o.id)));
+      return;
+    }
+    setSelectAllBusy(true);
+    try {
+      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
+      const full = await fetchAllOrders(token, {
+        city:      filterCity || undefined,
+        district:  filterDistrict || undefined,
+        search:    search || undefined,
+        courierId: filterCourier?.courierId,
+        unpriced:  filterUnpriced || undefined,
+        assigned:  assignTab === 'assigned',
+        date, dateTo,
+        page: 1, pageSize: data.totalCount,
+      });
+      const selectable = bulkMode === 'assign'  ? full.items.filter(isAssignable)  :
+                          bulkMode === 'deliver' ? full.items.filter(isDeliverable) :
+                          full.items;
+      setSelectAllCache(prev => {
+        const next = new Map(prev);
+        selectable.forEach(o => next.set(o.id, o));
+        return next;
+      });
+      setSelected(new Set(selectable.map(o => o.id)));
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : t.aopFailedLoad, 'err');
+    } finally {
+      setSelectAllBusy(false);
+    }
+  };
+
   const toggleOne    = (id: string) => setSelected(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -608,6 +659,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const handleExport = async () => {
     setExporting(true);
     try {
+      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
       await exportOrdersExcel(token, {
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
@@ -615,8 +667,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
         assigned:  assignTab === 'assigned',
-        date:      selectedDate ? toDateKey(selectedDate) : undefined,
-        dateTo:    rangeEnd ? toDateKey(rangeEnd) : undefined,
+        date,
+        dateTo,
         ids:       selected.size > 0 ? [...selected] : undefined,
       });
     } catch (e) {
@@ -629,7 +681,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // Print parcel labels for the currently selected orders (same sticker as the customer side).
   const handlePrintLabels = () => {
     const labels = [...selected]
-      .map(id => orders.find(o => o.id === id))
+      .map(id => findOrder(id))
       .filter((o): o is AdminOrderItem => !!o)
       .map(buildAdminLabel);
     void printParcelLabels(labels);
@@ -678,12 +730,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // never list rows the action would skip.
   const actionPool = useMemo(() => {
     const picked = [...selected]
-      .map(id => orders.find(o => o.id === id))
+      .map(id => findOrder(id))
       .filter((o): o is AdminOrderItem => !!o);
     if (bulkMode === 'assign')  return picked.filter(isAssignable);
     if (bulkMode === 'deliver') return picked.filter(isDeliverable);
     return picked;
-  }, [selected, orders, bulkMode]);
+  }, [selected, findOrder, bulkMode]);
 
   const missingSalaryOrders = useMemo(() =>
     actionPool.filter(o => o.courierSalary == null),
@@ -727,12 +779,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const doAssign = async () => {
     setBulkAssigning(true);
     const ids = [...selected].filter(id => {
-      const o = orders.find(x => x.id === id);
+      const o = findOrder(id);
       return !!o && isAssignable(o);
     });
     let ok = 0; let fail = 0;
     await Promise.all(ids.map(async id => {
-      const o = orders.find(x => x.id === id);
+      const o = findOrder(id);
       try {
         if (o?.orderType === 'Return') {
           await assignReturnCourier(token, id, bulkCourierId);
@@ -789,7 +841,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const doDeliver = async () => {
     setBulkDelivering(true);
     const targets = [...selected]
-      .map(id => orders.find(o => o.id === id))
+      .map(id => findOrder(id))
       .filter((o): o is AdminOrderItem => !!o && isDeliverable(o));
     let ok = 0; let fail = 0;
     await Promise.all(targets.map(async o => {
@@ -883,12 +935,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   return (
     <div className="aop-root" ref={aopRootRef}>
 
-      {/* Day navigator — All by default; pick a day, step with the arrows, or choose a
-          custom inclusive range to filter packages by the day they were placed (CreatedAt). */}
+      {/* Day navigator — last 7 days by default; pick a day, step with the arrows, or choose
+          a custom inclusive range to filter packages by the day they were placed (CreatedAt). */}
       <DateRangeNav
         from={selectedDate}
         to={rangeEnd}
-        onChange={(f, to) => { setSelectedDate(f); setRangeEnd(to); }}
+        onChange={(f, to) => { setDateTouched(true); setSelectedDate(f); setRangeEnd(to); }}
         classPrefix="aop-daynav"
       />
 
@@ -1477,7 +1529,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
               <tr>
                 {canManage && (
                   <th className="aop-th aop-th--check">
-                    <input type="checkbox" className="aop-checkbox" checked={allSelected}
+                    <input type="checkbox" className="aop-checkbox" checked={allSelected} disabled={selectAllBusy}
                       ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
                       onChange={toggleAll}
                       title={allSelected ? t.aopDeselectAll : t.aopSelectAll}

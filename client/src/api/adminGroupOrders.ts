@@ -1,3 +1,5 @@
+import type { PagedResult } from '../types/paging';
+
 const BASE = '/api/grouporders';
 
 export type OrderStatus =
@@ -98,9 +100,38 @@ export interface AdminGroupOrder {
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
-export async function fetchGroupOrders(token: string, search?: string): Promise<AdminGroupOrder[]> {
-    const url = search ? `${BASE}?search=${encodeURIComponent(search)}` : BASE;
-    const res = await fetch(url, {
+export interface FetchGroupOrdersParams {
+    search?: string;
+    /** Range start (Georgian day). Omit with dateTo omitted → no date bound (whole DB). */
+    date?: string;
+    /** Range end (inclusive). Omit → single day = date. */
+    dateTo?: string;
+    /** Pickup city (party='sender', default) or recipient city (party='recipient'). */
+    city?: string;
+    /** Pickup districts (party='sender', default) or recipient districts (party='recipient'); any match. */
+    districts?: string[];
+    party?: 'sender' | 'recipient';
+    status?: string;
+    /** Hide fully completed batches/orders (they live in History). Default false. */
+    excludeCompleted?: boolean;
+    page?: number;
+    pageSize?: number;
+}
+
+export async function fetchGroupOrders(token: string, params: FetchGroupOrdersParams = {}): Promise<PagedResult<AdminGroupOrder>> {
+    const qs = new URLSearchParams();
+    if (params.search)                        qs.set('search', params.search);
+    if (params.date)                          qs.set('date', params.date);
+    if (params.dateTo)                        qs.set('dateTo', params.dateTo);
+    if (params.city)                          qs.set('city', params.city);
+    if (params.districts && params.districts.length > 0) qs.set('district', params.districts.join(','));
+    if (params.party)                         qs.set('party', params.party);
+    if (params.status)                        qs.set('status', params.status);
+    if (params.excludeCompleted)              qs.set('excludeCompleted', 'true');
+    if (params.page)                          qs.set('page', String(params.page));
+    if (params.pageSize)                      qs.set('pageSize', String(params.pageSize));
+    const qsStr = qs.toString();
+    const res = await fetch(qsStr ? `${BASE}?${qsStr}` : BASE, {
         headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Failed to fetch group orders');

@@ -399,9 +399,9 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const load = useCallback(async (term: string) => {
     const seq = ++loadSeqRef.current;
     try {
-      const data = await fetchGroupOrders(token ?? '', term || undefined);
+      const { items } = await fetchGroupOrders(token ?? '', { search: term || undefined, pageSize: 1000 });
       if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
-      setGroupOrders(data);
+      setGroupOrders(items);
       setError(null);
     } catch (e: unknown) {
       if (seq !== loadSeqRef.current) return;
@@ -1211,6 +1211,17 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           <div className="go-toolbar pkg-delivery-toolbar">
             <label className="aop-col-toggle"><input type="checkbox" checked={showTracking} onChange={e => setShowTracking(e.target.checked)} />{t.aopShowTracking}</label>
             <label className="aop-col-toggle"><input type="checkbox" checked={showPrices} onChange={e => setShowPrices(e.target.checked)} />{t.aopShowPrices}</label>
+
+            {/* Selects/deselects every package currently matching the filters above (all
+                customer batches, not just the one you happen to have expanded) — this is
+                the only always-visible select-all; the bulk bar's own checkbox stays hidden
+                until at least one row is picked. */}
+            <label className="aop-col-toggle" style={{ opacity: selectableOrders.length === 0 ? 0.5 : 1 }}>
+              <input type="checkbox" className="aop-checkbox" checked={allSelected} disabled={selectableOrders.length === 0}
+                ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                onChange={toggleAll} />
+              {allSelected ? t.aopDeselectAll : t.aopSelectAllN(selectableOrders.length)}
+            </label>
 
             <div className="go-select-wrap">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
