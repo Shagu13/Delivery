@@ -1,3 +1,5 @@
+import type { PagedResult } from '../types/paging';
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface RegisterCustomerRequest {

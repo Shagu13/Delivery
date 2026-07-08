@@ -519,6 +519,13 @@ export function AdminDashboard() {
         .dmp-checkbox { width: 14px; height: 14px; accent-color: var(--color-accent); cursor: pointer; flex-shrink: 0; }
         .dmp-item-label { flex: 1; font-size: 0.82rem; color: var(--color-text); }
         .dmp-item-check { color: var(--color-accent); flex-shrink: 0; }
+        .dmp-search { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--color-border); color: var(--color-text-subtle); }
+        .dmp-search-input { flex: 1; background: none; border: none; outline: none; color: var(--color-text); font-size: 0.82rem; }
+        .dmp-search-input::placeholder { color: var(--color-text-subtle); }
+        .dmp-empty { padding: 12px 10px; text-align: center; font-size: 0.78rem; color: var(--color-text-subtle); }
+        .dmp-tick { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; border-radius: 100px; border: 1px solid var(--color-border); background: none; color: transparent; cursor: pointer; transition: all var(--transition); }
+        .dmp-tick:hover { border-color: var(--color-accent); }
+        .dmp-tick--on { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
         /* Sidebar link text (hidden when collapsed) */
         .sidebar__link-text { transition: opacity 0.15s, width 0.2s; }
         .sidebar__lang-toggle { margin-bottom: 10px; width: 100%; justify-content: center; }

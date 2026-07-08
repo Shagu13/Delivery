@@ -196,34 +196,46 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ── Multi-district checkbox dropdown (copied) ─────────────────────────────────
+// ── Multi city/district checkbox dropdown, with a typable search box (copied+generalized) ──
 
-interface DistrictMultiPickerProps {
+interface LocationMultiPickerProps {
   available: string[];
   selected: string[];
-  onChange: (districts: string[]) => void;
-  districtGeoMap: Record<string, string | undefined>;
-  locDistrict: (en: string, geo?: string | null) => string;
+  onChange: (values: string[]) => void;
+  geoMap: Record<string, string | undefined>;
+  locLabel: (en: string, geo?: string | null) => string;
+  allLabel: string;         // trigger text when nothing's selected, e.g. "All cities"
   disabled?: boolean;
 }
 
-function DistrictMultiPicker({ available, selected, onChange, districtGeoMap, locDistrict, disabled }: DistrictMultiPickerProps) {
+function LocationMultiPicker({ available, selected, onChange, geoMap, locLabel, allLabel, disabled }: LocationMultiPickerProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery(''); }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const toggle = (d: string) => onChange(selected.includes(d) ? selected.filter(x => x !== d) : [...selected, d]);
+  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
 
-  const label = selected.length === 0 ? 'All Districts'
-    : selected.length === 1 ? locDistrict(selected[0], districtGeoMap[selected[0]])
-    : `${selected.length} districts`;
+  const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return available;
+    return available.filter(v => v.toLowerCase().includes(q) || (geoMap[v] ?? '').toLowerCase().includes(q));
+  }, [available, query, geoMap]);
+
+  const label = selected.length === 0 ? allLabel
+    : selected.length === 1 ? locLabel(selected[0], geoMap[selected[0]])
+    : t.goNLocationsSelected(selected.length);
 
   return (
     <div className="dmp-root" ref={ref}>
@@ -251,22 +263,29 @@ function DistrictMultiPicker({ available, selected, onChange, districtGeoMap, lo
       </button>
       {open && !disabled && (
         <div className="dmp-dropdown">
+          <div className="dmp-search">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/><path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+            <input ref={inputRef} type="text" className="dmp-search-input" value={query}
+              onChange={e => setQuery(e.target.value)} placeholder={t.goLocationSearchPh} autoComplete="off" />
+          </div>
           <div className="dmp-dropdown-header">
-            <span className="dmp-dropdown-title">Districts</span>
+            <span className="dmp-dropdown-title">{t.goNLocationsSelected(selected.length)}</span>
             <button className="dmp-select-all" onClick={() => onChange(selected.length === available.length ? [] : [...available])}>
-              {selected.length === available.length ? 'Clear' : 'All'}
+              {selected.length === available.length ? t.goClear : t.pillAll}
             </button>
           </div>
           <div className="dmp-list">
-            {available.map(d => {
-              const checked = selected.includes(d);
+            {filtered.length === 0 && <div className="dmp-empty">{t.goNoLocationMatches}</div>}
+            {filtered.map(v => {
+              const checked = selected.includes(v);
               return (
-                <div key={d} className={`dmp-item${checked ? ' dmp-item--checked' : ''}`} onClick={() => toggle(d)}>
-                  <input type="checkbox" className="dmp-checkbox" checked={checked} readOnly />
-                  <span className="dmp-item-label">{locDistrict(d, districtGeoMap[d])}</span>
-                  {checked && (
-                    <svg className="dmp-item-check" width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  )}
+                <div key={v} className={`dmp-item${checked ? ' dmp-item--checked' : ''}`} onClick={() => toggle(v)}>
+                  <span className="dmp-item-label">{locLabel(v, geoMap[v])}</span>
+                  <button type="button" className={`dmp-tick${checked ? ' dmp-tick--on' : ''}`}
+                    onClick={e => { e.stopPropagation(); toggle(v); }}
+                    title={checked ? t.goDeselect : t.goSelect}>
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
                 </div>
               );
             })}
@@ -294,7 +313,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const [error,       setError]       = useState<string | null>(null);
   const [search,      setSearch]      = useState('');
   const [filterParty,     setFilterParty]     = useState<'sender' | 'recipient'>('sender');
-  const [filterCity,      setFilterCity]      = useState('');
+  const [filterCities,    setFilterCities]    = useState<string[]>([]);
   const [filterDistricts, setFilterDistricts] = useState<string[]>([]);
   const [filterStatus,    setFilterStatus]    = useState('');
   const [expandedIds,     setExpandedIds]     = useState<Set<string>>(new Set());
@@ -454,8 +473,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     setExpandedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
 
-  const handlePartyChange = (party: 'sender' | 'recipient') => { setFilterParty(party); setFilterCity(''); setFilterDistricts([]); };
-  const handleCityChange  = (city: string) => { setFilterCity(city); setFilterDistricts([]); };
+  const handlePartyChange  = (party: 'sender' | 'recipient') => { setFilterParty(party); setFilterCities([]); setFilterDistricts([]); };
+  const handleCitiesChange = (cities: string[]) => { setFilterCities(cities); setFilterDistricts([]); };
 
   // ── Derived: cities / districts / geo maps (copied) ─────────────────────────
   const availableCities = useMemo(() => {
@@ -482,10 +501,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   }, [groupOrders]);
 
   const availableDistricts = useMemo(() => {
-    if (!filterCity) return [];
-    if (filterParty === 'sender') return [...new Set(groupOrders.filter(go => go.pickUpCity === filterCity).map(go => go.pickUpDistrict))].sort();
-    return [...new Set(groupOrders.flatMap(go => go.orders).filter(o => o.recipientCity === filterCity).map(o => o.recipientDistrict))].sort();
-  }, [groupOrders, filterParty, filterCity]);
+    if (filterCities.length === 0) return [];
+    if (filterParty === 'sender') return [...new Set(groupOrders.filter(go => filterCities.includes(go.pickUpCity)).map(go => go.pickUpDistrict))].sort();
+    return [...new Set(groupOrders.flatMap(go => go.orders).filter(o => filterCities.includes(o.recipientCity)).map(o => o.recipientDistrict))].sort();
+  }, [groupOrders, filterParty, filterCities]);
 
   // Unpriced badge — packages (non-terminal) with no company service price set.
   const unpricedCount = useMemo(() =>
@@ -511,19 +530,19 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
       }
       // When a delivery courier / unpriced filter is on, keep only batches with a matching package.
       if ((filterCourier || filterUnpriced) && !go.orders.some(matchesDeliveryFilters)) return false;
-      if (!filterCity && filterDistricts.length === 0) return true;
+      if (filterCities.length === 0 && filterDistricts.length === 0) return true;
       if (filterParty === 'sender') {
-        if (filterCity && go.pickUpCity !== filterCity) return false;
+        if (filterCities.length > 0 && !filterCities.includes(go.pickUpCity)) return false;
         if (filterDistricts.length > 0 && !filterDistricts.includes(go.pickUpDistrict)) return false;
         return true;
       }
       return go.orders.some(o => {
-        if (filterCity && o.recipientCity !== filterCity) return false;
+        if (filterCities.length > 0 && !filterCities.includes(o.recipientCity)) return false;
         if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
         return true;
       });
     });
-  }, [groupOrders, filterStatus, filterCity, filterDistricts, filterParty, filterCourier, filterUnpriced, matchesDeliveryFilters]);
+  }, [groupOrders, filterStatus, filterCities, filterDistricts, filterParty, filterCourier, filterUnpriced, matchesDeliveryFilters]);
 
   // Date filter: null = All; a single day; or an inclusive [from..to] range. Date keys are
   // 'yyyy-MM-dd', so lexical string comparison is chronological.
@@ -606,10 +625,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   const displayList = pickupMode === 'ungrouped' ? ungroupedListOrders : listOrders;
 
-  const hasLocationFilter = filterCity || filterDistricts.length > 0;
+  const hasLocationFilter = filterCities.length > 0 || filterDistricts.length > 0;
   const hasFilters = search || hasLocationFilter || filterStatus || filterCourier || filterUnpriced;
   const clearAll = () => {
-    setSearch(''); setFilterCity(''); setFilterDistricts([]); setFilterStatus('');
+    setSearch(''); setFilterCities([]); setFilterDistricts([]); setFilterStatus('');
     setFilterCourier(''); setFilterUnpriced(false);
   };
 
@@ -617,13 +636,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const visibleOrdersFor = useCallback((go: AdminGroupOrder) => {
     let orders = go.orders.filter(o => !ACTIVE_ORDER_STATUSES_ONLY.has(o.status));
     if (filterCourier || filterUnpriced) orders = orders.filter(matchesDeliveryFilters);
-    if (pickupMode === 'ungrouped' || filterParty !== 'recipient' || (!filterCity && filterDistricts.length === 0)) return orders;
+    if (pickupMode === 'ungrouped' || filterParty !== 'recipient' || (filterCities.length === 0 && filterDistricts.length === 0)) return orders;
     return orders.filter(o => {
-      if (filterCity && o.recipientCity !== filterCity) return false;
+      if (filterCities.length > 0 && !filterCities.includes(o.recipientCity)) return false;
       if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
       return true;
     });
-  }, [pickupMode, filterParty, filterCity, filterDistricts, filterCourier, filterUnpriced, matchesDeliveryFilters]);
+  }, [pickupMode, filterParty, filterCities, filterDistricts, filterCourier, filterUnpriced, matchesDeliveryFilters]);
 
   // ── Date-section grouping (copied) ──────────────────────────────────────────
   const groupByDate = (orders: AdminGroupOrder[]) => {
@@ -745,7 +764,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     setExporting(true);
     try {
       await exportOrdersExcel(token ?? '', {
-        city:      filterCity || undefined,
+        city:      filterCities.length === 1 ? filterCities[0] : undefined,
         district:  filterDistricts.length === 1 ? filterDistricts[0] : undefined,
         search:    search || undefined,
         courierId: filterCourier || undefined,
@@ -1173,22 +1192,16 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
             <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ marginBottom: 6 }}><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
             <div className="go-filter-step">
               <span className="go-step-label">{t.goCity}</span>
-              <div className="go-select-wrap">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><path d="M8 1.5C5.515 1.5 3.5 3.515 3.5 6c0 3.75 4.5 8.5 4.5 8.5S12.5 9.75 12.5 6c0-2.485-2.015-4.5-4.5-4.5zm0 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" stroke="currentColor" strokeWidth="1.2"/></svg>
-                <select className="go-select" value={filterCity} onChange={e => handleCityChange(e.target.value)} disabled={loading || availableCities.length === 0}>
-                  <option value="">{t.goAllCities}</option>
-                  {availableCities.map(c => <option key={c} value={c}>{locCity(c, cityGeoMap[c])}</option>)}
-                </select>
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </div>
+              <LocationMultiPicker available={availableCities} selected={filterCities} onChange={handleCitiesChange}
+                geoMap={cityGeoMap} locLabel={locCity} allLabel={t.goAllCities} disabled={loading || availableCities.length === 0} />
             </div>
-            {filterCity && (
+            {filterCities.length > 0 && (
               <>
                 <svg className="go-chain-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ marginBottom: 6 }}><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 <div className="go-filter-step">
                   <span className="go-step-label">{t.goDistrict}</span>
-                  <DistrictMultiPicker available={availableDistricts} selected={filterDistricts} onChange={setFilterDistricts}
-                    districtGeoMap={districtGeoMap} locDistrict={locDistrict} disabled={availableDistricts.length === 0} />
+                  <LocationMultiPicker available={availableDistricts} selected={filterDistricts} onChange={setFilterDistricts}
+                    geoMap={districtGeoMap} locLabel={locDistrict} allLabel={t.goAllDistricts} disabled={availableDistricts.length === 0} />
                 </div>
               </>
             )}
