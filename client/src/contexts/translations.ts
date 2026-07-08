@@ -3349,7 +3349,7 @@ const ka: typeof en = {
     finTabCustomers:     'მომხმარებლები',
     finTabCouriers:      'კურიერები',
     finTabHistory:       'ისტორია',
-    finTabPaymentHistory: 'გადახდების ისტორია',
+    finTabPaymentHistory: 'ტრანზაქციები',
     finCourierSelect:    'აირჩიეთ კურიერი',
     finCourierSearch:    'მოძებნეთ კურიერი სახელით…',
     // Admin Finance — Overview / Payments toggle + payment-status filter
@@ -3471,7 +3471,7 @@ const ka: typeof en = {
     ofinNotDelivered:    'არ არის მიტანილი',
     ofinTabPlaced:       'განთავსებული',
     ofinTabPayments:     'ჩარიცხვები',
-    ofinTabReceipts:     'ქვითრები',
+    ofinTabReceipts:     'ტრანზაქციები',
     ofinShowing:         (d: string) => `არჩეული: ${d}`,
     ofinPaidDate:        'ჩარიცხვის თარიღი',
     ofinCodToPay:        'გადასახდელი COD',
