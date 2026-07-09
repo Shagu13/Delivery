@@ -15,20 +15,16 @@ namespace Application.CompanyFinance.Queries;
 /// on accepted-but-undelivered orders, since that cash is already in hand.
 /// </summary>
 /// <summary>
-/// One recipient-area filter entry. <paramref name="District"/> null = the whole city;
-/// otherwise the specific city+district.
-/// </summary>
-public sealed record AreaFilterSpec(string City, string? District);
-
-/// <summary>
-/// <paramref name="Areas"/> optionally scopes every figure to orders delivered to any of the
-/// listed recipient locations (a city-only entry matches every district in that city). An
-/// empty list = no narrowing.
+/// <paramref name="Cities"/>/<paramref name="Districts"/> optionally scope every figure to
+/// orders whose recipient location matches: recipient city is one of <paramref name="Cities"/>
+/// (if any given) AND recipient district is one of <paramref name="Districts"/> (if any given).
+/// Both empty = no narrowing. Mirrors GetAllGroupOrdersQueryHandler's facet-style filtering.
 /// </summary>
 public sealed record GetCompanyFinanceOverviewQuery(
     DateOnly From,
     DateOnly To,
-    IReadOnlyList<AreaFilterSpec>? Areas = null
+    IReadOnlyList<string>? Cities = null,
+    IReadOnlyList<string>? Districts = null
 ) : IRequest<CompanyFinanceOverviewDto>;
 
 public sealed class GetCompanyFinanceOverviewQueryHandler
@@ -44,25 +40,16 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         var fromDt = request.From.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var toDt   = request.To.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc); // exclusive upper bound
 
-        // Optional recipient-location narrowing over any number of areas. A city-only entry
-        // matches every district in that city; a city+district entry matches only that district.
-        // Encoded for SQL as two IN lists: whole-city names, and city+district pair keys joined
-        // by a unit-separator control char that can't occur in a place name. Empty = no narrowing.
-        const string sep = "\u001F";
-        List<AreaFilterSpec> areas = (request.Areas ?? Array.Empty<AreaFilterSpec>())
-            .Where(a => !string.IsNullOrWhiteSpace(a.City))
-            .Select(a => new AreaFilterSpec(
-                a.City.Trim(),
-                string.IsNullOrWhiteSpace(a.District) ? null : a.District!.Trim()))
-            .ToList();
-        List<string> cityOnly = areas.Where(a => a.District is null).Select(a => a.City).ToList();
-        List<string> pairKeys = areas.Where(a => a.District is not null).Select(a => a.City + sep + a.District).ToList();
+        // Optional recipient-location narrowing: city facet AND district facet, each applied
+        // only when non-empty (mirrors GetAllGroupOrdersQueryHandler's multi-select filters).
+        HashSet<string> cities = (request.Cities ?? Array.Empty<string>())
+            .Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).ToHashSet();
+        HashSet<string> districts = (request.Districts ?? Array.Empty<string>())
+            .Where(d => !string.IsNullOrWhiteSpace(d)).Select(d => d.Trim()).ToHashSet();
 
-        System.Linq.Expressions.Expression<Func<Domain.Order, bool>> inArea =
-            areas.Count == 0
-                ? o => true
-                : o => cityOnly.Contains(o.RecipientCity!)
-                    || pairKeys.Contains(o.RecipientCity + sep + o.RecipientDistrict);
+        System.Linq.Expressions.Expression<Func<Domain.Order, bool>> inArea = o =>
+            (cities.Count == 0 || cities.Contains(o.RecipientCity!))
+            && (districts.Count == 0 || districts.Contains(o.RecipientDistrict!));
 
         // Delivered orders for the range — same definition as CourierSettlement:
         // last-mile deliveries (DeliveredAt) and return drop-offs (DeliveredToWarehouseAt).

@@ -14,24 +14,15 @@ public sealed class CompanyFinanceController : BaseController
     public async Task<IActionResult> GetOverview(
         [FromQuery] DateOnly from,
         [FromQuery] DateOnly to,
-        [FromQuery] string[]? areaCity,
-        [FromQuery] string[]? areaDistrict,
+        [FromQuery] string? city,
+        [FromQuery] string? district,
         CancellationToken ct)
     {
-        // areaCity / areaDistrict are aligned by position: a blank district means "whole city".
-        var areas = new List<AreaFilterSpec>();
-        if (areaCity is not null)
-        {
-            for (int i = 0; i < areaCity.Length; i++)
-            {
-                var c = areaCity[i]?.Trim();
-                if (string.IsNullOrEmpty(c)) continue;
-                var d = (areaDistrict is not null && i < areaDistrict.Length) ? areaDistrict[i]?.Trim() : null;
-                areas.Add(new AreaFilterSpec(c, string.IsNullOrEmpty(d) ? null : d));
-            }
-        }
+        // city / district are comma-separated multi-select facets (mirrors GroupOrders' filter convention).
+        var cities    = city?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var districts = district?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        var result = await Sender.Send(new GetCompanyFinanceOverviewQuery(from, to, areas), ct);
+        var result = await Sender.Send(new GetCompanyFinanceOverviewQuery(from, to, cities, districts), ct);
         return Ok(result);
     }
 }

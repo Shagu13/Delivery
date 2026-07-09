@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { formatGeorgianDateTime } from '../../utils/georgianTime';
@@ -12,14 +12,14 @@ import {
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
-import { setCompanyServicePrice } from '../../api/orders';
+import { setCompanyServicePrice, fetchOrderLocations } from '../../api/orders';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
 import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 import { OutstandingBalancesModal } from './OutstandingBalancesModal';
-import { MultiAreaFilter, matchesAreaFilter, areaFilterKey } from '../../components/ui/MultiAreaFilter';
-import type { AreaFilter } from '../../components/ui/MultiAreaFilter';
+import { MultiCityDistrictFilter } from '../../components/ui/MultiCityDistrictFilter';
+import type { CityDistrictOption } from '../../components/ui/MultiCityDistrictFilter';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -140,24 +140,35 @@ function Row({ label, value, strong = false, tone }: {
 const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshSignal: number }) {
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
     const now = new Date();
     const [from, setFrom] = useState(isoDate(new Date(now.getFullYear(), now.getMonth(), 1)));
     const [to, setTo] = useState(isoDate(now));
     // Optional recipient-location narrowing of every figure on this card — any number of
-    // cities and/or districts (empty = all areas).
-    const [areas, setAreas] = useState<AreaFilter[]>([]);
+    // cities and/or (once narrowed to a city) districts within them. Empty = all areas.
+    const [filterCities, setFilterCities] = useState<string[]>([]);
+    const [filterDistricts, setFilterDistricts] = useState<string[]>([]);
+    const [locationOptions, setLocationOptions] = useState<CityDistrictOption[]>([]);
     const [data, setData] = useState<CompanyFinanceOverview | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Recipient locations actually used in [from, to] — drives the city/district picker
+    // options (only offers areas that would return results).
+    useEffect(() => {
+        fetchOrderLocations(token, from, to).then(setLocationOptions).catch(() => setLocationOptions([]));
+    }, [token, from, to]);
+
+    const locCity     = (en: string, geo?: string | null) => (lang === 'ka' && geo ? geo : en);
+    const locDistrict = (en: string, geo?: string | null) => (lang === 'ka' && geo ? geo : en);
+
     const load = useCallback(() => {
         setLoading(true); setError(null);
-        fetchCompanyFinanceOverview(from, to, token, areas)
+        fetchCompanyFinanceOverview(from, to, token, filterCities, filterDistricts)
             .then(setData)
             .catch(e => setError(e instanceof CompanyFinanceApiError ? e.message : t.finOvLoadFailed))
             .finally(() => setLoading(false));
-    }, [from, to, areas, token, t.finOvLoadFailed]);
+    }, [from, to, filterCities, filterDistricts, token, t.finOvLoadFailed]);
 
     // Reload on date change AND whenever a settlement action bumps refreshSignal,
     // so the cash position reflects a just-recorded payment without a page refresh.
@@ -186,9 +197,14 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
             </div>
 
             {/* Recipient-location filter — scopes every figure on this card to the selected
-                areas (any number of cities and/or districts). No selection = all areas. */}
+                cities/districts. No selection = all areas. */}
             <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--color-border)' }}>
-                <MultiAreaFilter value={areas} onChange={setAreas} />
+                <MultiCityDistrictFilter
+                    options={locationOptions}
+                    cities={filterCities} districts={filterDistricts}
+                    onCitiesChange={setFilterCities} onDistrictsChange={setFilterDistricts}
+                    locCity={locCity} locDistrict={locDistrict}
+                />
             </div>
 
             {error ? (
@@ -376,18 +392,36 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     // Recipient-location narrowing, applied client-side over the loaded lines — any number
-    // of cities and/or districts, plus a free-text address contains-match.
-    const [areas, setAreas] = useState<AreaFilter[]>([]);
+    // of cities and/or (once narrowed to a city) districts within them, plus a free-text
+    // address contains-match.
+    const [filterCities, setFilterCities] = useState<string[]>([]);
+    const [filterDistricts, setFilterDistricts] = useState<string[]>([]);
     const [address, setAddress] = useState('');
     const [payFilter, setPayFilter] = useState<PayFilter>('all');
     const [lines, setLines] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
+    const { locCity, locDistrict } = usePlaceLocalizer();
+
+    // City/district options offered by the picker — every distinct recipient location that
+    // actually appears among this customer's loaded lines for the current date window.
+    const locationOptions = useMemo<CityDistrictOption[]>(() => {
+        const seen = new Set<string>();
+        const opts: CityDistrictOption[] = [];
+        for (const l of lines) {
+            const key = `${l.recipientCity}|${l.recipientDistrict}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            opts.push({ city: l.recipientCity, district: l.recipientDistrict });
+        }
+        return opts;
+    }, [lines]);
 
     // Narrow the loaded lines to the chosen recipient city/district/address before counting/showing.
     const scoped = lines.filter(l =>
-        matchesAreaFilter(areas, l.recipientCity, l.recipientDistrict)
+        (filterCities.length === 0 || filterCities.includes(l.recipientCity))
+        && (filterDistricts.length === 0 || filterDistricts.includes(l.recipientDistrict))
         && (!address || (l.recipientAddress ?? '').toLowerCase().includes(address.trim().toLowerCase())));
 
     // Per-bucket counts (over the scoped set) + the filtered subset shown.
@@ -432,7 +466,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     // Disable "next" once we're at (or past) the current day / month.
     const atToday = date !== '' && (mode === 'month' ? date.slice(0, 7) >= monthStr : date >= todayStr);
     const dateActive = mode === 'range' ? !!(from || to) : !!date;
-    const hasFilter = dateActive || areas.length > 0 || !!address.trim();
+    const hasFilter = dateActive || filterCities.length > 0 || filterDistricts.length > 0 || !!address.trim();
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -485,7 +519,12 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                 </div>
                 {/* Recipient-location filter (client-side over the loaded orders): multi city/district + address */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <MultiAreaFilter value={areas} onChange={setAreas} />
+                    <MultiCityDistrictFilter
+                        options={locationOptions}
+                        cities={filterCities} districts={filterDistricts}
+                        onCitiesChange={setFilterCities} onDistrictsChange={setFilterDistricts}
+                        locCity={(en) => locCity(en)} locDistrict={(en) => locDistrict(en)}
+                    />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <input type="text" value={address} placeholder={t.ofinSearchAddress}
                             onChange={e => setAddress(e.target.value)}
@@ -527,7 +566,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                 </div>
             ) : (
                 <CustomerSettleCard
-                    key={customer.id + '|' + mode + '|' + date + '|' + from + '|' + to + '|' + areaFilterKey(areas) + '|' + address + '|' + payFilter}
+                    key={customer.id + '|' + mode + '|' + date + '|' + from + '|' + to + '|' + filterCities.join(',') + '|' + filterDistricts.join(',') + '|' + address + '|' + payFilter}
                     customerId={customer.id}
                     lines={visibleLines}
                     token={token}
