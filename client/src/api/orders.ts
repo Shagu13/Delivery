@@ -236,7 +236,10 @@ export async function updateOrder(token: string, id: string, data: UpdateOrderRe
 }
 
 // ── Courier ───────────────────────────────────────────────────────────────────
-export const markOrderDelivered  = (token: string, id: string) => orderAction(token, id, 'delivered');
+/** `updatedCodAmount` corrects the parcel COD amount at the door (e.g. the recipient
+ *  negotiated a different price than the sender originally set). */
+export const markOrderDelivered = (token: string, id: string, updatedCodAmount?: number) =>
+    orderAction(token, id, 'delivered', updatedCodAmount != null ? { updatedCodAmount } : undefined);
 /** Delivered, but the recipient had already paid the sender directly (COD zeroed). */
 export const markOrderDeliveredPaidToSender = (token: string, id: string, serviceFeeAlsoPaidToSender: boolean) =>
     orderAction(token, id, 'delivered-paid-to-sender', { serviceFeeAlsoPaidToSender });

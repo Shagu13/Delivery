@@ -436,10 +436,13 @@ public sealed class OrdersController : BaseController
     [HttpPut("{id:guid}/delivered")]
     [Authorize(Roles = "Courier")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> MarkDelivered(Guid id, CancellationToken ct)
+    public async Task<IActionResult> MarkDelivered(
+        Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] MarkDeliveredRequest? request,
+        CancellationToken ct)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        await Sender.Send(new MarkOrderDeliveredCommand(id, userId), ct);
+        await Sender.Send(new MarkOrderDeliveredCommand(id, userId, request?.UpdatedCodAmount), ct);
         return NoContent();
     }
 
@@ -561,6 +564,8 @@ public sealed record SetCourierSalaryRequest(decimal Salary);
 public sealed record AdminMarkDeliveredRequest(Guid? CourierId, decimal? Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);
+/// <summary>Optional correction to the parcel COD amount, applied atomically with delivery.</summary>
+public sealed record MarkDeliveredRequest(decimal? UpdatedCodAmount);
 public sealed record CancelDeliveryRequest(Domain.Enums.CancellationReason Reason, string? Comment);
 /// <summary>Optional body for admin cancel: a reason makes it a billable "cancel &amp; charge"; omit for a plain cancel.</summary>
 public sealed record CancelByAdminRequest(Domain.Enums.CancellationReason? Reason, string? Comment);

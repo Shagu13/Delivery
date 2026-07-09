@@ -128,6 +128,23 @@ export async function fetchCustomerOrderFinance(
     return handle<OrderFinanceLine[]>(res, 'Failed to load orders');
 }
 
+// ── Admin — every customer's orders for a date/range, grouped client-side by customer ──
+export async function fetchAllCustomersOrderFinance(
+    token: string,
+    opts: { date?: string; monthly?: boolean; from?: string; to?: string } = {},
+): Promise<OrderFinanceLine[]> {
+    const params = new URLSearchParams();
+    if (opts.date) params.set('date', opts.date);
+    if (opts.monthly) params.set('monthly', 'true');
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    const q = params.toString() ? `?${params}` : '';
+    const res = await fetch(`/api/orderfinance/all-customers${q}`, {
+        headers: authHeaders(token), cache: 'no-store',
+    });
+    return handle<OrderFinanceLine[]>(res, 'Failed to load customers');
+}
+
 // ── Courier (read-only) — own delivered orders by delivery date ──────────────────
 export async function fetchCourierOrderFinance(token: string, date?: string): Promise<OrderFinanceLine[]> {
     const q = date ? `?date=${date}` : '';

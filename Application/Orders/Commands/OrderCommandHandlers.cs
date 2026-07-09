@@ -279,6 +279,13 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         // still knows whether the product was unpaid at the time of delivery.
         var wasNotPaid = order.ProductPaymentStatus == PaymentStatus.NotPaid;
 
+        // The courier corrected the parcel COD amount at the door (e.g. the recipient
+        // negotiated a different price than the sender originally set) — only meaningful
+        // while the product is still unpaid/COD. Persisted onto the order so the cash
+        // collected below, and any later finance reporting, reflect the actual amount.
+        if (wasNotPaid && request.UpdatedCodAmount is { } updatedAmount && updatedAmount >= 0)
+            order.AmountToCollectForPackage = updatedAmount;
+
         order.Status = OrderStatus.DeliveredToRecipient;
         order.ProductPaymentStatus = PaymentStatus.Paid;
 

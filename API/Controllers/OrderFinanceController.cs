@@ -45,6 +45,21 @@ public sealed class OrderFinanceController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/orderfinance/all-customers  (Admin) — every customer's orders, by delivery date ──
+    // Powers the date-first Finance grid: one row per customer for the chosen date/range,
+    // expandable to that customer's orders. The frontend groups the flat result by customerId.
+    [HttpGet("all-customers")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<OrderFinanceLineDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllCustomers(
+        [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetAllCustomersOrderFinanceLinesQuery(date, monthly, from, to), ct);
+        return Ok(result);
+    }
+
     // ── GET /api/orderfinance/courier  (Courier) — own delivered orders, by delivery date ──
     [HttpGet("courier")]
     [Authorize(Roles = "Courier")]

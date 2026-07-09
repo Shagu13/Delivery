@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, Fragment } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { formatGeorgianDateTime } from '../../utils/georgianTime';
 import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
 import { getStatusMeta } from '../../utils/statusMeta';
-import { getCustomers } from '../../api/customers';
-import type { AdminCustomer } from '../../api/customers';
+import { getCustomers, getCustomerById } from '../../api/customers';
+import type { AdminCustomer, Customer } from '../../api/customers';
 import {
     fetchCustomerOrderFinance,
+    fetchAllCustomersOrderFinance,
     payCustomerOrders,
     OrderFinanceApiError,
 } from '../../api/orderFinance';
@@ -27,8 +28,8 @@ const gel = (n: number) => `₾${n.toFixed(2)}`;
 
 function CustomerPicker({ token, selected, onSelect, onClear }: {
     token: string;
-    selected: AdminCustomer | null;
-    onSelect: (c: AdminCustomer) => void;
+    selected: Customer | null;
+    onSelect: (c: Customer) => void;
     onClear: () => void;
 }) {
     const { t } = useLanguage();
@@ -152,6 +153,10 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
     const [data, setData] = useState<CompanyFinanceOverview | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Read-only customer breakdown grid for the same [from, to] window — expandable per
+    // customer to see their orders, with a red X / green check for outstanding balances.
+    const [gridLines, setGridLines] = useState<OrderFinanceLine[]>([]);
+    const [gridLoading, setGridLoading] = useState(false);
 
     // Recipient locations actually used in [from, to] — drives the city/district picker
     // options (only offers areas that would return results).
@@ -173,6 +178,20 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
     // Reload on date change AND whenever a settlement action bumps refreshSignal,
     // so the cash position reflects a just-recorded payment without a page refresh.
     useEffect(() => { load(); }, [load, refreshSignal]);
+
+    useEffect(() => {
+        setGridLoading(true);
+        fetchAllCustomersOrderFinance(token, { from, to })
+            .then(setGridLines)
+            .catch(() => setGridLines([]))
+            .finally(() => setGridLoading(false));
+    }, [token, from, to, refreshSignal]);
+
+    // Same recipient-location narrowing as the rest of the card, applied client-side.
+    const scopedGridLines = useMemo(() => gridLines.filter(l =>
+        (filterCities.length === 0 || filterCities.includes(l.recipientCity))
+        && (filterDistricts.length === 0 || filterDistricts.includes(l.recipientDistrict))
+    ), [gridLines, filterCities, filterDistricts]);
 
     const stats = data ? [
         { label: t.finOvDelivered,      value: String(data.ordersDelivered),    accent: false },
@@ -279,6 +298,14 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
                             </div>
                         </div>
                     </div>
+
+                    {/* ── Customer breakdown — read-only, expandable per customer ─────── */}
+                    <div style={{ borderTop: '4px solid var(--color-border)', padding: '12px 14px' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-text-subtle)', marginBottom: 8 }}>
+                            {t.finGridBreakdownTitle}
+                        </div>
+                        <CustomerFinanceGrid lines={scopedGridLines} mode="expand" loading={gridLoading} />
+                    </div>
                 </>
             )}
         </div>
@@ -382,9 +409,170 @@ function PaymentFilterSwitch({ value, counts, onChange }: {
     );
 }
 
+// ── Customer finance grid — date-first, all customers at once ─────────────────────
+// One row per customer for the currently loaded (already date-filtered) `lines`. Two modes:
+// 'picker' (Payments tab) — clicking a row hands the customerId to the caller, which opens
+// the full per-order settle view below. 'expand' (Overview tab) — clicking a row toggles an
+// inline, read-only order table for that customer, in place.
+
+interface CustomerGroup {
+    customerId: string;
+    businessName: string;
+    lines: OrderFinanceLine[];
+    serviceOwed: number;
+    codOwed: number;
+    unpaid: boolean;
+}
+
+function groupLinesByCustomer(lines: OrderFinanceLine[]): CustomerGroup[] {
+    const map = new Map<string, CustomerGroup>();
+    for (const o of lines) {
+        let g = map.get(o.customerId);
+        if (!g) {
+            g = { customerId: o.customerId, businessName: o.customerBusinessName, lines: [], serviceOwed: 0, codOwed: 0, unpaid: false };
+            map.set(o.customerId, g);
+        }
+        g.lines.push(o);
+    }
+    for (const g of map.values()) {
+        g.serviceOwed = round2(g.lines.reduce((s, o) => s + serviceOutstanding(o), 0));
+        g.codOwed     = round2(g.lines.reduce((s, o) => s + codOutstanding(o), 0));
+        // Either flow outstanding on any order that day → the customer still has something
+        // unsettled. No obligations at all (nothing owed either way) counts as settled.
+        g.unpaid = g.lines.some(isPendingLine);
+    }
+    return [...map.values()].sort((a, b) => a.businessName.localeCompare(b.businessName));
+}
+
+function PaidStatusBadge({ unpaid }: { unpaid: boolean }) {
+    const { t } = useLanguage();
+    return unpaid
+        ? <span title={t.finGridUnpaid} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,0.12)', color: '#ef4444', fontWeight: 800, fontSize: '0.8rem', lineHeight: 1 }}>✕</span>
+        : <span title={t.finGridPaid}   style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(5,150,105,0.12)',  color: '#059669', fontWeight: 800, fontSize: '0.85rem', lineHeight: 1 }}>✓</span>;
+}
+
+function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
+    lines: OrderFinanceLine[];
+    mode: 'picker' | 'expand';
+    onSelectCustomer?: (customerId: string) => void;
+    loading?: boolean;
+}) {
+    const { t, lang } = useLanguage();
+    const { locCity, locDistrict } = usePlaceLocalizer();
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const groups = useMemo(() => groupLinesByCustomer(lines), [lines]);
+
+    if (loading) {
+        return <div className="content-card" style={{ padding: 40, textAlign: 'center' }}><div className="go-spinner" style={{ margin: '0 auto' }} /></div>;
+    }
+    if (groups.length === 0) {
+        return <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>{t.finGridEmpty}</div>;
+    }
+
+    return (
+        <div className="content-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <style>{`.fin-grid-row:hover td { background: var(--color-bg-2); }`}</style>
+            <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+                    <thead>
+                        <tr>
+                            <th style={fhead}>{t.finGridColBusiness}</th>
+                            <th style={{ ...fhead, textAlign: 'center' }}>{t.finGridColOrders}</th>
+                            <th style={{ ...fhead, textAlign: 'right' }}>{t.finGridColServiceOwed}</th>
+                            <th style={{ ...fhead, textAlign: 'right' }}>{t.finGridColCodOwed}</th>
+                            <th style={{ ...fhead, textAlign: 'center' }}>{t.finGridColStatus}</th>
+                            <th style={{ ...fhead, width: 24 }} />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {groups.map(g => {
+                            const isExpanded = mode === 'expand' && expandedId === g.customerId;
+                            const toggle = () => mode === 'picker'
+                                ? onSelectCustomer?.(g.customerId)
+                                : setExpandedId(x => x === g.customerId ? null : g.customerId);
+                            return (
+                                <Fragment key={g.customerId}>
+                                    <tr onClick={toggle} className="fin-grid-row" style={{ cursor: 'pointer' }}>
+                                        <td style={{ ...fcell, fontWeight: 700 }}>{g.businessName}</td>
+                                        <td style={{ ...fcell, textAlign: 'center' }}>{g.lines.length}</td>
+                                        <td style={{ ...fcell, textAlign: 'right', fontWeight: 600, color: g.serviceOwed > 0.005 ? '#ef4444' : 'var(--color-text-subtle)' }}>
+                                            {g.serviceOwed > 0.005 ? gel(g.serviceOwed) : '—'}
+                                        </td>
+                                        <td style={{ ...fcell, textAlign: 'right', fontWeight: 600, color: g.codOwed > 0.005 ? '#b45309' : 'var(--color-text-subtle)' }}>
+                                            {g.codOwed > 0.005 ? gel(g.codOwed) : '—'}
+                                        </td>
+                                        <td style={{ ...fcell, textAlign: 'center' }}><PaidStatusBadge unpaid={g.unpaid} /></td>
+                                        <td style={{ ...fcell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>
+                                            {mode === 'expand' ? (isExpanded ? '▾' : '▸') : '›'}
+                                        </td>
+                                    </tr>
+                                    {isExpanded && (
+                                        <tr>
+                                            <td colSpan={6} style={{ padding: 0, background: 'var(--color-bg)' }}>
+                                                <div style={{ overflowX: 'auto' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+                                                        <thead>
+                                                            <tr>
+                                                                <th style={fsubhead}>{t.ofinColTracking}</th>
+                                                                <th style={fsubhead}>{t.ofinColRecipient}</th>
+                                                                <th style={fsubhead}>{t.ofinColStatus}</th>
+                                                                <th style={{ ...fsubhead, textAlign: 'right' }}>{t.ofinColService}</th>
+                                                                <th style={{ ...fsubhead, textAlign: 'right' }}>{t.ofinColCod}</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {g.lines.map(o => {
+                                                                const cancelled = CANCELLED_STATUSES.has(o.status) || o.isBillableFailedDelivery;
+                                                                const statusColor = cancelled ? '#dc2626' : o.status === 'DeliveryPostponed' ? '#f97316' : (o.deliveredAt ? '#059669' : 'var(--color-text-muted)');
+                                                                const so = serviceOutstanding(o);
+                                                                const co = codOutstanding(o);
+                                                                return (
+                                                                    <tr key={o.orderId}>
+                                                                        <td style={fsubcell}>{o.trackingNumber}</td>
+                                                                        <td style={fsubcell}>
+                                                                            <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
+                                                                            <div style={{ color: 'var(--color-text-subtle)', marginTop: 1 }}>
+                                                                                {[locCity(o.recipientCity), locDistrict(o.recipientDistrict)].filter(Boolean).join(', ')}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td style={{ ...fsubcell, color: statusColor, fontWeight: 700 }}>{getStatusMeta(o.status, lang).short}</td>
+                                                                        <td style={{ ...fsubcell, textAlign: 'right', color: so > 0.005 ? '#ef4444' : 'var(--color-text-subtle)' }}>
+                                                                            {o.senderOwesService ? gel(o.companyServicePrice) : '—'}
+                                                                            {so > 0.005 && <div style={{ fontSize: '0.62rem', fontWeight: 700 }}>{t.finGridOwed}</div>}
+                                                                        </td>
+                                                                        <td style={{ ...fsubcell, textAlign: 'right', color: co > 0.005 ? '#b45309' : 'var(--color-text-subtle)' }}>
+                                                                            {hasNoCod(o) ? '—' : gel(o.codAmount ?? 0)}
+                                                                            {co > 0.005 && <div style={{ fontSize: '0.62rem', fontWeight: 700 }}>{t.finGridOwed}</div>}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </Fragment>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
 function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () => void }) {
     const { t } = useLanguage();
-    const [customer, setCustomer] = useState<AdminCustomer | null>(null);
+    const [customer, setCustomer] = useState<Customer | null>(null);
+    // Date-first customer grid — shown instead of the empty placeholder while no customer is
+    // picked yet, so the admin doesn't have to know a business name up front.
+    const [gridLines, setGridLines] = useState<OrderFinanceLine[]>([]);
+    const [gridLoading, setGridLoading] = useState(false);
+    const pickCustomer = (customerId: string) => {
+        getCustomerById(customerId, token).then(setCustomer).catch(() => {});
+    };
     // Date filter modes: a single Day, a whole Month, or an inclusive custom Range.
     const [mode, setMode] = useState<'day' | 'month' | 'range'>('day');
     const [date, setDate] = useState(isoDate(new Date())); // day: a day; month: any day in the month; '' = all
@@ -449,6 +637,22 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     }, [customer, mode, date, from, to, token, t.ofinErrLoad]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Load the all-customers grid for the current date window whenever no customer is picked
+    // yet — reuses the same day/month/range controls the per-customer view already exposes.
+    useEffect(() => {
+        if (customer) return;
+        setGridLoading(true);
+        const opts = mode === 'range'
+            ? { from: from || undefined, to: to || undefined }
+            : mode === 'month'
+                ? { date: date || undefined, monthly: true }
+                : { date: date || undefined };
+        fetchAllCustomersOrderFinance(token, opts)
+            .then(setGridLines)
+            .catch(() => setGridLines([]))
+            .finally(() => setGridLoading(false));
+    }, [customer, mode, date, from, to, token]);
 
     const todayStr = isoDate(new Date());
     const monthStr = todayStr.slice(0, 7);
@@ -549,8 +753,9 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
             )}
 
             {!customer ? (
-                <div className="content-card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                    {t.ofinSelectCustomer}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)', padding: '0 2px' }}>{t.finGridPickHint}</div>
+                    <CustomerFinanceGrid lines={gridLines} loading={gridLoading} mode="picker" onSelectCustomer={pickCustomer} />
                 </div>
             ) : loading ? (
                 <div className="content-card" style={{ padding: 40, textAlign: 'center' }}>
@@ -1114,4 +1319,15 @@ const fhead: React.CSSProperties = {
 const settleLbl: React.CSSProperties = {
     fontSize: '0.6rem', fontWeight: 700, color: 'var(--color-text-subtle)',
     textTransform: 'uppercase', minWidth: 26, textAlign: 'right',
+};
+
+// Nested (expanded-row) grid cells — same Excel-style convention, slightly more compact.
+const fsubcell: React.CSSProperties = {
+    border: '1px solid var(--color-border)', padding: '5px 8px',
+    fontSize: '0.7rem', color: 'var(--color-text)', verticalAlign: 'top',
+};
+const fsubhead: React.CSSProperties = {
+    ...fsubcell, background: 'var(--color-bg-3)', fontWeight: 700, fontSize: '0.6rem',
+    textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-subtle)',
+    whiteSpace: 'nowrap', textAlign: 'left',
 };

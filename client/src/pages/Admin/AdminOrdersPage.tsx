@@ -430,10 +430,13 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const load = useCallback(async (params: {
     city?: string; district?: string; search?: string;
     courierId?: string; unpriced?: boolean; assigned?: boolean; page?: number;
-  }) => {
+  }, opts?: { silent?: boolean }) => {
     const seq = ++loadSeqRef.current;
-    setLoading(true);
-    setError(null);
+    // Silent reloads are background reconciliations after a mutation whose result was
+    // already applied to `data` optimistically (see patchOrders) — they must never blank
+    // the table with the loading spinner, and a transient failure is not worth surfacing
+    // (the admin already got a success/failure toast from the mutation itself).
+    if (!opts?.silent) { setLoading(true); setError(null); }
     try {
       // Untouched day navigator + no search → rolling last-7-days default; an explicit
       // day/range pick or a search term reaches the whole DB. Threaded here so all reload
@@ -448,15 +451,17 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
       setData(result);
     } catch (e) {
-      if (seq !== loadSeqRef.current) return;
+      if (seq !== loadSeqRef.current || opts?.silent) return;
       setError(e instanceof Error ? e.message : t.aopFailedLoad);
     } finally {
-      if (seq === loadSeqRef.current) setLoading(false);
+      if (seq === loadSeqRef.current && !opts?.silent) setLoading(false);
     }
   }, [token, t, dateTouched, selectedDate, rangeEnd]);
 
   // Reload the current view with the active filters — used by per-row actions (the kebab
-  // menu) that mutate a single order outside the bulk flow.
+  // menu) that mutate a single order outside the bulk flow. Silent: the row itself already
+  // reflects the change optimism aside, this just reconciles totals/pagination in the
+  // background without blanking the table.
   const reload = () => {
     void load({
       city:      filterCity     || undefined,
@@ -466,7 +471,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       unpriced:  filterUnpriced || undefined,
       assigned:  assignTab === 'assigned',
       page,
-    });
+    }, { silent: true });
     void refreshUnpricedCount();
   };
 
@@ -611,6 +616,48 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     (id: string) => orderCache.get(id) ?? selectAllCache.get(id),
     [orderCache, selectAllCache],
   );
+
+  // Apply a mutation's known effect to the loaded orders immediately, without waiting for
+  // a server round trip — this is what makes assign/salary/price/deliver actions feel
+  // instant. `removeIf` drops rows that no longer belong in the current tab/filter (e.g. an
+  // order that just got a courier should vanish from the "Pending Assign" tab). The matching
+  // background `load(..., { silent: true })` call still runs to reconcile totals/pagination;
+  // it is guarded by loadSeqRef so a slow response can never clobber a newer optimistic patch.
+  const patchOrders = useCallback((
+    ids: string[],
+    patch: (o: AdminOrderItem) => AdminOrderItem,
+    removeIf?: (patched: AdminOrderItem) => boolean,
+  ) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setData(prev => {
+      if (!prev) return prev;
+      let removed = 0;
+      const items: AdminOrderItem[] = [];
+      for (const o of prev.items) {
+        if (!idSet.has(o.id)) { items.push(o); continue; }
+        const patched = patch(o);
+        if (removeIf?.(patched)) { removed++; continue; }
+        items.push(patched);
+      }
+      return removed > 0
+        ? { ...prev, items, totalCount: Math.max(0, prev.totalCount - removed) }
+        : { ...prev, items };
+    });
+    setSelectAllCache(prev => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      let changed = false;
+      for (const id of ids) {
+        const o = next.get(id);
+        if (!o) continue;
+        const patched = patch(o);
+        changed = true;
+        if (removeIf?.(patched)) next.delete(id); else next.set(id, patched);
+      }
+      return changed ? next : prev;
+    });
+  }, []);
 
   const toggleAll = async () => {
     if (allSelected) { setSelected(new Set()); return; }
@@ -782,22 +829,40 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       return !!o && isAssignable(o);
     });
     let ok = 0; let fail = 0;
+    let succeededIds: string[] = [];
     try {
       const result = await bulkAssignCourierToOrders(token, ids, bulkCourierId);
+      succeededIds = result.succeeded;
       ok = result.succeeded.length;
       fail = result.failed.length;
     } catch {
       fail = ids.length;
+    }
+    // Apply the assignment locally right away — mirrors what the backend just did
+    // (BulkAssignCourierToOrdersCommandHandler), so the row updates instantly instead of
+    // waiting on a full reload. Rows that no longer belong on the "Pending Assign" tab
+    // (they now have a courier) disappear immediately too.
+    if (succeededIds.length > 0) {
+      const assignedCourierId = bulkCourierId;
+      const courierName = couriers.find(c => c.courierId === assignedCourierId)?.fullName ?? null;
+      patchOrders(succeededIds, o => ({
+        ...o,
+        courierId: assignedCourierId,
+        courierFullName: courierName ?? o.courierFullName,
+        status: o.orderType === 'Return' ? 'CourierAssignedToPickUp' : 'CourierAssignedToDeliver',
+      }), assignTab === 'pending' ? () => true : undefined);
     }
     setBulkAssigning(false);
     // Clear the selection after assigning — otherwise these orders stay ticked and get
     // re-assigned to the next courier the admin picks for a different order.
     setSelected(new Set());
     setBulkCourierId('');
-    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
-    await Promise.all([load(reloadParams), refreshUnpricedCount()]);
     showToast(fail === 0 ? t.aopAssignedToast(ok)
                          : t.aopAssignedPartial(ok, fail), fail > 0 ? 'err' : 'ok');
+    // Reconcile totals/pagination in the background — never blocks the instant UI update above.
+    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
+    void load(reloadParams, { silent: true });
+    void refreshUnpricedCount();
   };
 
   // ── Mark delivered ─────────────────────────────────────────────────────────
@@ -838,6 +903,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       .map(id => findOrder(id))
       .filter((o): o is AdminOrderItem => !!o && isDeliverable(o));
     let ok = 0; let fail = 0;
+    const succeededIds: string[] = [];
     await Promise.all(targets.map(async o => {
       try {
         // Assign the chosen courier only when the order has none — never override an
@@ -845,17 +911,37 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         await adminMarkOrderDelivered(token, o.id,
           !o.courierId && bulkCourierId ? { courierId: bulkCourierId } : undefined);
         ok++;
+        succeededIds.push(o.id);
       }
       catch { fail++; }
     }));
+    // Reflect the delivery locally right away instead of waiting on a full reload.
+    if (succeededIds.length > 0) {
+      const courierName = couriers.find(c => c.courierId === bulkCourierId)?.fullName ?? null;
+      const nowIso = new Date().toISOString();
+      patchOrders(succeededIds, o => ({
+        ...o,
+        status: 'DeliveredToRecipient',
+        deliveredAt: o.deliveredAt ?? nowIso,
+        courierId: o.courierId ?? bulkCourierId,
+        courierFullName: o.courierId ? o.courierFullName : (courierName ?? o.courierFullName),
+      }));
+    }
     setBulkDelivering(false);
     setBulkCourierId('');
     setSelected(new Set());
-    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
-    await Promise.all([load(reloadParams), refreshUnpricedCount()]);
     showToast(fail === 0 ? t.aopDeliveredToast(ok)
                          : t.aopDeliveredPartial(ok, fail), fail > 0 ? 'err' : 'ok');
+    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
+    void load(reloadParams, { silent: true });
+    void refreshUnpricedCount();
   };
+
+  // An order is still "unpriced" while either figure is missing/zero — mirrors the
+  // backend's `Unpriced` filter (GetAllOrdersQueryHandler) so a locally-patched order that
+  // just got fully priced can be dropped from that filtered view immediately.
+  const isStillUnpriced = (o: AdminOrderItem) =>
+    o.companyServicePrice === 0 || o.courierSalary == null || o.courierSalary === 0;
 
   const handleSalarySave = async () => {
     const toSave = [...salaryChecked].filter(id => {
@@ -867,16 +953,22 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     let saved = false;
     try {
       await Promise.all(toSave.map(id => setCourierSalary(token, id, parseFloat(salaryDrafts[id]))));
-      const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
-      await Promise.all([load(reloadParams), refreshUnpricedCount()]);
+      // Apply the just-saved salaries immediately so the gated action below can resume
+      // without waiting on a round trip.
+      patchOrders(toSave, o => ({ ...o, courierSalary: parseFloat(salaryDrafts[o.id]) }),
+        filterUnpriced ? o => !isStillUnpriced(o) : undefined);
       saved = true;
     } catch { /* best-effort */ }
     setSalarySaving(false);
     setShowSalaryModal(false);
     showToast(t.aopSalarySetToast(toSave.length));
     // Resume the action that opened this modal — the gating re-checks against the freshly
-    // reloaded orders, so it commits when nothing is missing or re-prompts otherwise.
+    // patched orders, so it commits when nothing is missing or re-prompts otherwise.
     if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
+    // Reconcile totals/pagination in the background — never blocks the resumed action above.
+    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
+    void load(reloadParams, { silent: true });
+    void refreshUnpricedCount();
   };
 
   const handlePriceSave = async () => {
@@ -889,16 +981,19 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     let saved = false;
     try {
       await Promise.all(toSave.map(id => setCompanyServicePrice(token, id, parseFloat(priceDrafts[id]))));
-      const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
-      await Promise.all([load(reloadParams), refreshUnpricedCount()]);
+      patchOrders(toSave, o => ({ ...o, companyServicePrice: parseFloat(priceDrafts[o.id]) }),
+        filterUnpriced ? o => !isStillUnpriced(o) : undefined);
       saved = true;
     } catch { /* best-effort */ }
     setPriceSaving(false);
     setShowPriceModal(false);
     showToast(t.aopPriceSetToast(toSave.length));
     // Resume the original action — it advances to the salary step (or commits) without a
-    // second click. Re-checks gating against the reloaded orders.
+    // second click. Re-checks gating against the freshly patched orders.
     if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
+    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
+    void load(reloadParams, { silent: true });
+    void refreshUnpricedCount();
   };
 
   // Resume the assign/deliver action after a price/salary save, once the reload has

@@ -80,47 +80,48 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
             .FirstOrDefaultAsync(c => c.Id == request.CustomerId, ct)
             ?? throw new NotFoundException("Customer", request.CustomerId);
 
-        var query = OrderFinanceQueries.ForCustomer(_context, request.CustomerId);
-
-        // Include an order when EITHER:
-        //   • it is delivered (its COD payout / service settlement is final), OR
-        //   • the sender pays the service fee and the order has been accepted (status past
-        //     Pending) but not cancelled — so the customer can settle that fee in advance,
-        //     before delivery, at any stage of the flow. (Customers often pre-pay.), OR
-        //   • it is a billable failed delivery — the sender owes the fee even though it never
-        //     delivered (mirrors OrderFinance.IsBillableFailedDelivery).
-        query = query.Where(o =>
-            (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null
-            || (o.WhoPaysForCompanyService == ServicePayer.Sender && o.Status != OrderStatus.Pending)
-            || (o.OrderType != OrderType.Return
-                && o.CancellationReason != null
-                && o.CancellationReason != CancellationReason.WarehouseNotReceived
-                && o.CancellationReason != CancellationReason.DidNotWant)
-            // Cancelled and postponed orders are listed too (shown with "—" amounts + status) so the
-            // admin sees the full picture and why a day has fewer billable orders.
-            || o.Status == OrderStatus.CancelledByAdmin
-            || o.Status == OrderStatus.CancelledBySender
-            || o.Status == OrderStatus.OrderNotAccepted
-            || o.Status == OrderStatus.DeliveryPostponed);
-
-        // Drop orders with no company↔customer settlement: the recipient pays the
-        // service fee (nothing invoiced to the sender) and there is no package COD
-        // for the company to pay back. Billable failed deliveries AND cancelled orders are
-        // kept (the latter shown with "—" amounts for transparency).
-        query = query.Where(o => !(o.WhoPaysForCompanyService == ServicePayer.Recipient
-                                && o.AmountToCollectForPackage == null)
-                              || (o.OrderType != OrderType.Return
-                                  && o.CancellationReason != null
-                                  && o.CancellationReason != CancellationReason.WarehouseNotReceived
-                                  && o.CancellationReason != CancellationReason.DidNotWant)
-                              || o.Status == OrderStatus.CancelledByAdmin
-                              || o.Status == OrderStatus.CancelledBySender
-                              || o.Status == OrderStatus.OrderNotAccepted
-                              || o.Status == OrderStatus.DeliveryPostponed);
+        var query = OrderFinanceQueries.ForFinanceReporting(
+            OrderFinanceQueries.ForCustomer(_context, request.CustomerId));
 
         // Date by delivery when delivered, else by placement (for the not-yet-delivered
         // sender-paid orders) so both slot into the day/month navigation. A from/to range
         // (when given) takes precedence over the single day/month.
+        query = (request.From is not null || request.To is not null)
+            ? OrderFinanceQueries.FilterByEffectiveDateRange(query, request.From, request.To)
+            : OrderFinanceQueries.FilterByEffectiveDate(query, request.Date, request.Monthly);
+        query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt);
+
+        var orders = await query.ToListAsync(ct);
+        return orders.Select(OrderFinanceQueries.ToDto).ToList();
+    }
+}
+
+// ── Admin: every customer's order lines for a date/range, dated by delivery ───────
+/// <summary>
+/// Same inclusion rules as <see cref="GetCustomerOrderFinanceLinesQuery"/> (delivered, or
+/// sender-pays-and-accepted, or billable failed delivery, or cancelled — for transparency)
+/// but across every customer, for the date-first admin Finance grid. The caller groups the
+/// flat result by <c>CustomerId</c>.
+/// </summary>
+public sealed record GetAllCustomersOrderFinanceLinesQuery(
+    DateOnly? Date,
+    bool      Monthly = false,
+    DateOnly? From    = null,
+    DateOnly? To      = null
+) : IRequest<IReadOnlyList<OrderFinanceLineDto>>;
+
+public sealed class GetAllCustomersOrderFinanceLinesQueryHandler
+    : IRequestHandler<GetAllCustomersOrderFinanceLinesQuery, IReadOnlyList<OrderFinanceLineDto>>
+{
+    private readonly IAppDbContext _context;
+    public GetAllCustomersOrderFinanceLinesQueryHandler(IAppDbContext context) => _context = context;
+
+    public async Task<IReadOnlyList<OrderFinanceLineDto>> Handle(
+        GetAllCustomersOrderFinanceLinesQuery request, CancellationToken ct)
+    {
+        var query = OrderFinanceQueries.ForFinanceReporting(
+            OrderFinanceQueries.Base(_context, includeCancelled: true));
+
         query = (request.From is not null || request.To is not null)
             ? OrderFinanceQueries.FilterByEffectiveDateRange(query, request.From, request.To)
             : OrderFinanceQueries.FilterByEffectiveDate(query, request.Date, request.Monthly);
@@ -190,6 +191,46 @@ internal static class OrderFinanceQueries
     /// (shown with "—" amounts in the finance lists for transparency).</summary>
     public static IQueryable<Order> ForCustomer(IAppDbContext context, Guid customerId) =>
         Base(context, includeCancelled: true).Where(o => o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId);
+
+    /// <summary>
+    /// Shapes an already-scoped order set (one customer, or every customer) down to what a
+    /// customer↔company finance list should ever show. Include an order when EITHER:
+    ///   • it is delivered (its COD payout / service settlement is final), OR
+    ///   • the sender pays the service fee and the order has been accepted (status past
+    ///     Pending) but not cancelled — so the customer can settle that fee in advance, before
+    ///     delivery, at any stage of the flow (customers often pre-pay), OR
+    ///   • it is a billable failed delivery — the sender owes the fee even though it never
+    ///     delivered (mirrors OrderFinance.IsBillableFailedDelivery), OR
+    ///   • it is cancelled (shown with "—" amounts + reason, for transparency).
+    /// Then drops orders with no company↔customer settlement at all: the recipient pays the
+    /// service fee (nothing invoiced to the sender) and there is no package COD for the
+    /// company to pay back. Billable failed deliveries and cancelled orders are kept regardless.
+    /// </summary>
+    public static IQueryable<Order> ForFinanceReporting(IQueryable<Order> query)
+    {
+        query = query.Where(o =>
+            (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null
+            || (o.WhoPaysForCompanyService == ServicePayer.Sender && o.Status != OrderStatus.Pending)
+            || (o.OrderType != OrderType.Return
+                && o.CancellationReason != null
+                && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                && o.CancellationReason != CancellationReason.DidNotWant)
+            || o.Status == OrderStatus.CancelledByAdmin
+            || o.Status == OrderStatus.CancelledBySender
+            || o.Status == OrderStatus.OrderNotAccepted
+            || o.Status == OrderStatus.DeliveryPostponed);
+
+        return query.Where(o => !(o.WhoPaysForCompanyService == ServicePayer.Recipient
+                                && o.AmountToCollectForPackage == null)
+                              || (o.OrderType != OrderType.Return
+                                  && o.CancellationReason != null
+                                  && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                                  && o.CancellationReason != CancellationReason.DidNotWant)
+                              || o.Status == OrderStatus.CancelledByAdmin
+                              || o.Status == OrderStatus.CancelledBySender
+                              || o.Status == OrderStatus.OrderNotAccepted
+                              || o.Status == OrderStatus.DeliveryPostponed);
+    }
 
     /// <summary>
     /// Narrows by placement date (CreatedAt). A from/to range (inclusive, either bound optional)

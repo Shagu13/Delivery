@@ -292,7 +292,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                     {collectConfirmOrderId === order.id && (
                                         <CollectConfirmModal order={order} isBusy={isBusy}
                                             onCancel={() => setCollectConfirmOrderId(null)}
-                                            onConfirm={() => { setCollectConfirmOrderId(null); handleAct(order.id, () => markOrderDelivered(token, order.id), t.cdDeliveryToastDelivered); }}
+                                            onConfirm={(updatedAmount) => { setCollectConfirmOrderId(null); handleAct(order.id, () => markOrderDelivered(token, order.id, updatedAmount), t.cdDeliveryToastDelivered); }}
                                             onPaidToSender={(feeAlsoToSender) => { setCollectConfirmOrderId(null); handleAct(order.id, () => markOrderDeliveredPaidToSender(token, order.id, feeAlsoToSender), t.cdDeliveryToastDelivered); }} />
                                     )}
                                     {postponingId === order.id && (

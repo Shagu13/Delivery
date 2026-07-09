@@ -24,8 +24,14 @@ public sealed record BulkAssignCourierResultDto(
 
 public sealed record BulkAssignFailureDto(Guid OrderId, string Error);
 
-/// <summary>Courier confirms delivery to recipient. Order → DeliveredToRecipient.</summary>
-public sealed record MarkOrderDeliveredCommand(Guid OrderId, string CourierUserId) : IRequest;
+/// <summary>
+/// Courier confirms delivery to recipient. Order → DeliveredToRecipient.
+/// <paramref name="UpdatedCodAmount"/> lets the courier correct the parcel COD amount at the
+/// door (e.g. the recipient negotiated a different price than the sender originally set) —
+/// when supplied it overwrites <c>Order.AmountToCollectForPackage</c> before cash collection
+/// is computed.
+/// </summary>
+public sealed record MarkOrderDeliveredCommand(Guid OrderId, string CourierUserId, decimal? UpdatedCodAmount = null) : IRequest;
 
 /// <summary>
 /// Courier confirms delivery for an order whose recipient had already paid the SENDER
