@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations } from '../../api/orders';
@@ -73,7 +73,7 @@ export interface AdminOrderItem {
 async function fetchAllOrders(
   token: string,
   params: {
-    city?: string; district?: string; search?: string; party?: 'sender' | 'recipient';
+    city?: string; district?: string; search?: string;
     courierId?: string; unpriced?: boolean; assigned?: boolean;
     date?: string; dateTo?: string; page?: number; pageSize?: number;
   }
@@ -82,7 +82,6 @@ async function fetchAllOrders(
   if (params.city)       qs.set('city',      params.city);
   if (params.district)   qs.set('district',  params.district);
   if (params.search)     qs.set('search',    params.search);
-  if (params.party)      qs.set('party',     params.party);
   if (params.courierId)  qs.set('courierId', params.courierId);
   if (params.unpriced)   qs.set('unpriced',  'true');
   if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
@@ -359,10 +358,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // the Revenue column here and in the view/bulk modals (server also strips the value).
 
   const [search,          setSearch]          = useState('');
-  // Which side of the order the search box matches: 'recipient' restricts to this Order's
-  // own recipient fields (name/phone/address/tracking); 'sender' restricts to the sender/
-  // customer fields. Defaults to sender to match prior behavior's primary use case.
-  const [filterParty,     setFilterParty]     = useState<'sender' | 'recipient'>('sender');
   // The list/locations/unpriced-count queries refetch 300ms after the admin stops typing;
   // other filters (dropdowns, date picker) apply immediately.
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -388,11 +383,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const [dateTouched,     setDateTouched]     = useState(false);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
-  // Sender view groups the flat order list into expandable per-batch rows (collapsed by
-  // default); keyed by groupOrderId, or the order's own id for standalone orders.
-  const [expandedGroups,  setExpandedGroups]  = useState<Set<string>>(new Set());
-  const toggleGroupExpand = (key: string) =>
-    setExpandedGroups(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
 
   const [showTracking,  setShowTracking]  = useState(false);
   const [showPrices,    setShowPrices]    = useState(true);
@@ -463,7 +453,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     city:      filterCity     || undefined,
     district:  filterDistrict || undefined,
     search:    debouncedSearch || undefined,
-    party:     filterParty,
     courierId: filterCourier?.courierId,
     unpriced:  filterUnpriced || undefined,
     assigned:  assignTab === 'assigned',
@@ -513,7 +502,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     setPage(1);
     setSelected(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, debouncedSearch, filterParty, filterCourier?.courierId, filterUnpriced, assignTab, pkgDate, pkgDateTo]);
+  }, [filterCity, filterDistrict, debouncedSearch, filterCourier?.courierId, filterUnpriced, assignTab, pkgDate, pkgDateTo]);
 
   // Esc terminates the Mark-Delivered action: leave deliver mode and clear the selection.
   // Only active while in deliver mode, and never while a modal/warning dialog is open.
@@ -583,42 +572,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   }, [orderLocations, filterCity, lang]);
 
   const orders = data?.items ?? [];
-
-  // Sender view: group the (already-fetched, already-filtered) flat order list by batch —
-  // groupOrderId for GroupOrder-backed orders, or the order's own id for standalone ones
-  // (each standalone order forms its own single-item "batch"). Order of groups follows the
-  // server's own ordering (first order seen in each group).
-  interface SenderGroup {
-    key: string;
-    senderBusinessName: string;
-    senderFirstName: string;
-    senderLastName: string;
-    pickUpCity: string;
-    pickUpDistrict: string;
-    orders: AdminOrderItem[];
-  }
-  const senderGroups = useMemo<SenderGroup[]>(() => {
-    if (filterParty !== 'sender') return [];
-    const map = new Map<string, SenderGroup>();
-    for (const o of orders) {
-      const key = o.groupOrderId ?? `standalone-${o.id}`;
-      let group = map.get(key);
-      if (!group) {
-        group = {
-          key,
-          senderBusinessName: o.senderBusinessName,
-          senderFirstName: o.senderFirstName,
-          senderLastName: o.senderLastName,
-          pickUpCity: o.pickUpCity,
-          pickUpDistrict: o.pickUpDistrict,
-          orders: [],
-        };
-        map.set(key, group);
-      }
-      group.orders.push(o);
-    }
-    return [...map.values()];
-  }, [orders, filterParty]);
 
   const selectableOrders = useMemo(() =>
     bulkMode === 'assign'  ? orders.filter(isAssignable)  :
@@ -697,7 +650,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
         search:    search || undefined,
-        party:     filterParty,
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
         assigned:  assignTab === 'assigned',
@@ -1213,13 +1165,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     );
   };
 
-  // Column count for a sender-group header row's colSpan — every column except the
-  // leading checkbox (which the header row renders on its own).
-  const orderColumnCount =
-    (showTracking ? 1 : 0) + 1 /* sender */ + 1 /* recipient */ + 1 /* city/district */ +
-    1 /* status */ + 1 /* cod */ + (showPricesEff ? 2 : 0) + (showRevenueEff ? 1 : 0) +
-    1 /* paid */ + 1 /* actions */;
-
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -1283,21 +1228,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
               </svg>
             </button>
           )}
-        </div>
-
-        <div className="go-seg">
-          <button
-            className={`go-seg__btn${filterParty === 'sender' ? ' go-seg__btn--active' : ''}`}
-            onClick={() => setFilterParty('sender')}
-          >
-            {t.goSender}
-          </button>
-          <button
-            className={`go-seg__btn${filterParty === 'recipient' ? ' go-seg__btn--active' : ''}`}
-            onClick={() => setFilterParty('recipient')}
-          >
-            {t.goRecipient}
-          </button>
         </div>
 
         <CourierPicker
@@ -1855,33 +1785,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
               </tr>
             </thead>
             <tbody>
-              {filterParty === 'sender'
-                ? senderGroups.map(group => {
-                    const isExpanded = expandedGroups.has(group.key);
-                    return (
-                      <Fragment key={group.key}>
-                        <tr
-                          className="aop-tr aop-tr--group"
-                          onClick={() => toggleGroupExpand(group.key)}
-                          style={{ cursor: 'pointer', background: 'var(--color-bg-3)' }}
-                        >
-                          {canManage && <td className="aop-td aop-td--check" />}
-                          <td className="aop-td" colSpan={orderColumnCount}>
-                            <span style={{
-                              display: 'inline-block', marginRight: 8, fontSize: '0.75rem',
-                              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s',
-                            }}>›</span>
-                            <strong>{group.senderBusinessName || `${group.senderFirstName} ${group.senderLastName}`}</strong>
-                            {' · '}{group.senderFirstName} {group.senderLastName}
-                            {' · '}{group.pickUpCity}, {group.pickUpDistrict}
-                            {' · '}{t.goPkgs(group.orders.length)}
-                          </td>
-                        </tr>
-                        {isExpanded && group.orders.map(order => renderOrderRow(order))}
-                      </Fragment>
-                    );
-                  })
-                : orders.map(order => renderOrderRow(order))}
+              {orders.map(order => renderOrderRow(order))}
             </tbody>
           </table>
         )}
