@@ -7,11 +7,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace API.Controllers;
 
 /// <summary>
-/// The company (dilo) side of the tenant ↔ company monthly settlement. Admin-only: the
-/// company records what it pays a tenant (COD) and collects from a tenant (service fees).
-/// The tenant co-admin sees these figures read-only via /api/tenantfinance/overview.
+/// The company (dilo) side of the tenant ↔ company monthly settlement. Restricted to the
+/// dedicated "systemadmin" account: it records what the company pays a tenant (COD) and
+/// collects from a tenant (service fees). The tenant co-admin sees these figures read-only
+/// via /api/tenantfinance/overview.
 /// </summary>
-[Authorize(Roles = "Admin")]
+[Authorize(Policy = "SystemAdmin")]
 public sealed class TenantSettlementsController : BaseController
 {
     // ── GET /api/tenantsettlements?tenantId=&year=&month=  (ensure + recompute) ──

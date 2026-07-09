@@ -120,8 +120,9 @@ export function AdminDashboard() {
   const activeView: AdminView =
     isTenant   && !TENANT_VIEWS.includes(requestedView)   ? 'orders'
     : isOperator && !OPERATOR_VIEWS.includes(requestedView) ? 'overview'
-    // Block a non-systemadmin Admin from landing on the Tenants page via the URL.
-    : requestedView === 'tenants' && !isSystemAdmin ? 'overview'
+    // Block a non-systemadmin Admin from landing on the Tenants/Partner API/Tenant
+    // Settlements pages via the URL.
+    : (requestedView === 'tenants' || requestedView === 'partners' || requestedView === 'tenantSettlements') && !isSystemAdmin ? 'overview'
     : requestedView;
 
   const goTo = (view: AdminView) => {
@@ -284,6 +285,7 @@ export function AdminDashboard() {
               </svg>
               <span className="sidebar__link-text">{t.sidebarWeightTiers}</span>
           </button>
+          {isSystemAdmin && (<>
           <button
             className={`sidebar__link ${activeView === 'partners' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('partners')}
@@ -295,7 +297,6 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Partner API</span>
           </button>
-          {isSystemAdmin && (
           <button
             className={`sidebar__link ${activeView === 'tenants' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('tenants')}
@@ -307,7 +308,6 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Tenants</span>
           </button>
-          )}
           <button
             className={`sidebar__link ${activeView === 'tenantSettlements' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('tenantSettlements')}
@@ -319,6 +319,7 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Tenant Settlements</span>
           </button>
+          </>)}
           </>)}
           {/* History — Admin + Operator. */}
           {!isTenant && (
@@ -447,9 +448,9 @@ export function AdminDashboard() {
                   {activeView === 'weightTiers' && token && (
                       <AdminWeightPriceTiersPage token={token} />
                   )}
-          {activeView === 'partners' && token && <AdminPartnersPage token={token} />}
+          {activeView === 'partners' && isSystemAdmin && token && <AdminPartnersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
-          {activeView === 'tenantSettlements' && !isOperator && token && <AdminTenantSettlementsPage token={token} />}
+          {activeView === 'tenantSettlements' && isSystemAdmin && token && <AdminTenantSettlementsPage token={token} />}
           {activeView === 'history' && <AdminHistoryPage token={token ?? ''} canSeeRevenue={!isOperator} />}
           {/* Finance: tenant co-admin sees the scoped tenant finance, never the company-wide P&L. */}
           {activeView === 'finance' && (isTenant ? <TenantFinanceView /> : <AdminFinancePage token={token ?? ''} />)}

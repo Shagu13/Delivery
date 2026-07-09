@@ -11,8 +11,9 @@ namespace API.Controllers;
 /// <summary>
 /// Admin management of partner webhook subscriptions. Each webhook belongs to a
 /// Customer (partner); status changes on that partner's orders are POSTed to its URL.
+/// Restricted to the dedicated "systemadmin" account.
 /// </summary>
-[Authorize(Roles = "Admin")]
+[Authorize(Policy = "SystemAdmin")]
 public sealed class PartnerWebhooksController : BaseController
 {
     // ── POST /api/partnerwebhooks  — register an endpoint (returns signing secret) ──

@@ -11,8 +11,9 @@ namespace API.Controllers;
 /// <summary>
 /// Admin management of partner API keys. Each key is bound to a Customer (the partner)
 /// and lets that partner's backend place orders via <c>PartnerOrdersController</c>.
+/// Restricted to the dedicated "systemadmin" account.
 /// </summary>
-[Authorize(Roles = "Admin")]
+[Authorize(Policy = "SystemAdmin")]
 public sealed class PartnerApiKeysController : BaseController
 {
     // ── POST /api/partnerapikeys  — issue a new key (raw key returned once) ────
