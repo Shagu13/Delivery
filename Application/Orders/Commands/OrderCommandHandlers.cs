@@ -90,6 +90,15 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         order.PostponeReason = null;
         order.PostponedAt = null;
 
+        // Auto-fill this courier's standard rate (Tbilisi couriers only — see
+        // Courier.DefaultSalary doc comment). When null, the order's CourierSalary stays
+        // untouched and the Packages page's missing-salary flow prompts the admin to set one.
+        if (courier.DefaultSalary is decimal defaultSalary)
+        {
+            order.CourierSalary = defaultSalary;
+            order.CompanyRevenue = order.CompanyServicePrice - defaultSalary;
+        }
+
         // The separate "on the way" step was removed (courier now confirms delivery in one
         // swipe), so the warehouse-pickup stamp and the non-Tbilisi delivery-window estimate
         // are recorded here, at assignment — the start of the courier's last-mile possession.
@@ -213,6 +222,13 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
             // Clear stale postpone info — the order is active again under a (possibly new) courier.
             order.PostponeReason = null;
             order.PostponedAt = null;
+
+            // Auto-fill this courier's standard rate — mirrors AssignCourierToOrderCommandHandler.
+            if (courier.DefaultSalary is decimal defaultSalary)
+            {
+                order.CourierSalary = defaultSalary;
+                order.CompanyRevenue = order.CompanyServicePrice - defaultSalary;
+            }
 
             // Guarded so a re-assignment doesn't overwrite an already-recorded pickup/window —
             // mirrors AssignCourierToOrderCommandHandler.
@@ -958,6 +974,7 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
         // Attribute the delivery to a courier when none is assigned yet, so the order
         // is picked up live by that courier's daily settlement. Never overrides an
         // existing assignee.
+        Guid? courierIdForSalary = order.CourierId;
         if (order.CourierId is null && request.CourierId is Guid courierId)
         {
             var courierExists = await _context.Couriers
@@ -966,10 +983,14 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
                 throw new NotFoundException("Courier", courierId);
 
             order.CourierId = courierId;
+            courierIdForSalary = courierId;
         }
 
         // Set/refresh the courier salary atomically with the delivery and recompute
         // CompanyRevenue, mirroring SetCourierSalaryCommand, so the settlement is complete.
+        // An explicit admin value always wins; otherwise fall back to the courier's standard
+        // rate (Tbilisi only — see Courier.DefaultSalary) when the order has none yet, mirroring
+        // AssignCourierToOrderCommandHandler.
         if (request.Salary is decimal salary)
         {
             if (salary < 0)
@@ -979,6 +1000,19 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
 
             order.CourierSalary  = salary;
             order.CompanyRevenue = order.CompanyServicePrice - salary;
+        }
+        else if (order.CourierSalary is null && courierIdForSalary is Guid cid)
+        {
+            var defaultSalary = await _context.Couriers
+                .Where(c => c.Id == cid)
+                .Select(c => c.DefaultSalary)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (defaultSalary is decimal ds)
+            {
+                order.CourierSalary  = ds;
+                order.CompanyRevenue = order.CompanyServicePrice - ds;
+            }
         }
 
         var wasNotPaid = order.ProductPaymentStatus == PaymentStatus.NotPaid;

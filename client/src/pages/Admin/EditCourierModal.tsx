@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useEditCourier } from '../../hooks/useEditCourier';
+import { useEditCourier, isTbilisiCourier } from '../../hooks/useEditCourier';
 import type { Courier } from '../../api/couriers';
 
 interface Props {
@@ -7,7 +7,7 @@ interface Props {
     courier: Courier | null;
     token: string;
     onClose: () => void;
-    onUpdated: (courierId: string, newUsername: string, newPhone: string, newIdNumber: string) => void;
+    onUpdated: (courierId: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => void;
 }
 
 export function EditCourierModal({ open, courier, token, onClose, onUpdated }: Props) {
@@ -215,6 +215,36 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                             <span style={{ fontSize: '0.78rem', color: 'var(--color-error)' }}>{errors.idNumber}</span>
                         )}
                     </div>
+
+                    {/* Default Salary — Tbilisi couriers only */}
+                    {isTbilisiCourier(courier) && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                                Default Salary
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={form.defaultSalary}
+                                onChange={e => handleChange('defaultSalary', e.target.value)}
+                                placeholder="e.g. 15.00"
+                                style={{
+                                    background: 'var(--color-bg)', border: `1px solid ${errors.defaultSalary ? 'var(--color-error)' : 'var(--color-border)'}`,
+                                    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
+                                    fontSize: '0.875rem', padding: '9px 12px', outline: 'none',
+                                    transition: 'border-color 0.15s',
+                                }}
+                                onFocus={e => { if (!errors.defaultSalary) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                                onBlur={e => { if (!errors.defaultSalary) e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                            />
+                            {errors.defaultSalary
+                                ? <span style={{ fontSize: '0.78rem', color: 'var(--color-error)' }}>{errors.defaultSalary}</span>
+                                : <span style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
+                                    Auto-applied to this courier's deliveries when assigned from the Packages page.
+                                  </span>}
+                        </div>
+                    )}
 
                     {/* Section label */}
                     <p style={{

@@ -3,27 +3,33 @@ import { updateCourier, CourierApiError } from '../api/couriers';
 import type { Courier } from '../api/couriers';
 
 export interface EditCourierForm {
-    username:    string;
-    newPassword: string;
-    phoneNumber: string;
-    idNumber:    string;
+    username:      string;
+    newPassword:   string;
+    phoneNumber:   string;
+    idNumber:      string;
+    defaultSalary: string;
 }
 
 type FieldErrors = Partial<Record<keyof EditCourierForm, string>>;
 
+// Only Tbilisi couriers get a standard per-order rate — see Courier.DefaultSalary doc comment.
+export const isTbilisiCourier = (courier: Courier | null) =>
+    !!courier && courier.assignedCity.trim().toLowerCase() === 'tbilisi';
+
 function initialForm(courier: Courier | null): EditCourierForm {
     return {
-        username:    courier?.username    ?? '',
-        newPassword: '',
-        phoneNumber: courier?.phoneNumber ?? '',
-        idNumber:    courier?.idNumber    ?? '',
+        username:      courier?.username    ?? '',
+        newPassword:   '',
+        phoneNumber:   courier?.phoneNumber ?? '',
+        idNumber:      courier?.idNumber    ?? '',
+        defaultSalary: courier?.defaultSalary != null ? String(courier.defaultSalary) : '',
     };
 }
 
 export function useEditCourier(
     courier: Courier | null,
     token: string,
-    onUpdated: (courierId: string, newUsername: string, newPhone: string, newIdNumber: string) => void,
+    onUpdated: (courierId: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => void,
 ) {
     // Key the entire form state off the courier's ID so React re-initializes
     // whenever a different courier is selected — no useEffect needed.
@@ -59,6 +65,10 @@ export function useEditCourier(
         if (!form.idNumber.trim()) {
             e.idNumber = 'ID number is required.';
         }
+        if (isTbilisiCourier(courier) && form.defaultSalary.trim() !== '') {
+            const v = parseFloat(form.defaultSalary);
+            if (isNaN(v) || v < 0) e.defaultSalary = 'Enter a valid non-negative amount.';
+        }
         return e;
     };
 
@@ -76,6 +86,8 @@ export function useEditCourier(
 
         setSubmitting(true);
         try {
+            const defaultSalary = isTbilisiCourier(courier) && form.defaultSalary.trim() !== ''
+                ? parseFloat(form.defaultSalary) : null;
             await updateCourier(
                 courier.courierId,
                 {
@@ -83,11 +95,12 @@ export function useEditCourier(
                     newPassword: form.newPassword || undefined,
                     phoneNumber: form.phoneNumber.trim(),
                     idNumber:    form.idNumber.trim(),
+                    defaultSalary,
                 },
                 token,
             );
             setSuccess(true);
-            onUpdated(courier.courierId, form.username.trim(), form.phoneNumber.trim(), form.idNumber.trim());
+            onUpdated(courier.courierId, form.username.trim(), form.phoneNumber.trim(), form.idNumber.trim(), defaultSalary);
         } catch (err) {
             if (err instanceof CourierApiError && err.errors) {
                 const mapped: FieldErrors = {};

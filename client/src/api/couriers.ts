@@ -7,6 +7,8 @@ export interface CreateCourierRequest {
     assignedDistrict: string;
     username: string;
     password: string;
+    /** Standard per-order delivery salary — only allowed when assignedCity is Tbilisi. */
+    defaultSalary?: number | null;
 }
 
 export interface CreateCourierResponse {
@@ -26,6 +28,8 @@ export interface Courier {
     idNumber: string;
     isDeleted: boolean;
     dateDeleted: string | null;
+    /** Standard per-order delivery salary — only set for Tbilisi couriers; null elsewhere. */
+    defaultSalary: number | null;
 }
 
 export interface CourierOrder {
@@ -157,6 +161,8 @@ export interface UpdateCourierRequest {
     newPassword?: string;
     phoneNumber: string;
     idNumber: string;
+    /** Standard per-order delivery salary — only allowed when the courier is assigned to Tbilisi. */
+    defaultSalary?: number | null;
 }
 
 export async function updateCourier(

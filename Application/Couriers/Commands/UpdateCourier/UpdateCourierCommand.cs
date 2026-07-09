@@ -9,11 +9,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.Couriers.Commands.UpdateCourier;
 
 public sealed record UpdateCourierCommand(
-    Guid    CourierId,
-    string  Username,
-    string? NewPassword,
-    string  PhoneNumber,
-    string  IdNumber
+    Guid     CourierId,
+    string   Username,
+    string?  NewPassword,
+    string   PhoneNumber,
+    string   IdNumber,
+    /// <summary>Standard per-order salary — only allowed when the courier is assigned to Tbilisi; null clears it.</summary>
+    decimal? DefaultSalary = null
 ) : IRequest;
 
 public sealed class UpdateCourierCommandHandler : IRequestHandler<UpdateCourierCommand>
@@ -62,6 +64,18 @@ public sealed class UpdateCourierCommandHandler : IRequestHandler<UpdateCourierC
         // Update phone number and ID number on the Courier entity
         courier.PhoneNumber = request.PhoneNumber.Trim();
         courier.IdNumber    = request.IdNumber.Trim();
+
+        // Only Tbilisi couriers get a standard per-order rate (see Courier.DefaultSalary doc comment).
+        if (request.DefaultSalary is decimal salary)
+        {
+            if (salary < 0)
+                throw new ValidationException(new[] {
+                    new ValidationFailure("DefaultSalary", "Default salary must be a non-negative value.")
+                });
+            if (!courier.AssignedCity.Trim().Equals("Tbilisi", StringComparison.OrdinalIgnoreCase))
+                throw new ConflictException("Default salary can only be set for couriers assigned to Tbilisi.");
+        }
+        courier.DefaultSalary = request.DefaultSalary;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

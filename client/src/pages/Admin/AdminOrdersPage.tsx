@@ -762,9 +762,25 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     return picked;
   }, [selected, findOrder, bulkMode]);
 
-  const missingSalaryOrders = useMemo(() =>
-    actionPool.filter(o => o.courierSalary == null),
-  [actionPool]);
+  // Orders the admin must manually price because no applicable courier default rate covers
+  // them (mirrors the backend's auto-fill in AssignCourierToOrderCommandHandler /
+  // AdminMarkOrderDeliveredCommandHandler — a Tbilisi courier's DefaultSalary is applied
+  // automatically, so those orders don't need this gate). The "applicable" courier is
+  // mode-dependent: assigning always (re)targets the newly chosen bulkCourierId, while
+  // delivering never changes an existing assignee — only orders still missing one pick up
+  // bulkCourierId.
+  const missingSalaryOrders = useMemo(() => {
+    const bulkCourierDefault = couriers.find(c => c.courierId === bulkCourierId)?.defaultSalary ?? null;
+    return actionPool.filter(o => {
+      if (o.courierSalary != null) return false;
+      const ownerDefault = bulkMode === 'assign'
+        ? bulkCourierDefault
+        : o.courierId
+          ? (couriers.find(c => c.courierId === o.courierId)?.defaultSalary ?? null)
+          : bulkCourierDefault;
+      return ownerDefault == null;
+    });
+  }, [actionPool, couriers, bulkCourierId, bulkMode]);
 
   // Orders with no company service price set (0 / null) — must be priced before
   // assigning or delivering, mirroring the salary requirement.
@@ -823,12 +839,17 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     // (they now have a courier) disappear immediately too.
     if (succeededIds.length > 0) {
       const assignedCourierId = bulkCourierId;
-      const courierName = couriers.find(c => c.courierId === assignedCourierId)?.fullName ?? null;
+      const assignedCourier = couriers.find(c => c.courierId === assignedCourierId);
+      const courierName = assignedCourier?.fullName ?? null;
+      const defaultSalary = assignedCourier?.defaultSalary ?? null;
       patchOrders(succeededIds, o => ({
         ...o,
         courierId: assignedCourierId,
         courierFullName: courierName ?? o.courierFullName,
         status: o.orderType === 'Return' ? 'CourierAssignedToPickUp' : 'CourierAssignedToDeliver',
+        ...(o.orderType !== 'Return' && defaultSalary != null
+          ? { courierSalary: defaultSalary, companyRevenue: o.companyServicePrice - defaultSalary }
+          : {}),
       }), assignTab === 'pending' ? () => true : undefined);
     }
     setBulkAssigning(false);
@@ -885,7 +906,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     await Promise.all(targets.map(async o => {
       try {
         // Assign the chosen courier only when the order has none — never override an
-        // existing assignee. Salary is already persisted by the salary modal above.
+        // existing assignee. Any order still missing a salary at this point is covered by
+        // its (existing or newly-chosen) courier's default rate — the backend auto-fills
+        // it (AdminMarkOrderDeliveredCommandHandler); anything without a default was
+        // already persisted by the salary modal above.
         await adminMarkOrderDelivered(token, o.id,
           !o.courierId && bulkCourierId ? { courierId: bulkCourierId } : undefined);
         ok++;
@@ -895,15 +919,28 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     }));
     // Reflect the delivery locally right away instead of waiting on a full reload.
     if (succeededIds.length > 0) {
-      const courierName = couriers.find(c => c.courierId === bulkCourierId)?.fullName ?? null;
+      const bulkCourier = couriers.find(c => c.courierId === bulkCourierId);
+      const courierName = bulkCourier?.fullName ?? null;
       const nowIso = new Date().toISOString();
-      patchOrders(succeededIds, o => ({
-        ...o,
-        status: 'DeliveredToRecipient',
-        deliveredAt: o.deliveredAt ?? nowIso,
-        courierId: o.courierId ?? bulkCourierId,
-        courierFullName: o.courierId ? o.courierFullName : (courierName ?? o.courierFullName),
-      }));
+      patchOrders(succeededIds, o => {
+        // Mirrors the backend's fallback: an order without a salary yet picks up its
+        // (existing or newly-assigned) courier's default rate.
+        const ownerDefault = o.courierSalary != null
+          ? null
+          : (o.courierId
+              ? couriers.find(c => c.courierId === o.courierId)?.defaultSalary
+              : bulkCourier?.defaultSalary) ?? null;
+        return {
+          ...o,
+          status: 'DeliveredToRecipient',
+          deliveredAt: o.deliveredAt ?? nowIso,
+          courierId: o.courierId ?? bulkCourierId,
+          courierFullName: o.courierId ? o.courierFullName : (courierName ?? o.courierFullName),
+          ...(ownerDefault != null
+            ? { courierSalary: ownerDefault, companyRevenue: o.companyServicePrice - ownerDefault }
+            : {}),
+        };
+      });
     }
     setBulkDelivering(false);
     setBulkCourierId('');

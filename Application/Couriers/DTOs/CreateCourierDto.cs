@@ -12,5 +12,7 @@ public sealed record CreateCourierDto(
     string AssignedCity,
     string AssignedDistrict,
     string Username,
-    string Password
+    string Password,
+    /// <summary>Standard per-order salary — only allowed when AssignedCity is Tbilisi.</summary>
+    decimal? DefaultSalary = null
 );

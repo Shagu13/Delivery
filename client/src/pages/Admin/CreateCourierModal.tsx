@@ -18,11 +18,15 @@ interface Props {
 interface FormData {
   firstName: string; lastName: string; idNumber: string; phoneNumber: string;
   assignedCity: string; assignedDistrict: string; username: string; password: string;
+  defaultSalary: string;
 }
 
 type FieldErrors = Partial<Record<keyof FormData, string>>;
 
-const EMPTY: FormData = { firstName: '', lastName: '', idNumber: '', phoneNumber: '', assignedCity: '', assignedDistrict: '', username: '', password: '' };
+const EMPTY: FormData = { firstName: '', lastName: '', idNumber: '', phoneNumber: '', assignedCity: '', assignedDistrict: '', username: '', password: '', defaultSalary: '' };
+
+// Only Tbilisi couriers get a standard per-order rate — see Courier.DefaultSalary doc comment.
+const isTbilisi = (city: string) => city.trim().toLowerCase() === 'tbilisi';
 
 // Translates backend validation errors into friendly, localized field messages.
 // The API returns two kinds of keys: FluentValidation property names ("Dto.Username")
@@ -88,7 +92,12 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
     }, [open]);
 
   const handleChange = useCallback((field: keyof FormData, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm(prev => ({
+      ...prev,
+      [field]: value,
+      // Leaving Tbilisi drops any entered default salary — it's not applicable elsewhere.
+      ...(field === 'assignedCity' && !isTbilisi(value) ? { defaultSalary: '' } : {}),
+    }));
     setErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
   }, []);
 
@@ -102,6 +111,10 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
     if (!form.assignedDistrict.trim()) e.assignedDistrict = t.errDistrictRequired;
     if (!form.username.trim())        e.username        = t.errUsernameRequired;
     else if (!/^[a-zA-Z0-9_.-]+$/.test(form.username)) e.username = t.errUsernameChars;
+    if (isTbilisi(form.assignedCity) && form.defaultSalary.trim() !== '') {
+      const v = parseFloat(form.defaultSalary);
+      if (isNaN(v) || v < 0) e.defaultSalary = t.errDefaultSalaryInvalid;
+    }
     if (!form.password)               e.password        = t.errPasswordRequired;
     else {
       // Mirror ASP.NET Identity's full password policy so every unmet rule surfaces
@@ -125,6 +138,8 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
         idNumber: form.idNumber.trim(), phoneNumber: form.phoneNumber.trim(),
         assignedCity: form.assignedCity.trim(), assignedDistrict: form.assignedDistrict.trim(),
         username: form.username.trim(), password: form.password,
+        defaultSalary: isTbilisi(form.assignedCity) && form.defaultSalary.trim() !== ''
+          ? parseFloat(form.defaultSalary) : null,
       }, token);
       onCreated(result);
     } catch (err) {
@@ -196,6 +211,23 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
               cityError={errors.assignedCity}
               districtError={errors.assignedDistrict}
             />
+            {isTbilisi(form.assignedCity) && (
+              <div>
+                <FormField
+                  label={t.courierDefaultSalary}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.defaultSalary}
+                  onChange={e => handleChange('defaultSalary', e.target.value)}
+                  error={errors.defaultSalary}
+                  placeholder={t.phDefaultSalary}
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 4, display: 'block' }}>
+                  {t.courierDefaultSalaryHint}
+                </span>
+              </div>
+            )}
           </fieldset>
 
           <fieldset className="modal__fieldset">

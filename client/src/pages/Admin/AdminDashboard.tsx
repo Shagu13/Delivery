@@ -189,10 +189,10 @@ export function AdminDashboard() {
     goTo('couriers');
   };
 
-  const handleCourierUpdated = (courierId: string, newUsername: string, newPhone: string, newIdNumber: string) => {
+  const handleCourierUpdated = (courierId: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => {
     setCouriers(prev => prev.map(c =>
       c.courierId === courierId
-        ? { ...c, username: newUsername, phoneNumber: newPhone, idNumber: newIdNumber }
+        ? { ...c, username: newUsername, phoneNumber: newPhone, idNumber: newIdNumber, defaultSalary: newDefaultSalary }
         : c
     ));
     setEditCourier(null);
@@ -513,7 +513,7 @@ export function AdminDashboard() {
         courier={editCourier}
         token={token ?? ''}
         onClose={() => setEditCourier(null)}
-        onUpdated={(id, username, phone, idNumber) => { handleCourierUpdated(id, username, phone, idNumber); }}
+        onUpdated={(id, username, phone, idNumber, defaultSalary) => { handleCourierUpdated(id, username, phone, idNumber, defaultSalary); }}
       />
 
       {toast && (
@@ -2923,6 +2923,11 @@ function AllCouriersList({
             <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
               {courier.phoneNumber}
             </span>
+            {courier.defaultSalary != null && (
+              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', border: '1px solid rgba(196,127,23,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+                {t.courierDefaultSalary} ₾{courier.defaultSalary.toFixed(2)}
+              </span>
+            )}
             <span className={`status-badge ${!courier.isDeleted ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
               {!courier.isDeleted ? t.courierStatusActive : t.courierStatusDeleted}
             </span>

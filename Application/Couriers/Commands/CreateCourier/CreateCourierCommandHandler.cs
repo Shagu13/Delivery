@@ -54,7 +54,8 @@ public sealed class CreateCourierCommandHandler : IRequestHandler<CreateCourierC
             PhoneNumber = dto.PhoneNumber,
             AssignedCity = dto.AssignedCity,
             AssignedDistrict = dto.AssignedDistrict,
-            ApplicationUserId = user.Id
+            ApplicationUserId = user.Id,
+            DefaultSalary = dto.DefaultSalary
         };
 
         _context.Couriers.Add(courier);

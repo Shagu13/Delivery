@@ -229,6 +229,10 @@ const en = {
   courierTerritorySection: 'Assigned Territory',
   courierCredSection:      'Login Credentials',
   courierSubmit:           'Create Courier',
+  courierDefaultSalary:     'Default Salary',
+  courierDefaultSalaryHint: 'Auto-applied to this courier’s deliveries when assigned from the Packages page. Only available for Tbilisi.',
+  phDefaultSalary:          'e.g. 15.00',
+  errDefaultSalaryInvalid:  'Enter a valid non-negative amount.',
 
   // ── Customer modal ────────────────────────────────────────────────────────
   customerModalTitle:      'New Customer',
@@ -2085,6 +2089,10 @@ const ka: typeof en = {
   courierTerritorySection: 'მინიჭებული ტერიტორია',
   courierCredSection:      'შესვლის მონაცემები',
   courierSubmit:           'კურიერის შექმნა',
+  courierDefaultSalary:     'სტანდარტული ხელფასი',
+  courierDefaultSalaryHint: 'ავტომატურად გამოიყენება ამ კურიერის მიტანებზე Packages გვერდიდან მინიჭებისას. ხელმისაწვდომია მხოლოდ თბილისისთვის.',
+  phDefaultSalary:          'მაგ. 15.00',
+  errDefaultSalaryInvalid:  'შეიყვანეთ სწორი, არაუარყოფითი თანხა.',
 
   // ── Customer modal ────────────────────────────────────────────────────────
   customerModalTitle:      'ახალი კლიენტი',

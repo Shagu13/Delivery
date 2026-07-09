@@ -154,6 +154,9 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("DateDeleted")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal?>("DefaultSalary")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)

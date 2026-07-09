@@ -27,5 +27,18 @@ public sealed class CreateCourierCommandValidator : AbstractValidator<CreateCour
             .NotEmpty()
             .MinimumLength(8)
             .MaximumLength(100);
+
+        RuleFor(x => x.Dto.DefaultSalary)
+            .GreaterThanOrEqualTo(0)
+            .When(x => x.Dto.DefaultSalary.HasValue)
+            .WithMessage("Default salary must be a non-negative value.");
+
+        // Only Tbilisi couriers get a standard per-order rate — other cities are priced
+        // manually per order (see Courier.DefaultSalary doc comment).
+        RuleFor(x => x.Dto.AssignedCity)
+            .Must(city => city.Trim().Equals("Tbilisi", StringComparison.OrdinalIgnoreCase))
+            .When(x => x.Dto.DefaultSalary.HasValue)
+            .WithMessage("Default salary can only be set for couriers assigned to Tbilisi.")
+            .OverridePropertyName("DefaultSalary");
     }
 }
