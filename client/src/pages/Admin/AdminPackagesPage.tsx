@@ -111,15 +111,45 @@ function recipientAmountDue(o: { productPaymentStatus: string; amountToCollectFo
   return cod + fee;
 }
 
+// A Return order is picked up from `returnPickup*` (entered explicitly when the return
+// was created) — not the "recipient" fields, which for Return orders hold the business's
+// own address (where the item is ultimately returned to), not where the courier actually
+// goes to collect it. No geo variant exists for return-pickup fields (plain text entry),
+// unlike recipient city/district. Structural type so it works for both AdminOrderItem and
+// AdminOrder (the pickup-customer-grid modals use the latter).
+interface PickupLocationFields {
+  orderType: string;
+  recipientCity: string;
+  recipientCityGeo?: string;
+  recipientDistrict: string;
+  recipientDistrictGeo?: string;
+  recipientAddress: string;
+  returnPickupCity?: string | null;
+  returnPickupDistrict?: string | null;
+  returnPickupAddress?: string | null;
+}
+function pickupCityDisplay(o: PickupLocationFields, lang: string): string {
+  if (o.orderType === 'Return' && o.returnPickupCity) return o.returnPickupCity;
+  return lang === 'ka' && o.recipientCityGeo ? o.recipientCityGeo : o.recipientCity;
+}
+function pickupDistrictDisplay(o: PickupLocationFields, lang: string): string {
+  if (o.orderType === 'Return' && o.returnPickupCity) return o.returnPickupDistrict ?? '';
+  return lang === 'ka' && o.recipientDistrictGeo ? o.recipientDistrictGeo : o.recipientDistrict;
+}
+function pickupAddressDisplay(o: PickupLocationFields): string {
+  return o.orderType === 'Return' && o.returnPickupCity ? (o.returnPickupAddress ?? '') : o.recipientAddress;
+}
+
 function buildAdminLabel(o: AdminOrderItem): ParcelLabelData {
   const due = recipientAmountDue(o);
-  const city     = o.recipientCityGeo     || o.recipientCity;
-  const district = o.recipientDistrictGeo || o.recipientDistrict;
+  const city     = o.orderType === 'Return' && o.returnPickupCity ? o.returnPickupCity     : (o.recipientCityGeo     || o.recipientCity);
+  const district = o.orderType === 'Return' && o.returnPickupCity ? (o.returnPickupDistrict ?? '') : (o.recipientDistrictGeo || o.recipientDistrict);
+  const address  = pickupAddressDisplay(o);
   return {
     storeName:        o.senderBusinessName,
     recipientName:    recipientDisplayName(o.recipientName, 'უცნობი'),
     recipientPhone:   o.recipientPhone,
-    recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
+    recipientAddress: [address, district, city].filter(Boolean).join(', '),
     amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
     description:      o.description ?? undefined,
     trackingNumber:   o.trackingNumber,
@@ -876,10 +906,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{o.recipientPhone}</div>
         </td>
         <td>
-          <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}</div>
+          <div>{pickupCityDisplay(o, lang)}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupDistrictDisplay(o, lang)}</div>
         </td>
-        <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
+        <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{pickupAddressDisplay(o)}</td>
         <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>{o.description ?? <span style={{ opacity: 0.4 }}>—</span>}</td>
         <td>
           <StatusBadge status={o.status} />
@@ -1483,8 +1513,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                             {o.senderBusinessName && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>{o.senderBusinessName}</div>}
                           </td>
                           <td style={{ padding: '6px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{pickupCityDisplay(o, lang)}, {pickupDistrictDisplay(o, lang)}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupAddressDisplay(o)}</div>
                           </td>
                           <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text)' }}>₾{o.companyServicePrice.toFixed(2)}</td>
                           <td style={{ padding: '6px 8px', textAlign: 'right' }}>
@@ -1550,8 +1580,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                           <td style={{ padding: '6px 4px', textAlign: 'center' }}><input type="checkbox" style={{ cursor: 'pointer' }} checked={isChecked} onChange={() => setPriceChecked(prev => { const next = new Set(prev); isChecked ? next.delete(o.id) : next.add(o.id); return next; })} /></td>
                           <td style={{ padding: '6px 8px' }}><span className="tn-badge">{o.trackingNumber}</span></td>
                           <td style={{ padding: '6px 8px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{pickupCityDisplay(o, lang)}, {pickupDistrictDisplay(o, lang)}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupAddressDisplay(o)}</div>
                           </td>
                           <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
@@ -1830,7 +1860,6 @@ function GroupingModal({ customer, date, batches, token, onClose, onGrouped }: {
   customer: PickupDayCustomer; date: Date; batches: AdminGroupOrder[]; token: string; onClose: () => void; onGrouped: (count: number) => void;
 }) {
   const { t, lang } = useLanguage();
-  const locCity = (en: string, geo?: string | null) => (lang === 'ka' && geo ? geo : en);
   const [orders, setOrders]     = useState<AdminOrder[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -1899,7 +1928,7 @@ function GroupingModal({ customer, date, batches, token, onClose, onGrouped }: {
                       <td><input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} onClick={e => e.stopPropagation()} /></td>
                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
                       <td>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</td>
-                      <td>{locCity(o.recipientCity, o.recipientCityGeo)}, {o.recipientDistrict}</td>
+                      <td>{pickupCityDisplay(o, lang)}, {pickupDistrictDisplay(o, lang)}</td>
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : '—'}</td>
                     </tr>
                   ))}
