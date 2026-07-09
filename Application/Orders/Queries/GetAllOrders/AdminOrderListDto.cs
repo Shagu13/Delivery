@@ -3,12 +3,18 @@ namespace Application.Orders.Queries.GetAllOrders;
 public sealed record AdminOrderListDto(
     Guid     Id,
     string   TrackingNumber,
-    // Sender info (from GroupOrder)
+    // Sender info (from GroupOrder, or Customer for standalone orders)
     string   SenderBusinessName,
     string   SenderFirstName,
     string   SenderLastName,
     string   SenderPhone,
     string?  AlternativeSenderPhone,
+    // Batch this order belongs to (null for standalone Return/Customer-direct orders) and
+    // the sender's pickup location — used to group results by sender on the Packages page.
+    Guid?    GroupOrderId,
+    string   PickUpCity,
+    string   PickUpDistrict,
+    string   PickUpAddress,
     // Recipient
     string   RecipientName,
     string   RecipientPhone,

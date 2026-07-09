@@ -642,7 +642,7 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                         onChange={e => setActionCourierId(e.target.value)}
                                     >
                                         <option value="">{t.eomSkipNoCourier}</option>
-                                        {couriers.map(c => (
+                                        {couriers.filter(c => !c.isDeleted).map(c => (
                                             <option key={c.courierId} value={c.courierId}>
                                                 {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
                                             </option>

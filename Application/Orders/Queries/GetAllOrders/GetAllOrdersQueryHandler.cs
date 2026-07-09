@@ -97,11 +97,11 @@ public sealed class GetAllOrdersQueryHandler
         }
 
         // ── Free-text search ─────────────────────────────────────────────────
-        // Party = "recipient" restricts the search to the Order's own recipient
-        // fields only (name/phone/address/tracking) — sender/customer fields are
+        // Party = "recipient" restricts the search to the Order's own recipient fields
+        // (tracking/name/phone/address/city/district) — sender/customer fields are
         // excluded so a recipient-side search never matches on the sender's name.
-        // Party = "sender" restricts to sender/customer fields. Otherwise (null)
-        // it matches either side, same as before.
+        // Party = "sender" restricts to sender/customer fields (name/phone/pickup
+        // city/district/address). Otherwise (null) it matches either side.
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var term = request.Search.Trim().ToLower();
@@ -112,14 +112,23 @@ public sealed class GetAllOrdersQueryHandler
                     (o.TrackingNumber.ToLower().Contains(term) ||
                      o.RecipientName.ToLower().Contains(term) ||
                      o.RecipientPhone.Contains(term) ||
-                     o.RecipientAddress.ToLower().Contains(term)))
+                     o.RecipientAddress.ToLower().Contains(term) ||
+                     o.RecipientCity.ToLower().Contains(term) ||
+                     o.RecipientDistrict.ToLower().Contains(term)))
                 ||
                 (matchesSender &&
                     ((o.GroupOrder != null && o.GroupOrder.SenderBusinessName.ToLower().Contains(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.SenderFirstName.ToLower().Contains(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.SenderLastName.ToLower().Contains(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.SenderPhone.Contains(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.PickUpCity.ToLower().Contains(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.PickUpDistrict.ToLower().Contains(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.PickUpAddress.ToLower().Contains(term)) ||
                      (o.Customer != null && o.Customer.BusinessName.ToLower().Contains(term)) ||
-                     (o.Customer != null && o.Customer.PhoneNumber.Contains(term)))));
+                     (o.Customer != null && o.Customer.PhoneNumber.Contains(term)) ||
+                     (o.Customer != null && o.Customer.City.ToLower().Contains(term)) ||
+                     (o.Customer != null && o.Customer.District.ToLower().Contains(term)) ||
+                     (o.Customer != null && o.Customer.Address.ToLower().Contains(term)))));
         }
 
         // ── Count then page ──────────────────────────────────────────────────
@@ -164,6 +173,10 @@ public sealed class GetAllOrdersQueryHandler
                 SenderLastName:           o.GroupOrder?.SenderLastName     ?? o.Customer?.LastName     ?? string.Empty,
                 SenderPhone:              o.GroupOrder?.SenderPhone        ?? o.Customer?.PhoneNumber  ?? string.Empty,
                 AlternativeSenderPhone:   o.GroupOrder?.AlternativeSenderPhone,
+                GroupOrderId:             o.GroupOrderId,
+                PickUpCity:               o.GroupOrder?.PickUpCity     ?? o.Customer?.City     ?? string.Empty,
+                PickUpDistrict:           o.GroupOrder?.PickUpDistrict ?? o.Customer?.District ?? string.Empty,
+                PickUpAddress:            o.GroupOrder?.PickUpAddress  ?? o.Customer?.Address  ?? string.Empty,
                 RecipientName:            o.RecipientName,
                 RecipientPhone:           o.RecipientPhone,
                 RecipientCity:            o.RecipientCity,

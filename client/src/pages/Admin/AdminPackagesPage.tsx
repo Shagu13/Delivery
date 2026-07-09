@@ -1255,7 +1255,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
                   <select className="go-select" value={bulkCourierId} onChange={e => setBulkCourierId(e.target.value)} style={{ minWidth: 220 }}>
                     <option value="">{t.aopChooseCourierOpt}</option>
-                    {couriers.map(c => <option key={c.courierId} value={c.courierId}>{c.fullName} — {c.assignedCity}, {c.assignedDistrict}</option>)}
+                    {couriers.filter(c => !c.isDeleted).map(c => <option key={c.courierId} value={c.courierId}>{c.fullName} — {c.assignedCity}, {c.assignedDistrict}</option>)}
                   </select>
                   <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
@@ -1297,7 +1297,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="go-select-icon"><circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/><path d="M2 14c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
                     <select className="go-select" value={bulkCourierId} onChange={e => setBulkCourierId(e.target.value)} style={{ minWidth: 220 }}>
                       <option value="">{t.aopCourierForUnassigned}</option>
-                      {couriers.map(c => <option key={c.courierId} value={c.courierId}>{c.fullName} — {c.assignedCity}, {c.assignedDistrict}</option>)}
+                      {couriers.filter(c => !c.isDeleted).map(c => <option key={c.courierId} value={c.courierId}>{c.fullName} — {c.assignedCity}, {c.assignedDistrict}</option>)}
                     </select>
                     <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="go-select-chevron"><path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </div>

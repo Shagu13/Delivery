@@ -255,7 +255,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                     <select className="go-select go-select--inline" value={selectedCourierId}
                         onChange={e => setSelectedCourierId(e.target.value)}>
                         <option value="">{t.goChooseCourierOption}</option>
-                        {couriers.map(c => (
+                        {couriers.filter(c => !c.isDeleted).map(c => (
                             <option key={c.courierId} value={c.courierId}>
                                 {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
                             </option>

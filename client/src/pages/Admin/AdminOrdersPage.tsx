@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import { Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations } from '../../api/orders';
@@ -29,6 +29,12 @@ export interface AdminOrderItem {
   senderLastName: string;
   senderPhone: string;
   alternativeSenderPhone: string | null;
+  // Batch this order belongs to (null for standalone Return/Customer-direct orders) and the
+  // sender's pickup location — used to group results by sender on the Packages page.
+  groupOrderId: string | null;
+  pickUpCity: string;
+  pickUpDistrict: string;
+  pickUpAddress: string;
   recipientName: string;
   recipientPhone: string;
   recipientCity: string;
@@ -382,6 +388,11 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const [dateTouched,     setDateTouched]     = useState(false);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
+  // Sender view groups the flat order list into expandable per-batch rows (collapsed by
+  // default); keyed by groupOrderId, or the order's own id for standalone orders.
+  const [expandedGroups,  setExpandedGroups]  = useState<Set<string>>(new Set());
+  const toggleGroupExpand = (key: string) =>
+    setExpandedGroups(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
 
   const [showTracking,  setShowTracking]  = useState(false);
   const [showPrices,    setShowPrices]    = useState(true);
@@ -572,6 +583,42 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   }, [orderLocations, filterCity, lang]);
 
   const orders = data?.items ?? [];
+
+  // Sender view: group the (already-fetched, already-filtered) flat order list by batch —
+  // groupOrderId for GroupOrder-backed orders, or the order's own id for standalone ones
+  // (each standalone order forms its own single-item "batch"). Order of groups follows the
+  // server's own ordering (first order seen in each group).
+  interface SenderGroup {
+    key: string;
+    senderBusinessName: string;
+    senderFirstName: string;
+    senderLastName: string;
+    pickUpCity: string;
+    pickUpDistrict: string;
+    orders: AdminOrderItem[];
+  }
+  const senderGroups = useMemo<SenderGroup[]>(() => {
+    if (filterParty !== 'sender') return [];
+    const map = new Map<string, SenderGroup>();
+    for (const o of orders) {
+      const key = o.groupOrderId ?? `standalone-${o.id}`;
+      let group = map.get(key);
+      if (!group) {
+        group = {
+          key,
+          senderBusinessName: o.senderBusinessName,
+          senderFirstName: o.senderFirstName,
+          senderLastName: o.senderLastName,
+          pickUpCity: o.pickUpCity,
+          pickUpDistrict: o.pickUpDistrict,
+          orders: [],
+        };
+        map.set(key, group);
+      }
+      group.orders.push(o);
+    }
+    return [...map.values()];
+  }, [orders, filterParty]);
 
   const selectableOrders = useMemo(() =>
     bulkMode === 'assign'  ? orders.filter(isAssignable)  :
@@ -1031,6 +1078,148 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     setFilterCourier(null); setFilterUnpriced(false);
   };
 
+  // Renders a single order row — shared by the flat (Recipient) view and, nested under a
+  // sender group header, the grouped (Sender) view.
+  const renderOrderRow = (order: AdminOrderItem) => {
+    const isChecked       = selected.has(order.id);
+    const [bg, color]     = STATUS_COLORS[order.status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];
+    const statusMeta      = getStatusMeta(order.status, lang);
+    const missingPrice    = order.companyServicePrice === 0;
+    const missingSalary   = order.courierSalary == null || order.courierSalary === 0;
+    const selectable      = bulkMode === 'assign'  ? isAssignable(order)
+                          : bulkMode === 'deliver' ? isDeliverable(order)
+                          : true;
+    return (
+      <tr key={order.id}
+        className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}${!selectable ? ' aop-tr--disabled' : ''}`}
+        onClick={() => canManage && selectable && toggleOne(order.id)}
+        style={!canManage || !selectable ? { cursor: 'default' } : undefined}
+      >
+        {canManage && (
+          <td className="aop-td aop-td--check" onClick={e => e.stopPropagation()}>
+            <input type="checkbox" className="aop-checkbox" checked={isChecked}
+              disabled={!selectable}
+              onChange={() => selectable && toggleOne(order.id)}/>
+          </td>
+        )}
+        {showTracking && (
+          <td className="aop-td">
+            <span className="tn-badge">{order.trackingNumber}</span>
+          </td>
+        )}
+        <td className="aop-td">
+          <div className="aop-sender-biz">{order.senderBusinessName}</div>
+          <div className="aop-sender-name">{order.senderFirstName} {order.senderLastName}</div>
+        </td>
+        <td className="aop-td">
+          <div className="aop-name">{recipientDisplayName(order.recipientName, t.recipientUnknown)}</div>
+          <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{order.recipientPhone}</div>
+          <div className="aop-addr">{pickupAddressDisplay(order)}</div>
+        </td>
+        <td className="aop-td">
+          <div className="aop-city">{pickupCityDisplay(order, lang)}</div>
+          <div className="aop-district">{pickupDistrictDisplay(order, lang)}</div>
+        </td>
+        <td className="aop-td">
+          <span
+            className="status-badge"
+            style={{ background: bg, color }}
+            title={statusMeta.description}
+          >
+            {statusMeta.short}
+          </span>
+          <div className="aop-courier-name" title={order.courierFullName ?? t.vomUnassigned}
+            style={order.courierId ? undefined : { color: '#ef4444' }}>
+            {order.courierFullName ?? t.vomUnassigned}
+          </div>
+          {/* Delivered time — shown on delivered (Assigned-tab) orders. */}
+          {order.deliveredAt && (
+            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+              {t.aopDeliveredAt} · {fmtDateTime(order.deliveredAt, lang)}
+            </div>
+          )}
+          {order.status === 'DeliveryPostponed' && order.postponeReason && (
+            <div style={{ fontSize: '0.7rem', color: '#f97316', marginTop: 2 }}>
+              {t.cdPostponeReasons[order.postponeReason]}
+            </div>
+          )}
+        </td>
+        <td className="aop-td aop-td--num">
+          {(() => {
+            // Cash the courier collects from the recipient: product COD (when
+            // unpaid) + company service fee (when the recipient pays it). Shown
+            // stacked — COD, + fee, = total — when both apply. Operators (no
+            // canManage) must not see the service fee, so they get the total only.
+            const cod = order.productPaymentStatus === 'NotPaid' ? (order.amountToCollectForPackage ?? 0) : 0;
+            const fee = order.whoPaysForCompanyService === 'Recipient' ? (order.companyServicePrice ?? 0) : 0;
+            const total = cod + fee;
+            if (total <= 0) return <span className="aop-price aop-price--empty">—</span>;
+            if (!canManage || !(cod > 0 && fee > 0)) return <span className="aop-price">₾{total.toFixed(2)}</span>;
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3, alignItems: 'flex-end' }}>
+                <span className="aop-price">{t.goCodLbl} ₾{cod.toFixed(2)}</span>
+                <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-subtle)' }}>{t.goFeeLbl} ₾{fee.toFixed(2)}</span>
+                <span className="aop-price" style={{ fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 1, marginTop: 1 }}>{t.goTotalLbl} ₾{total.toFixed(2)}</span>
+              </div>
+            );
+          })()}
+        </td>
+        {showPricesEff && (
+          <td className="aop-td aop-td--num">
+            {missingPrice
+              ? <span className="aop-missing">{t.aopNotSet}</span>
+              : <span className="aop-price">₾{order.companyServicePrice.toFixed(2)}</span>
+            }
+          </td>
+        )}
+        {showPricesEff && (
+          <td className="aop-td aop-td--num">
+            {missingSalary
+              ? <span className="aop-missing">{t.aopNotSet}</span>
+              : <span className="aop-price">₾{order.courierSalary!.toFixed(2)}</span>
+            }
+          </td>
+        )}
+        {showRevenueEff && (
+          <td className="aop-td aop-td--num">
+            {order.companyRevenue != null
+              ? <span className="aop-price">₾{order.companyRevenue.toFixed(2)}</span>
+              : <span className="aop-price aop-price--empty">—</span>
+            }
+          </td>
+        )}
+        <td className="aop-td">
+          {order.productPaymentStatus === 'Paid'
+            ? <span className="aop-paid">{t.aopPaid}</span>
+            : <span className="aop-unpaid">{t.aopUnpaid}</span>
+          }
+        </td>
+        <td className="aop-td aop-td--actions" onClick={e => e.stopPropagation()}>
+          <OrderRowActionsMenu
+            order={order}
+            couriers={couriers}
+            token={token ?? ''}
+            canManage={canManage}
+            canAssign={isAssignable(order)}
+            canDeliver={isDeliverable(order)}
+            onView={() => setViewingOrder(order)}
+            onEdit={() => setEditingOrder(order)}
+            onLabel={() => void printParcelLabels([buildAdminLabel(order)])}
+            onChanged={reload}
+            onError={msg => showToast(msg, 'err')}
+          />
+        </td>
+      </tr>
+    );
+  };
+
+  // Column count for a sender-group header row's colSpan — every column except the
+  // leading checkbox (which the header row renders on its own).
+  const orderColumnCount =
+    (showTracking ? 1 : 0) + 1 /* sender */ + 1 /* recipient */ + 1 /* city/district */ +
+    1 /* status */ + 1 /* cod */ + (showPricesEff ? 2 : 0) + (showRevenueEff ? 1 : 0) +
+    1 /* paid */ + 1 /* actions */;
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -1304,7 +1493,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
                   style={{ minWidth: 220 }}
                 >
                   <option value="">{t.aopChooseCourierOpt}</option>
-                  {couriers.map(c => (
+                  {couriers.filter(c => !c.isDeleted).map(c => (
                     <option key={c.courierId} value={c.courierId}>
                       {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
                     </option>
@@ -1385,7 +1574,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
                     style={{ minWidth: 220 }}
                   >
                     <option value="">{t.aopCourierForUnassigned}</option>
-                    {couriers.map(c => (
+                    {couriers.filter(c => !c.isDeleted).map(c => (
                       <option key={c.courierId} value={c.courierId}>
                         {c.fullName} — {c.assignedCity}, {c.assignedDistrict}
                       </option>
@@ -1666,138 +1855,33 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
               </tr>
             </thead>
             <tbody>
-              {orders.map(order => {
-                const isChecked       = selected.has(order.id);
-                const [bg, color]     = STATUS_COLORS[order.status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];
-                const statusMeta      = getStatusMeta(order.status, lang);
-                const missingPrice    = order.companyServicePrice === 0;
-                const missingSalary   = order.courierSalary == null || order.courierSalary === 0;
-                const selectable      = bulkMode === 'assign'  ? isAssignable(order)
-                                      : bulkMode === 'deliver' ? isDeliverable(order)
-                                      : true;
-                return (
-                  <tr key={order.id}
-                    className={`aop-tr${isChecked ? ' aop-tr--selected' : ''}${!selectable ? ' aop-tr--disabled' : ''}`}
-                    onClick={() => canManage && selectable && toggleOne(order.id)}
-                    style={!canManage || !selectable ? { cursor: 'default' } : undefined}
-                  >
-                    {canManage && (
-                      <td className="aop-td aop-td--check" onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" className="aop-checkbox" checked={isChecked}
-                          disabled={!selectable}
-                          onChange={() => selectable && toggleOne(order.id)}/>
-                      </td>
-                    )}
-                    {showTracking && (
-                      <td className="aop-td">
-                        <span className="tn-badge">{order.trackingNumber}</span>
-                      </td>
-                    )}
-                    <td className="aop-td">
-                      <div className="aop-sender-biz">{order.senderBusinessName}</div>
-                      <div className="aop-sender-name">{order.senderFirstName} {order.senderLastName}</div>
-                    </td>
-                    <td className="aop-td">
-                      <div className="aop-name">{recipientDisplayName(order.recipientName, t.recipientUnknown)}</div>
-                      <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{order.recipientPhone}</div>
-                      <div className="aop-addr">{pickupAddressDisplay(order)}</div>
-                    </td>
-                    <td className="aop-td">
-                      <div className="aop-city">{pickupCityDisplay(order, lang)}</div>
-                      <div className="aop-district">{pickupDistrictDisplay(order, lang)}</div>
-                    </td>
-                    <td className="aop-td">
-                      <span
-                        className="status-badge"
-                        style={{ background: bg, color }}
-                        title={statusMeta.description}
-                      >
-                        {statusMeta.short}
-                      </span>
-                      <div className="aop-courier-name" title={order.courierFullName ?? t.vomUnassigned}
-                        style={order.courierId ? undefined : { color: '#ef4444' }}>
-                        {order.courierFullName ?? t.vomUnassigned}
-                      </div>
-                      {/* Delivered time — shown on delivered (Assigned-tab) orders. */}
-                      {order.deliveredAt && (
-                        <div style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
-                          {t.aopDeliveredAt} · {fmtDateTime(order.deliveredAt, lang)}
-                        </div>
-                      )}
-                      {order.status === 'DeliveryPostponed' && order.postponeReason && (
-                        <div style={{ fontSize: '0.7rem', color: '#f97316', marginTop: 2 }}>
-                          {t.cdPostponeReasons[order.postponeReason]}
-                        </div>
-                      )}
-                    </td>
-                    <td className="aop-td aop-td--num">
-                      {(() => {
-                        // Cash the courier collects from the recipient: product COD (when
-                        // unpaid) + company service fee (when the recipient pays it). Shown
-                        // stacked — COD, + fee, = total — when both apply. Operators (no
-                        // canManage) must not see the service fee, so they get the total only.
-                        const cod = order.productPaymentStatus === 'NotPaid' ? (order.amountToCollectForPackage ?? 0) : 0;
-                        const fee = order.whoPaysForCompanyService === 'Recipient' ? (order.companyServicePrice ?? 0) : 0;
-                        const total = cod + fee;
-                        if (total <= 0) return <span className="aop-price aop-price--empty">—</span>;
-                        if (!canManage || !(cod > 0 && fee > 0)) return <span className="aop-price">₾{total.toFixed(2)}</span>;
-                        return (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3, alignItems: 'flex-end' }}>
-                            <span className="aop-price">{t.goCodLbl} ₾{cod.toFixed(2)}</span>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-subtle)' }}>{t.goFeeLbl} ₾{fee.toFixed(2)}</span>
-                            <span className="aop-price" style={{ fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 1, marginTop: 1 }}>{t.goTotalLbl} ₾{total.toFixed(2)}</span>
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    {showPricesEff && (
-                      <td className="aop-td aop-td--num">
-                        {missingPrice
-                          ? <span className="aop-missing">{t.aopNotSet}</span>
-                          : <span className="aop-price">₾{order.companyServicePrice.toFixed(2)}</span>
-                        }
-                      </td>
-                    )}
-                    {showPricesEff && (
-                      <td className="aop-td aop-td--num">
-                        {missingSalary
-                          ? <span className="aop-missing">{t.aopNotSet}</span>
-                          : <span className="aop-price">₾{order.courierSalary!.toFixed(2)}</span>
-                        }
-                      </td>
-                    )}
-                    {showRevenueEff && (
-                      <td className="aop-td aop-td--num">
-                        {order.companyRevenue != null
-                          ? <span className="aop-price">₾{order.companyRevenue.toFixed(2)}</span>
-                          : <span className="aop-price aop-price--empty">—</span>
-                        }
-                      </td>
-                    )}
-                    <td className="aop-td">
-                      {order.productPaymentStatus === 'Paid'
-                        ? <span className="aop-paid">{t.aopPaid}</span>
-                        : <span className="aop-unpaid">{t.aopUnpaid}</span>
-                      }
-                    </td>
-                    <td className="aop-td aop-td--actions" onClick={e => e.stopPropagation()}>
-                      <OrderRowActionsMenu
-                        order={order}
-                        couriers={couriers}
-                        token={token ?? ''}
-                        canManage={canManage}
-                        canAssign={isAssignable(order)}
-                        canDeliver={isDeliverable(order)}
-                        onView={() => setViewingOrder(order)}
-                        onEdit={() => setEditingOrder(order)}
-                        onLabel={() => void printParcelLabels([buildAdminLabel(order)])}
-                        onChanged={reload}
-                        onError={msg => showToast(msg, 'err')}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
+              {filterParty === 'sender'
+                ? senderGroups.map(group => {
+                    const isExpanded = expandedGroups.has(group.key);
+                    return (
+                      <Fragment key={group.key}>
+                        <tr
+                          className="aop-tr aop-tr--group"
+                          onClick={() => toggleGroupExpand(group.key)}
+                          style={{ cursor: 'pointer', background: 'var(--color-bg-3)' }}
+                        >
+                          {canManage && <td className="aop-td aop-td--check" />}
+                          <td className="aop-td" colSpan={orderColumnCount}>
+                            <span style={{
+                              display: 'inline-block', marginRight: 8, fontSize: '0.75rem',
+                              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s',
+                            }}>›</span>
+                            <strong>{group.senderBusinessName || `${group.senderFirstName} ${group.senderLastName}`}</strong>
+                            {' · '}{group.senderFirstName} {group.senderLastName}
+                            {' · '}{group.pickUpCity}, {group.pickUpDistrict}
+                            {' · '}{t.goPkgs(group.orders.length)}
+                          </td>
+                        </tr>
+                        {isExpanded && group.orders.map(order => renderOrderRow(order))}
+                      </Fragment>
+                    );
+                  })
+                : orders.map(order => renderOrderRow(order))}
             </tbody>
           </table>
         )}
