@@ -214,9 +214,9 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         </div>
                                         {(() => {
                                             const isReturnPickup = order.orderType === 'Return' && !!order.returnPickupCity;
-                                            const city     = isReturnPickup ? order.returnPickupCity     : order.recipientCity;
-                                            const district = isReturnPickup ? order.returnPickupDistrict : order.recipientDistrict;
-                                            const address  = isReturnPickup ? order.returnPickupAddress  : order.recipientAddress;
+                                            const city     = isReturnPickup ? (order.returnPickupCity ?? '')     : order.recipientCity;
+                                            const district = isReturnPickup ? (order.returnPickupDistrict ?? '') : order.recipientDistrict;
+                                            const address  = isReturnPickup ? (order.returnPickupAddress ?? '')  : order.recipientAddress;
                                             return (
                                                 <>
                                                     <div className="courier-card__row">
