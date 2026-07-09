@@ -9,7 +9,12 @@ namespace Application.GroupOrders.Queries.GetGroupOrderById;
 public sealed class GetGroupOrderByIdQueryHandler : IRequestHandler<GetGroupOrderByIdQuery, AdminGroupOrderDto?>
 {
     private readonly IAppDbContext _context;
-    public GetGroupOrderByIdQueryHandler(IAppDbContext context) => _context = context;
+    private readonly ICacheService _cache;
+    public GetGroupOrderByIdQueryHandler(IAppDbContext context, ICacheService cache)
+    {
+        _context = context;
+        _cache = cache;
+    }
 
     public async Task<AdminGroupOrderDto?> Handle(GetGroupOrderByIdQuery request, CancellationToken cancellationToken)
     {
@@ -20,7 +25,7 @@ public sealed class GetGroupOrderByIdQueryHandler : IRequestHandler<GetGroupOrde
             .AsNoTracking()
             .FirstOrDefaultAsync(go => go.Id == request.Id, cancellationToken);
 
-        var (cityGeo, districtGeo) = await GroupOrderMapping.BuildGeoLookupsAsync(_context, cancellationToken);
+        var (cityGeo, districtGeo) = await GroupOrderMapping.BuildGeoLookupsAsync(_context, _cache, cancellationToken);
 
         if (groupOrder is not null)
             return GroupOrderMapping.MapGroupOrder(groupOrder, cityGeo, districtGeo);

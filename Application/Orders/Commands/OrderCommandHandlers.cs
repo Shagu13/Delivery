@@ -62,13 +62,16 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             // Already assigned but not yet picked up by the courier — allow the admin to
             // re-assign it to a different courier.
             OrderStatus.CourierAssignedToDeliver,
+            // A postponed delivery — allow the admin to reassign/retry it, same as
+            // CourierAssignedToDeliver.
+            OrderStatus.DeliveryPostponed,
         };
 
         if (!validStatuses.Contains(order.Status))
             throw new ConflictException(
                 $"Cannot assign courier from status {order.Status}. " +
                 "Expected AdminAcceptedOrderInWareHouse, OrderIsOnItsWayToRecipientsCity, " +
-                "or CourierAssignedToDeliver (re-assignment).");
+                "CourierAssignedToDeliver (re-assignment), or DeliveryPostponed.");
 
         var courier = await _context.Couriers
             .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)
@@ -81,6 +84,9 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         order.CourierId = courier.Id;
         order.AssignedToCourierAt = CustomTime.Now;
         order.Status = OrderStatus.CourierAssignedToDeliver;
+        // Clear stale postpone info — the order is active again under a (possibly new) courier.
+        order.PostponeReason = null;
+        order.PostponedAt = null;
 
         // The separate "on the way" step was removed (courier now confirms delivery in one
         // swipe), so the warehouse-pickup stamp and the non-Tbilisi delivery-window estimate
@@ -137,6 +143,8 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
         // Already assigned but not yet picked up by the courier — allow the admin to
         // re-assign it to a different courier.
         OrderStatus.CourierAssignedToDeliver,
+        // A postponed delivery — allow the admin to reassign/retry it.
+        OrderStatus.DeliveryPostponed,
     };
 
     private readonly IAppDbContext _context;
@@ -198,6 +206,9 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
             order.CourierId = courier.Id;
             order.AssignedToCourierAt = now;
             order.Status = OrderStatus.CourierAssignedToDeliver;
+            // Clear stale postpone info — the order is active again under a (possibly new) courier.
+            order.PostponeReason = null;
+            order.PostponedAt = null;
 
             // Guarded so a re-assignment doesn't overwrite an already-recorded pickup/window —
             // mirrors AssignCourierToOrderCommandHandler.

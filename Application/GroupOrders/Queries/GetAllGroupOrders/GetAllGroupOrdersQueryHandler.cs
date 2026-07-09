@@ -49,7 +49,12 @@ public sealed class GetAllGroupOrdersQueryHandler
     };
 
     private readonly IAppDbContext _context;
-    public GetAllGroupOrdersQueryHandler(IAppDbContext context) => _context = context;
+    private readonly ICacheService _cache;
+    public GetAllGroupOrdersQueryHandler(IAppDbContext context, ICacheService cache)
+    {
+        _context = context;
+        _cache = cache;
+    }
 
     public async Task<PagedResult<AdminGroupOrderDto>> Handle(
         GetAllGroupOrdersQuery request,
@@ -182,17 +187,17 @@ public sealed class GetAllGroupOrdersQueryHandler
                 o.CompanyServicePrice == 0 || o.CourierSalary == null || o.CourierSalary == 0);
         }
 
-        // ── Count + merge-paginate over lightweight (Id, CreatedAt) rows ──────────
-        var goCount = await goQuery.CountAsync(cancellationToken);
-        var soCount = await soQuery.CountAsync(cancellationToken);
-        var totalCount = goCount + soCount;
-
+        // ── Merge-paginate over lightweight (Id, CreatedAt) rows ──────────────────
+        // goQuery/soQuery are unpaginated and share the exact predicates used above, so
+        // the row counts double as the totals — no need for two extra CountAsync round
+        // trips against the same (non-concurrent-safe) DbContext.
         var goRows = await goQuery
             .Select(go => new { go.Id, go.CreatedAt })
             .ToListAsync(cancellationToken);
         var soRows = await soQuery
             .Select(o => new { o.Id, o.CreatedAt })
             .ToListAsync(cancellationToken);
+        var totalCount = goRows.Count + soRows.Count;
 
         var pageIds = goRows.Select(x => (x.Id, x.CreatedAt, IsStandalone: false))
             .Concat(soRows.Select(x => (x.Id, x.CreatedAt, IsStandalone: true)))
@@ -224,7 +229,7 @@ public sealed class GetAllGroupOrdersQueryHandler
                 .Where(o => pageSoIds.Contains(o.Id))
                 .ToListAsync(cancellationToken);
 
-        var (cityGeo, districtGeo) = await GroupOrderMapping.BuildGeoLookupsAsync(_context, cancellationToken);
+        var (cityGeo, districtGeo) = await GroupOrderMapping.BuildGeoLookupsAsync(_context, _cache, cancellationToken);
 
         var items = groupOrders.Select(go => GroupOrderMapping.MapGroupOrder(go, cityGeo, districtGeo))
             .Concat(standalone.Select(o => GroupOrderMapping.MapStandalone(o, cityGeo, districtGeo)))

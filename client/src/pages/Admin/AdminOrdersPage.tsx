@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations, type OrderLocation } from '../../api/orders';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations } from '../../api/orders';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
 import { useAuth } from '../../contexts/useAuth';
@@ -14,7 +15,6 @@ import { PriceWarningModal } from './PriceWarningModal';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
-import { toDateKey } from '../../utils/georgianTime';
 import { resolveDateWindow } from '../../utils/dateWindow';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import type { PagedResult } from '../../types/paging';
@@ -105,12 +105,14 @@ async function fetchUnpricedCount(token: string, courierId?: string, date?: stri
 
 // Orders that can be (re)assigned to a courier from the Packages page: warehouse-ready
 // and en-route-to-city Send/Exchange, an already-assigned delivery (re-assignment to a
-// different courier), and Return orders still awaiting / in pickup assignment. Used by
-// the select-all set, each row's checkbox, and the bulk-assign action so they stay in sync.
+// different courier), a postponed delivery being reassigned/retried, and Return orders
+// still awaiting / in pickup assignment. Used by the select-all set, each row's checkbox,
+// and the bulk-assign action so they stay in sync.
 function isAssignable(o: AdminOrderItem): boolean {
   return o.status === 'AdminAcceptedOrderInWareHouse'
       || o.status === 'OrderIsOnItsWayToRecipientsCity'
       || o.status === 'CourierAssignedToDeliver'
+      || o.status === 'DeliveryPostponed'
       || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
 }
 
@@ -157,16 +159,34 @@ function recipientAmountDue(o: AdminOrderItem): number {
   return cod + fee;
 }
 
+// A Return order is picked up from `returnPickup*` (entered explicitly when the return
+// was created) — not the "recipient" fields, which for Return orders hold the business's
+// own address (where the item is ultimately returned to), not where the courier actually
+// goes to collect it. No geo variant exists for return-pickup fields (plain text entry),
+// unlike recipient city/district.
+function pickupCityDisplay(o: AdminOrderItem, lang: string): string {
+  if (o.orderType === 'Return' && o.returnPickupCity) return o.returnPickupCity;
+  return lang === 'ka' && o.recipientCityGeo ? o.recipientCityGeo : o.recipientCity;
+}
+function pickupDistrictDisplay(o: AdminOrderItem, lang: string): string {
+  if (o.orderType === 'Return' && o.returnPickupCity) return o.returnPickupDistrict ?? '';
+  return lang === 'ka' && o.recipientDistrictGeo ? o.recipientDistrictGeo : o.recipientDistrict;
+}
+function pickupAddressDisplay(o: AdminOrderItem): string {
+  return o.orderType === 'Return' && o.returnPickupCity ? (o.returnPickupAddress ?? '') : o.recipientAddress;
+}
+
 // Build the Georgian parcel-sticker payload from an admin order row.
 function buildAdminLabel(o: AdminOrderItem): ParcelLabelData {
   const due = recipientAmountDue(o);
-  const city     = o.recipientCityGeo     || o.recipientCity;
-  const district = o.recipientDistrictGeo || o.recipientDistrict;
+  const city     = o.orderType === 'Return' && o.returnPickupCity ? o.returnPickupCity     : (o.recipientCityGeo     || o.recipientCity);
+  const district = o.orderType === 'Return' && o.returnPickupCity ? (o.returnPickupDistrict ?? '') : (o.recipientDistrictGeo || o.recipientDistrict);
+  const address  = pickupAddressDisplay(o);
   return {
     storeName:        o.senderBusinessName,
     recipientName:    recipientDisplayName(o.recipientName, 'უცნობი'),
     recipientPhone:   o.recipientPhone,
-    recipientAddress: [o.recipientAddress, district, city].filter(Boolean).join(', '),
+    recipientAddress: [address, district, city].filter(Boolean).join(', '),
     amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
     description:      o.description ?? undefined,
     trackingNumber:   o.trackingNumber,
@@ -329,21 +349,20 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // fully (canManage=true) but never see company revenue/margin: canSeeRevenue=false hides
   // the Revenue column here and in the view/bulk modals (server also strips the value).
 
-  const [data,            setData]            = useState<PagedResult<AdminOrderItem> | null>(null);
-  const [loading,         setLoading]         = useState(true);
-  const [error,           setError]           = useState<string | null>(null);
   const [search,          setSearch]          = useState('');
+  // The list/locations/unpriced-count queries refetch 300ms after the admin stops typing;
+  // other filters (dropdowns, date picker) apply immediately.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   // Packages view tab: 'pending' = orders with no courier yet, 'assigned' = courier set.
   const [assignTab,       setAssignTab]       = useState<'pending' | 'assigned'>('pending');
   const [filterCity,      setFilterCity]      = useState('');
   const [filterDistrict,  setFilterDistrict]  = useState('');
-  // Distinct city/district pairs that actually appear in orders — drives the City/District
-  // filters so they list only used locations (not the whole master list) and the full set
-  // across all pages (not just the loaded one). Refreshed for the selected day below.
-  const [orderLocations,  setOrderLocations]  = useState<OrderLocation[]>([]);
   const [filterCourier,   setFilterCourier]   = useState<Courier | null>(null);
   const [filterUnpriced,  setFilterUnpriced]  = useState(false);
-  const [unpricedCount,   setUnpricedCount]   = useState<number | null>(null);
   // Day navigator — mirrors the Pick-Up page; filters by Order.CreatedAt (Georgian day).
   // selectedDate null = untouched/Show-All depending on dateTouched (see resolveDateWindow);
   // set = range start (single day when rangeEnd is null, else the inclusive span
@@ -354,7 +373,6 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // "Today"). Untouched + no search → default to a rolling last-7-days window instead of
   // showing every order ever placed.
   const [dateTouched,     setDateTouched]     = useState(false);
-  const [couriers,        setCouriers]        = useState<Courier[]>([]);
   const [page,            setPage]            = useState(1);
   const [selected,        setSelected]        = useState<Set<string>>(new Set());
 
@@ -403,127 +421,80 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const bulkBarRef  = useRef<HTMLDivElement | null>(null);
   const aopRootRef  = useRef<HTMLDivElement | null>(null);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Monotonic id for the in-flight data load. Only the most recently issued request may
-  // write to state, so a slow/stale response can never overwrite a newer search — which
-  // otherwise made results flicker in then vanish.
-  const loadSeqRef  = useRef(0);
-  const filterRef   = useRef({ city: '', district: '', search: '', courierId: '', unpriced: false, assigned: false, date: '', dateTo: '', dateTouched: false });
-
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
 
-  useEffect(() => {
-    fetchCouriers(token).then(setCouriers).catch(() => {});
-  }, [token]);
+  const queryClient = useQueryClient();
 
-  const refreshUnpricedCount = useCallback(async () => {
-    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
-    const count = await fetchUnpricedCount(token, filterCourier?.courierId, date, dateTo);
-    setUnpricedCount(count);
-  }, [token, filterCourier, dateTouched, search, selectedDate, rangeEnd]);
+  // Couriers are shared with the Pick-Up page's own courier query (same key) — whichever
+  // admin page loads first warms the cache for both.
+  const couriersQuery = useQuery({
+    queryKey: ['admin', 'couriers'] as const,
+    queryFn: () => fetchCouriers(token),
+    enabled: !!token,
+  });
+  const couriers = couriersQuery.data ?? [];
 
-  useEffect(() => { void refreshUnpricedCount(); }, [refreshUnpricedCount]);
+  // Untouched day navigator + no search → rolling last-7-days default; an explicit
+  // day/range pick or a search term reaches the whole DB.
+  const { date: pkgDate, dateTo: pkgDateTo } = resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd });
 
-  const load = useCallback(async (params: {
-    city?: string; district?: string; search?: string;
-    courierId?: string; unpriced?: boolean; assigned?: boolean; page?: number;
-  }, opts?: { silent?: boolean }) => {
-    const seq = ++loadSeqRef.current;
-    // Silent reloads are background reconciliations after a mutation whose result was
-    // already applied to `data` optimistically (see patchOrders) — they must never blank
-    // the table with the loading spinner, and a transient failure is not worth surfacing
-    // (the admin already got a success/failure toast from the mutation itself).
-    if (!opts?.silent) { setLoading(true); setError(null); }
-    try {
-      // Untouched day navigator + no search → rolling last-7-days default; an explicit
-      // day/range pick or a search term reaches the whole DB. Threaded here so all reload
-      // paths honor the same rule.
-      const { date, dateTo } = resolveDateWindow({ dateTouched, search: params.search ?? '', selectedDate, rangeEnd });
-      const result = await fetchAllOrders(token, {
-        ...params,
-        date,
-        dateTo,
-        pageSize: PAGE_SIZE,
-      });
-      if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
-      setData(result);
-    } catch (e) {
-      if (seq !== loadSeqRef.current || opts?.silent) return;
-      setError(e instanceof Error ? e.message : t.aopFailedLoad);
-    } finally {
-      if (seq === loadSeqRef.current && !opts?.silent) setLoading(false);
-    }
-  }, [token, t, dateTouched, selectedDate, rangeEnd]);
-
-  // Reload the current view with the active filters — used by per-row actions (the kebab
-  // menu) that mutate a single order outside the bulk flow. Silent: the row itself already
-  // reflects the change optimism aside, this just reconciles totals/pagination in the
-  // background without blanking the table.
-  const reload = () => {
-    void load({
-      city:      filterCity     || undefined,
-      district:  filterDistrict || undefined,
-      search:    search         || undefined,
-      courierId: filterCourier?.courierId,
-      unpriced:  filterUnpriced || undefined,
-      assigned:  assignTab === 'assigned',
-      page,
-    }, { silent: true });
-    void refreshUnpricedCount();
+  const packagesFilters = {
+    city:      filterCity     || undefined,
+    district:  filterDistrict || undefined,
+    search:    debouncedSearch || undefined,
+    courierId: filterCourier?.courierId,
+    unpriced:  filterUnpriced || undefined,
+    assigned:  assignTab === 'assigned',
   };
 
-  useEffect(() => {
-    const prev = filterRef.current;
-    const next = {
-      city:      filterCity,
-      district:  filterDistrict,
-      search,
-      courierId: filterCourier?.courierId ?? '',
-      unpriced:  filterUnpriced,
-      assigned:  assignTab === 'assigned',
-      date:      selectedDate ? toDateKey(selectedDate) : '',
-      dateTo:    rangeEnd ? toDateKey(rangeEnd) : '',
-      dateTouched,
-    };
+  const listQueryKey = ['admin', 'packages', 'list', packagesFilters, pkgDate, pkgDateTo, page] as const;
 
-    const filterChanged =
-      prev.city        !== next.city        ||
-      prev.district    !== next.district    ||
-      prev.search      !== next.search      ||
-      prev.courierId   !== next.courierId   ||
-      prev.unpriced    !== next.unpriced    ||
-      prev.assigned    !== next.assigned    ||
-      prev.date        !== next.date        ||
-      prev.dateTo      !== next.dateTo      ||
-      prev.dateTouched !== next.dateTouched;
+  const mainQuery = useQuery({
+    queryKey: listQueryKey,
+    queryFn: () => fetchAllOrders(token, { ...packagesFilters, date: pkgDate, dateTo: pkgDateTo, page, pageSize: PAGE_SIZE }),
+    enabled: !!token,
+    // Keep the previous page/filter's rows on screen while the next combination loads
+    // instead of flashing an empty list.
+    placeholderData: keepPreviousData,
+  });
+  const data    = mainQuery.data ?? null;
+  const loading = mainQuery.isPending;
+  const error   = mainQuery.isError ? (mainQuery.error instanceof Error ? mainQuery.error.message : t.aopFailedLoad) : null;
 
-    filterRef.current = next;
+  const unpricedQuery = useQuery({
+    queryKey: ['admin', 'packages', 'unpricedCount', filterCourier?.courierId ?? null, pkgDate, pkgDateTo] as const,
+    queryFn: () => fetchUnpricedCount(token, filterCourier?.courierId, pkgDate, pkgDateTo),
+    enabled: !!token,
+  });
+  const unpricedCount = unpricedQuery.data ?? null;
 
-    const delay = filterChanged && next.search !== prev.search ? 300 : 0;
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const targetPage = filterChanged ? 1 : page;
-      if (filterChanged && page !== 1)  setPage(1);
-      if (filterChanged)                setSelected(new Set());
-
-      void load({
-        city:      filterCity     || undefined,
-        district:  filterDistrict || undefined,
-        search:    search         || undefined,
-        courierId: filterCourier?.courierId,
-        unpriced:  filterUnpriced || undefined,
-        assigned:  assignTab === 'assigned',
-        page:      targetPage,
-      });
-    }, delay);
-
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  // Reload the current view with the active filters — used by per-row actions (the kebab
+  // menu) and after bulk mutations whose result was already applied to `data` optimistically
+  // (see patchOrders). Writes straight into the query cache instead of going through
+  // `mainQuery`'s own fetch/error state, so a transient failure here can never blank the
+  // table or surface an error banner over an already-applied optimistic update — the admin
+  // already got a success/failure toast from the mutation itself.
+  const loadSilent = useCallback(() => {
+    fetchAllOrders(token, { ...packagesFilters, date: pkgDate, dateTo: pkgDateTo, page, pageSize: PAGE_SIZE })
+      .then(result => queryClient.setQueryData(listQueryKey, result))
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, search, filterCourier, filterUnpriced, assignTab, selectedDate, rangeEnd, dateTouched, page, load]);
+  }, [token, page, JSON.stringify(packagesFilters), pkgDate, pkgDateTo, queryClient]);
+
+  const reload = () => {
+    loadSilent();
+    void unpricedQuery.refetch();
+  };
+
+  // Reset to page 1 (and clear the selection) whenever a filter changes.
+  useEffect(() => {
+    setPage(1);
+    setSelected(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterCity, filterDistrict, debouncedSearch, filterCourier?.courierId, filterUnpriced, assignTab, pkgDate, pkgDateTo]);
 
   // Esc terminates the Mark-Delivered action: leave deliver mode and clear the selection.
   // Only active while in deliver mode, and never while a modal/warning dialog is open.
@@ -558,13 +529,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // Load the city/district pairs actually used in orders so the filters are complete across
   // all pages (the old approach derived them from the loaded page only, hiding districts
   // whose orders sat on another page, e.g. Tskneti). Scoped to the selected Georgian day.
-  useEffect(() => {
-    if (!token) return;
-    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
-    fetchOrderLocations(token, date, dateTo)
-      .then(setOrderLocations)
-      .catch(() => { /* keep filters empty on failure */ });
-  }, [token, dateTouched, search, selectedDate, rangeEnd]);
+  const locationsQuery = useQuery({
+    queryKey: ['admin', 'packages', 'locations', pkgDate, pkgDateTo] as const,
+    queryFn: () => fetchOrderLocations(token, pkgDate, pkgDateTo),
+    enabled: !!token,
+  });
+  const orderLocations = locationsQuery.data ?? [];
 
   // Filter value is the English name (what the backend matches on recipientCity/District);
   // the label shows the Georgian name when the UI is in Georgian.
@@ -621,8 +591,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // a server round trip — this is what makes assign/salary/price/deliver actions feel
   // instant. `removeIf` drops rows that no longer belong in the current tab/filter (e.g. an
   // order that just got a courier should vanish from the "Pending Assign" tab). The matching
-  // background `load(..., { silent: true })` call still runs to reconcile totals/pagination;
-  // it is guarded by loadSeqRef so a slow response can never clobber a newer optimistic patch.
+  // background `loadSilent()` call still runs to reconcile totals/pagination.
   const patchOrders = useCallback((
     ids: string[],
     patch: (o: AdminOrderItem) => AdminOrderItem,
@@ -630,7 +599,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   ) => {
     if (ids.length === 0) return;
     const idSet = new Set(ids);
-    setData(prev => {
+    queryClient.setQueryData(listQueryKey, (prev: PagedResult<AdminOrderItem> | undefined) => {
       if (!prev) return prev;
       let removed = 0;
       const items: AdminOrderItem[] = [];
@@ -657,7 +626,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       }
       return changed ? next : prev;
     });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient, JSON.stringify(listQueryKey)]);
 
   const toggleAll = async () => {
     if (allSelected) { setSelected(new Set()); return; }
@@ -758,8 +728,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       setBulkSalary('');
       setSelected(new Set());
       await Promise.all([
-        load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page }),
-        refreshUnpricedCount(),
+        mainQuery.refetch(),
+        unpricedQuery.refetch(),
       ]);
     } catch (e) {
       showToast(e instanceof Error ? e.message : t.aopBulkFailed, 'err');
@@ -860,9 +830,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     showToast(fail === 0 ? t.aopAssignedToast(ok)
                          : t.aopAssignedPartial(ok, fail), fail > 0 ? 'err' : 'ok');
     // Reconcile totals/pagination in the background — never blocks the instant UI update above.
-    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
-    void load(reloadParams, { silent: true });
-    void refreshUnpricedCount();
+    loadSilent();
+    void unpricedQuery.refetch();
   };
 
   // ── Mark delivered ─────────────────────────────────────────────────────────
@@ -932,9 +901,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     setSelected(new Set());
     showToast(fail === 0 ? t.aopDeliveredToast(ok)
                          : t.aopDeliveredPartial(ok, fail), fail > 0 ? 'err' : 'ok');
-    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
-    void load(reloadParams, { silent: true });
-    void refreshUnpricedCount();
+    loadSilent();
+    void unpricedQuery.refetch();
   };
 
   // An order is still "unpriced" while either figure is missing/zero — mirrors the
@@ -966,9 +934,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     // patched orders, so it commits when nothing is missing or re-prompts otherwise.
     if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
     // Reconcile totals/pagination in the background — never blocks the resumed action above.
-    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
-    void load(reloadParams, { silent: true });
-    void refreshUnpricedCount();
+    loadSilent();
+    void unpricedQuery.refetch();
   };
 
   const handlePriceSave = async () => {
@@ -991,9 +958,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     // Resume the original action — it advances to the salary step (or commits) without a
     // second click. Re-checks gating against the freshly patched orders.
     if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
-    const reloadParams = { city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, assigned: assignTab === 'assigned', page };
-    void load(reloadParams, { silent: true });
-    void refreshUnpricedCount();
+    loadSilent();
+    void unpricedQuery.refetch();
   };
 
   // Resume the assign/deliver action after a price/salary save, once the reload has
@@ -1474,8 +1440,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
                             {o.senderBusinessName && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>{o.senderBusinessName}</div>}
                           </td>
                           <td style={{ padding: '6px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{pickupCityDisplay(o, lang)}, {pickupDistrictDisplay(o, lang)}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupAddressDisplay(o)}</div>
                           </td>
                           <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text)' }}>₾{o.companyServicePrice.toFixed(2)}</td>
                           <td style={{ padding: '6px 8px', textAlign: 'right' }}>
@@ -1568,8 +1534,8 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
                           </td>
                           <td style={{ padding: '6px 8px' }}><span className="tn-badge">{o.trackingNumber}</span></td>
                           <td style={{ padding: '6px 8px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{o.recipientCity}, {o.recipientDistrict}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{pickupCityDisplay(o, lang)}, {pickupDistrictDisplay(o, lang)}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupAddressDisplay(o)}</div>
                           </td>
                           <td style={{ padding: '6px 8px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
@@ -1673,11 +1639,11 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
                     <td className="aop-td">
                       <div className="aop-name">{recipientDisplayName(order.recipientName, t.recipientUnknown)}</div>
                       <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{order.recipientPhone}</div>
-                      <div className="aop-addr">{order.recipientAddress}</div>
+                      <div className="aop-addr">{pickupAddressDisplay(order)}</div>
                     </td>
                     <td className="aop-td">
-                      <div className="aop-city">{lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity}</div>
-                      <div className="aop-district">{lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict}</div>
+                      <div className="aop-city">{pickupCityDisplay(order, lang)}</div>
+                      <div className="aop-district">{pickupDistrictDisplay(order, lang)}</div>
                     </td>
                     <td className="aop-td">
                       <span
@@ -1805,7 +1771,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         onClose={() => setEditingOrder(null)}
         onSaved={async () => {
           setEditingOrder(null);
-          await load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page });
+          await mainQuery.refetch();
         }}
         token={token}
         canMarkDelivered={editingOrder != null && !['DeliveredToRecipient','ExchangeCompleted','DeliveredReturnOrderToWarehouse','ReturnedToSender','CancelledByAdmin','CancelledBySender','OrderNotAccepted','AllDelivered'].includes(editingOrder.status) && editingOrder.orderType !== 'Return'}
@@ -1813,7 +1779,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         couriers={couriers}
         canSeeRevenue={canSeeRevenue}
         onActioned={async () => {
-          await load({ city: filterCity || undefined, district: filterDistrict || undefined, search: search || undefined, courierId: filterCourier?.courierId, unpriced: filterUnpriced || undefined, page });
+          await mainQuery.refetch();
         }}
       />
 

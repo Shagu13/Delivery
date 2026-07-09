@@ -181,6 +181,17 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         </span>
                                     </div>
                                     <div className="courier-card__collapse-right">
+                                        <span style={{
+                                            fontSize: '0.62rem', fontWeight: 700, padding: '2px 7px', borderRadius: 100,
+                                            letterSpacing: '0.03em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+                                            ...(order.orderType === 'Return'
+                                                ? { background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }
+                                                : order.orderType === 'Exchange'
+                                                    ? { background: 'rgba(59,130,246,0.1)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.25)' }
+                                                    : { background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)', border: '1px solid var(--color-border)' }),
+                                        }}>
+                                            {order.orderType === 'Return' ? t.aopOrderTypeReturn : order.orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend}
+                                        </span>
                                         {mustCollect && <span className="courier-card__collapse-collect">₾{total.toFixed(2)}</span>}
                                         {order.isFragile && <span className="courier-card__collapse-badge courier-card__collapse-badge--warn">{t.cdLabelFragile}</span>}
                                         <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>

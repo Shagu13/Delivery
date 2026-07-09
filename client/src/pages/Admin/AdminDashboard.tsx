@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
@@ -39,6 +40,38 @@ import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 import { georgianToday, georgianDateKeyOf } from '../../utils/georgianTime';
 import { resolveDateWindow } from '../../utils/dateWindow';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
+
+// A Return order is picked up from `returnPickup*` (entered explicitly when the return was
+// created) — not the "recipient" fields, which for Return orders hold the business's own
+// address (where the item is ultimately returned to), not where the courier actually goes
+// to collect it. No geo variant exists for return-pickup fields (plain text entry), unlike
+// recipient city/district. Structural type so it works for both AdminOrder and CourierOrder.
+interface PickupLocationFields {
+  orderType: string;
+  recipientCity: string;
+  recipientCityGeo?: string;
+  recipientDistrict: string;
+  recipientDistrictGeo?: string;
+  recipientAddress: string;
+  returnPickupCity?: string | null;
+  returnPickupDistrict?: string | null;
+  returnPickupAddress?: string | null;
+}
+function pickupCityFor(o: PickupLocationFields): string {
+  return o.orderType === 'Return' && o.returnPickupCity ? o.returnPickupCity : o.recipientCity;
+}
+function pickupCityGeoFor(o: PickupLocationFields): string | undefined {
+  return o.orderType === 'Return' && o.returnPickupCity ? undefined : o.recipientCityGeo;
+}
+function pickupDistrictFor(o: PickupLocationFields): string {
+  return o.orderType === 'Return' && o.returnPickupCity ? (o.returnPickupDistrict ?? '') : o.recipientDistrict;
+}
+function pickupDistrictGeoFor(o: PickupLocationFields): string | undefined {
+  return o.orderType === 'Return' && o.returnPickupCity ? undefined : o.recipientDistrictGeo;
+}
+function pickupAddressFor(o: PickupLocationFields): string {
+  return o.orderType === 'Return' && o.returnPickupCity ? (o.returnPickupAddress ?? '') : o.recipientAddress;
+}
 
 // Terminal order statuses — these orders are hidden from the active Group Orders page
 // and shown only in the History page.
@@ -769,30 +802,31 @@ const STATUS_CLASS_MAP: Record<string, string> = {
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
 
+const ADMIN_OVERVIEW_QUERY_KEY = (isOperator: boolean) => ['admin', 'overview', isOperator] as const;
+
 function AdminOverview({ token, isOperator = false }: { token: string; isOperator?: boolean }) {
     const { t } = useLanguage();
-    const [groupOrders, setGroupOrders] = useState<AdminGroupOrder[]>([]);
-    const [couriers, setCouriersLocal] = useState<Courier[]>([]);
-    const [smsBalance, setSmsBalance] = useState<number | null>(null);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
 
-    useEffect(() => {
-        if (!token) return;
-        let cancelled = false;
-        Promise.all([
+    const { data, isLoading: loading } = useQuery({
+        queryKey: ADMIN_OVERVIEW_QUERY_KEY(isOperator),
+        queryFn: () => Promise.all([
             fetchGroupOrders(token, { pageSize: 1000 }).then(r => r.items).catch(() => [] as AdminGroupOrder[]),
             // Operators have no access to courier/SMS data — skip those fetches.
             isOperator ? Promise.resolve([] as Courier[]) : fetchCouriers(token).catch(() => [] as Courier[]),
             isOperator ? Promise.resolve(null as number | null) : fetchSmsBalance(token).catch(() => null as number | null),
-        ]).then(([go, co, sms]) => {
-            if (cancelled) return;
-            setGroupOrders(go);
-            setCouriersLocal(co);
-            setSmsBalance(sms);
-            setLoading(false);
-        });
-        return () => { cancelled = true; };
-    }, [token, isOperator]);
+        ]).then(([groupOrders, couriers, smsBalance]) => ({ groupOrders, couriers, smsBalance })),
+        enabled: !!token,
+    });
+    const groupOrders = data?.groupOrders ?? [];
+    const couriers = data?.couriers ?? [];
+    const smsBalance = data?.smsBalance ?? null;
+
+    // Live refresh: when any order is placed/changed, silently revalidate this cached
+    // data in the background instead of forcing a full reload/spinner.
+    useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
+        void queryClient.invalidateQueries({ queryKey: ADMIN_OVERVIEW_QUERY_KEY(isOperator) });
+    });
 
     const totalOrders = groupOrders.reduce((sum, go) => sum + go.orders.length, 0);
     const pendingPickup = groupOrders.filter(go =>
@@ -1049,13 +1083,15 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
-  const [groupOrders, setGroupOrders]   = useState<AdminGroupOrder[]>([]);
-  const [totalCount,  setTotalCount]    = useState(0);
   const [page,        setPage]          = useState(1);
-  const [couriers,    setCouriers]      = useState<Courier[]>([]);
-  const [loading,     setLoading]       = useState(true);
-  const [error,       setError]         = useState<string | null>(null);
   const [search,      setSearch]        = useState('');
+  // The list is refetched 350ms after the admin stops typing; other filters (dropdowns,
+  // date picker) apply immediately since they don't need keystroke debouncing.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [filterParty,    setFilterParty]    = useState<'sender' | 'recipient'>('sender');
   const [filterCity,     setFilterCity]     = useState('');
   const [filterDistricts,setFilterDistricts] = useState<string[]>([]);
@@ -1073,11 +1109,6 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   });
   // Order being edited from a group order's package row, with its customer's pricing.
   const [editing, setEditing] = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Monotonic id for the in-flight data load. Only the most recently issued request may
-  // write to state, so a slow/stale response (initial load, realtime refetch) can never
-  // overwrite a newer search — which otherwise made results flicker in then vanish.
-  const loadSeqRef = useRef(0);
 
   // ── Pick-Up day navigation + grouping ──────────────────────────────────────
   // null = untouched/Show-All depending on dateTouched (see resolveDateWindow); a date
@@ -1088,13 +1119,6 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   // False until the admin interacts with the day/range navigator at all (including
   // "Show All"/"Today"). Untouched + no search → default to a rolling last-7-days window.
   const [dateTouched,      setDateTouched]      = useState(false);
-  const [daySummary,       setDaySummary]       = useState<PickupDayCustomer[]>([]);
-  // Every batch/standalone order matching the current filters + date window (not just the
-  // current ~30-row page of `groupOrders`) — decoupled from the paginated main list so the
-  // merge/grouping tools below always see every batch for whatever day they operate on
-  // (the selected day, or the day of any order actually visible in the list), regardless
-  // of which page of the main feed it would otherwise land on.
-  const [windowScopedOrders,  setWindowScopedOrders]  = useState<AdminGroupOrder[]>([]);
   const [groupingCustomer, setGroupingCustomer] = useState<PickupDayCustomer | null>(null);
   // The day grouping/merge actions operate on. Falls back to today while showing All,
   // so the per-day Non-Grouped tools still work without a day chosen.
@@ -1172,119 +1196,82 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
     setTimeout(() => setActionToast(null), 4000);
   };
 
-  const filterRef = useRef({ search: '', city: '', districts: '', party: 'sender', status: initialStatus, date: '', dateTo: '', dateTouched: false });
+  // Untouched day navigator + no search → rolling last-7-days default; an explicit
+  // day/range pick or a search term reaches the whole DB.
+  const { date: windowDate, dateTo: windowDateTo } = resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd });
 
-  const load = useCallback(async (pageArg: number) => {
-    const seq = ++loadSeqRef.current;
-    try {
-      // Untouched day navigator + no search → rolling last-7-days default; an explicit
-      // day/range pick or a search term reaches the whole DB.
-      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
-      const result = await fetchGroupOrders(token ?? '', {
-        search: search || undefined,
-        date, dateTo,
-        cities: filterCity ? [filterCity] : undefined,
-        districts: filterDistricts.length > 0 ? filterDistricts : undefined,
-        party: filterParty,
-        status: filterStatus || undefined,
-        excludeCompleted: true,
-        page: pageArg,
-        pageSize: PICKUP_PAGE_SIZE,
-      });
-      if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
-      setGroupOrders(result.items);
-      setTotalCount(result.totalCount);
-      setError(null);
-    } catch (e: unknown) {
-      if (seq !== loadSeqRef.current) return;
-      setError(e instanceof Error ? e.message : t.goLoadingOrders);
-    } finally {
-      if (seq === loadSeqRef.current) setLoading(false);
-    }
-  }, [token, dateTouched, search, selectedDate, rangeEnd, filterCity, filterDistricts, filterParty, filterStatus, t.goLoadingOrders]);
+  const pickupFilters = {
+    search: debouncedSearch || undefined,
+    date: windowDate, dateTo: windowDateTo,
+    cities: filterCity ? [filterCity] : undefined,
+    districts: filterDistricts.length > 0 ? filterDistricts : undefined,
+    party: filterParty,
+    status: filterStatus || undefined,
+    excludeCompleted: true,
+  };
 
-  const loadSummary = useCallback(async () => {
-    // The Non-Grouped tools are per-day; summarize the effective day (the chosen day,
-    // or today while showing All) so they keep working without a day filter.
-    try { setDaySummary(await fetchPickupDay(token ?? '', effectiveDayKey)); }
-    catch { setDaySummary([]); }
-  }, [token, effectiveDayKey]);
-
-  useEffect(() => { void loadSummary(); }, [loadSummary]);
-
-  const loadWindowScoped = useCallback(async () => {
-    // Mirrors the main list's filters/date window (search/city/districts/party/status +
-    // resolveDateWindow), but with a generous pageSize instead of paginating — a batch
-    // count within one browsing window is realistically small, unlike the whole history
-    // the old unpaginated fetch used to load. batchesFor/mergeableByCustomer/etc. only
-    // ever operate on a day that's within this same window (the selected day, "today", or
-    // the day of an order actually rendered from `groupOrders`), so this always covers them.
-    try {
-      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
-      const { items } = await fetchGroupOrders(token ?? '', {
-        search: search || undefined,
-        date, dateTo,
-        cities: filterCity ? [filterCity] : undefined,
-        districts: filterDistricts.length > 0 ? filterDistricts : undefined,
-        party: filterParty,
-        status: filterStatus || undefined,
-        excludeCompleted: true,
-        page: 1,
-        pageSize: 500,
-      });
-      setWindowScopedOrders(items);
-    } catch { setWindowScopedOrders([]); }
-  }, [token, dateTouched, search, selectedDate, rangeEnd, filterCity, filterDistricts, filterParty, filterStatus]);
-
-  useEffect(() => { void loadWindowScoped(); }, [loadWindowScoped]);
-
+  // Reset to page 1 whenever a filter changes — a stale page number past the end of a
+  // narrower result set would otherwise render an empty list until manually paged back.
   useEffect(() => {
-    const prev = filterRef.current;
-    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
-    const next = {
-      search,
-      city:      filterCity,
-      districts: filterDistricts.join(','),
-      party:     filterParty,
-      status:    filterStatus,
-      date:      date ?? '',
-      dateTo:    dateTo ?? '',
-      dateTouched,
-    };
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, filterCity, filterDistricts, filterParty, filterStatus, windowDate, windowDateTo]);
 
-    const filterChanged =
-      prev.search      !== next.search      ||
-      prev.city        !== next.city        ||
-      prev.districts   !== next.districts   ||
-      prev.party       !== next.party       ||
-      prev.status      !== next.status      ||
-      prev.date        !== next.date        ||
-      prev.dateTo      !== next.dateTo      ||
-      prev.dateTouched !== next.dateTouched;
+  const mainQuery = useQuery({
+    queryKey: ['admin', 'pickup', 'list', pickupFilters, page] as const,
+    queryFn: () => fetchGroupOrders(token ?? '', { ...pickupFilters, page, pageSize: PICKUP_PAGE_SIZE }),
+    enabled: !!token,
+    // Keep the previous page's rows on screen while the next page/filter loads instead
+    // of flashing an empty list — the defining UX this migration was meant to fix.
+    placeholderData: keepPreviousData,
+  });
+  const groupOrders = mainQuery.data?.items ?? [];
+  const totalCount  = mainQuery.data?.totalCount ?? 0;
+  const loading     = mainQuery.isPending;
+  const error       = mainQuery.isError ? (mainQuery.error instanceof Error ? mainQuery.error.message : t.goLoadingOrders) : null;
 
-    filterRef.current = next;
+  // The Non-Grouped tools are per-day; summarize the effective day (the chosen day,
+  // or today while showing All) so they keep working without a day filter.
+  const summaryQuery = useQuery({
+    queryKey: ['admin', 'pickup', 'summary', effectiveDayKey] as const,
+    queryFn: () => fetchPickupDay(token ?? '', effectiveDayKey),
+    enabled: !!token,
+  });
+  const daySummary = summaryQuery.data ?? [];
 
-    const delay = filterChanged && next.search !== prev.search ? 350 : 0;
+  // Every batch/standalone order matching the current filters + date window (not just the
+  // current ~30-row page of `groupOrders`) — decoupled from the paginated main list so the
+  // merge/grouping tools below always see every batch for whatever day they operate on
+  // (the selected day, or the day of any order actually visible in the list), regardless
+  // of which page of the main feed it would otherwise land on. A generous pageSize instead
+  // of paginating — a batch count within one browsing window is realistically small.
+  const windowScopedQuery = useQuery({
+    queryKey: ['admin', 'pickup', 'windowScoped', pickupFilters] as const,
+    queryFn: () => fetchGroupOrders(token ?? '', { ...pickupFilters, page: 1, pageSize: 500 }).then(r => r.items),
+    enabled: !!token,
+    placeholderData: keepPreviousData,
+  });
+  const windowScopedOrders = windowScopedQuery.data ?? [];
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const targetPage = filterChanged ? 1 : page;
-      if (filterChanged && page !== 1) setPage(1);
-      setLoading(true);
-      void load(targetPage);
-    }, delay);
+  const couriersQuery = useQuery({
+    queryKey: ['admin', 'couriers'] as const,
+    queryFn: () => fetchCouriers(token ?? ''),
+    enabled: !!token,
+  });
+  const couriers = couriersQuery.data ?? [];
 
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filterCity, filterDistricts, filterParty, filterStatus, selectedDate, rangeEnd, dateTouched, page, load]);
+  // Refresh helpers kept under their original names — every mutation handler below
+  // (accept/decline/assign/group/etc.) already calls these to refresh after an action.
+  const load = useCallback((pageArg?: number) => {
+    if (pageArg !== undefined && pageArg !== page) { setPage(pageArg); return; }
+    void mainQuery.refetch();
+  }, [page, mainQuery]);
+  const loadSummary = useCallback(() => { void summaryQuery.refetch(); }, [summaryQuery]);
+  const loadWindowScoped = useCallback(() => { void windowScopedQuery.refetch(); }, [windowScopedQuery]);
 
   // Live refresh: when any order is placed/changed, refetch silently (keep current
   // filters/page, no spinner) so new customer orders appear without a manual refresh.
   useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(page); void loadSummary(); void loadWindowScoped(); });
-
-  useEffect(() => {
-    fetchCouriers(token ?? '').then(setCouriers).catch(() => {});
-  }, [token]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -1793,10 +1780,10 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                       <td><div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div></td>
                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                       <td>
-                        <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}</div>
+                        <div>{locCity(pickupCityFor(o), pickupCityGeoFor(o))}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(pickupDistrictFor(o), pickupDistrictGeoFor(o))}</div>
                       </td>
-                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
+                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{pickupAddressFor(o)}</td>
                       <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
                         {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
                       </td>
@@ -2010,10 +1997,10 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                                       <td><div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div></td>
                                       <td style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem' }}>{o.recipientPhone}</td>
                                       <td>
-                                        <div>{locCity(o.recipientCity, o.recipientCityGeo)}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}</div>
+                                        <div>{locCity(pickupCityFor(o), pickupCityGeoFor(o))}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{locDistrict(pickupDistrictFor(o), pickupDistrictGeoFor(o))}</div>
                                       </td>
-                                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{o.recipientAddress}</td>
+                                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{pickupAddressFor(o)}</td>
                                       <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>
                                         {o.description ?? <span style={{ opacity: 0.4 }}>—</span>}
                                       </td>
@@ -2532,7 +2519,7 @@ function GroupingModal({
                       <td><input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} onClick={e => e.stopPropagation()} /></td>
                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
                       <td>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</td>
-                      <td>{locCity(o.recipientCity, o.recipientCityGeo)}, {o.recipientDistrict}</td>
+                      <td>{locCity(pickupCityFor(o), pickupCityGeoFor(o))}, {pickupDistrictFor(o)}</td>
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : '—'}
                       </td>
@@ -3157,8 +3144,8 @@ function CourierRow({ courier, orders, canSeeRevenue = true }: { courier: Courie
                         <div style={{ fontWeight: 600 }}>{o.senderBusinessName || '—'}</div>
                       </td>
                       <td>
-                        <div>{o.recipientCity}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{o.recipientAddress}</div>
+                        <div>{pickupCityFor(o)}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupAddressFor(o)}</div>
                       </td>
                       <td><StatusBadge status={o.status} /></td>
                       <td style={{ fontWeight: 600 }}>₾{o.companyServicePrice.toFixed(2)}</td>

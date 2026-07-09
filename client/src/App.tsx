@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthProvider';
 import { CartProvider } from './contexts/CartProvider';
 import { LanguageProvider } from './contexts/LanguageProvider';
@@ -39,6 +40,22 @@ function RouteFallback() {
     );
 }
 
+// Module-level singleton so route remounts (tab switches, etc.) reuse the same cache
+// instead of wiping it. Defaults favor "instant from cache, quietly revalidate": data
+// is treated as fresh for 30s (no refetch on a quick re-visit), kept around for 5min
+// after last use, and SignalR-driven invalidation (not window refocus) is what should
+// actually trigger a background refresh for realtime pages.
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            staleTime: 30_000,
+            gcTime: 5 * 60_000,
+            refetchOnWindowFocus: false,
+            retry: 1,
+        },
+    },
+});
+
 export default function App() {
     // Stop the mouse wheel from changing a focused number input's value (a browser
     // default that silently edits amount fields while the user scrolls the page).
@@ -54,6 +71,7 @@ export default function App() {
     }, []);
 
     return (
+        <QueryClientProvider client={queryClient}>
         <LanguageProvider>
             <BrandingProvider>
             <AuthProvider>
@@ -141,5 +159,6 @@ export default function App() {
             </AuthProvider>
             </BrandingProvider>
         </LanguageProvider>
+        </QueryClientProvider>
     );
 }

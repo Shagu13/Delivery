@@ -22,20 +22,26 @@ export function CollectConfirmModal({ order, isBusy, onCancel, onConfirm, onPaid
     // negotiated a different price than what the sender originally set. `null` = unedited.
     const [codOverride, setCodOverride] = useState<number | null>(null);
     const [editingAmount, setEditingAmount] = useState(false);
-    const [amountInput, setAmountInput] = useState(() =>
-        hasProductAmount ? order.amountToCollectForPackage!.toFixed(2) : '0.00');
+    const [amountInput, setAmountInput] = useState(() => {
+        const initialProduct = hasProductAmount ? order.amountToCollectForPackage! : 0;
+        return (initialProduct + (hasServiceFee ? order.companyServicePrice : 0)).toFixed(2);
+    });
 
     const productAmount = codOverride ?? (hasProductAmount ? order.amountToCollectForPackage! : 0);
     const total = productAmount + (hasServiceFee ? order.companyServicePrice : 0);
 
+    // The input always shows/edits the TOTAL the recipient pays (product + service fee, when
+    // the recipient owes it) — the fee itself never changes, only the product/COD portion, so
+    // saving back-computes product = enteredTotal − fee.
     const saveAmount = () => {
-        const n = Number(amountInput);
-        if (isNaN(n) || n < 0) return;
-        setCodOverride(n);
+        const enteredTotal = Number(amountInput);
+        if (isNaN(enteredTotal) || enteredTotal < 0) return;
+        const fee = hasServiceFee ? order.companyServicePrice : 0;
+        setCodOverride(Math.max(0, enteredTotal - fee));
         setEditingAmount(false);
     };
     const cancelAmountEdit = () => {
-        setAmountInput(productAmount.toFixed(2));
+        setAmountInput(total.toFixed(2));
         setEditingAmount(false);
     };
 
@@ -77,7 +83,7 @@ export function CollectConfirmModal({ order, isBusy, onCancel, onConfirm, onPaid
                             )}
                         </div>
                         {hasProductAmount && !editingAmount && (
-                            <button disabled={isBusy} onClick={() => { setAmountInput(productAmount.toFixed(2)); setEditingAmount(true); }}
+                            <button disabled={isBusy} onClick={() => { setAmountInput(total.toFixed(2)); setEditingAmount(true); }}
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: 5, margin: '0 0 14px', padding: '5px 12px', borderRadius: '100px', border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-muted)', cursor: isBusy ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.76rem' }}>
                                 ✏️ {t.cdCollectChange}
                             </button>

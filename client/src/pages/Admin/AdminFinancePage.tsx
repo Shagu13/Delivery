@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useRef, useMemo, Fragment } from 'react';
+import { useEffect, useState, useRef, useMemo, Fragment } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { formatGeorgianDateTime } from '../../utils/georgianTime';
@@ -15,7 +16,6 @@ import {
 import type { OrderFinanceLine } from '../../api/orderFinance';
 import { setCompanyServicePrice, fetchOrderLocations } from '../../api/orders';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
-import type { CompanyFinanceOverview } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
 import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 import { OutstandingBalancesModal } from './OutstandingBalancesModal';
@@ -149,43 +149,43 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
     // cities and/or (once narrowed to a city) districts within them. Empty = all areas.
     const [filterCities, setFilterCities] = useState<string[]>([]);
     const [filterDistricts, setFilterDistricts] = useState<string[]>([]);
-    const [locationOptions, setLocationOptions] = useState<CityDistrictOption[]>([]);
-    const [data, setData] = useState<CompanyFinanceOverview | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    // Read-only customer breakdown grid for the same [from, to] window — expandable per
-    // customer to see their orders, with a red X / green check for outstanding balances.
-    const [gridLines, setGridLines] = useState<OrderFinanceLine[]>([]);
-    const [gridLoading, setGridLoading] = useState(false);
-
     // Recipient locations actually used in [from, to] — drives the city/district picker
     // options (only offers areas that would return results).
-    useEffect(() => {
-        fetchOrderLocations(token, from, to).then(setLocationOptions).catch(() => setLocationOptions([]));
-    }, [token, from, to]);
+    const locationsQuery = useQuery({
+        queryKey: ['admin', 'finance', 'overviewLocations', from, to] as const,
+        queryFn: () => fetchOrderLocations(token, from, to),
+        enabled: !!token,
+    });
+    const locationOptions = locationsQuery.data ?? [];
 
     const locCity     = (en: string, geo?: string | null) => (lang === 'ka' && geo ? geo : en);
     const locDistrict = (en: string, geo?: string | null) => (lang === 'ka' && geo ? geo : en);
 
-    const load = useCallback(() => {
-        setLoading(true); setError(null);
-        fetchCompanyFinanceOverview(from, to, token, filterCities, filterDistricts)
-            .then(setData)
-            .catch(e => setError(e instanceof CompanyFinanceApiError ? e.message : t.finOvLoadFailed))
-            .finally(() => setLoading(false));
-    }, [from, to, filterCities, filterDistricts, token, t.finOvLoadFailed]);
+    // Reload on date/location-filter change AND whenever a settlement action bumps
+    // refreshSignal, so the cash position reflects a just-recorded payment without a
+    // page refresh.
+    const overviewQuery = useQuery({
+        queryKey: ['admin', 'finance', 'overview', from, to, filterCities, filterDistricts, refreshSignal] as const,
+        queryFn: () => fetchCompanyFinanceOverview(from, to, token, filterCities, filterDistricts),
+        enabled: !!token,
+        placeholderData: keepPreviousData,
+    });
+    const data    = overviewQuery.data ?? null;
+    const loading = overviewQuery.isPending;
+    const error   = overviewQuery.isError
+        ? (overviewQuery.error instanceof CompanyFinanceApiError ? overviewQuery.error.message : t.finOvLoadFailed)
+        : null;
 
-    // Reload on date change AND whenever a settlement action bumps refreshSignal,
-    // so the cash position reflects a just-recorded payment without a page refresh.
-    useEffect(() => { load(); }, [load, refreshSignal]);
-
-    useEffect(() => {
-        setGridLoading(true);
-        fetchAllCustomersOrderFinance(token, { from, to })
-            .then(setGridLines)
-            .catch(() => setGridLines([]))
-            .finally(() => setGridLoading(false));
-    }, [token, from, to, refreshSignal]);
+    // Read-only customer breakdown grid for the same [from, to] window — expandable per
+    // customer to see their orders, with a red X / green check for outstanding balances.
+    const gridQuery = useQuery({
+        queryKey: ['admin', 'finance', 'overviewGrid', from, to, refreshSignal] as const,
+        queryFn: () => fetchAllCustomersOrderFinance(token, { from, to }),
+        enabled: !!token,
+        placeholderData: keepPreviousData,
+    });
+    const gridLines   = gridQuery.data ?? [];
+    const gridLoading = gridQuery.isPending;
 
     // Same recipient-location narrowing as the rest of the card, applied client-side.
     const scopedGridLines = useMemo(() => gridLines.filter(l =>
@@ -566,10 +566,6 @@ function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
 function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () => void }) {
     const { t } = useLanguage();
     const [customer, setCustomer] = useState<Customer | null>(null);
-    // Date-first customer grid — shown instead of the empty placeholder while no customer is
-    // picked yet, so the admin doesn't have to know a business name up front.
-    const [gridLines, setGridLines] = useState<OrderFinanceLine[]>([]);
-    const [gridLoading, setGridLoading] = useState(false);
     const pickCustomer = (customerId: string) => {
         getCustomerById(customerId, token).then(setCustomer).catch(() => {});
     };
@@ -586,11 +582,42 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     const [filterDistricts, setFilterDistricts] = useState<string[]>([]);
     const [address, setAddress] = useState('');
     const [payFilter, setPayFilter] = useState<PayFilter>('all');
-    const [lines, setLines] = useState<OrderFinanceLine[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
+    // Payment-action errors (e.g. a failed settlement save) reported by CustomerSettleCard —
+    // distinct from (but displayed alongside) a failed lines fetch below.
+    const [actionError, setActionError] = useState<string | null>(null);
+    useEffect(() => { setActionError(null); }, [customer?.id]);
     const { locCity, locDistrict } = usePlaceLocalizer();
+
+    const dateOpts = mode === 'range'
+        ? { from: from || undefined, to: to || undefined }
+        : mode === 'month'
+            ? { date: date || undefined, monthly: true }
+            : { date: date || undefined };
+
+    const linesQuery = useQuery({
+        queryKey: ['admin', 'finance', 'customerLines', customer?.id, mode, date, from, to] as const,
+        queryFn: () => fetchCustomerOrderFinance(customer!.id, token, dateOpts),
+        enabled: !!token && !!customer,
+    });
+    const lines   = customer ? (linesQuery.data ?? []) : [];
+    const loading = customer ? linesQuery.isPending : false;
+    const fetchError = customer && linesQuery.isError
+        ? (linesQuery.error instanceof OrderFinanceApiError ? linesQuery.error.message : t.ofinErrLoad)
+        : null;
+    const error = actionError ?? fetchError;
+    const load = () => { void linesQuery.refetch(); };
+
+    // Load the all-customers grid for the current date window whenever no customer is picked
+    // yet — reuses the same day/month/range controls the per-customer view already exposes.
+    const gridQuery = useQuery({
+        queryKey: ['admin', 'finance', 'customerGrid', mode, date, from, to] as const,
+        queryFn: () => fetchAllCustomersOrderFinance(token, dateOpts),
+        enabled: !!token && !customer,
+        placeholderData: keepPreviousData,
+    });
+    const gridLines   = gridQuery.data ?? [];
+    const gridLoading = gridQuery.isPending;
 
     // City/district options offered by the picker — every distinct recipient location that
     // actually appears among this customer's loaded lines for the current date window.
@@ -622,38 +649,6 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
 
     const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3000); };
 
-    const load = useCallback(() => {
-        if (!customer) { setLines([]); return; }
-        setLoading(true); setError(null);
-        const opts = mode === 'range'
-            ? { from: from || undefined, to: to || undefined }
-            : mode === 'month'
-                ? { date: date || undefined, monthly: true }
-                : { date: date || undefined };
-        fetchCustomerOrderFinance(customer.id, token, opts)
-            .then(setLines)
-            .catch(e => setError(e instanceof OrderFinanceApiError ? e.message : t.ofinErrLoad))
-            .finally(() => setLoading(false));
-    }, [customer, mode, date, from, to, token, t.ofinErrLoad]);
-
-    useEffect(() => { load(); }, [load]);
-
-    // Load the all-customers grid for the current date window whenever no customer is picked
-    // yet — reuses the same day/month/range controls the per-customer view already exposes.
-    useEffect(() => {
-        if (customer) return;
-        setGridLoading(true);
-        const opts = mode === 'range'
-            ? { from: from || undefined, to: to || undefined }
-            : mode === 'month'
-                ? { date: date || undefined, monthly: true }
-                : { date: date || undefined };
-        fetchAllCustomersOrderFinance(token, opts)
-            .then(setGridLines)
-            .catch(() => setGridLines([]))
-            .finally(() => setGridLoading(false));
-    }, [customer, mode, date, from, to, token]);
-
     const todayStr = isoDate(new Date());
     const monthStr = todayStr.slice(0, 7);
     const shiftDay = (delta: number) => setDate(prev => {
@@ -681,7 +676,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                         token={token}
                         selected={customer}
                         onSelect={setCustomer}
-                        onClear={() => { setCustomer(null); setLines([]); setError(null); }}
+                        onClear={() => setCustomer(null)}
                     />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
                         {/* Day / Month / Range toggle */}
@@ -775,7 +770,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                     customerId={customer.id}
                     lines={visibleLines}
                     token={token}
-                    onError={setError}
+                    onError={setActionError}
                     onChanged={() => { showToast(t.ofinSavedToast); load(); onPaid(); }}
                 />
             )}

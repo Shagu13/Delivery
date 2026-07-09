@@ -1,15 +1,12 @@
-import { Fragment, useEffect, useState, useRef, useCallback } from 'react';
+import { Fragment, useEffect, useState, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import { fetchCouriers } from '../../api/couriers';
-import type { Courier } from '../../api/couriers';
 import { fetchCustomerSettlements, CustomerSettlementApiError } from '../../api/customerSettlements';
-import type { CustomerSettlement } from '../../api/customerSettlements';
 import { fetchCourierSettlementsAdmin, SettlementApiError } from '../../api/settlements';
-import type { AdminCourierSettlementItem } from '../../api/settlements';
 import { fetchCustomerPaymentReceipts, OrderFinanceApiError } from '../../api/orderFinance';
-import type { PaymentReceipt } from '../../api/orderFinance';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -134,20 +131,17 @@ function TD({ children, color, bold, align, colSpan }: { children: React.ReactNo
 function CustomerLedger({ token }: { token: string }) {
     const { t } = useLanguage();
     const [customer, setCustomer] = useState<AdminCustomer | null>(null);
-    const [records, setRecords] = useState<CustomerSettlement[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
-    const load = useCallback(() => {
-        if (!customer) return;
-        setLoading(true); setError(null);
-        fetchCustomerSettlements(customer.id, token)
-            .then(setRecords)
-            .catch(e => setError(e instanceof CustomerSettlementApiError ? e.message : t.finErrLoad))
-            .finally(() => setLoading(false));
-    }, [customer, token, t.finErrLoad]);
-
-    useEffect(() => { load(); }, [load]);
+    const recordsQuery = useQuery({
+        queryKey: ['admin', 'finance', 'customerLedger', customer?.id] as const,
+        queryFn: () => fetchCustomerSettlements(customer!.id, token),
+        enabled: !!token && !!customer,
+    });
+    const records = customer ? (recordsQuery.data ?? []) : [];
+    const loading = customer ? recordsQuery.isPending : false;
+    const error = customer && recordsQuery.isError
+        ? (recordsQuery.error instanceof CustomerSettlementApiError ? recordsQuery.error.message : t.finErrLoad)
+        : null;
 
     const totalCodOut = records.reduce((s, r) => s + r.outstandingCodOwedToCustomer, 0);
     const totalSvcOut = records.reduce((s, r) => s + r.outstandingServiceOwedToCompany, 0);
@@ -156,7 +150,7 @@ function CustomerLedger({ token }: { token: string }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {/* Picker */}
             <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5 }}>
-                <CustomerPicker token={token} selected={customer} onSelect={setCustomer} onClear={() => { setCustomer(null); setRecords([]); setError(null); }} />
+                <CustomerPicker token={token} selected={customer} onSelect={setCustomer} onClear={() => setCustomer(null)} />
             </div>
 
             {error && (
@@ -237,26 +231,26 @@ function CustomerLedger({ token }: { token: string }) {
 
 function CourierLedger({ token }: { token: string }) {
     const { t } = useLanguage();
-    const [couriers, setCouriers] = useState<Courier[]>([]);
+
+    const couriersQuery = useQuery({
+        queryKey: ['admin', 'couriers'] as const,
+        queryFn: () => fetchCouriers(token),
+        enabled: !!token,
+    });
+    const couriers = couriersQuery.data ?? [];
+
     const [selectedId, setSelectedId] = useState('');
-    const [records, setRecords] = useState<AdminCourierSettlementItem[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchCouriers(token).then(setCouriers).catch(() => setCouriers([]));
-    }, [token]);
-
-    const load = useCallback(() => {
-        if (!selectedId) return;
-        setLoading(true); setError(null);
-        fetchCourierSettlementsAdmin(selectedId, token)
-            .then(setRecords)
-            .catch(e => setError(e instanceof SettlementApiError ? e.message : t.finErrLoad))
-            .finally(() => setLoading(false));
-    }, [selectedId, token, t.finErrLoad]);
-
-    useEffect(() => { load(); }, [load]);
+    const recordsQuery = useQuery({
+        queryKey: ['admin', 'finance', 'courierLedger', selectedId] as const,
+        queryFn: () => fetchCourierSettlementsAdmin(selectedId, token),
+        enabled: !!token && !!selectedId,
+    });
+    const records = selectedId ? (recordsQuery.data ?? []) : [];
+    const loading = selectedId ? recordsQuery.isPending : false;
+    const error = selectedId && recordsQuery.isError
+        ? (recordsQuery.error instanceof SettlementApiError ? recordsQuery.error.message : t.finErrLoad)
+        : null;
 
     const selectedCourier = couriers.find(c => c.courierId === selectedId) ?? null;
     const totalSalary = records.reduce((s, r) => s + r.totalCourierSalary, 0);
@@ -270,7 +264,7 @@ function CourierLedger({ token }: { token: string }) {
                 <select
                     className="go-select"
                     value={selectedId}
-                    onChange={e => { setSelectedId(e.target.value); setRecords([]); }}
+                    onChange={e => setSelectedId(e.target.value)}
                     style={{ minWidth: 240, maxWidth: 380 }}
                 >
                     <option value="">{t.finCourierSelect}</option>
@@ -390,24 +384,22 @@ function PaymentReceiptsSection({ token }: { token: string }) {
     const [date, setDate] = useState(isoToday());
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
-    const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
     const [expandedId, setExpandedId] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
-    const load = useCallback(() => {
-        if (!customer) { setReceipts([]); return; }
-        setLoading(true); setError(null);
-        const opts = mode === 'range'
-            ? { from: from || undefined, to: to || undefined }
-            : { date: date || undefined, monthly: mode === 'month' };
-        fetchCustomerPaymentReceipts(customer.id, token, opts)
-            .then(setReceipts)
-            .catch(e => setError(e instanceof OrderFinanceApiError ? e.message : t.finErrLoad))
-            .finally(() => setLoading(false));
-    }, [customer, mode, date, from, to, token, t.finErrLoad]);
+    const receiptsOpts = mode === 'range'
+        ? { from: from || undefined, to: to || undefined }
+        : { date: date || undefined, monthly: mode === 'month' };
 
-    useEffect(() => { load(); }, [load]);
+    const receiptsQuery = useQuery({
+        queryKey: ['admin', 'finance', 'paymentReceipts', customer?.id, mode, date, from, to] as const,
+        queryFn: () => fetchCustomerPaymentReceipts(customer!.id, token, receiptsOpts),
+        enabled: !!token && !!customer,
+    });
+    const receipts = customer ? (receiptsQuery.data ?? []) : [];
+    const loading = customer ? receiptsQuery.isPending : false;
+    const error = customer && receiptsQuery.isError
+        ? (receiptsQuery.error instanceof OrderFinanceApiError ? receiptsQuery.error.message : t.finErrLoad)
+        : null;
 
     const shiftDay = (delta: number) => setDate(prev => {
         const base = prev ? new Date(prev + 'T00:00:00') : new Date();
@@ -431,7 +423,7 @@ function PaymentReceiptsSection({ token }: { token: string }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {/* Picker + date filter */}
             <div className="content-card" style={{ padding: '10px 14px', overflow: 'visible', position: 'relative', zIndex: 5, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <CustomerPicker token={token} selected={customer} onSelect={setCustomer} onClear={() => { setCustomer(null); setReceipts([]); setError(null); }} />
+                <CustomerPicker token={token} selected={customer} onSelect={setCustomer} onClear={() => setCustomer(null)} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
                     <div className="go-seg" style={{ display: 'inline-flex' }}>
                         <button className={`go-seg__btn ${mode === 'day' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('day')}>{t.ofinViewDaily}</button>

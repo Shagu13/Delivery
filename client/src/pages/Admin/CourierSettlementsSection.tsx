@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useLanguage } from '../../contexts/useLanguage';
 import { fetchCouriers } from '../../api/couriers';
-import type { Courier } from '../../api/couriers';
 import { fetchCouriersWithDeliveries } from '../../api/settlements';
 import { SettlementModal } from './SettlementModal';
 
@@ -23,20 +23,21 @@ const shiftIso = (iso: string, delta: number) => {
  */
 export function CourierSettlementsSection({ token, onSettled }: { token: string; onSettled?: () => void }) {
     const { t } = useLanguage();
-    const [couriers, setCouriers] = useState<Courier[]>([]);
+
+    const couriersQuery = useQuery({
+        queryKey: ['admin', 'couriers'] as const,
+        queryFn: () => fetchCouriers(token),
+        enabled: !!token,
+    });
+    const couriers = couriersQuery.data ?? [];
+
     const [date, setDate] = useState('');                       // '' = all couriers
-    const [activeIds, setActiveIds] = useState<string[] | null>(null); // null = no date filter
-    const [loadingIds, setLoadingIds] = useState(false);
     const [selectedId, setSelectedId] = useState('');
     const [open, setOpen] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
     const [courierSearch, setCourierSearch] = useState('');
     const pickerRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        fetchCouriers(token).then(setCouriers).catch(() => setCouriers([]));
-    }, [token]);
 
     // Close the courier dropdown on an outside click.
     useEffect(() => {
@@ -55,16 +56,14 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
 
     // When a date is chosen, load which couriers delivered that day; clear the filter
     // (show all) when the date is emptied.
-    useEffect(() => {
-        if (!date) { setActiveIds(null); return; }
-        let cancelled = false;
-        setLoadingIds(true);
-        fetchCouriersWithDeliveries(date, token)
-            .then(ids => { if (!cancelled) setActiveIds(ids); })
-            .catch(() => { if (!cancelled) setActiveIds([]); })
-            .finally(() => { if (!cancelled) setLoadingIds(false); });
-        return () => { cancelled = true; };
-    }, [date, token]);
+    const activeIdsQuery = useQuery({
+        queryKey: ['admin', 'finance', 'couriersWithDeliveries', date] as const,
+        queryFn: () => fetchCouriersWithDeliveries(date, token),
+        enabled: !!token && !!date,
+        placeholderData: keepPreviousData,
+    });
+    const activeIds = date ? (activeIdsQuery.data ?? null) : null;
+    const loadingIds = date ? activeIdsQuery.isFetching : false;
 
     // Couriers visible in the dropdown: all when no date filter, else only those who
     // delivered on the chosen date.

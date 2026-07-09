@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   type AdminCustomer,
   getCustomers,
   setCustomerCompanyPrice,
   setCustomerActive,
 } from '../../api/customers';
+import type { PagedResult } from '../../types/paging';
 import { AdminSetPasswordModal } from './AdminSetPasswordModal';
 import { EditCustomerModal } from './EditCustomerModal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
@@ -27,40 +29,50 @@ function priceDisplay(v: number | null, defaultLabel: string) {
   return v != null ? `₾${v}` : <em style={{ color: '#999' }}>{defaultLabel}</em>;
 }
 
+const PAGE_SIZE = 20;
+
 export default function AdminCustomersPage({ token, canManage = true }: Props) {
   const { t } = useLanguage();
-  const [customers, setCustomers]       = useState<AdminCustomer[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch]             = useState('');
+  // Refetch 300ms after the admin stops typing instead of on every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [page, setPage]                 = useState(1);
-  const [totalPages, setTotalPages]     = useState(1);
-  const [loading, setLoading]           = useState(false);
   const [editingId, setEditingId]       = useState<string | null>(null);
   const [editState, setEditState]       = useState<EditState>({ capitalPrice: '', cityPrice: '', districtPrice: '', included: false });
   const [saving, setSaving]             = useState(false);
-  const [error, setError]               = useState('');
+  const [actionError, setActionError]   = useState('');
   const [pwdCustomer, setPwdCustomer]   = useState<AdminCustomer | null>(null);
   const [editCustomer, setEditCustomer] = useState<AdminCustomer | null>(null);
   const [togglingId, setTogglingId]     = useState<string | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<AdminCustomer | null>(null);
   const [notice, setNotice]             = useState('');
 
-  const PAGE_SIZE = 20;
+  // Reset to page 1 whenever the (debounced) search term changes.
+  useEffect(() => { setPage(1); }, [debouncedSearch]);
 
-  const load = useCallback(async (p: number, q: string) => {
-    setLoading(true);
-    try {
-      const result = await getCustomers(token, p, PAGE_SIZE, q);
-      setCustomers(result.items as AdminCustomer[]);
-      setTotalPages(result.totalPages || 1);
-    } catch {
-      setError(t.acupLoadFail);
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  const queryKey = ['admin', 'customers', 'list', debouncedSearch, page] as const;
+  const customersQuery = useQuery({
+    queryKey,
+    queryFn: () => getCustomers(token, page, PAGE_SIZE, debouncedSearch),
+    enabled: !!token,
+    placeholderData: keepPreviousData,
+  });
+  const customers  = customersQuery.data?.items ?? [];
+  const totalPages = customersQuery.data?.totalPages || 1;
+  const loading    = customersQuery.isPending;
+  const error      = actionError || (customersQuery.isError ? t.acupLoadFail : '');
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void load(1, search); }, [search, load]);
+  // Apply a mutation's known effect to the loaded page immediately, without waiting for
+  // a full refetch.
+  const patchCustomer = (id: string, patch: (c: AdminCustomer) => AdminCustomer) => {
+    queryClient.setQueryData(queryKey, (prev: PagedResult<AdminCustomer> | undefined) =>
+      prev ? { ...prev, items: prev.items.map(c => c.id === id ? patch(c) : c) } : prev);
+  };
 
   function startEdit(c: AdminCustomer) {
     setEditingId(c.id);
@@ -83,18 +95,16 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
         isCompanyServicePriceIncludedInPrice: editState.included,
       };
       await setCustomerCompanyPrice(id, prices, token);
-      setCustomers(prev => prev.map(c =>
-        c.id === id ? {
-          ...c,
-          companyServiceCapitalPrice:  prices.capitalPrice,
-          companyServiceCityPrice:     prices.cityPrice,
-          companyServiceDistrictPrice: prices.districtPrice,
-          isCompanyServicePriceIncludedInPrice: prices.isCompanyServicePriceIncludedInPrice,
-        } : c
-      ));
+      patchCustomer(id, c => ({
+        ...c,
+        companyServiceCapitalPrice:  prices.capitalPrice,
+        companyServiceCityPrice:     prices.cityPrice,
+        companyServiceDistrictPrice: prices.districtPrice,
+        isCompanyServicePriceIncludedInPrice: prices.isCompanyServicePriceIncludedInPrice,
+      }));
       setEditingId(null);
     } catch {
-      setError(t.acupSaveFail);
+      setActionError(t.acupSaveFail);
     } finally {
       setSaving(false);
     }
@@ -108,13 +118,13 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
 
   async function applyActive(c: AdminCustomer, next: boolean) {
     setTogglingId(c.id);
-    setError('');
+    setActionError('');
     try {
       await setCustomerActive(c.id, next, token);
-      setCustomers(prev => prev.map(x => x.id === c.id ? { ...x, isActive: next } : x));
+      patchCustomer(c.id, x => ({ ...x, isActive: next }));
       setDeactivateTarget(null);
     } catch {
-      setError(t.acupActiveFail);
+      setActionError(t.acupActiveFail);
     } finally {
       setTogglingId(null);
     }
@@ -133,7 +143,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
         type="text"
         placeholder={t.acupSearchPh}
         value={search}
-        onChange={e => { setSearch(e.target.value); setPage(1); }}
+        onChange={e => setSearch(e.target.value)}
         style={{
           padding: '0.5rem 0.75rem', borderRadius: 8, border: '1px solid #ddd',
           width: '100%', maxWidth: 400, marginBottom: '1rem', fontSize: '0.9rem',
@@ -270,13 +280,13 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
       <div style={{ display: 'flex', gap: 8, marginTop: '1rem', alignItems: 'center' }}>
         <button
           disabled={page <= 1}
-          onClick={() => { const p = page - 1; setPage(p); void load(p, search); }}
+          onClick={() => setPage(p => p - 1)}
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
         >{t.acupPrev}</button>
         <span>{t.acupPage(page, totalPages)}</span>
         <button
           disabled={page >= totalPages}
-          onClick={() => { const p = page + 1; setPage(p); void load(p, search); }}
+          onClick={() => setPage(p => p + 1)}
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
         >Next →</button>
       </div>
@@ -291,7 +301,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
         customer={editCustomer}
         onClose={() => setEditCustomer(null)}
         onSaved={patch => {
-          setCustomers(prev => prev.map(x => x.id === editCustomer?.id ? { ...x, ...patch } : x));
+          if (editCustomer) patchCustomer(editCustomer.id, x => ({ ...x, ...patch }));
           setEditCustomer(null);
           setNotice(t.acupEditSuccess);
         }}
