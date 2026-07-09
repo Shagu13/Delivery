@@ -29,6 +29,7 @@ public sealed class OrdersController : BaseController
         [FromQuery] string? search     = null,
         [FromQuery] string? orderType  = null,
         [FromQuery] Guid?   courierId  = null,
+        [FromQuery] string? party      = null,
         [FromQuery] bool    unpriced   = false,
         [FromQuery] bool    postponed  = false,
         [FromQuery] bool    activeOnly = false,
@@ -42,7 +43,7 @@ public sealed class OrdersController : BaseController
         // A tenant co-admin sees only their own tenant's orders (scope from the JWT claim).
         // Operators run the delivery flow but must not see internal company margin.
         var result = await Sender.Send(
-            new GetAllOrdersQuery(city, district, search, courierId, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date, dateTo, CurrentTenantId, HideCompanyRevenue: User.IsInRole("Operator")), ct);
+            new GetAllOrdersQuery(city, district, search, courierId, party, orderType, unpriced, activeOnly, postponed, page, pageSize, assigned, date, dateTo, CurrentTenantId, HideCompanyRevenue: User.IsInRole("Operator")), ct);
         return Ok(result);
     }
 

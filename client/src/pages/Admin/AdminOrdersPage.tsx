@@ -67,7 +67,7 @@ export interface AdminOrderItem {
 async function fetchAllOrders(
   token: string,
   params: {
-    city?: string; district?: string; search?: string;
+    city?: string; district?: string; search?: string; party?: 'sender' | 'recipient';
     courierId?: string; unpriced?: boolean; assigned?: boolean;
     date?: string; dateTo?: string; page?: number; pageSize?: number;
   }
@@ -76,6 +76,7 @@ async function fetchAllOrders(
   if (params.city)       qs.set('city',      params.city);
   if (params.district)   qs.set('district',  params.district);
   if (params.search)     qs.set('search',    params.search);
+  if (params.party)      qs.set('party',     params.party);
   if (params.courierId)  qs.set('courierId', params.courierId);
   if (params.unpriced)   qs.set('unpriced',  'true');
   if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
@@ -105,13 +106,15 @@ async function fetchUnpricedCount(token: string, courierId?: string, date?: stri
 
 // Orders that can be (re)assigned to a courier from the Packages page: warehouse-ready
 // and en-route-to-city Send/Exchange, an already-assigned delivery (re-assignment to a
-// different courier), a postponed delivery being reassigned/retried, and Return orders
-// still awaiting / in pickup assignment. Used by the select-all set, each row's checkbox,
-// and the bulk-assign action so they stay in sync.
+// different courier), an in-progress delivery (reassign mid-flight), a postponed delivery
+// being reassigned/retried, and Return orders still awaiting / in pickup assignment. Any
+// Send/Exchange status short of DeliveredToRecipient can be reassigned. Used by the
+// select-all set, each row's checkbox, and the bulk-assign action so they stay in sync.
 function isAssignable(o: AdminOrderItem): boolean {
   return o.status === 'AdminAcceptedOrderInWareHouse'
       || o.status === 'OrderIsOnItsWayToRecipientsCity'
       || o.status === 'CourierAssignedToDeliver'
+      || o.status === 'CourierDeliveringTheOrderToRecipient'
       || o.status === 'DeliveryPostponed'
       || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
 }
@@ -350,6 +353,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // the Revenue column here and in the view/bulk modals (server also strips the value).
 
   const [search,          setSearch]          = useState('');
+  // Which side of the order the search box matches: 'recipient' restricts to this Order's
+  // own recipient fields (name/phone/address/tracking); 'sender' restricts to the sender/
+  // customer fields. Defaults to sender to match prior behavior's primary use case.
+  const [filterParty,     setFilterParty]     = useState<'sender' | 'recipient'>('sender');
   // The list/locations/unpriced-count queries refetch 300ms after the admin stops typing;
   // other filters (dropdowns, date picker) apply immediately.
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -445,6 +452,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     city:      filterCity     || undefined,
     district:  filterDistrict || undefined,
     search:    debouncedSearch || undefined,
+    party:     filterParty,
     courierId: filterCourier?.courierId,
     unpriced:  filterUnpriced || undefined,
     assigned:  assignTab === 'assigned',
@@ -494,7 +502,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     setPage(1);
     setSelected(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCity, filterDistrict, debouncedSearch, filterCourier?.courierId, filterUnpriced, assignTab, pkgDate, pkgDateTo]);
+  }, [filterCity, filterDistrict, debouncedSearch, filterParty, filterCourier?.courierId, filterUnpriced, assignTab, pkgDate, pkgDateTo]);
 
   // Esc terminates the Mark-Delivered action: leave deliver mode and clear the selection.
   // Only active while in deliver mode, and never while a modal/warning dialog is open.
@@ -642,6 +650,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
         search:    search || undefined,
+        party:     filterParty,
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
         assigned:  assignTab === 'assigned',
@@ -1048,6 +1057,21 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
               </svg>
             </button>
           )}
+        </div>
+
+        <div className="go-seg">
+          <button
+            className={`go-seg__btn${filterParty === 'sender' ? ' go-seg__btn--active' : ''}`}
+            onClick={() => setFilterParty('sender')}
+          >
+            {t.goSender}
+          </button>
+          <button
+            className={`go-seg__btn${filterParty === 'recipient' ? ' go-seg__btn--active' : ''}`}
+            onClick={() => setFilterParty('recipient')}
+          >
+            {t.goRecipient}
+          </button>
         </div>
 
         <CourierPicker

@@ -97,20 +97,29 @@ public sealed class GetAllOrdersQueryHandler
         }
 
         // ── Free-text search ─────────────────────────────────────────────────
+        // Party = "recipient" restricts the search to the Order's own recipient
+        // fields only (name/phone/address/tracking) — sender/customer fields are
+        // excluded so a recipient-side search never matches on the sender's name.
+        // Party = "sender" restricts to sender/customer fields. Otherwise (null)
+        // it matches either side, same as before.
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var term = request.Search.Trim().ToLower();
+            var matchesRecipient = request.Party != "sender";
+            var matchesSender    = request.Party != "recipient";
             query = query.Where(o =>
-                o.TrackingNumber.ToLower().Contains(term) ||
-                o.RecipientName.ToLower().Contains(term) ||
-                o.RecipientPhone.Contains(term) ||
-                o.RecipientAddress.ToLower().Contains(term) ||
-                (o.GroupOrder != null && o.GroupOrder.SenderBusinessName.ToLower().Contains(term)) ||
-                (o.GroupOrder != null && o.GroupOrder.SenderFirstName.ToLower().Contains(term)) ||
-                (o.GroupOrder != null && o.GroupOrder.SenderLastName.ToLower().Contains(term)) ||
-                (o.Customer != null && o.Customer.BusinessName.ToLower().Contains(term)) ||
-                (o.Customer != null && o.Customer.PhoneNumber.Contains(term))
-            );
+                (matchesRecipient &&
+                    (o.TrackingNumber.ToLower().Contains(term) ||
+                     o.RecipientName.ToLower().Contains(term) ||
+                     o.RecipientPhone.Contains(term) ||
+                     o.RecipientAddress.ToLower().Contains(term)))
+                ||
+                (matchesSender &&
+                    ((o.GroupOrder != null && o.GroupOrder.SenderBusinessName.ToLower().Contains(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.SenderFirstName.ToLower().Contains(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.SenderLastName.ToLower().Contains(term)) ||
+                     (o.Customer != null && o.Customer.BusinessName.ToLower().Contains(term)) ||
+                     (o.Customer != null && o.Customer.PhoneNumber.Contains(term)))));
         }
 
         // ── Count then page ──────────────────────────────────────────────────

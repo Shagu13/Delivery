@@ -32,6 +32,10 @@ interface Props {
   /** Refresh the list after an action mutates the order. */
   onChanged: () => void;
   onError: (msg: string) => void;
+  /** Hide the View item — for callers whose row lacks the full order shape View needs. Default true. */
+  showView?: boolean;
+  /** Hide the Edit item — for callers whose row lacks the full order shape Edit needs. Default true. */
+  showEdit?: boolean;
 }
 
 type Panel = 'menu' | 'assign' | 'salary' | 'deliver' | 'returnToSender' | 'cancelCharge' | 'postpone';
@@ -44,6 +48,7 @@ type Panel = 'menu' | 'assign' | 'salary' | 'deliver' | 'returnToSender' | 'canc
  */
 export function OrderRowActionsMenu({
   order, couriers, token, canManage, canAssign, canDeliver, onView, onEdit, onLabel, onChanged, onError,
+  showView = true, showEdit = true,
 }: Props) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -169,8 +174,8 @@ export function OrderRowActionsMenu({
 
           {panel === 'menu' && (
             <>
-              <button className="orm-item" onClick={() => { onView(); close(); }}>{t.aopView}</button>
-              {canManage && <button className="orm-item" onClick={() => { onEdit(); close(); }}>{t.aopEdit}</button>}
+              {showView && <button className="orm-item" onClick={() => { onView(); close(); }}>{t.aopView}</button>}
+              {canManage && showEdit && <button className="orm-item" onClick={() => { onEdit(); close(); }}>{t.aopEdit}</button>}
               {onLabel && <button className="orm-item" onClick={() => { onLabel(); close(); }}>{t.custLabelBtn}</button>}
               {showAssign && (
                 <button className="orm-item" onClick={() => setPanel('assign')}>

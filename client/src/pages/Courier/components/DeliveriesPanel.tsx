@@ -212,20 +212,30 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                                 📞 {order.recipientPhone}
                                             </a>
                                         </div>
-                                        <div className="courier-card__row">
-                                            <span className="courier-card__label">{t.cdLabelLocation}</span>
-                                            <span className="courier-card__value">{order.recipientCity}, {order.recipientDistrict},</span>
-                                        </div>
-                                        <div className="courier-card__row">
-                                            <span className="courier-card__label">{t.cdLabelAddress}</span>
-                                            <AddressMapLink
-                                                city={order.recipientCity}
-                                                district={order.recipientDistrict}
-                                                address={order.recipientAddress}
-                                                lat={order.latitude}
-                                                lon={order.longitude}
-                                            />
-                                        </div>
+                                        {(() => {
+                                            const isReturnPickup = order.orderType === 'Return' && !!order.returnPickupCity;
+                                            const city     = isReturnPickup ? order.returnPickupCity     : order.recipientCity;
+                                            const district = isReturnPickup ? order.returnPickupDistrict : order.recipientDistrict;
+                                            const address  = isReturnPickup ? order.returnPickupAddress  : order.recipientAddress;
+                                            return (
+                                                <>
+                                                    <div className="courier-card__row">
+                                                        <span className="courier-card__label">{t.cdLabelLocation}</span>
+                                                        <span className="courier-card__value">{city}, {district},</span>
+                                                    </div>
+                                                    <div className="courier-card__row">
+                                                        <span className="courier-card__label">{t.cdLabelAddress}</span>
+                                                        <AddressMapLink
+                                                            city={city}
+                                                            district={district}
+                                                            address={address}
+                                                            lat={order.latitude}
+                                                            lon={order.longitude}
+                                                        />
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelPayment}</span>
                                             <span className="courier-card__value">

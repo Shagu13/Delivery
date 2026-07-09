@@ -62,6 +62,8 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             // Already assigned but not yet picked up by the courier — allow the admin to
             // re-assign it to a different courier.
             OrderStatus.CourierAssignedToDeliver,
+            // Courier already has it out for delivery — still reassignable mid-flight.
+            OrderStatus.CourierDeliveringTheOrderToRecipient,
             // A postponed delivery — allow the admin to reassign/retry it, same as
             // CourierAssignedToDeliver.
             OrderStatus.DeliveryPostponed,
@@ -71,7 +73,7 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             throw new ConflictException(
                 $"Cannot assign courier from status {order.Status}. " +
                 "Expected AdminAcceptedOrderInWareHouse, OrderIsOnItsWayToRecipientsCity, " +
-                "CourierAssignedToDeliver (re-assignment), or DeliveryPostponed.");
+                "CourierAssignedToDeliver, CourierDeliveringTheOrderToRecipient (re-assignment), or DeliveryPostponed.");
 
         var courier = await _context.Couriers
             .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)
@@ -143,6 +145,8 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
         // Already assigned but not yet picked up by the courier — allow the admin to
         // re-assign it to a different courier.
         OrderStatus.CourierAssignedToDeliver,
+        // Courier already has it out for delivery — still reassignable mid-flight.
+        OrderStatus.CourierDeliveringTheOrderToRecipient,
         // A postponed delivery — allow the admin to reassign/retry it.
         OrderStatus.DeliveryPostponed,
     };

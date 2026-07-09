@@ -11,6 +11,7 @@ import { fetchGroupOrders,
     groupAndAcceptStandalone, groupAndWarehouseStandalone } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/adminGroupOrders';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
+import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import type { AdminOrderItem } from './AdminOrdersPage';
 import { fetchCouriers, fetchAssignedForRange, fetchAssignedPickupsForRange, setCourierActiveStatus } from '../../api/couriers';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
@@ -2602,6 +2603,14 @@ function AdminCouriers({
   const [pickups, setPickups] = useState<CourierDayPickup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Transient failure banner for a per-row action (deliver/postpone/cancel) — separate from
+  // `error` above, which blanks the whole list on an initial-load failure.
+  const [actionError, setActionError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!actionError) return;
+    const timer = setTimeout(() => setActionError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [actionError]);
 
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const isSameDay = (a: Date, b: Date) =>
@@ -2625,6 +2634,14 @@ function AdminCouriers({
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [day, token, mode]);
+
+  // Silently re-fetch the day's deliveries after a per-row action (mark delivered/postpone/
+  // cancel) mutates an order — no loading spinner, mirrors the Packages page's `loadSilent`.
+  const reloadDeliveries = useCallback(() => {
+    const dayStart = new Date(day);
+    const dayEnd = new Date(day); dayEnd.setDate(dayEnd.getDate() + 1);
+    fetchAssignedForRange(dayStart, dayEnd, token).then(setDeliveries).catch(() => {});
+  }, [day, token]);
 
   const courierById = useMemo(() => new Map(couriers.map(c => [c.courierId, c])), [couriers]);
 
@@ -2789,11 +2806,19 @@ function AdminCouriers({
                 courier={r.courier}
                 orders={r.items as CourierDayDelivery[]}
                 canSeeRevenue={canSeeRevenue}
+                token={token}
+                couriers={couriers}
+                onChanged={reloadDeliveries}
+                onError={setActionError}
               />
             ))}
           </div>
         )}
       </div>
+
+      {actionError && (
+        <div className="action-toast action-toast--err" role="status">{actionError}</div>
+      )}
     </>
   );
 }
@@ -3052,7 +3077,23 @@ function CourierPickupRow({ courier, pickups }: { courier: Courier; pickups: Cou
   );
 }
 
-function CourierRow({ courier, orders, canSeeRevenue = true }: { courier: Courier; orders: CourierOrder[]; canSeeRevenue?: boolean; }) {
+// Mirrors AdminOrdersPage's isDeliverable: only Send/Exchange orders that have reached the
+// warehouse (last-mile flow) can be marked delivered/postponed/cancelled-with-charge here.
+const COURIER_ROW_LAST_MILE_STATUSES = [
+  'AdminAcceptedOrderInWareHouse',
+  'OrderIsOnItsWayToRecipientsCity',
+  'CourierAssignedToDeliver',
+  'CourierDeliveringTheOrderToRecipient',
+  'DeliveryPostponed',
+];
+function isCourierRowDeliverable(o: CourierOrder): boolean {
+  return o.orderType !== 'Return' && COURIER_ROW_LAST_MILE_STATUSES.includes(o.status);
+}
+
+function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, onChanged, onError }: {
+  courier: Courier; orders: CourierDayDelivery[]; canSeeRevenue?: boolean;
+  token: string; couriers: Courier[]; onChanged: () => void; onError: (msg: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useLanguage();
 
@@ -3117,7 +3158,7 @@ function CourierRow({ courier, orders, canSeeRevenue = true }: { courier: Courie
         </div>
       </div>
 
-      {/* Deliveries for the selected day (read-only) */}
+      {/* Deliveries for the selected day */}
       {expanded && (
         <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-3)', animation: 'expand-in 0.15s ease both' }}>
           <div style={{ overflowX: 'auto' }}>
@@ -3132,6 +3173,7 @@ function CourierRow({ courier, orders, canSeeRevenue = true }: { courier: Courie
                   <th>{t.crwThCourierSalary}</th>
                   {canSeeRevenue && <th>{t.aopThRevenue}</th>}
                   <th>{t.crwThDelivered}</th>
+                  <th>{t.goThActions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -3163,6 +3205,22 @@ function CourierRow({ courier, orders, canSeeRevenue = true }: { courier: Courie
                       )}
                       <td style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>
                         {deliveredIso ? new Date(deliveredIso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <OrderRowActionsMenu
+                          order={{ id: o.id, orderType: o.orderType, status: o.status, courierId: o.courierId, courierSalary: o.courierSalary }}
+                          couriers={couriers}
+                          token={token}
+                          canManage
+                          canAssign={false}
+                          canDeliver={isCourierRowDeliverable(o)}
+                          showView={false}
+                          showEdit={false}
+                          onView={() => {}}
+                          onEdit={() => {}}
+                          onChanged={onChanged}
+                          onError={onError}
+                        />
                       </td>
                     </tr>
                   );

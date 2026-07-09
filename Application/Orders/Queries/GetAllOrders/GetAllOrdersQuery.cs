@@ -8,6 +8,7 @@ public sealed record GetAllOrdersQuery(
     string? District,
     string? Search,
     Guid?   CourierId,
+    string? Party      = null,   // "sender" | "recipient" | null (search both)
     string? OrderType  = null,   // "Send" | "Return" | "Exchange" | null (all)
     bool    Unpriced   = false,
     bool    ActiveOnly = false,  // when true, exclude terminal statuses

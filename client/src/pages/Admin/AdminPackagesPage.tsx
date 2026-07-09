@@ -98,6 +98,8 @@ function isAssignable(o: AdminOrderItem): boolean {
   return o.status === 'AdminAcceptedOrderInWareHouse'
       || o.status === 'OrderIsOnItsWayToRecipientsCity'
       || o.status === 'CourierAssignedToDeliver'
+      || o.status === 'CourierDeliveringTheOrderToRecipient'
+      || o.status === 'DeliveryPostponed'
       || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
 }
 
