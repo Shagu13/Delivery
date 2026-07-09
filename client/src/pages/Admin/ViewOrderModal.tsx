@@ -51,8 +51,16 @@ export function ViewOrderModal({ order, open, onClose, showFinancials = true, sh
 
     const [bg, color] = STATUS_COLORS[order.status] ?? ['rgba(160,120,0,0.12)', '#c4870f'];
     const statusMeta  = getStatusMeta(order.status, lang);
-    const city        = lang === 'ka' && order.recipientCityGeo     ? order.recipientCityGeo     : order.recipientCity;
-    const district    = lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict;
+    // A Return order is picked up from returnPickup* (entered explicitly when the return
+    // was created) — recipientCity/District/Address hold the business's own address (where
+    // the item is ultimately returned to, same as the Sender section above), not where the
+    // courier actually goes to collect it.
+    const isReturnWithPickup = order.orderType === 'Return' && !!order.returnPickupCity;
+    const city        = isReturnWithPickup ? order.returnPickupCity!
+        : lang === 'ka' && order.recipientCityGeo ? order.recipientCityGeo : order.recipientCity;
+    const district     = isReturnWithPickup ? (order.returnPickupDistrict ?? '')
+        : lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict;
+    const address      = isReturnWithPickup ? (order.returnPickupAddress ?? '') : order.recipientAddress;
 
     const formatDate = (iso: string | null) => {
         if (!iso) return null;
@@ -122,21 +130,13 @@ export function ViewOrderModal({ order, open, onClose, showFinancials = true, sh
                         )}
                     </Section>
 
-                    <Section title={t.vomSecRecipient}>
+                    <Section title={isReturnWithPickup ? t.vomSecReturnPickup : t.vomSecRecipient}>
                         <Row label={t.vomLblName}     value={recipientDisplayName(order.recipientName, t.recipientUnknown)} />
                         <Row label={t.vomLblPhone}    value={order.recipientPhone} />
                         <Row label={t.vomLblCity}     value={city} />
                         <Row label={t.vomLblDistrict} value={district} />
-                        <Row label={t.vomLblAddress}  value={order.recipientAddress} />
+                        <Row label={t.vomLblAddress}  value={address} />
                     </Section>
-
-                    {order.orderType === 'Return' && (order.returnPickupCity || order.returnPickupAddress) && (
-                        <Section title={t.vomSecReturnPickup}>
-                            <Row label={t.vomLblCity}     value={order.returnPickupCity} />
-                            <Row label={t.vomLblDistrict} value={order.returnPickupDistrict} />
-                            <Row label={t.vomLblAddress}  value={order.returnPickupAddress} />
-                        </Section>
-                    )}
 
                     <Section title={t.vomSecFinancials}>
                         <Row label={t.vomLblServicePayer}   value={order.whoPaysForCompanyService} />

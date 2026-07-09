@@ -12,8 +12,9 @@
 // Actions, EditOrderModal, ViewOrderModal, Salary/Price warning modals) are reused
 // by import; the small pickup-local helpers/modals are copied here verbatim.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -30,7 +31,6 @@ import {
 } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/adminGroupOrders';
 import { fetchCouriers } from '../../api/couriers';
-import type { Courier } from '../../api/couriers';
 import {
   setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders,
   adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations,
@@ -204,18 +204,17 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
 
   // ── Pickup state (mirrors AdminOrders) ──────────────────────────────────────
-  const [groupOrders, setGroupOrders] = useState<AdminGroupOrder[]>([]);
-  // Wide (non-30-paginated) same-window fetch feeding the merge/group cross-batch summaries
-  // — see loadWindowScoped below.
-  const [windowScopedOrders, setWindowScopedOrders] = useState<AdminGroupOrder[]>([]);
-  const [couriers,    setCouriers]    = useState<Courier[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState<string | null>(null);
   const [search,      setSearch]      = useState('');
+  // The list/window/locations queries refetch 350ms after the admin stops typing; other
+  // filters (dropdowns, date picker) apply immediately.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
   // Server-side pagination — untouched/no-filter default is a rolling last-7-days window;
   // any filter (or an explicit day/range pick) reaches the whole DB instead.
   const [page,          setPage]          = useState(1);
-  const [totalPages,    setTotalPages]    = useState(1);
   const [dateTouched,   setDateTouched]   = useState(false);
   const [filterParty,     setFilterParty]     = useState<'sender' | 'recipient'>('sender');
   const [filterCities,    setFilterCities]    = useState<string[]>([]);
@@ -232,15 +231,9 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     return next;
   });
   const [editing,         setEditing]         = useState<{ item: AdminOrderItem; pricing: CustomerServicePricing | null } | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Monotonic id for the in-flight data load. Only the most recently issued request may
-  // write to state, so a slow/stale response (initial load, realtime refetch) can never
-  // overwrite a newer search — which otherwise made results flicker in then vanish.
-  const loadSeqRef = useRef(0);
 
   const [selectedDate,     setSelectedDate]     = useState<Date | null>(null);
   const [rangeEnd,         setRangeEnd]         = useState<Date | null>(null);
-  const [daySummary,       setDaySummary]       = useState<PickupDayCustomer[]>([]);
   const [groupingCustomer, setGroupingCustomer] = useState<PickupDayCustomer | null>(null);
   const [groupingDate,     setGroupingDate]     = useState<Date>(() => georgianToday());
   const [acceptStandalone, setAcceptStandalone] = useState<AdminGroupOrder | null>(null);
@@ -297,6 +290,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const effectiveDay    = selectedDate ?? georgianToday();
   const effectiveDayKey = toDateKey(effectiveDay);
 
+  const couriersQuery = useQuery({
+    queryKey: ['admin', 'couriers'] as const,
+    queryFn: () => fetchCouriers(token ?? ''),
+    enabled: !!token,
+  });
+  const couriers = couriersQuery.data ?? [];
+
   const courierNameById = useMemo(() => {
     const m = new Map<string, string>();
     couriers.forEach(c => m.set(c.courierId, c.fullName));
@@ -327,123 +327,70 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const otherFiltersActive = filterCities.length > 0 || filterDistricts.length > 0
     || !!filterStatus || !!filterCourier || filterUnpriced || !!customerFilter;
 
-  const load = useCallback(async (params: {
-    search?: string; cities?: string[]; districts?: string[]; party?: 'sender' | 'recipient';
-    status?: string; courierId?: string; unpriced?: boolean; date?: string; dateTo?: string; page?: number;
-  }) => {
-    const seq = ++loadSeqRef.current;
-    try {
-      const result = await fetchGroupOrders(token ?? '', {
-        search:           params.search || undefined,
-        cities:           params.cities,
-        districts:        params.districts,
-        party:            params.party,
-        status:           params.status || undefined,
-        courierId:        params.courierId || undefined,
-        unpriced:         params.unpriced || undefined,
-        date:             params.date,
-        dateTo:           params.dateTo,
-        excludeCompleted: true,
-        page:             params.page ?? 1,
-        pageSize:         PAGE_SIZE,
-      });
-      if (seq !== loadSeqRef.current) return;   // a newer load started — drop this stale result
-      setGroupOrders(result.items);
-      setTotalPages(result.totalPages);
-      setError(null);
-    } catch (e: unknown) {
-      if (seq !== loadSeqRef.current) return;
-      setError(e instanceof Error ? e.message : t.goLoadingOrders);
-    } finally {
-      if (seq === loadSeqRef.current) setLoading(false);
-    }
-  }, [token, t]);
+  const { date: pkgDate, dateTo: pkgDateTo } = resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd, otherFiltersActive });
 
-  const loadSummary = useCallback(async () => {
-    try { setDaySummary(await fetchPickupDay(token ?? '', effectiveDayKey)); }
-    catch { setDaySummary([]); }
-  }, [token, effectiveDayKey]);
+  const pkgFilters = {
+    search:    debouncedSearch || undefined,
+    cities:    filterCities.length > 0 ? filterCities : undefined,
+    districts: filterDistricts.length > 0 ? filterDistricts : undefined,
+    party:     filterParty,
+    status:    filterStatus || undefined,
+    courierId: filterCourier || undefined,
+    unpriced:  filterUnpriced || undefined,
+    excludeCompleted: true,
+  };
 
-  useEffect(() => { void loadSummary(); }, [loadSummary]);
+  const listQueryKey = ['admin', 'packagesTest', 'list', pkgFilters, pkgDate, pkgDateTo, page] as const;
+
+  const mainQuery = useQuery({
+    queryKey: listQueryKey,
+    queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page, pageSize: PAGE_SIZE }),
+    enabled: !!token,
+    placeholderData: keepPreviousData,
+  });
+  const groupOrders = mainQuery.data?.items ?? [];
+  const totalPages  = mainQuery.data?.totalPages ?? 1;
+  const loading     = mainQuery.isPending;
+  const error       = mainQuery.isError ? (mainQuery.error instanceof Error ? mainQuery.error.message : t.goLoadingOrders) : null;
+
+  const summaryQuery = useQuery({
+    queryKey: ['admin', 'pickup', 'summary', effectiveDayKey] as const,
+    queryFn: () => fetchPickupDay(token ?? '', effectiveDayKey),
+    enabled: !!token,
+  });
+  const daySummary = summaryQuery.data ?? [];
 
   // Mirrors the main list's filters/date window, but with a generous pageSize instead of
   // paginating — a batch count within one browsing window is realistically small. Feeds
   // mergeableByCustomer/batchesFor/multiBatchCustomers/ungroupedCustomers, which need every
   // batch for a day (not just whatever fits on the current 30-item page) to detect same-day
   // merge candidates and unattached orders correctly.
-  const loadWindowScoped = useCallback(async () => {
-    try {
-      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive });
-      const { items } = await fetchGroupOrders(token ?? '', {
-        search: search || undefined,
-        date, dateTo,
-        cities: filterCities.length > 0 ? filterCities : undefined,
-        districts: filterDistricts.length > 0 ? filterDistricts : undefined,
-        party: filterParty,
-        status: filterStatus || undefined,
-        courierId: filterCourier || undefined,
-        unpriced: filterUnpriced || undefined,
-        excludeCompleted: true,
-        page: 1,
-        pageSize: 500,
-      });
-      setWindowScopedOrders(items);
-    } catch { setWindowScopedOrders([]); }
-  }, [token, dateTouched, search, selectedDate, rangeEnd, otherFiltersActive, filterCities, filterDistricts, filterParty, filterStatus, filterCourier, filterUnpriced]);
-
-  useEffect(() => { void loadWindowScoped(); }, [loadWindowScoped]);
+  const windowScopedQuery = useQuery({
+    queryKey: ['admin', 'packagesTest', 'windowScoped', pkgFilters, pkgDate, pkgDateTo] as const,
+    queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page: 1, pageSize: 500 }).then(r => r.items),
+    enabled: !!token,
+    placeholderData: keepPreviousData,
+  });
+  const windowScopedOrders = windowScopedQuery.data ?? [];
 
   // Reload with the current filters/page — used by realtime pings and after any mutation
   // that doesn't itself change a filter (assign courier, save price/salary, move/merge/group…).
-  // Returns the load promise so callers that need the fresh data before proceeding can await it.
-  const reload = useCallback(() => {
-    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive });
-    return load({
-      search, cities: filterCities, districts: filterDistricts, party: filterParty,
-      status: filterStatus, courierId: filterCourier, unpriced: filterUnpriced, date, dateTo, page,
-    });
-  }, [load, dateTouched, search, selectedDate, rangeEnd, otherFiltersActive, filterCities, filterDistricts, filterParty, filterStatus, filterCourier, filterUnpriced, page]);
+  // Returns the refetch promise so callers that need the fresh data before proceeding can await it.
+  const reload = useCallback(() => mainQuery.refetch(), [mainQuery]);
+  const loadSummary = useCallback(() => summaryQuery.refetch(), [summaryQuery]);
+  const loadWindowScoped = useCallback(() => windowScopedQuery.refetch(), [windowScopedQuery]);
 
-  // Re-resolve the date window and (re)fetch whenever any filter, or the page, changes.
-  // Filter changes always jump back to page 1; only the search term is debounced.
-  const filterRef = useRef({ search: '', cities: '', districts: '', party: 'sender', status: '', courier: '', unpriced: false, date: '', dateTo: '', dateTouched: false });
+  // Reset to page 1 whenever a filter changes (queryKey reactivity handles the actual refetch).
   useEffect(() => {
-    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive });
-    const prev = filterRef.current;
-    const next = {
-      search, cities: filterCities.join(','), districts: filterDistricts.join(','),
-      party: filterParty, status: filterStatus, courier: filterCourier, unpriced: filterUnpriced,
-      date: date ?? '', dateTo: dateTo ?? '', dateTouched,
-    };
-    const filterChanged =
-      prev.search    !== next.search    || prev.cities   !== next.cities   || prev.districts !== next.districts ||
-      prev.party     !== next.party     || prev.status   !== next.status   ||
-      prev.courier   !== next.courier   || prev.unpriced !== next.unpriced ||
-      prev.date      !== next.date      || prev.dateTo   !== next.dateTo   || prev.dateTouched !== next.dateTouched;
-    filterRef.current = next;
-
-    const delay = filterChanged && next.search !== prev.search ? 350 : 0;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const targetPage = filterChanged ? 1 : page;
-      if (filterChanged && page !== 1) setPage(1);
-      setLoading(true);
-      void load({
-        search, cities: filterCities, districts: filterDistricts, party: filterParty,
-        status: filterStatus, courierId: filterCourier, unpriced: filterUnpriced, date, dateTo, page: targetPage,
-      });
-    }, delay);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filterCities, filterDistricts, filterParty, filterStatus, filterCourier, filterUnpriced, dateTouched, selectedDate, rangeEnd, otherFiltersActive, page, load]);
+  }, [debouncedSearch, filterCities, filterDistricts, filterParty, filterStatus, filterCourier, filterUnpriced, dateTouched, pkgDate, pkgDateTo]);
 
-  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { reload(); void loadSummary(); void loadWindowScoped(); });
-
-  useEffect(() => { fetchCouriers(token ?? '').then(setCouriers).catch(() => {}); }, [token]);
+  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void reload(); void loadSummary(); void loadWindowScoped(); });
 
   // After a delivery mutation: silently reload and clear the selection.
   const reloadAfterAction = useCallback(() => {
-    reload();
+    void reload();
     void loadSummary();
     void loadWindowScoped();
     setSelected(new Set());
@@ -474,16 +421,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // be on the currently paginated page. Party-aware: sender = pickup side (GroupOrder /
   // standalone-order-customer), recipient = each order's own recipient (shared with the
   // Delivery page). Scoped to the same resolved date window as the main list.
-  const [locationOptions, setLocationOptions] = useState<{ city: string; cityGeo?: string | null; district: string; districtGeo?: string | null }[]>([]);
-
-  useEffect(() => {
-    const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive });
-    const fetcher = filterParty === 'recipient'
-      ? fetchOrderLocations(token ?? '', date, dateTo)
-      : fetchGroupOrderLocations(token ?? '', date, dateTo);
-    fetcher.then(setLocationOptions).catch(() => { /* keep filters empty on failure */ });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, filterParty, dateTouched, search, selectedDate, rangeEnd, otherFiltersActive]);
+  const locationsQuery = useQuery({
+    queryKey: ['admin', 'packagesTest', 'locations', filterParty, pkgDate, pkgDateTo] as const,
+    queryFn: () => filterParty === 'recipient'
+      ? fetchOrderLocations(token ?? '', pkgDate, pkgDateTo)
+      : fetchGroupOrderLocations(token ?? '', pkgDate, pkgDateTo),
+    enabled: !!token,
+  });
+  const locationOptions = locationsQuery.data ?? [];
 
   const availableCities = useMemo(() => [...new Set(locationOptions.map(l => l.city))].sort(), [locationOptions]);
 
