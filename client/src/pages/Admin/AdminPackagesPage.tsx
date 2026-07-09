@@ -586,17 +586,34 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     setFilterCourier(''); setFilterUnpriced(false);
   };
 
-  // Active packages of a batch matching the recipient location AND delivery filters.
+  // Active packages of a batch matching the recipient location/search AND delivery filters.
+  // The backend's `search` param only narrows which batches are returned (a batch matches if
+  // ANY of its orders do) — it never trims a matched batch's own order list, so a recipient
+  // search still needs this client-side pass to drop that batch's non-matching siblings.
   const visibleOrdersFor = useCallback((go: AdminGroupOrder) => {
     let orders = go.orders.filter(o => !ACTIVE_ORDER_STATUSES_ONLY.has(o.status));
     if (filterCourier || filterUnpriced) orders = orders.filter(matchesDeliveryFilters);
-    if (pickupMode === 'ungrouped' || filterParty !== 'recipient' || (filterCities.length === 0 && filterDistricts.length === 0)) return orders;
-    return orders.filter(o => {
-      if (filterCities.length > 0 && !filterCities.includes(o.recipientCity)) return false;
-      if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
-      return true;
-    });
-  }, [pickupMode, filterParty, filterCities, filterDistricts, filterCourier, filterUnpriced, matchesDeliveryFilters]);
+    if (pickupMode === 'ungrouped' || filterParty !== 'recipient') return orders;
+    if (filterCities.length > 0 || filterDistricts.length > 0) {
+      orders = orders.filter(o => {
+        if (filterCities.length > 0 && !filterCities.includes(o.recipientCity)) return false;
+        if (filterDistricts.length > 0 && !filterDistricts.includes(o.recipientDistrict)) return false;
+        return true;
+      });
+    }
+    const term = debouncedSearch.trim().toLowerCase();
+    if (term) {
+      orders = orders.filter(o =>
+        o.trackingNumber.toLowerCase().includes(term) ||
+        o.recipientName.toLowerCase().includes(term) ||
+        o.recipientPhone.includes(term) ||
+        o.recipientAddress.toLowerCase().includes(term) ||
+        o.recipientCity.toLowerCase().includes(term) ||
+        o.recipientDistrict.toLowerCase().includes(term)
+      );
+    }
+    return orders;
+  }, [pickupMode, filterParty, filterCities, filterDistricts, filterCourier, filterUnpriced, debouncedSearch, matchesDeliveryFilters]);
 
   // ── Date-section grouping (copied) ──────────────────────────────────────────
   const groupByDate = (orders: AdminGroupOrder[]) => {
@@ -1332,10 +1349,25 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
       {/* List */}
       {!loading && !error && displayList.length > 0 && (() => {
-        const showFlat = pickupMode === 'grouped' && filterParty === 'recipient' && hasLocationFilter;
+        // Recipient party always shows single orders directly — no batch/group wrapper —
+        // matching Sender party's expandable-batch view. A batch matching the backend's
+        // search/filters can still have some non-matching sibling orders, so this can be
+        // empty even though displayList (batches) is not; handled below.
+        const showFlat = pickupMode === 'grouped' && filterParty === 'recipient';
 
         if (showFlat) {
           const flatRows = listOrders.flatMap(go => visibleOrdersFor(go).map(o => ({ o, go })));
+          if (flatRows.length === 0) {
+            return (
+              <div className="empty-state" style={{ padding: '48px 20px' }}>
+                <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
+                  <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M12 16h16M12 22h10M12 28h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                <span className="empty-state__text">{hasFilters ? t.goNoOrdersFilters : t.goNoOrders}</span>
+              </div>
+            );
+          }
           return (
             <div style={{ overflowX: 'auto' }}>
               <table className="go-orders-table">

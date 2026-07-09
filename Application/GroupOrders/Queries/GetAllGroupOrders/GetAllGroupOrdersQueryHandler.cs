@@ -93,35 +93,51 @@ public sealed class GetAllGroupOrdersQueryHandler
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
             var term = request.SearchTerm.Trim().ToLower();
+            // Party = "recipient" restricts the search to each order's own recipient fields
+            // (name/phone/address/city/district/tracking) — sender/pickup fields are excluded
+            // so a recipient-side search never matches on the sender's name. Party = "sender"
+            // restricts to sender/pickup fields. Otherwise (null) it matches either side.
+            var matchesSender    = request.Party != "recipient";
+            var matchesRecipient = request.Party != "sender";
+
             goQuery = goQuery.Where(go =>
-                go.SenderFirstName.ToLower().Contains(term) ||
-                go.SenderLastName.ToLower().Contains(term) ||
-                go.SenderBusinessName.ToLower().Contains(term) ||
-                go.SenderPhone.Contains(term) ||
-                go.PickUpCity.ToLower().Contains(term) ||
-                go.PickUpDistrict.ToLower().Contains(term) ||
-                go.PickUpAddress.ToLower().Contains(term) ||
-                go.Orders.Any(o =>
-                    o.RecipientName.ToLower().Contains(term) ||
-                    o.RecipientPhone.Contains(term) ||
-                    o.RecipientCity.ToLower().Contains(term) ||
-                    o.RecipientDistrict.ToLower().Contains(term) ||
-                    o.RecipientAddress.ToLower().Contains(term) ||
-                    o.TrackingNumber.ToLower().Contains(term))
+                (matchesSender &&
+                    (go.SenderFirstName.ToLower().Contains(term) ||
+                     go.SenderLastName.ToLower().Contains(term) ||
+                     go.SenderBusinessName.ToLower().Contains(term) ||
+                     go.SenderPhone.Contains(term) ||
+                     go.PickUpCity.ToLower().Contains(term) ||
+                     go.PickUpDistrict.ToLower().Contains(term) ||
+                     go.PickUpAddress.ToLower().Contains(term)))
+                ||
+                (matchesRecipient &&
+                    go.Orders.Any(o =>
+                        o.RecipientName.ToLower().Contains(term) ||
+                        o.RecipientPhone.Contains(term) ||
+                        o.RecipientCity.ToLower().Contains(term) ||
+                        o.RecipientDistrict.ToLower().Contains(term) ||
+                        o.RecipientAddress.ToLower().Contains(term) ||
+                        o.TrackingNumber.ToLower().Contains(term)))
             );
 
             soQuery = soQuery.Where(o =>
-                o.RecipientName.ToLower().Contains(term) ||
-                o.RecipientPhone.Contains(term) ||
-                o.RecipientCity.ToLower().Contains(term) ||
-                o.RecipientDistrict.ToLower().Contains(term) ||
-                o.RecipientAddress.ToLower().Contains(term) ||
-                o.TrackingNumber.ToLower().Contains(term) ||
-                (o.Customer != null && (
-                    o.Customer.BusinessName.ToLower().Contains(term) ||
-                    o.Customer.FirstName.ToLower().Contains(term) ||
-                    o.Customer.LastName.ToLower().Contains(term) ||
-                    o.Customer.PhoneNumber.Contains(term))));
+                (matchesRecipient &&
+                    (o.RecipientName.ToLower().Contains(term) ||
+                     o.RecipientPhone.Contains(term) ||
+                     o.RecipientCity.ToLower().Contains(term) ||
+                     o.RecipientDistrict.ToLower().Contains(term) ||
+                     o.RecipientAddress.ToLower().Contains(term) ||
+                     o.TrackingNumber.ToLower().Contains(term)))
+                ||
+                (matchesSender && o.Customer != null &&
+                    (o.Customer.BusinessName.ToLower().Contains(term) ||
+                     o.Customer.FirstName.ToLower().Contains(term) ||
+                     o.Customer.LastName.ToLower().Contains(term) ||
+                     o.Customer.PhoneNumber.Contains(term) ||
+                     o.Customer.City.ToLower().Contains(term) ||
+                     o.Customer.District.ToLower().Contains(term) ||
+                     o.Customer.Address.ToLower().Contains(term)))
+            );
         }
 
         // ── Date window (sargable — same style as the Packages/Orders fix) ────────
