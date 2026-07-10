@@ -121,6 +121,7 @@ public sealed class GetAllOrdersQueryHandler
                      (o.GroupOrder != null && o.GroupOrder.SenderFirstName.ToLower().Contains(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.SenderLastName.ToLower().Contains(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.SenderPhone.Contains(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.AlternativeSenderPhone != null && o.GroupOrder.AlternativeSenderPhone.Contains(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.PickUpCity.ToLower().Contains(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.PickUpDistrict.ToLower().Contains(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.PickUpAddress.ToLower().Contains(term)) ||

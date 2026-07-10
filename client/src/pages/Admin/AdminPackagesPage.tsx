@@ -230,6 +230,27 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Distinguishes Send/Return/Exchange on a package row — Return orders are otherwise visually
+// identical to a normal Send (same table, same status pill), which confused admins into
+// treating them as ordinary deliveries.
+function OrderTypeBadge({ orderType }: { orderType: string }) {
+  const { t } = useLanguage();
+  const style = orderType === 'Return'
+    ? { background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }
+    : orderType === 'Exchange'
+    ? { background: 'rgba(59,130,246,0.1)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.25)' }
+    : { background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)', border: '1px solid var(--color-border)' };
+  const label = orderType === 'Return' ? t.aopOrderTypeReturn : orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend;
+  return (
+    <span style={{
+      display: 'inline-block', fontSize: '0.62rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100,
+      letterSpacing: '0.03em', textTransform: 'uppercase', whiteSpace: 'nowrap', ...style,
+    }}>
+      {label}
+    </span>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -357,14 +378,12 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   };
 
   // ── Data loading ────────────────────────────────────────────────────────────
-  // Any filter other than a typed search also releases the rolling-7-day default (mirrors
-  // AdminOrdersPage.tsx's search-only trigger, widened here per product ask): once the admin
-  // narrows by city/district/status/courier/unpriced/customer, the match must reach the whole
-  // DB, not just whatever the default 7-day window happens to contain.
-  const otherFiltersActive = filterCities.length > 0 || filterDistricts.length > 0
-    || !!filterStatus || !!filterCourier || filterUnpriced || !!customerFilter;
-
-  const { date: pkgDate, dateTo: pkgDateTo } = resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd, otherFiltersActive });
+  // Default view (day navigator untouched) is all active orders — no date bound, scoped
+  // to non-terminal statuses via excludeCompleted below (completed orders live on the
+  // History page instead). An explicit day/range pick still browses that window.
+  const { date: pkgDate, dateTo: pkgDateTo } = dateTouched
+    ? resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd })
+    : {};
 
   const pkgFilters = {
     search:    debouncedSearch || undefined,
@@ -741,6 +760,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         search:    search || undefined,
         courierId: filterCourier || undefined,
         unpriced:  filterUnpriced || undefined,
+        activeOnly: selected.size === 0,
         date:      selectedDate ? toDateKey(selectedDate) : undefined,
         dateTo:    rangeEnd ? toDateKey(rangeEnd) : undefined,
         ids:       selected.size > 0 ? [...selected] : undefined,
@@ -937,6 +957,9 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>{o.description ?? <span style={{ opacity: 0.4 }}>—</span>}</td>
         <td>
           <StatusBadge status={o.status} />
+          <div style={{ marginTop: 4 }}>
+            <OrderTypeBadge orderType={o.orderType} />
+          </div>
           {/* Delivery-courier / assignment indicator (from the Delivery page). */}
           <div className="aop-courier-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={courierName ?? t.vomUnassigned}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>

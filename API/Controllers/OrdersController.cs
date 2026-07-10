@@ -72,6 +72,7 @@ public sealed class OrdersController : BaseController
         [FromQuery] string? search    = null,
         [FromQuery] Guid?   courierId = null,
         [FromQuery] bool    unpriced  = false,
+        [FromQuery] bool    activeOnly = false,
         [FromQuery] bool?   assigned  = null,
         [FromQuery] DateTime? date    = null,
         [FromQuery] DateTime? dateTo  = null,
@@ -82,7 +83,7 @@ public sealed class OrdersController : BaseController
         // the Delivery page; then narrow to the selected ids when provided.
         var result = await Sender.Send(new GetAllOrdersQuery(
             city, district, search, courierId,
-            OrderType: null, Unpriced: unpriced, ActiveOnly: false, Postponed: false,
+            OrderType: null, Unpriced: unpriced, ActiveOnly: activeOnly, Postponed: false,
             Page: 1, PageSize: int.MaxValue, Assigned: assigned, Date: date, DateTo: dateTo,
             TenantId: null, HideCompanyRevenue: User.IsInRole("Operator")), ct);
 

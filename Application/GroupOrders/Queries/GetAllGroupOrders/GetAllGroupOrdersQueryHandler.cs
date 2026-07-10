@@ -106,6 +106,7 @@ public sealed class GetAllGroupOrdersQueryHandler
                      go.SenderLastName.ToLower().Contains(term) ||
                      go.SenderBusinessName.ToLower().Contains(term) ||
                      go.SenderPhone.Contains(term) ||
+                     (go.AlternativeSenderPhone != null && go.AlternativeSenderPhone.Contains(term)) ||
                      go.PickUpCity.ToLower().Contains(term) ||
                      go.PickUpDistrict.ToLower().Contains(term) ||
                      go.PickUpAddress.ToLower().Contains(term)))

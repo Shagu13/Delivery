@@ -8,7 +8,8 @@ export async function exportOrdersExcel(
     token: string,
     params: {
         city?: string; district?: string; search?: string; courierId?: string;
-        unpriced?: boolean; assigned?: boolean; date?: string; dateTo?: string; ids?: string[];
+        unpriced?: boolean; assigned?: boolean; activeOnly?: boolean;
+        date?: string; dateTo?: string; ids?: string[];
     },
 ): Promise<void> {
     const qs = new URLSearchParams();
@@ -18,6 +19,7 @@ export async function exportOrdersExcel(
     if (params.courierId) qs.set('courierId', params.courierId);
     if (params.unpriced)  qs.set('unpriced', 'true');
     if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
+    if (params.activeOnly) qs.set('activeOnly', 'true');
     if (params.date)      qs.set('date', params.date);
     if (params.dateTo)    qs.set('dateTo', params.dateTo);
     if (params.ids && params.ids.length) qs.set('ids', params.ids.join(','));

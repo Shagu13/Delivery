@@ -75,7 +75,7 @@ async function fetchAllOrders(
   token: string,
   params: {
     city?: string; district?: string; search?: string;
-    courierId?: string; unpriced?: boolean; assigned?: boolean;
+    courierId?: string; unpriced?: boolean; assigned?: boolean; activeOnly?: boolean;
     date?: string; dateTo?: string; page?: number; pageSize?: number;
   }
 ): Promise<PagedResult<AdminOrderItem>> {
@@ -86,6 +86,7 @@ async function fetchAllOrders(
   if (params.courierId)  qs.set('courierId', params.courierId);
   if (params.unpriced)   qs.set('unpriced',  'true');
   if (params.assigned !== undefined) qs.set('assigned', String(params.assigned));
+  if (params.activeOnly) qs.set('activeOnly', 'true');
   if (params.date)       qs.set('date',      params.date);
   if (params.dateTo)     qs.set('dateTo',    params.dateTo);
   if (params.page)       qs.set('page',      String(params.page));
@@ -97,11 +98,12 @@ async function fetchAllOrders(
   return res.json();
 }
 
-async function fetchUnpricedCount(token: string, courierId?: string, date?: string, dateTo?: string): Promise<number> {
+async function fetchUnpricedCount(token: string, courierId?: string, date?: string, dateTo?: string, activeOnly?: boolean): Promise<number> {
   const qs = new URLSearchParams({ unpriced: 'true', pageSize: '1', page: '1' });
-  if (courierId) qs.set('courierId', courierId);
-  if (date)      qs.set('date', date);
-  if (dateTo)    qs.set('dateTo', dateTo);
+  if (courierId)  qs.set('courierId', courierId);
+  if (date)       qs.set('date', date);
+  if (dateTo)     qs.set('dateTo', dateTo);
+  if (activeOnly) qs.set('activeOnly', 'true');
   const res = await fetch(`/api/orders?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -446,9 +448,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   });
   const couriers = couriersQuery.data ?? [];
 
-  // Untouched day navigator + no search → rolling last-7-days default; an explicit
-  // day/range pick or a search term reaches the whole DB.
-  const { date: pkgDate, dateTo: pkgDateTo } = resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd });
+  // Default view (day navigator untouched) is all active orders — no date bound, scoped
+  // to non-terminal statuses via activeOnly below (completed orders live on the History
+  // page instead). An explicit day/range pick still browses that window.
+  const { date: pkgDate, dateTo: pkgDateTo } = dateTouched
+    ? resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd })
+    : {};
 
   const packagesFilters = {
     city:      filterCity     || undefined,
@@ -457,6 +462,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     courierId: filterCourier?.courierId,
     unpriced:  filterUnpriced || undefined,
     assigned:  assignTab === 'assigned',
+    activeOnly: true,
   };
 
   const listQueryKey = ['admin', 'packages', 'list', packagesFilters, pkgDate, pkgDateTo, page] as const;
@@ -475,7 +481,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
 
   const unpricedQuery = useQuery({
     queryKey: ['admin', 'packages', 'unpricedCount', filterCourier?.courierId ?? null, pkgDate, pkgDateTo] as const,
-    queryFn: () => fetchUnpricedCount(token, filterCourier?.courierId, pkgDate, pkgDateTo),
+    queryFn: () => fetchUnpricedCount(token, filterCourier?.courierId, pkgDate, pkgDateTo, true),
     enabled: !!token,
   });
   const unpricedCount = unpricedQuery.data ?? null;
@@ -646,7 +652,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     }
     setSelectAllBusy(true);
     try {
-      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
+      const { date, dateTo } = dateTouched
+        ? resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd })
+        : {};
       const full = await fetchAllOrders(token, {
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
@@ -654,6 +662,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
         assigned:  assignTab === 'assigned',
+        activeOnly: true,
         date, dateTo,
         page: 1, pageSize: data.totalCount,
       });
@@ -684,7 +693,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const handleExport = async () => {
     setExporting(true);
     try {
-      const { date, dateTo } = resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd });
+      const { date, dateTo } = dateTouched
+        ? resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd })
+        : {};
       await exportOrdersExcel(token, {
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
@@ -692,6 +703,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
         assigned:  assignTab === 'assigned',
+        activeOnly: selected.size === 0,
         date,
         dateTo,
         ids:       selected.size > 0 ? [...selected] : undefined,
