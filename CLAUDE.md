@@ -150,3 +150,5 @@ Redis is used when `ConnectionStrings:Redis` is configured; falls back to in-mem
 - Return entities from queries — always map to DTOs
 - Add computed/snapshot columns to CourierSettlement (derive live instead)
 - Rewrite entire files — make surgical targeted edits only
+- Touch the local-storage / persisted query-cache setup (`client/src/queryClient.ts`, the `PersistQueryClientProvider` wiring in `App.tsx`, IndexedDB persistence) unless explicitly asked
+- Add, query, or update via a `DbContext` inside a `foreach`/`while` loop (N+1 round trips) — batch: load the needed rows in one query before the loop, and save once after

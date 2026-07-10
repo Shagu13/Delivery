@@ -368,6 +368,11 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                         <div className="courier-card__collapse-icon">↩</div>
                                         <div className="courier-card__collapse-info">
                                             <span className="courier-card__collapse-primary">{order.recipientName}</span>
+                                            {order.senderBusinessName && (
+                                                <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-accent)' }}>
+                                                    🏪 {order.senderBusinessName}
+                                                </span>
+                                            )}
                                             <span className="courier-card__collapse-secondary">
                                                 {[order.returnPickupAddress, order.returnPickupDistrict, order.returnPickupCity].filter(Boolean).join(', ')}
                                             </span>

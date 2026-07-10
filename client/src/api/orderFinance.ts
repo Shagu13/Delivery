@@ -59,6 +59,10 @@ export interface OrderFinanceLine {
     cancellationReason: string | null;
     /** Free-text comment for the "Other" cancellation reason, if any. */
     cancellationComment: string | null;
+    /** Free-text comment left when a delivery was postponed with the "Other" reason, if any. */
+    postponeComment: string | null;
+    /** The note the customer typed when placing the batch (GroupOrder.Note), if any. */
+    orderNote: string | null;
 }
 
 export interface OrderPaymentRequest {

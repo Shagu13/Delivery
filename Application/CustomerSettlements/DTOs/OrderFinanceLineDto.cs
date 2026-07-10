@@ -75,5 +75,10 @@ public sealed record OrderFinanceLineDto(
     /// failed delivery is charged. Null for normal orders.</summary>
     string?  CancellationReason,
     /// <summary>Free-text comment for the "Other" cancellation reason, if any.</summary>
-    string?  CancellationComment
+    string?  CancellationComment,
+    /// <summary>Free-text comment left when a delivery was postponed with the "Other" reason, if any.</summary>
+    string?  PostponeComment,
+    /// <summary>The note the customer typed when placing the batch (GroupOrder.Note), if any.
+    /// Null for standalone Return orders (no parent GroupOrder).</summary>
+    string?  OrderNote
 );

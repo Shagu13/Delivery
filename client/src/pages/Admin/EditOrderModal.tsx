@@ -397,6 +397,20 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                                             // (customer tier first, then district default); stays editable.
                                             if (!d) return;
                                             const resolved = resolveServicePrice(d, customerPricing);
+                                            // When the recipient pays the fee, the grand total they hand over
+                                            // (product COD + service fee) must stay constant as a wrong district
+                                            // is corrected: shift the difference between the old and new fee onto
+                                            // the COD so total = COD + fee is unchanged. (Sender-paid fees aren't
+                                            // part of the recipient's total, so the COD is left untouched.)
+                                            if (payer === 'Recipient' && resolved != null) {
+                                                const oldSvc = parseFloat(svcPrice) || 0;
+                                                const cod = parseFloat(codAmount);
+                                                if (!isNaN(cod)) {
+                                                    const adjusted = Math.max(0, +(cod - (resolved - oldSvc)).toFixed(2));
+                                                    setCodAmount(String(adjusted));
+                                                    clearErr('codAmount');
+                                                }
+                                            }
                                             setSvcPrice(resolved != null ? String(resolved) : '');
                                             clearErr('svcPrice');
                                         }}

@@ -797,6 +797,23 @@ function Stat({ label, value, accent, color }: { label: string; value: string; a
     );
 }
 
+// A single order's free-text note. Empty → an em-dash. Present → the localized word
+// "Comment", which reveals the full note as a hover/focus tooltip (read-only, not clickable).
+// Uses the native title tooltip so it can't be clipped by the table's scroll container.
+function CommentCell({ text }: { text: string | null }) {
+    const { t } = useLanguage();
+    if (!text) return <span style={{ color: 'var(--color-text-subtle)' }}>—</span>;
+    return (
+        <span
+            title={text}
+            tabIndex={0}
+            style={{ color: 'var(--color-accent)', fontWeight: 600, cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
+        >
+            {t.ofinColComment}
+        </span>
+    );
+}
+
 type Sel = Record<string, { checked: boolean; amount: string }>;
 
 interface FlowVM {
@@ -1111,13 +1128,14 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                 the COD breakdown; the Settle column carries the per-order pay controls. */}
             {expanded && (
                 <div style={{ overflowX: 'auto', borderTop: '1px solid var(--color-border)' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 940 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1040 }}>
                         <thead>
                             <tr>
                                 <th style={{ ...fhead, textAlign: 'center' }}>#</th>
                                 <th style={fhead}>{t.ofinColTracking}</th>
                                 <th style={fhead}>{t.ofinColRecipient}</th>
                                 <th style={fhead}>{t.ofinColStatus}</th>
+                                <th style={{ ...fhead, textAlign: 'center' }}>{t.ofinColComment}</th>
                                 <th style={{ ...fhead, textAlign: 'right' }}>{t.ofinColService}</th>
                                 <th style={{ ...fhead, textAlign: 'right' }}>{t.ofinColCod}</th>
                                 <th style={{ ...fhead, textAlign: 'right' }}>{t.ofinColSettle}</th>
@@ -1177,6 +1195,11 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                                 <div>{t.ofinColPlaced}: {formatGeorgianDateTime(o.createdAt)}</div>
                                                 <div>{t.ofinColDelivered}: {o.deliveredAt ? formatGeorgianDateTime(o.deliveredAt) : t.ofinNotDelivered}</div>
                                             </div>
+                                        </td>
+                                        {/* Comment — the customer's order note plus any postpone / cancellation
+                                            free-text note; hover to read the full text. */}
+                                        <td style={{ ...fcell, textAlign: 'center' }}>
+                                            <CommentCell text={[o.orderNote, o.postponeComment, o.cancellationComment].filter(Boolean).join(' · ') || null} />
                                         </td>
                                         {/* Company fee + inline edit, with who pays it. */}
                                         <td style={{ ...fcell, textAlign: 'right', whiteSpace: 'nowrap' }}>

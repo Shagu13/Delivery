@@ -156,6 +156,7 @@ public sealed class GetCourierReturnPickupsQueryHandler
         var orders = await _context.Orders
             .AsNoTracking()
             .Include(o => o.GroupOrder)
+            .Include(o => o.Customer)   // standalone Return orders own the customer directly (no GroupOrder)
             .Where(o => o.CourierId == courier.Id && o.OrderType == OrderType.Return
                      && activeStatuses.Contains(o.Status))
             .OrderByDescending(o => o.CreatedAt)
@@ -171,7 +172,9 @@ internal static class CourierOrderMapping
     public static CourierOrderDto Map(Domain.Order o) => new(
         Id:                      o.Id,
         TrackingNumber:          o.TrackingNumber,
-        SenderBusinessName:      o.GroupOrder?.SenderBusinessName,
+        // Send/Exchange carry the sender name on their GroupOrder; standalone Return orders
+        // have no GroupOrder, so fall back to the owning customer's business name.
+        SenderBusinessName:      o.GroupOrder?.SenderBusinessName ?? o.Customer?.BusinessName,
         RecipientName:           o.RecipientName,
         RecipientPhone:          o.RecipientPhone,
         RecipientCity:           o.RecipientCity,

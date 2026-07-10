@@ -407,7 +407,9 @@ internal static class OrderFinanceQueries
             SenderOwesService:            OrderFinance.SenderOwesService(o),
             IsBillableFailedDelivery:     OrderFinance.IsBillableFailedDelivery(o),
             CancellationReason:           o.CancellationReason?.ToString(),
-            CancellationComment:          o.CancellationComment
+            CancellationComment:          o.CancellationComment,
+            PostponeComment:              o.PostponeComment,
+            OrderNote:                    o.GroupOrder?.Note
         );
     }
 }

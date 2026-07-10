@@ -58,7 +58,10 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         var delivered = _context.Orders
             .AsNoTracking()
             .Where(o => ((o.Status == OrderStatus.DeliveredToRecipient
-                          || o.Status == OrderStatus.ExchangeCompleted)
+                          || o.Status == OrderStatus.ExchangeCompleted
+                          // An Exchange finalized as ReturnedToSender is still dated by its
+                          // delivery event (it has no warehouse drop-off timestamp).
+                          || (o.OrderType == OrderType.Exchange && o.Status == OrderStatus.ReturnedToSender))
                          && o.DeliveredAt >= fromDt && o.DeliveredAt < toDt)
                      || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
                           || o.Status == OrderStatus.ReturnedToSender)
@@ -109,7 +112,10 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         var deliveredUpTo = await _context.Orders
             .AsNoTracking()
             .Where(o => ((o.Status == OrderStatus.DeliveredToRecipient
-                          || o.Status == OrderStatus.ExchangeCompleted)
+                          || o.Status == OrderStatus.ExchangeCompleted
+                          // An Exchange finalized as ReturnedToSender is still dated by its
+                          // delivery event (it has no warehouse drop-off timestamp).
+                          || (o.OrderType == OrderType.Exchange && o.Status == OrderStatus.ReturnedToSender))
                          && o.DeliveredAt < toDt)
                      || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
                           || o.Status == OrderStatus.ReturnedToSender)

@@ -6,7 +6,7 @@ import {
     markReturnedToSender,
     type ReturnExchangeOrder,
 } from '../../api/returnExchange';
-import { setCourierSalary, setCompanyServicePrice } from '../../api/orders';
+import { setCourierSalary, setCompanyServicePrice, adminMarkReturnAtWarehouse } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { SalaryWarningModal } from './SalaryWarningModal';
@@ -222,11 +222,31 @@ function OrderRow({
         } finally { setCompleting(false); }
     };
 
+    const handleMarkAtWarehouse = async () => {
+        setCompleting(true); setRowError(null);
+        try {
+            await adminMarkReturnAtWarehouse(token, order.id);
+            onRefresh();
+        } catch (e) {
+            setRowError(e instanceof Error ? e.message : t.reActionFailed);
+        } finally { setCompleting(false); }
+    };
+
     const canAssign = order.orderType === 'Return' &&
         (order.status === 'Pending' || order.status === 'CourierAssignedToPickUp');
 
+    // Admin can advance a picked-up return to the warehouse (mirrors the courier's own step,
+    // for when the courier didn't record it).
+    const canMarkAtWarehouse = order.orderType === 'Return' &&
+        order.status === 'PickedUpFromRecipient';
+
     const canMarkReturned = order.orderType === 'Return' &&
         order.status === 'DeliveredReturnOrderToWarehouse';
+
+    // An Exchange has no warehouse leg; once it's delivered the admin can confirm the
+    // swapped-out item went back to the sender (its own terminal), same endpoint as returns.
+    const canMarkExchangeReturned = order.orderType === 'Exchange' &&
+        (order.status === 'DeliveredToRecipient' || order.status === 'ExchangeCompleted');
 
     const done = isCompleted(order);
 
@@ -310,7 +330,22 @@ function OrderRow({
                             </button>
                         </>
                     )}
-                    {canMarkReturned && (
+                    {canMarkAtWarehouse && (
+                        <button
+                            className="go-action-btn"
+                            onClick={handleMarkAtWarehouse}
+                            disabled={completing}
+                            style={{
+                                fontSize: '0.75rem', padding: '4px 10px',
+                                background: 'rgba(249,115,22,0.1)',
+                                color: '#f97316',
+                                border: '1px solid rgba(249,115,22,0.3)',
+                            }}
+                        >
+                            {completing ? '…' : t.reMarkAtWarehouse}
+                        </button>
+                    )}
+                    {(canMarkReturned || canMarkExchangeReturned) && (
                         <button
                             className="go-action-btn"
                             onClick={handleMarkReturned}

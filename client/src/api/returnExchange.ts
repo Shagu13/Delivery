@@ -88,6 +88,7 @@ export function getPendingReturnExchangeCount(orders: ReturnExchangeOrder[]): nu
             return o.status !== 'ReturnedToSender' && o.status !== 'CancelledByAdmin';
         }
         // Exchange
-        return o.status !== 'ExchangeCompleted' && o.status !== 'DeliveredToRecipient' && o.status !== 'CancelledByAdmin';
+        return o.status !== 'ExchangeCompleted' && o.status !== 'DeliveredToRecipient'
+            && o.status !== 'ReturnedToSender' && o.status !== 'CancelledByAdmin';
     }).length;
 }

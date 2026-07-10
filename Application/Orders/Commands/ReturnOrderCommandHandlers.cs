@@ -124,11 +124,29 @@ public sealed class MarkReturnedToSenderCommandHandler
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, ct)
             ?? throw new NotFoundException(nameof(Domain.Order), request.OrderId);
 
-        if (order.OrderType != OrderType.Return)
-            throw new ConflictException("Only Return orders can be marked ReturnedToSender via this endpoint.");
+        switch (order.OrderType)
+        {
+            case OrderType.Return:
+                // Standard Return terminal, set once the warehoused parcel is sent back.
+                order.Status      = OrderStatus.ReturnedToSender;
+                order.DeliveredAt = CustomTime.Now;
+                break;
 
-        order.Status      = OrderStatus.ReturnedToSender;
-        order.DeliveredAt = CustomTime.Now;
+            case OrderType.Exchange:
+                // An Exchange runs the Send flow to the recipient; "returned to sender" is the
+                // final milestone confirming the swapped-out item got back. Only valid once the
+                // exchange has actually been delivered. KEEP the original DeliveredAt so the
+                // courier's settlement and the finance overview still date and count the delivery
+                // (both key an Exchange off DeliveredAt, not the warehouse timestamp).
+                if (order.Status is not (OrderStatus.DeliveredToRecipient or OrderStatus.ExchangeCompleted))
+                    throw new ConflictException(
+                        $"An Exchange can be marked ReturnedToSender only after delivery. Current: {order.Status}.");
+                order.Status = OrderStatus.ReturnedToSender;
+                break;
+
+            default:
+                throw new ConflictException("Only Return or Exchange orders can be marked ReturnedToSender via this endpoint.");
+        }
 
         await _context.SaveChangesAsync(ct);
     }

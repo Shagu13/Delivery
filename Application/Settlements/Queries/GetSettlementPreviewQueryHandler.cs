@@ -34,7 +34,10 @@ public sealed class GetSettlementPreviewQueryHandler
             .AsNoTracking()
             .Where(o => o.CourierId == request.CourierId
                      && (((o.Status == OrderStatus.DeliveredToRecipient
-                           || o.Status == OrderStatus.ExchangeCompleted)
+                           || o.Status == OrderStatus.ExchangeCompleted
+                           // An Exchange finalized as ReturnedToSender is still dated by its
+                           // delivery event (it has no warehouse drop-off timestamp).
+                           || (o.OrderType == OrderType.Exchange && o.Status == OrderStatus.ReturnedToSender))
                           && o.DeliveredAt >= dayStart
                           && o.DeliveredAt <= dayEnd)
                        || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
