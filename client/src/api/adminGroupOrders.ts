@@ -121,6 +121,9 @@ export interface FetchGroupOrdersParams {
     excludeCompleted?: boolean;
     page?: number;
     pageSize?: number;
+    /** Owning customer — GroupOrder.CustomerId for batches, Order.CustomerId for standalone
+     *  orders (History page's customer filter). */
+    customerId?: string;
 }
 
 export async function fetchGroupOrders(token: string, params: FetchGroupOrdersParams = {}): Promise<PagedResult<AdminGroupOrder>> {
@@ -137,6 +140,7 @@ export async function fetchGroupOrders(token: string, params: FetchGroupOrdersPa
     if (params.excludeCompleted)              qs.set('excludeCompleted', 'true');
     if (params.page)                          qs.set('page', String(params.page));
     if (params.pageSize)                      qs.set('pageSize', String(params.pageSize));
+    if (params.customerId)                    qs.set('customerId', params.customerId);
     const qsStr = qs.toString();
     const res = await fetch(qsStr ? `${BASE}?${qsStr}` : BASE, {
         headers: { Authorization: `Bearer ${token}` },

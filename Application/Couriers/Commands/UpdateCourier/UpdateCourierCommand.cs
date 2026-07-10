@@ -14,7 +14,8 @@ public sealed record UpdateCourierCommand(
     string?  NewPassword,
     string   PhoneNumber,
     string   IdNumber,
-    /// <summary>Standard per-order salary — only allowed when the courier is assigned to Tbilisi; null clears it.</summary>
+    /// <summary>Standard per-order salary — only allowed for couriers in an eligible city
+    /// (see <see cref="Application.Couriers.CourierSalaryEligibility"/>); null clears it.</summary>
     decimal? DefaultSalary = null
 ) : IRequest;
 
@@ -65,15 +66,17 @@ public sealed class UpdateCourierCommandHandler : IRequestHandler<UpdateCourierC
         courier.PhoneNumber = request.PhoneNumber.Trim();
         courier.IdNumber    = request.IdNumber.Trim();
 
-        // Only Tbilisi couriers get a standard per-order rate (see Courier.DefaultSalary doc comment).
+        // Only couriers in an eligible city get a standard per-order rate (see
+        // Courier.DefaultSalary doc comment).
         if (request.DefaultSalary is decimal salary)
         {
             if (salary < 0)
                 throw new ValidationException(new[] {
                     new ValidationFailure("DefaultSalary", "Default salary must be a non-negative value.")
                 });
-            if (!courier.AssignedCity.Trim().Equals("Tbilisi", StringComparison.OrdinalIgnoreCase))
-                throw new ConflictException("Default salary can only be set for couriers assigned to Tbilisi.");
+            if (!Application.Couriers.CourierSalaryEligibility.IsEligible(courier.AssignedCity))
+                throw new ConflictException("Default salary can only be set for couriers assigned to " +
+                    string.Join(" or ", Application.Couriers.CourierSalaryEligibility.EligibleCities) + ".");
         }
         courier.DefaultSalary = request.DefaultSalary;
 

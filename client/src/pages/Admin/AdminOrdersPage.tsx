@@ -61,6 +61,7 @@ export interface AdminOrderItem {
   createdAt: string;
   deliveredAt: string | null;
   postponeReason: string | null;
+  postponeComment: string | null;
   // Optional extras — populated by the History view for a full order picture; the
   // Delivery list leaves them undefined, so the modal simply omits those rows.
   amountOfCashCollected?: number | null;
@@ -1093,6 +1094,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
           {order.status === 'DeliveryPostponed' && order.postponeReason && (
             <div style={{ fontSize: '0.7rem', color: '#f97316', marginTop: 2 }}>
               {t.cdPostponeReasons[order.postponeReason]}
+              {order.postponeComment && ` — ${order.postponeComment}`}
             </div>
           )}
         </td>

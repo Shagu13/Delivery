@@ -211,6 +211,7 @@ function toOrderItem(o: AdminOrder, go: AdminGroupOrder, courierName: string | n
     createdAt: o.createdAt,
     deliveredAt: o.deliveredAt,
     postponeReason: null,
+    postponeComment: null,
   };
 }
 

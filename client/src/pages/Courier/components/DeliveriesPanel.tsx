@@ -3,7 +3,6 @@ import { useLanguage } from '../../../contexts/useLanguage';
 import {
     markOrderDelivered, markOrderDeliveredPaidToSender,
     postponeOrder, retryDelivery, cancelDelivery,
-    markReturnPickedUp, markReturnDeliveredWarehouse,
 } from '../../../api/orders';
 import type { CourierOrder } from '../../../api/orders';
 import { SwipeButton } from './SwipeButton';
@@ -13,6 +12,7 @@ import { CollectConfirmModal } from './CollectConfirmModal';
 import { PostponeModal } from './PostponeModal';
 import { CancelModal } from './CancelModal';
 import { useGeoSort, distanceToAddress } from './useGeoSort';
+import { fmtAssignedAt } from './courierTime';
 
 export interface DeliveriesPanelProps {
     deliveries: CourierOrder[];
@@ -24,7 +24,7 @@ export interface DeliveriesPanelProps {
 }
 
 export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onAct }: DeliveriesPanelProps) {
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [postponingId, setPostponingId] = useState<string | null>(null);
@@ -167,30 +167,25 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                     style={{ width: 18, height: 18, marginLeft: 12, cursor: 'pointer', accentColor: 'var(--color-accent)', flexShrink: 0 }} />
                                 <button className="courier-card__collapse-row" style={{ flex: 1 }} onClick={() => toggle(order.id)} aria-expanded={isExpanded}>
                                     <div className="courier-card__collapse-icon">
-                                        {order.orderType === 'Return' ? '↩' : order.orderType === 'Exchange' ? '🔄' : order.isFragile ? '🥚' : '🚚'}
+                                        {order.orderType === 'Exchange' ? '🔄' : order.isFragile ? '🥚' : '🚚'}
                                     </div>
                                     <div className="courier-card__collapse-info">
                                         <span className="courier-card__collapse-primary">
                                             {order.senderBusinessName}
                                         </span>
                                         <span className="courier-card__collapse-secondary">
-                                            {(order.orderType === 'Return' && order.returnPickupCity
-                                                ? [order.returnPickupAddress, order.returnPickupDistrict, order.returnPickupCity]
-                                                : [order.recipientAddress, order.recipientDistrict, order.recipientCity]
-                                            ).filter(Boolean).join(', ')}
+                                            {[order.recipientAddress, order.recipientDistrict, order.recipientCity].filter(Boolean).join(', ')}
                                         </span>
                                     </div>
                                     <div className="courier-card__collapse-right">
                                         <span style={{
                                             fontSize: '0.62rem', fontWeight: 700, padding: '2px 7px', borderRadius: 100,
                                             letterSpacing: '0.03em', textTransform: 'uppercase', whiteSpace: 'nowrap',
-                                            ...(order.orderType === 'Return'
-                                                ? { background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }
-                                                : order.orderType === 'Exchange'
-                                                    ? { background: 'rgba(59,130,246,0.1)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.25)' }
-                                                    : { background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)', border: '1px solid var(--color-border)' }),
+                                            ...(order.orderType === 'Exchange'
+                                                ? { background: 'rgba(59,130,246,0.1)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.25)' }
+                                                : { background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)', border: '1px solid var(--color-border)' }),
                                         }}>
-                                            {order.orderType === 'Return' ? t.aopOrderTypeReturn : order.orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend}
+                                            {order.orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend}
                                         </span>
                                         {mustCollect && <span className="courier-card__collapse-collect">₾{total.toFixed(2)}</span>}
                                         {order.isFragile && <span className="courier-card__collapse-badge courier-card__collapse-badge--warn">{t.cdLabelFragile}</span>}
@@ -212,30 +207,20 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                                 📞 {order.recipientPhone}
                                             </a>
                                         </div>
-                                        {(() => {
-                                            const isReturnPickup = order.orderType === 'Return' && !!order.returnPickupCity;
-                                            const city     = isReturnPickup ? (order.returnPickupCity ?? '')     : order.recipientCity;
-                                            const district = isReturnPickup ? (order.returnPickupDistrict ?? '') : order.recipientDistrict;
-                                            const address  = isReturnPickup ? (order.returnPickupAddress ?? '')  : order.recipientAddress;
-                                            return (
-                                                <>
-                                                    <div className="courier-card__row">
-                                                        <span className="courier-card__label">{t.cdLabelLocation}</span>
-                                                        <span className="courier-card__value">{city}, {district},</span>
-                                                    </div>
-                                                    <div className="courier-card__row">
-                                                        <span className="courier-card__label">{t.cdLabelAddress}</span>
-                                                        <AddressMapLink
-                                                            city={city}
-                                                            district={district}
-                                                            address={address}
-                                                            lat={order.latitude}
-                                                            lon={order.longitude}
-                                                        />
-                                                    </div>
-                                                </>
-                                            );
-                                        })()}
+                                        <div className="courier-card__row">
+                                            <span className="courier-card__label">{t.cdLabelLocation}</span>
+                                            <span className="courier-card__value">{order.recipientCity}, {order.recipientDistrict},</span>
+                                        </div>
+                                        <div className="courier-card__row">
+                                            <span className="courier-card__label">{t.cdLabelAddress}</span>
+                                            <AddressMapLink
+                                                city={order.recipientCity}
+                                                district={order.recipientDistrict}
+                                                address={order.recipientAddress}
+                                                lat={order.latitude}
+                                                lon={order.longitude}
+                                            />
+                                        </div>
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelPayment}</span>
                                             <span className="courier-card__value">
@@ -273,7 +258,16 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         {order.status === 'DeliveryPostponed' && order.postponeReason && (
                                             <div className="courier-card__row">
                                                 <span className="courier-card__label">{t.cdLabelPostponed}</span>
-                                                <span className="courier-card__value" style={{ color: '#f97316' }}>{t.cdPostponeReasons[order.postponeReason]}</span>
+                                                <span className="courier-card__value" style={{ color: '#f97316' }}>
+                                                    {t.cdPostponeReasons[order.postponeReason]}
+                                                    {order.postponeComment && ` — ${order.postponeComment}`}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {order.assignedToCourierAt && (
+                                            <div className="courier-card__row">
+                                                <span className="courier-card__label">{t.cdAssignedAt}</span>
+                                                <span className="courier-card__value">{fmtAssignedAt(order.assignedToCourierAt, lang)}</span>
                                             </div>
                                         )}
                                         {order.description && <div className="courier-card__note">{order.description}</div>}
@@ -301,14 +295,6 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                             <SwipeButton label={t.cdDeliverySwipeRetry} variant="primary" disabled={isBusy}
                                                 onSwipe={() => handleAct(order.id, () => retryDelivery(token, order.id), t.cdDeliveryToastRetry)} />
                                         )}
-                                        {order.status === 'CourierAssignedToPickUp' && order.orderType === 'Return' && (
-                                            <SwipeButton label={t.cdDeliverySwipeReturnPickup} variant="primary" disabled={isBusy}
-                                                onSwipe={() => handleAct(order.id, () => markReturnPickedUp(token, order.id), t.cdDeliveryToastReturnPickup)} />
-                                        )}
-                                        {order.status === 'PickedUpFromRecipient' && order.orderType === 'Return' && (
-                                            <SwipeButton label={t.cdDeliverySwipeReturnWarehouse} variant="success" disabled={isBusy}
-                                                onSwipe={() => handleAct(order.id, () => markReturnDeliveredWarehouse(token, order.id), t.cdDeliveryToastReturnWarehouse)} />
-                                        )}
                                     </div>
                                     {collectConfirmOrderId === order.id && (
                                         <CollectConfirmModal order={order} isBusy={isBusy}
@@ -319,7 +305,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                     {postponingId === order.id && (
                                         <PostponeModal isBusy={isBusy}
                                             onCancel={() => setPostponingId(null)}
-                                            onConfirm={(reason) => { setPostponingId(null); handleAct(order.id, () => postponeOrder(token, order.id, reason), t.cdDeliveryToastPostponed); }} />
+                                            onConfirm={(reason, comment) => { setPostponingId(null); handleAct(order.id, () => postponeOrder(token, order.id, reason, comment), t.cdDeliveryToastPostponed); }} />
                                     )}
                                     {cancellingId === order.id && (
                                         <CancelModal isBusy={isBusy}

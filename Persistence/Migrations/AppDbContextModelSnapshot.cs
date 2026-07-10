@@ -555,6 +555,9 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("PickedUpFromWarehouseAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("PostponeComment")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("PostponeReason")
                         .HasColumnType("int");
 

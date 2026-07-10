@@ -18,6 +18,9 @@ const EMPTY: PendingCounts = { pendingGroupOrders: 0, returnExchange: 0 };
 let connection: signalR.HubConnection | null = null;
 let refCount = 0;
 let latestPendingCounts: PendingCounts = EMPTY;
+// Token used to (re)build the connection — remembered so onclose can rebuild it without
+// needing a subscriber to call subscribe() again.
+let lastToken: string | null = null;
 
 // event name → set of handlers, and the set of events already wired with connection.on().
 const handlers = new Map<HubEvent, Set<Handler>>();
@@ -33,6 +36,7 @@ function bindEvent(event: HubEvent) {
 }
 
 function ensureConnection(token: string) {
+    lastToken = token;
     if (connection) return;
     // No accessTokenFactory: that would append ?access_token=<jwt> to the hub URL.
     // Instead we set an HttpOnly "hubToken" cookie (scoped to /hubs) and let the
@@ -41,6 +45,20 @@ function ensureConnection(token: string) {
         .withUrl('/hubs/notifications')
         .withAutomaticReconnect()
         .build();
+
+    // withAutomaticReconnect() only retries a few times (0s/2s/10s/30s) before giving up
+    // for good and firing onclose — without this handler, a tab open across a laptop
+    // sleep / wifi blip / idle proxy timeout would silently stop receiving live pings
+    // forever (e.g. a customer's cancel never removing their order from an admin's
+    // already-open dashboard) until a full page reload. Rebuild from scratch whenever
+    // subscribers still want events; a no-op when the drop was our own intentional stop()
+    // (refCount is already 0 by then — see the unsubscribe closure below).
+    connection.onclose(() => {
+        connection = null;
+        boundEvents.clear();
+        latestPendingCounts = EMPTY;
+        if (refCount > 0 && lastToken) ensureConnection(lastToken);
+    });
 
     // (Re)wire handlers for every event that already has subscribers.
     boundEvents.clear();

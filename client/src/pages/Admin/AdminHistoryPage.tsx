@@ -8,6 +8,8 @@ import type { ReturnExchangeOrder } from '../../api/returnExchange';
 import { correctOrderStatus } from '../../api/orders';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
+import { getCustomers } from '../../api/customers';
+import type { AdminCustomer } from '../../api/customers';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { georgianToday, toDateKey, georgianDateKeyOf } from '../../utils/georgianTime';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
@@ -87,7 +89,7 @@ function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
     id: r.id,
     createdAt: r.createdAt,
     status: r.status as OrderStatus,
-    customerId: null,
+    customerId: r.customerId,
     senderFirstName: '',
     senderLastName: '',
     senderIdNumber: null,
@@ -162,6 +164,99 @@ function returnMatchesSearch(go: AdminGroupOrder, term: string): boolean {
     o.trackingNumber.toLowerCase().includes(q));
 }
 
+// A selected customer filter — id drives the server-side query, label is what's shown
+// in the (typable) input once picked.
+interface SelectedCustomer { id: string; label: string }
+
+function customerLabel(c: AdminCustomer): string {
+  return c.businessName || `${c.firstName} ${c.lastName}`.trim();
+}
+
+// Typable customer combobox: types free text, debounce-searches /api/customers, pick one
+// to filter History server-side. Local to this page — not used elsewhere.
+function CustomerTypeahead({ token, value, onChange }: {
+  token: string;
+  value: SelectedCustomer | null;
+  onChange: (v: SelectedCustomer | null) => void;
+}) {
+  const { t } = useLanguage();
+  const [query, setQuery] = useState(value?.label ?? '');
+  const [open, setOpen] = useState(false);
+  const [results, setResults] = useState<AdminCustomer[]>([]);
+  const [loading, setLoading] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { setQuery(value?.label ?? ''); }, [value]);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setLoading(true);
+      getCustomers(token, 1, 8, query.trim())
+        .then(r => setResults(r.items))
+        .catch(() => setResults([]))
+        .finally(() => setLoading(false));
+    }, 250);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, open, token]);
+
+  const select = (c: AdminCustomer) => {
+    onChange({ id: c.id, label: customerLabel(c) });
+    setOpen(false);
+  };
+
+  const clear = () => { onChange(null); setQuery(''); };
+
+  return (
+    <div className="hist-cust" ref={rootRef}>
+      <div className="hist-cust__box">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="5.5" r="2.8" stroke="currentColor" strokeWidth="1.4"/>
+          <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+        <input
+          type="text"
+          className="hist-cust__input"
+          placeholder={t.histCustomerFilterPh}
+          value={query}
+          autoComplete="off"
+          onFocus={() => setOpen(true)}
+          onChange={e => { setQuery(e.target.value); setOpen(true); if (value) onChange(null); }}
+        />
+        {value && (
+          <button type="button" className="hist-cust__clear" onClick={clear} aria-label="Clear">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="hist-cust__dropdown">
+          {loading && <div className="hist-cust__empty">…</div>}
+          {!loading && results.length === 0 && <div className="hist-cust__empty">{t.histCustomerFilterNoMatch}</div>}
+          {!loading && results.map(c => (
+            <button key={c.id} type="button" className="hist-cust__item" onClick={() => select(c)}>
+              <span className="hist-cust__item-name">{customerLabel(c)}</span>
+              <span className="hist-cust__item-sub">{c.phoneNumber}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function AdminHistoryPage({ token, canSeeRevenue = true }: { token: string; canSeeRevenue?: boolean }) {
@@ -175,6 +270,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   const [loading,       setLoading]      = useState(true);
   const [error,         setError]        = useState<string | null>(null);
   const [search,        setSearch]       = useState('');
+  const [customer,      setCustomer]     = useState<SelectedCustomer | null>(null);
   const [filterStatus,  setFilterStatus] = useState<HistoryFilter>('delivered');
   // Date navigator — filters by completion date (delivery date, or created date when
   // cancelled). `rangeFrom` is the single day / range start (defaults to today);
@@ -186,7 +282,9 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
 
   const load = useCallback(async (term: string) => {
     try {
-      const { items } = await fetchGroupOrders(token, { search: term || undefined, pageSize: 1000 });
+      const { items } = await fetchGroupOrders(token, {
+        search: term || undefined, pageSize: 1000, customerId: customer?.id,
+      });
       setGroupOrders(items);
       setError(null);
     } catch (e: unknown) {
@@ -194,7 +292,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, customer]);
 
   useEffect(() => {
     void (async () => { setLoading(true); await load(''); })();
@@ -262,6 +360,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
     createdAt: o.createdAt,
     deliveredAt: o.deliveredAt,
     postponeReason: null,
+    postponeComment: null,
     amountOfCashCollected: o.amountOfCashCollected,
     cancellationReason: o.cancellationReason ?? null,
     cancellationComment: o.cancellationComment ?? null,
@@ -273,7 +372,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
       void (async () => { setLoading(true); await load(search); })();
     }, 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search, load]);
+  }, [search, customer, load]);
 
   // ── Date navigator ────────────────────────────────────────────────────────
   // null `rangeFrom` = All days; otherwise an inclusive [fromKey..toKey] window.
@@ -289,7 +388,11 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   // already search-filtered server-side; the wrapped returns are filtered here.
   const flatOrders = useMemo<FlatHistoryOrder[]>(() => {
     const result: FlatHistoryOrder[] = [];
-    const all = [...groupOrders, ...returnOrders.filter(go => returnMatchesSearch(go, search))];
+    const all = [
+      ...groupOrders,
+      ...returnOrders.filter(go =>
+        returnMatchesSearch(go, search) && (!customer || go.customerId === customer.id)),
+    ];
     for (const go of all) {
       for (const o of go.orders) {
         const category = orderCategory(o);
@@ -305,7 +408,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
       }
     }
     return result;
-  }, [groupOrders, returnOrders, search]);
+  }, [groupOrders, returnOrders, search, customer]);
 
   // Narrow to the selected completion day / range.
   const dayOrders = useMemo(
@@ -417,6 +520,18 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
         .hist-fix-btn:hover:not(:disabled) { background: var(--color-bg-3); color: var(--color-text); border-color: var(--color-text-subtle); }
         .hist-fix-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .hist-fix-btn--confirm { background: var(--color-accent-dim); color: var(--color-accent); border-color: rgba(196,127,23,0.4); }
+        .hist-cust { position: relative; width: 240px; flex-shrink: 0; }
+        .hist-cust__box { display: flex; align-items: center; gap: 6px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 0 10px; color: var(--color-text-subtle); }
+        .hist-cust__input { flex: 1; border: none; background: none; outline: none; padding: 7px 0; font-size: 0.82rem; color: var(--color-text); font-family: inherit; }
+        .hist-cust__clear { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: var(--color-text-subtle); padding: 2px; }
+        .hist-cust__clear:hover { color: var(--color-text); }
+        .hist-cust__dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5; background: var(--color-bg-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-height: 260px; overflow-y: auto; }
+        .hist-cust__item { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--color-border); padding: 8px 10px; cursor: pointer; font-family: inherit; }
+        .hist-cust__item:last-child { border-bottom: none; }
+        .hist-cust__item:hover { background: var(--color-bg-3); }
+        .hist-cust__item-name { font-size: 0.82rem; font-weight: 600; color: var(--color-text); }
+        .hist-cust__item-sub { font-size: 0.72rem; color: var(--color-text-subtle); }
+        .hist-cust__empty { padding: 10px; font-size: 0.78rem; color: var(--color-text-subtle); text-align: center; }
       `}</style>
 
       {/* Date navigator — All ↔ single day ↔ custom inclusive from→to range.
@@ -450,6 +565,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
             </button>
           )}
         </div>
+        <CustomerTypeahead token={token} value={customer} onChange={setCustomer} />
         {!loading && !error && (
           <span className="go-count" style={{ marginLeft: 'auto' }}>
             {resultCount} {t.goOrdersMatched}

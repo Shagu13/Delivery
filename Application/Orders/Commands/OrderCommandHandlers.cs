@@ -88,6 +88,7 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         order.Status = OrderStatus.CourierAssignedToDeliver;
         // Clear stale postpone info — the order is active again under a (possibly new) courier.
         order.PostponeReason = null;
+        order.PostponeComment = null;
         order.PostponedAt = null;
 
         // Auto-fill this courier's standard rate (Tbilisi couriers only — see
@@ -221,6 +222,7 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
             order.Status = OrderStatus.CourierAssignedToDeliver;
             // Clear stale postpone info — the order is active again under a (possibly new) courier.
             order.PostponeReason = null;
+            order.PostponeComment = null;
             order.PostponedAt = null;
 
             // Auto-fill this courier's standard rate — mirrors AssignCourierToOrderCommandHandler.
@@ -351,6 +353,7 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
 
         order.DeliveredAt = CustomTime.Now;
         order.PostponeReason = null;
+        order.PostponeComment = null;
         await _context.SaveChangesAsync(cancellationToken);
 
 
@@ -410,6 +413,7 @@ public sealed class MarkOrderDeliveredPaidToSenderCommandHandler
 
         order.DeliveredAt    = CustomTime.Now;
         order.PostponeReason = null;
+        order.PostponeComment = null;
         await _context.SaveChangesAsync(cancellationToken);
 
 
@@ -435,6 +439,9 @@ public sealed class PostponeOrderCommandHandler : IRequestHandler<PostponeOrderC
 
         order.Status = OrderStatus.DeliveryPostponed;
         order.PostponeReason = request.Reason;
+        order.PostponeComment = request.Reason == PostponeReason.Other
+            ? (string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim())
+            : null;
         order.PostponedAt = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -460,6 +467,9 @@ public sealed class AdminPostponeOrderCommandHandler : IRequestHandler<AdminPost
 
         order.Status         = OrderStatus.DeliveryPostponed;
         order.PostponeReason = request.Reason;
+        order.PostponeComment = request.Reason == PostponeReason.Other
+            ? (string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim())
+            : null;
         order.PostponedAt    = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -481,6 +491,7 @@ public sealed class RetryDeliveryCommandHandler : IRequestHandler<RetryDeliveryC
 
         order.Status = OrderStatus.CourierAssignedToDeliver;
         order.PostponeReason = null;
+        order.PostponeComment = null;
         order.PostponedAt = null;
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -516,6 +527,7 @@ public sealed class CancelOrderByCourierCommandHandler : IRequestHandler<CancelO
         order.CancelledAt         = CustomTime.Now;
         // Clear any postpone state — this is now terminal.
         order.PostponeReason      = null;
+        order.PostponeComment     = null;
         order.PostponedAt         = null;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -638,6 +650,7 @@ public sealed class MarkSendReturnedToSenderCommandHandler : IRequestHandler<Mar
         order.CancellationReason ??= CancellationReason.Other;
         // Clear any postpone state — this is now terminal.
         order.PostponeReason = null;
+        order.PostponeComment = null;
         order.PostponedAt    = null;
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -708,6 +721,7 @@ public sealed class AdminCorrectOrderStatusCommandHandler : IRequestHandler<Admi
 
         // Common: clear any postpone state and return to the assigned-to-deliver step.
         order.PostponeReason = null;
+        order.PostponeComment = null;
         order.PostponedAt    = null;
         order.Status         = OrderStatus.CourierAssignedToDeliver;
 
@@ -1038,6 +1052,7 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
 
         order.DeliveredAt    = CustomTime.Now;
         order.PostponeReason = null;
+        order.PostponeComment = null;
         await _context.SaveChangesAsync(cancellationToken);
 
 

@@ -4,10 +4,13 @@ import {
     markPickedUp, markDeliveredToWarehouse,
 } from '../../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../../api/adminGroupOrders';
+import { markReturnPickedUp, markReturnDeliveredWarehouse } from '../../../api/orders';
+import type { CourierOrder } from '../../../api/orders';
 import { SwipeButton } from './SwipeButton';
 import { AddressMapLink } from './AddressMapLink';
 import { useGeoSort, distanceToAddress } from './useGeoSort';
 import { RouteToolbar } from './RouteToolbar';
+import { fmtAssignedAt } from './courierTime';
 
 export interface PickupsPanelProps {
     pickups: AdminGroupOrder[];
@@ -18,10 +21,13 @@ export interface PickupsPanelProps {
     token: string;
     onAct: (id: string, fn: () => Promise<void>, msg: string) => Promise<void>;
     onBulkAct: (ids: string[], fn: (id: string) => Promise<void>, msg: string) => Promise<void>;
+    /** Standalone Return orders assigned to this courier in pickup-phase statuses — the
+     *  courier collects the parcel from the recipient's location, not a sender batch. */
+    returnPickups: CourierOrder[];
 }
 
-export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct, onBulkAct }: PickupsPanelProps) {
-    const { t } = useLanguage();
+export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token, onAct, onBulkAct, returnPickups }: PickupsPanelProps) {
+    const { t, lang } = useLanguage();
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkBusy, setBulkBusy] = useState(false);
@@ -65,6 +71,32 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     );
     const { sortMode, setSortMode, locState, coords, geocodeCache, geocoding, retryLocation, refreshLocation } = useGeoSort(addresses);
 
+    // Same free-text search, scoped to the standalone Return-pickup cards (recipient is the
+    // pickup contact for these — there's no sender batch involved).
+    const returnFiltered = useMemo(() => {
+        if (!q) return returnPickups;
+        return returnPickups.filter(o => {
+            const hay: (string | null | undefined)[] = [
+                o.recipientName, o.recipientPhone, o.trackingNumber,
+                o.returnPickupAddress, o.returnPickupCity, o.returnPickupDistrict,
+            ];
+            return hay.some(v => (v ?? '').toString().toLowerCase().includes(q));
+        });
+    }, [returnPickups, q]);
+
+    // Mirrors DeliveriesPanel's collect-on-delivery logic — informational only here (the
+    // pickup swipe never triggers a collect-confirm step, that only happens at last-mile).
+    const needsCollect = (o: CourierOrder) => {
+        const codDue = o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null && o.amountToCollectForPackage > 0;
+        const feeDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
+        return codDue || feeDue;
+    };
+    const collectTotal = (o: CourierOrder) => {
+        const cod = o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null ? o.amountToCollectForPackage : 0;
+        const fee = o.whoPaysForCompanyService === 'Recipient' ? o.companyServicePrice : 0;
+        return cod + fee;
+    };
+
     const toggle = (id: string) =>
         setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
     const toggleSelect = (id: string) =>
@@ -72,7 +104,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
 
     if (loading) return <div className="dashboard__loader">{t.cdPickupsLoading}</div>;
     if (error)   return <div className="dashboard__error">{error} <button onClick={onRefresh}>{t.cdRetry}</button></div>;
-    if (!pickups.length) return <div className="dashboard__empty">{t.cdPickupsEmpty}</div>;
+    if (!pickups.length && !returnPickups.length) return <div className="dashboard__empty">{t.cdPickupsEmpty}</div>;
 
     const distanceTo = (go: AdminGroupOrder) => {
         if (!coords) return Infinity;
@@ -315,6 +347,92 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                     );
                 })}
             </div>
+
+            {/* Standalone Return orders: the courier collects the parcel from the recipient's
+                location rather than a sender's — same kind of job, kept as its own section since
+                the card shape (single order, no package count/batch fields) differs from a batch pickup. */}
+            {returnFiltered.length > 0 && (
+                <>
+                    <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-text-muted)', padding: '14px 4px 6px' }}>
+                        {t.cdReturnPickupsTitle(returnFiltered.length)}
+                    </div>
+                    <div className="courier-cards">
+                        {returnFiltered.map(order => {
+                            const isExpanded = expandedIds.has(order.id);
+                            const isBusy = busyId === order.id;
+                            const mustCollect = needsCollect(order);
+                            const total = collectTotal(order);
+                            return (
+                                <div key={order.id} className="courier-card">
+                                    <button className="courier-card__collapse-row" onClick={() => toggle(order.id)} aria-expanded={isExpanded}>
+                                        <div className="courier-card__collapse-icon">↩</div>
+                                        <div className="courier-card__collapse-info">
+                                            <span className="courier-card__collapse-primary">{order.recipientName}</span>
+                                            <span className="courier-card__collapse-secondary">
+                                                {[order.returnPickupAddress, order.returnPickupDistrict, order.returnPickupCity].filter(Boolean).join(', ')}
+                                            </span>
+                                        </div>
+                                        <div className="courier-card__collapse-right">
+                                            {mustCollect && <span className="courier-card__collapse-collect">₾{total.toFixed(2)}</span>}
+                                            <span className="courier-card__collapse-chevron" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
+                                        </div>
+                                    </button>
+                                    {isExpanded && (
+                                        <>
+                                            <div className="courier-card__body">
+                                                <div className="courier-card__row">
+                                                    <span className="courier-card__label">{t.cdLabelPhone}</span>
+                                                    <a href={`tel:${order.recipientPhone}`} className="courier-card__phone-link">
+                                                        📞 {order.recipientPhone}
+                                                    </a>
+                                                </div>
+                                                <div className="courier-card__row">
+                                                    <span className="courier-card__label">{t.cdLabelLocation}</span>
+                                                    <span className="courier-card__value">{order.returnPickupCity}, {order.returnPickupDistrict},</span>
+                                                </div>
+                                                <div className="courier-card__row">
+                                                    <span className="courier-card__label">{t.cdLabelAddress}</span>
+                                                    <AddressMapLink
+                                                        city={order.returnPickupCity ?? ''}
+                                                        district={order.returnPickupDistrict ?? ''}
+                                                        address={order.returnPickupAddress ?? ''}
+                                                        lat={order.latitude}
+                                                        lon={order.longitude}
+                                                    />
+                                                </div>
+                                                {mustCollect && (
+                                                    <div className="courier-card__row">
+                                                        <span className="courier-card__label">{t.cdLabelCollect}</span>
+                                                        <span className="courier-card__value" style={{ color: '#dc2626', fontWeight: 700 }}>₾{total.toFixed(2)}</span>
+                                                    </div>
+                                                )}
+                                                {order.assignedToCourierAt && (
+                                                    <div className="courier-card__row">
+                                                        <span className="courier-card__label">{t.cdAssignedAt}</span>
+                                                        <span className="courier-card__value">{fmtAssignedAt(order.assignedToCourierAt, lang)}</span>
+                                                    </div>
+                                                )}
+                                                {order.description && <div className="courier-card__note">{order.description}</div>}
+                                            </div>
+                                            <div className="courier-card__footer">
+                                                {order.status === 'CourierAssignedToPickUp' && (
+                                                    <SwipeButton label={t.cdDeliverySwipeReturnPickup} variant="primary" disabled={isBusy}
+                                                        onSwipe={() => onAct(order.id, () => markReturnPickedUp(token, order.id), t.cdDeliveryToastReturnPickup)} />
+                                                )}
+                                                {order.status === 'PickedUpFromRecipient' && (
+                                                    <SwipeButton label={t.cdDeliverySwipeReturnWarehouse} variant="success" disabled={isBusy}
+                                                        onSwipe={() => onAct(order.id, () => markReturnDeliveredWarehouse(token, order.id), t.cdDeliveryToastReturnWarehouse)} />
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
+
             <RouteToolbar
                 stops={sortedPickups.filter(go => selectedIds.has(go.id)).map(go => ({ city: go.pickUpCity, district: go.pickUpDistrict, address: go.pickUpAddress }))}
                 onClear={() => setSelectedIds(new Set())}

@@ -164,6 +164,18 @@ export function ViewOrderModal({ order, open, onClose, showFinancials = true, sh
                         </Section>
                     )}
 
+                    {(order.postponeReason || order.postponeComment) && (
+                        <Section title={t.vomSecPostpone}>
+                            {order.postponeReason && (
+                                <Row label={t.vomLblPostponeReason}
+                                     value={(t.cdPostponeReasons as Record<string, string>)[order.postponeReason] ?? order.postponeReason} />
+                            )}
+                            {order.postponeComment && (
+                                <Row label={t.vomLblPostponeComment} value={order.postponeComment} />
+                            )}
+                        </Section>
+                    )}
+
                 </div>
 
                 {/* Footer */}

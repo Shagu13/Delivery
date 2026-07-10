@@ -4,6 +4,7 @@ import type { CreateCourierResponse } from '../../api/couriers';
 import { FormField } from '../../components/ui/FormField';
 import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
+import { isDefaultSalaryEligibleCity } from '../../hooks/useEditCourier';
 import { firstPasswordError } from '../../utils/passwordRules';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -24,9 +25,6 @@ interface FormData {
 type FieldErrors = Partial<Record<keyof FormData, string>>;
 
 const EMPTY: FormData = { firstName: '', lastName: '', idNumber: '', phoneNumber: '', assignedCity: '', assignedDistrict: '', username: '', password: '', defaultSalary: '' };
-
-// Only Tbilisi couriers get a standard per-order rate — see Courier.DefaultSalary doc comment.
-const isTbilisi = (city: string) => city.trim().toLowerCase() === 'tbilisi';
 
 // Translates backend validation errors into friendly, localized field messages.
 // The API returns two kinds of keys: FluentValidation property names ("Dto.Username")
@@ -95,8 +93,8 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
     setForm(prev => ({
       ...prev,
       [field]: value,
-      // Leaving Tbilisi drops any entered default salary — it's not applicable elsewhere.
-      ...(field === 'assignedCity' && !isTbilisi(value) ? { defaultSalary: '' } : {}),
+      // Leaving an eligible city drops any entered default salary — it's not applicable elsewhere.
+      ...(field === 'assignedCity' && !isDefaultSalaryEligibleCity(value) ? { defaultSalary: '' } : {}),
     }));
     setErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
   }, []);
@@ -111,7 +109,7 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
     if (!form.assignedDistrict.trim()) e.assignedDistrict = t.errDistrictRequired;
     if (!form.username.trim())        e.username        = t.errUsernameRequired;
     else if (!/^[a-zA-Z0-9_.-]+$/.test(form.username)) e.username = t.errUsernameChars;
-    if (isTbilisi(form.assignedCity) && form.defaultSalary.trim() !== '') {
+    if (isDefaultSalaryEligibleCity(form.assignedCity) && form.defaultSalary.trim() !== '') {
       const v = parseFloat(form.defaultSalary);
       if (isNaN(v) || v < 0) e.defaultSalary = t.errDefaultSalaryInvalid;
     }
@@ -138,7 +136,7 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
         idNumber: form.idNumber.trim(), phoneNumber: form.phoneNumber.trim(),
         assignedCity: form.assignedCity.trim(), assignedDistrict: form.assignedDistrict.trim(),
         username: form.username.trim(), password: form.password,
-        defaultSalary: isTbilisi(form.assignedCity) && form.defaultSalary.trim() !== ''
+        defaultSalary: isDefaultSalaryEligibleCity(form.assignedCity) && form.defaultSalary.trim() !== ''
           ? parseFloat(form.defaultSalary) : null,
       }, token);
       onCreated(result);
@@ -211,7 +209,7 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
               cityError={errors.assignedCity}
               districtError={errors.assignedDistrict}
             />
-            {isTbilisi(form.assignedCity) && (
+            {isDefaultSalaryEligibleCity(form.assignedCity) && (
               <div>
                 <FormField
                   label={t.courierDefaultSalary}

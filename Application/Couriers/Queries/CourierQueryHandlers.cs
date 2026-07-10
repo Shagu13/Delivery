@@ -107,16 +107,14 @@ public sealed class GetCourierOrdersQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CourierUserId, cancellationToken)
             ?? throw new NotFoundException("Courier", request.CourierUserId);
 
-        // Active last-mile statuses shown on the courier dashboard
-        // Includes Return order pickup flow statuses
+        // Active last-mile statuses shown on the courier's Deliveries tab. Return orders'
+        // pickup-phase statuses live on the Pickups tab instead (GetCourierReturnPickupsQuery)
+        // even though they're the same Order entity — see that handler.
         var activeStatuses = new[]
         {
             OrderStatus.CourierAssignedToDeliver,
             OrderStatus.CourierDeliveringTheOrderToRecipient,
             OrderStatus.DeliveryPostponed,
-            // Return order courier flow
-            OrderStatus.CourierAssignedToPickUp,
-            OrderStatus.PickedUpFromRecipient,
         };
 
         var orders = await _context.Orders
@@ -126,35 +124,80 @@ public sealed class GetCourierOrdersQueryHandler
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        return orders.Select(o => new CourierOrderDto(
-            Id:                      o.Id,
-            TrackingNumber:          o.TrackingNumber,
-            SenderBusinessName:      o.GroupOrder?.SenderBusinessName,
-            RecipientName:           o.RecipientName,
-            RecipientPhone:          o.RecipientPhone,
-            RecipientCity:           o.RecipientCity,
-            RecipientDistrict:       o.RecipientDistrict,
-            RecipientAddress:        o.RecipientAddress,
-            Latitude:                o.Latitude,
-            Longitude:               o.Longitude,
-            Description:             o.Description,
-            IsFragile:               o.IsFragile,
-            OrderType:               o.OrderType,
-            ReturnPickupAddress:     o.ReturnPickupAddress,
-            ReturnPickupCity:        o.ReturnPickupCity,
-            ReturnPickupDistrict:    o.ReturnPickupDistrict,
-            Status:                  o.Status,
-            ProductPaymentStatus:    o.ProductPaymentStatus,
-            WhoPaysForCompanyService: o.WhoPaysForCompanyService,
-            AmountToCollectForPackage: o.AmountToCollectForPackage,
-            CompanyServicePrice:     o.CompanyServicePrice,
-            CreatedAt:               o.CreatedAt,
-            PickedUpFromWarehouseAt: o.PickedUpFromWarehouseAt,
-            DeliveredAt:             o.DeliveredAt,
-            DeliveryDateFrom:        o.DeliveryDateFrom,
-            DeliveryDateTo:          o.DeliveryDateTo,
-            PostponeReason:          o.PostponeReason,
-            PostponedAt:             o.PostponedAt
-        )).ToList();
+        return orders.Select(CourierOrderMapping.Map).ToList();
     }
+}
+
+// ── GetCourierReturnPickups ───────────────────────────────────────────────────
+// Standalone Return orders assigned to this courier, in pickup-phase statuses. Surfaced
+// on the Pickups tab (not Deliveries) — the courier's job here is to go collect the parcel
+// from the recipient's location (Order.ReturnPickup*), the same kind of job as a sender
+// batch pickup, not a last-mile delivery.
+public sealed class GetCourierReturnPickupsQueryHandler
+    : IRequestHandler<GetCourierReturnPickupsQuery, IReadOnlyList<CourierOrderDto>>
+{
+    private readonly IAppDbContext _context;
+    public GetCourierReturnPickupsQueryHandler(IAppDbContext context) => _context = context;
+
+    public async Task<IReadOnlyList<CourierOrderDto>> Handle(
+        GetCourierReturnPickupsQuery request, CancellationToken cancellationToken)
+    {
+        var courier = await _context.Couriers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CourierUserId, cancellationToken)
+            ?? throw new NotFoundException("Courier", request.CourierUserId);
+
+        var activeStatuses = new[]
+        {
+            OrderStatus.CourierAssignedToPickUp,
+            OrderStatus.PickedUpFromRecipient,
+        };
+
+        var orders = await _context.Orders
+            .AsNoTracking()
+            .Include(o => o.GroupOrder)
+            .Where(o => o.CourierId == courier.Id && o.OrderType == OrderType.Return
+                     && activeStatuses.Contains(o.Status))
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return orders.Select(CourierOrderMapping.Map).ToList();
+    }
+}
+
+// ── Shared mapping ────────────────────────────────────────────────────────────
+internal static class CourierOrderMapping
+{
+    public static CourierOrderDto Map(Domain.Order o) => new(
+        Id:                      o.Id,
+        TrackingNumber:          o.TrackingNumber,
+        SenderBusinessName:      o.GroupOrder?.SenderBusinessName,
+        RecipientName:           o.RecipientName,
+        RecipientPhone:          o.RecipientPhone,
+        RecipientCity:           o.RecipientCity,
+        RecipientDistrict:       o.RecipientDistrict,
+        RecipientAddress:        o.RecipientAddress,
+        Latitude:                o.Latitude,
+        Longitude:               o.Longitude,
+        Description:             o.Description,
+        IsFragile:               o.IsFragile,
+        OrderType:               o.OrderType,
+        ReturnPickupAddress:     o.ReturnPickupAddress,
+        ReturnPickupCity:        o.ReturnPickupCity,
+        ReturnPickupDistrict:    o.ReturnPickupDistrict,
+        Status:                  o.Status,
+        ProductPaymentStatus:    o.ProductPaymentStatus,
+        WhoPaysForCompanyService: o.WhoPaysForCompanyService,
+        AmountToCollectForPackage: o.AmountToCollectForPackage,
+        CompanyServicePrice:     o.CompanyServicePrice,
+        CreatedAt:               o.CreatedAt,
+        AssignedToCourierAt:     o.AssignedToCourierAt,
+        PickedUpFromWarehouseAt: o.PickedUpFromWarehouseAt,
+        DeliveredAt:             o.DeliveredAt,
+        DeliveryDateFrom:        o.DeliveryDateFrom,
+        DeliveryDateTo:          o.DeliveryDateTo,
+        PostponeReason:          o.PostponeReason,
+        PostponeComment:         o.PostponeComment,
+        PostponedAt:             o.PostponedAt
+    );
 }

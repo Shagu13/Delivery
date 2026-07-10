@@ -58,6 +58,7 @@ export function OrderRowActionsMenu({
   const [cancelReason, setCancelReason] = useState<CancellationReason | null>(null);
   const [cancelComment, setCancelComment] = useState('');
   const [postponeReason, setPostponeReason] = useState<PostponeReason | null>(null);
+  const [postponeComment, setPostponeComment] = useState('');
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -142,7 +143,8 @@ export function OrderRowActionsMenu({
   };
   const postpone = () => {
     if (!postponeReason) return;
-    void run(() => adminPostponeOrder(token, order.id, postponeReason));
+    void run(() => adminPostponeOrder(token, order.id, postponeReason,
+      postponeReason === 'Other' ? postponeComment.trim() : undefined));
   };
 
   const showAssign  = canManage && canAssign;
@@ -158,6 +160,7 @@ export function OrderRowActionsMenu({
   // Admin postpone: once a courier is assigned (and while in-flight), mirroring the courier action.
   const showPostpone = canManage && !isReturn
     && (order.status === 'CourierAssignedToDeliver' || order.status === 'CourierDeliveringTheOrderToRecipient');
+  const canConfirmPostpone = postponeReason !== null && (postponeReason !== 'Other' || postponeComment.trim().length > 0);
 
   return (
     <>
@@ -201,7 +204,7 @@ export function OrderRowActionsMenu({
                 </button>
               )}
               {showPostpone && (
-                <button className="orm-item" onClick={() => { setPostponeReason(null); setPanel('postpone'); }}>
+                <button className="orm-item" onClick={() => { setPostponeReason(null); setPostponeComment(''); setPanel('postpone'); }}>
                   {t.cdDeliveryBtnPostpone} <span className="orm-chev">›</span>
                 </button>
               )}
@@ -303,7 +306,14 @@ export function OrderRowActionsMenu({
                   </button>
                 ))}
               </div>
-              <button className="orm-confirm" disabled={busy || postponeReason === null} onClick={postpone}>
+              {postponeReason === 'Other' && (
+                <div className="orm-field">
+                  <input type="text" autoFocus placeholder={t.cdPostponeCommentPlaceholder} value={postponeComment}
+                    maxLength={500} onChange={e => setPostponeComment(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && canConfirmPostpone) postpone(); }} />
+                </div>
+              )}
+              <button className="orm-confirm" disabled={busy || !canConfirmPostpone} onClick={postpone}>
                 {busy ? t.aopSaving : t.goConfirm}
               </button>
             </div>

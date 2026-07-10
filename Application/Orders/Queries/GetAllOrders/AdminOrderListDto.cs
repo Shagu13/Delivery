@@ -49,5 +49,7 @@ public sealed record AdminOrderListDto(
     DateTime CreatedAt,
     DateTime? DeliveredAt,
     // Reason a delivery attempt failed (only set when Status == DeliveryPostponed)
-    string?  PostponeReason
+    string?  PostponeReason,
+    /// <summary>Free-text note captured when PostponeReason is "Other". Null otherwise.</summary>
+    string?  PostponeComment
 );

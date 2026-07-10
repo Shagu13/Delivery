@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useEditCourier, isTbilisiCourier } from '../../hooks/useEditCourier';
+import { useEditCourier, isDefaultSalaryEligibleCourier } from '../../hooks/useEditCourier';
 import type { Courier } from '../../api/couriers';
 
 interface Props {
@@ -48,6 +48,8 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                     transform: 'translate(-50%, -50%)',
                     zIndex: 101,
                     width: 'min(460px, calc(100vw - 32px))',
+                    maxHeight: 'calc(100dvh - 32px)',
+                    display: 'flex', flexDirection: 'column',
                     background: 'var(--color-bg-2)',
                     border: '1px solid var(--color-border)',
                     borderRadius: 'var(--radius-lg)',
@@ -62,6 +64,7 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                     padding: '20px 24px 16px',
                     borderBottom: '1px solid var(--color-border)',
                     background: 'var(--color-bg-2)',
+                    flexShrink: 0,
                 }}>
                     <div>
                         <p style={{
@@ -97,7 +100,7 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                 </div>
 
                 {/* Body */}
-                <form onSubmit={handleSubmit} noValidate style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <form onSubmit={handleSubmit} noValidate style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', minHeight: 0 }}>
 
                     {/* Courier name hint */}
                     <div style={{
@@ -216,8 +219,8 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                         )}
                     </div>
 
-                    {/* Default Salary — Tbilisi couriers only */}
-                    {isTbilisiCourier(courier) && (
+                    {/* Default Salary — eligible-city couriers only (Tbilisi, Rustavi) */}
+                    {isDefaultSalaryEligibleCourier(courier) && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                             <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>
                                 Default Salary

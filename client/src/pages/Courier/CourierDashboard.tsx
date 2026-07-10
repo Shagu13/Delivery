@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/useLanguage';
 import { fetchMyPickups } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder } from '../../api/adminGroupOrders';
-import { fetchMyDeliveries } from '../../api/orders';
+import { fetchMyDeliveries, fetchMyReturnPickups } from '../../api/orders';
 import type { CourierOrder } from '../../api/orders';
 import '../../styles/dashboard.css';
 import { PickupsPanel } from './components/PickupsPanel';
@@ -76,6 +76,7 @@ export function CourierDashboard() {
     const [deliveries, setDeliveries] = useState<CourierOrder[]>([]);
     const [deliveriesLoading, setDeliveriesLoading] = useState(false);
     const [deliveriesError, setDeliveriesError] = useState<string | null>(null);
+    const [returnPickups, setReturnPickups] = useState<CourierOrder[]>([]);
     const [busyId, setBusyId] = useState<string | null>(null);
     const [toast, setToast] = useState<string | null>(null);
 
@@ -90,10 +91,12 @@ export function CourierDashboard() {
     const [newOrders, setNewOrders] = useState<NewOrderAlertItem[]>([]);
     const seenPickupIdsRef = useRef<Set<string> | null>(null);
     const seenDeliveryIdsRef = useRef<Set<string> | null>(null);
+    const seenReturnPickupIdsRef = useRef<Set<string> | null>(null);
     const courierPosRef = useRef<{ lat: number; lng: number } | null>(null);
     // Persisted-baseline keys, scoped per courier so reopen surfaces orders assigned while closed.
     const seenKeyPickup = `courier_seen_pickup_v1_${user?.username ?? 'anon'}`;
     const seenKeyDeliv  = `courier_seen_delivery_v1_${user?.username ?? 'anon'}`;
+    const seenKeyReturnPickup = `courier_seen_return_pickup_v1_${user?.username ?? 'anon'}`;
 
     const fireAlert = useCallback((items: NewOrderAlertItem[]) => {
         if (items.length === 0) return;
@@ -158,6 +161,29 @@ export function CourierDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fireAlert]);
 
+    // Return-pickup jobs surface on the Pickups tab, so a freshly-assigned one fires the
+    // same 'pickup' kind of alert (the recipient's location is the address to visit).
+    const detectNewReturnPickups = useCallback((data: CourierOrder[]) => {
+        const ids = new Set(data.map(o => o.id));
+        const baseline = seenReturnPickupIdsRef.current ?? loadSeenIds(seenKeyReturnPickup);
+        const added = baseline ? data.filter(o => !baseline.has(o.id)) : [];
+        seenReturnPickupIdsRef.current = ids;
+        saveSeenIds(seenKeyReturnPickup, ids);
+        if (added.length === 0) return;
+        fireAlert(added.map(o => ({
+            id: o.id, kind: 'pickup' as const,
+            store: o.recipientName,
+            address: o.returnPickupAddress ?? o.recipientAddress,
+            city: o.returnPickupCity ?? o.recipientCity,
+            district: o.returnPickupDistrict ?? o.recipientDistrict,
+            type: o.orderType,
+            distanceKm: distTo(o.latitude != null && o.longitude != null
+                ? [o.latitude, o.longitude]
+                : lookupGeocode(o.returnPickupAddress ?? o.recipientAddress, o.returnPickupDistrict ?? o.recipientDistrict, o.returnPickupCity ?? o.recipientCity)),
+        })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fireAlert]);
+
     const loadPickups = useCallback(async (silent = false) => {
         if (!token) return;
         if (!silent) { setPickupLoading(true); setPickupError(null); }
@@ -174,8 +200,18 @@ export function CourierDashboard() {
         finally { if (!silent) setDeliveriesLoading(false); }
     }, [token, t.cdDeliveriesLoading, detectNewDeliveries]);
 
+    // Silent-only: the return-pickups section lives inside the Pickups tab, whose own
+    // loading/error state already gates the view — a failed/slow fetch here just means
+    // that section stays empty rather than blocking the whole tab.
+    const loadReturnPickups = useCallback(async () => {
+        if (!token) return;
+        try { const data = await fetchMyReturnPickups(token); detectNewReturnPickups(data); setReturnPickups(data); }
+        catch { /* section simply stays empty */ }
+    }, [token, detectNewReturnPickups]);
+
     useEffect(() => { loadPickups(); }, [loadPickups]);
     useEffect(() => { loadDeliveries(); }, [loadDeliveries]);
+    useEffect(() => { loadReturnPickups(); }, [loadReturnPickups]);
 
     // ── Push notifications enablement (alerts even when the app is closed) ────────
     const [showPushPrompt, setShowPushPrompt] = useState(false);
@@ -231,6 +267,7 @@ export function CourierDashboard() {
     useOrdersChangedSignal(token ?? null, 'courierOrdersChanged', () => {
         void loadPickups(true);
         void loadDeliveries(true);
+        void loadReturnPickups();
     });
 
     // Refresh on resume: when the courier returns to the app after backgrounding it
@@ -239,11 +276,12 @@ export function CourierDashboard() {
     useRefreshOnResume(() => {
         void loadPickups(true);
         void loadDeliveries(true);
+        void loadReturnPickups();
     });
 
     async function act(id: string, fn: () => Promise<void>, msg: string) {
         setBusyId(id);
-        try { await fn(); showToast(msg); loadPickups(true); loadDeliveries(true); }
+        try { await fn(); showToast(msg); loadPickups(true); loadDeliveries(true); loadReturnPickups(); }
         catch (e: unknown) { showToast(e instanceof Error ? e.message : t.cdToastFailed); }
         finally { setBusyId(null); }
     }
@@ -263,7 +301,7 @@ export function CourierDashboard() {
     const initials = user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : 'C';
     const fullName = user ? `${user.firstName} ${user.lastName}` : '';
 
-    const pickupProps = { pickups, loading: pickupLoading, error: pickupError, onRefresh: loadPickups, busyId, token: token!, onAct: act, onBulkAct: actBulk };
+    const pickupProps = { pickups, loading: pickupLoading, error: pickupError, onRefresh: loadPickups, busyId, token: token!, onAct: act, onBulkAct: actBulk, returnPickups };
     const deliveryProps = { deliveries, loading: deliveriesLoading, error: deliveriesError, busyId, token: token!, onAct: act };
 
     // "Enable notifications" nudge (or iOS install hint) — rendered in both layouts.

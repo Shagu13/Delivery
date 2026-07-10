@@ -44,7 +44,8 @@ export type PostponeReason =
     | 'WrongRecipientPhoneNumber'
     | 'RecipientNotAtAddress'
     | 'RecipientRequestedReschedule'
-    | 'AddressNotFound';
+    | 'AddressNotFound'
+    | 'Other';
 
 export const POSTPONE_REASON_LABELS: Record<PostponeReason, string> = {
     RecipientDidNotAnswer:         'Recipient did not answer',
@@ -52,6 +53,7 @@ export const POSTPONE_REASON_LABELS: Record<PostponeReason, string> = {
     RecipientNotAtAddress:         'Recipient is not at the address',
     RecipientRequestedReschedule:  'Recipient requested a reschedule',
     AddressNotFound:               'Address could not be found',
+    Other:                         'Other',
 };
 
 export type CancellationReason = 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other';
@@ -96,6 +98,8 @@ export interface CourierOrder {
     /** The company courier service fee. Used when whoPaysForCompanyService === 'Recipient'. */
     companyServicePrice: number;
     createdAt: string;
+    /** When this courier was assigned this order — lets the courier see which of their jobs is oldest. */
+    assignedToCourierAt: string | null;
     pickedUpFromWarehouseAt: string | null;
     deliveredAt: string | null;
     deliveryDateFrom: string | null;
@@ -104,6 +108,7 @@ export interface CourierOrder {
     returnPickupDistrict: string | null;
     returnPickupAddress: string | null;
     postponeReason: PostponeReason | null;
+    postponeComment: string | null;
     postponedAt: string | null;
 }
 
@@ -216,9 +221,10 @@ export const setCourierSalary       = (token: string, id: string, salary: number
     orderAction(token, id, 'courier-salary', { salary });
 export const setCompanyServicePrice = (token: string, id: string, price: number) =>
     orderAction(token, id, 'company-service-price', { price });
-/** Admin postpones an assigned delivery (mirrors the courier action). */
-export const adminPostponeOrder = (token: string, id: string, reason: PostponeReason) =>
-    orderAction(token, id, 'admin-postpone', { reason });
+/** Admin postpones an assigned delivery (mirrors the courier action). Comment is only kept
+ *  (and required by the UI) for the "Other" reason. */
+export const adminPostponeOrder = (token: string, id: string, reason: PostponeReason, comment?: string) =>
+    orderAction(token, id, 'admin-postpone', { reason, comment: comment ?? null });
 
 export async function updateOrder(token: string, id: string, data: UpdateOrderRequest): Promise<void> {
     const res = await fetch(`${BASE}/${id}`, {
@@ -243,8 +249,8 @@ export const markOrderDelivered = (token: string, id: string, updatedCodAmount?:
 /** Delivered, but the recipient had already paid the sender directly (COD zeroed). */
 export const markOrderDeliveredPaidToSender = (token: string, id: string, serviceFeeAlsoPaidToSender: boolean) =>
     orderAction(token, id, 'delivered-paid-to-sender', { serviceFeeAlsoPaidToSender });
-export const postponeOrder       = (token: string, id: string, reason: PostponeReason) =>
-    orderAction(token, id, 'postpone', { reason });
+export const postponeOrder       = (token: string, id: string, reason: PostponeReason, comment?: string) =>
+    orderAction(token, id, 'postpone', { reason, comment: comment ?? null });
 export const cancelDelivery      = (token: string, id: string, reason: CancellationReason, comment?: string) =>
     orderAction(token, id, 'cancel-delivery', { reason, comment: comment ?? null });
 export const retryDelivery       = (token: string, id: string) => orderAction(token, id, 'retry-delivery');
@@ -278,6 +284,16 @@ export async function fetchMyDeliveries(token: string): Promise<CourierOrder[]> 
         headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Failed to fetch deliveries');
+    return res.json();
+}
+
+/** Standalone Return orders assigned to this courier in pickup-phase statuses — shown on
+ *  the Pickups tab (collecting from the recipient), not the Deliveries tab. */
+export async function fetchMyReturnPickups(token: string): Promise<CourierOrder[]> {
+    const res = await fetch(`${BASE}/my-return-pickups`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch return pickups');
     return res.json();
 }
 

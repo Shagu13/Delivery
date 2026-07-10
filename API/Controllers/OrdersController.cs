@@ -196,6 +196,19 @@ public sealed class OrdersController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/orders/my-return-pickups  (Courier) ───────────────────────────
+    // Standalone Return orders assigned to this courier, in pickup-phase statuses —
+    // surfaced on the Pickups tab rather than Deliveries (see GetCourierReturnPickupsQuery).
+    [HttpGet("my-return-pickups")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyReturnPickups(CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var result = await Sender.Send(new GetCourierReturnPickupsQuery(userId), ct);
+        return Ok(result);
+    }
+
     // ── PUT /api/orders/{id}  (Admin/Operator — edit all fields) ──────────────
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin,Operator")]
@@ -368,7 +381,7 @@ public sealed class OrdersController : BaseController
     public async Task<IActionResult> AdminPostpone(
         Guid id, [FromBody] PostponeOrderRequest request, CancellationToken ct)
     {
-        await Sender.Send(new AdminPostponeOrderCommand(id, request.Reason), ct);
+        await Sender.Send(new AdminPostponeOrderCommand(id, request.Reason, request.Comment), ct);
         return NoContent();
     }
 
@@ -454,7 +467,7 @@ public sealed class OrdersController : BaseController
     public async Task<IActionResult> Postpone(Guid id, [FromBody] PostponeOrderRequest request, CancellationToken ct)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        await Sender.Send(new PostponeOrderCommand(id, userId, request.Reason), ct);
+        await Sender.Send(new PostponeOrderCommand(id, userId, request.Reason, request.Comment), ct);
         return NoContent();
     }
 
@@ -564,7 +577,7 @@ public sealed record SetCourierSalaryRequest(decimal Salary);
 /// <summary>Optional body for admin-mark-delivered: assign a courier when unassigned and/or set salary.</summary>
 public sealed record AdminMarkDeliveredRequest(Guid? CourierId, decimal? Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
-public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason);
+public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason, string? Comment = null);
 /// <summary>Optional correction to the parcel COD amount, applied atomically with delivery.</summary>
 public sealed record MarkDeliveredRequest(decimal? UpdatedCodAmount);
 public sealed record CancelDeliveryRequest(Domain.Enums.CancellationReason Reason, string? Comment);

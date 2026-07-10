@@ -40,10 +40,15 @@ public sealed record CourierOrderDto(
     /// </summary>
     decimal CompanyServicePrice,
     DateTime  CreatedAt,
+    /// <summary>When this courier was assigned this order (last-mile assignment, or the
+    /// Return-pickup assignment) — lets the courier see which of their jobs is oldest.</summary>
+    DateTime? AssignedToCourierAt,
     DateTime? PickedUpFromWarehouseAt,
     DateTime? DeliveredAt,
     DateTime? DeliveryDateFrom,
     DateTime? DeliveryDateTo,
     PostponeReason? PostponeReason,
+    /// <summary>Free-text note captured when PostponeReason is "Other". Null otherwise.</summary>
+    string?         PostponeComment,
     DateTime?       PostponedAt
 );

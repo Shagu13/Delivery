@@ -8,4 +8,6 @@ public enum PostponeReason
     RecipientNotAtAddress       = 3,
     RecipientRequestedReschedule = 4,
     AddressNotFound             = 5,
+    /// <summary>Free-text reason — the accompanying comment is captured on <see cref="Order.PostponeComment"/>.</summary>
+    Other                       = 6,
 }

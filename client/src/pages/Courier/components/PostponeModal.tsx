@@ -6,12 +6,14 @@ import { POSTPONE_REASON_LABELS } from '../../../api/orders';
 interface PostponeModalProps {
     isBusy: boolean;
     onCancel: () => void;
-    onConfirm: (reason: PostponeReason) => void;
+    onConfirm: (reason: PostponeReason, comment?: string) => void;
 }
 
 export function PostponeModal({ isBusy, onCancel, onConfirm }: PostponeModalProps) {
     const { t } = useLanguage();
     const [selected, setSelected] = useState<PostponeReason | null>(null);
+    const [comment, setComment] = useState('');
+    const canConfirm = selected !== null && (selected !== 'Other' || comment.trim().length > 0);
 
     return (
         <div style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(0,0,0,0.45)', borderRadius: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
@@ -29,15 +31,28 @@ export function PostponeModal({ isBusy, onCancel, onConfirm }: PostponeModalProp
                         </button>
                     ))}
                 </div>
+                {selected === 'Other' && (
+                    <textarea
+                        autoFocus
+                        value={comment}
+                        onChange={e => setComment(e.target.value)}
+                        placeholder={t.cdPostponeCommentPlaceholder}
+                        maxLength={500}
+                        rows={3}
+                        style={{ width: '100%', boxSizing: 'border-box', marginBottom: '16px', padding: '10px 12px',
+                            borderRadius: '8px', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)',
+                            color: 'var(--color-text)', fontSize: '0.875rem', fontFamily: 'inherit', resize: 'vertical' }}
+                    />
+                )}
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={onCancel} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', fontSize: '0.875rem' }}>
                         {t.cancel}
                     </button>
-                    <button disabled={!selected || isBusy} onClick={() => selected && onConfirm(selected)}
+                    <button disabled={!canConfirm || isBusy} onClick={() => selected && onConfirm(selected, comment.trim() || undefined)}
                         style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none',
-                            background: selected ? '#f97316' : 'var(--color-bg-3)',
-                            color: selected ? '#fff' : 'var(--color-text-muted)',
-                            cursor: selected ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: '0.875rem' }}>
+                            background: canConfirm ? '#f97316' : 'var(--color-bg-3)',
+                            color: canConfirm ? '#fff' : 'var(--color-text-muted)',
+                            cursor: canConfirm ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: '0.875rem' }}>
                         {t.goConfirm}
                     </button>
                 </div>

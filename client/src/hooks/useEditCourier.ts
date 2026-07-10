@@ -12,9 +12,15 @@ export interface EditCourierForm {
 
 type FieldErrors = Partial<Record<keyof EditCourierForm, string>>;
 
-// Only Tbilisi couriers get a standard per-order rate — see Courier.DefaultSalary doc comment.
-export const isTbilisiCourier = (courier: Courier | null) =>
-    !!courier && courier.assignedCity.trim().toLowerCase() === 'tbilisi';
+// Cities whose couriers get a standard per-order rate — see Courier.DefaultSalary doc comment.
+// Mirrors Application.Couriers.CourierSalaryEligibility on the backend.
+export const DEFAULT_SALARY_ELIGIBLE_CITIES = ['Tbilisi', 'Rustavi'];
+
+export const isDefaultSalaryEligibleCity = (city: string) =>
+    DEFAULT_SALARY_ELIGIBLE_CITIES.some(c => c.toLowerCase() === city.trim().toLowerCase());
+
+export const isDefaultSalaryEligibleCourier = (courier: Courier | null) =>
+    !!courier && isDefaultSalaryEligibleCity(courier.assignedCity);
 
 function initialForm(courier: Courier | null): EditCourierForm {
     return {
@@ -65,7 +71,7 @@ export function useEditCourier(
         if (!form.idNumber.trim()) {
             e.idNumber = 'ID number is required.';
         }
-        if (isTbilisiCourier(courier) && form.defaultSalary.trim() !== '') {
+        if (isDefaultSalaryEligibleCourier(courier) && form.defaultSalary.trim() !== '') {
             const v = parseFloat(form.defaultSalary);
             if (isNaN(v) || v < 0) e.defaultSalary = 'Enter a valid non-negative amount.';
         }
@@ -86,7 +92,7 @@ export function useEditCourier(
 
         setSubmitting(true);
         try {
-            const defaultSalary = isTbilisiCourier(courier) && form.defaultSalary.trim() !== ''
+            const defaultSalary = isDefaultSalaryEligibleCourier(courier) && form.defaultSalary.trim() !== ''
                 ? parseFloat(form.defaultSalary) : null;
             await updateCourier(
                 courier.courierId,

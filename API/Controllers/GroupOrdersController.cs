@@ -198,6 +198,7 @@ public sealed class GroupOrdersController : BaseController
         [FromQuery] bool      excludeCompleted = false,
         [FromQuery] int       page      = 1,
         [FromQuery] int       pageSize  = 30,
+        [FromQuery] Guid?     customerId = null,  // owning customer (History page filter)
         CancellationToken ct = default)
     {
         // A tenant co-admin sees only their own tenant's batches, and never company revenue.
@@ -211,7 +212,7 @@ public sealed class GroupOrdersController : BaseController
             return Ok(new PagedResult<AdminGroupOrderResponse>(mapped, mapped.Count, 1, Math.Max(mapped.Count, 1)));
         }
 
-        var result = await Sender.Send(new GetAllGroupOrdersQuery(search, date, dateTo, city, district, party, status, courierId, unpriced, excludeCompleted, page, pageSize), ct);
+        var result = await Sender.Send(new GetAllGroupOrdersQuery(search, date, dateTo, city, district, party, status, courierId, unpriced, excludeCompleted, page, pageSize, customerId), ct);
         // Operators run the pick-up flow but must not see internal company revenue.
         bool includeRevenue = !User.IsInRole("Operator");
         var items = result.Items.Select(go => MapToAdminResponse(go, includeRevenue)).ToList();

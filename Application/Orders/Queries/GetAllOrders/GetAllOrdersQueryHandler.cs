@@ -203,7 +203,8 @@ public sealed class GetAllOrdersQueryHandler
                 CourierFullName:          o.Courier == null ? null : $"{o.Courier.FirstName} {o.Courier.LastName}".Trim(),
                 CreatedAt:                o.CreatedAt,
                 DeliveredAt:              o.DeliveredAt,
-                PostponeReason:           o.PostponeReason == null ? null : o.PostponeReason.Value.ToString()
+                PostponeReason:           o.PostponeReason == null ? null : o.PostponeReason.Value.ToString(),
+                PostponeComment:          o.PostponeComment
             ))
             .ToList();
 

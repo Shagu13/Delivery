@@ -22,6 +22,8 @@ namespace Application.GroupOrders.Queries.GetAllGroupOrders;
 /// The Pick-Up page hides fully completed batches/orders (they live in History instead) —
 /// opt-in only, since History and other consumers of this query need the full set.
 /// </param>
+/// <param name="CustomerId">Owning customer — GroupOrder.CustomerId for batches, Order.CustomerId
+/// for standalone orders (History page's customer filter).</param>
 public sealed record GetAllGroupOrdersQuery(
     string?   SearchTerm,
     DateTime? Date             = null,
@@ -34,5 +36,6 @@ public sealed record GetAllGroupOrdersQuery(
     bool      Unpriced         = false,
     bool      ExcludeCompleted = false,
     int       Page             = 1,
-    int       PageSize         = 30
+    int       PageSize         = 30,
+    Guid?     CustomerId       = null
 ) : IRequest<PagedResult<AdminGroupOrderDto>>;

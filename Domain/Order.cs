@@ -199,6 +199,8 @@ public class Order
 
     // ── Postpone info ─────────────────────────────────────────────────────────
     public PostponeReason? PostponeReason { get; set; }
+    /// <summary>Free-text note captured when the reason is "Other". Null otherwise.</summary>
+    public string?    PostponeComment     { get; set; }
     public DateTime? PostponedAt          { get; set; }
 
     // ── Cancellation info (courier-cancelled at delivery) ─────────────────────

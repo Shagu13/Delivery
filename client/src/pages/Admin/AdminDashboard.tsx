@@ -1185,6 +1185,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
       createdAt: o.createdAt,
       deliveredAt: o.deliveredAt,
       postponeReason: null,
+      postponeComment: null,
     };
     setEditing({
       item,

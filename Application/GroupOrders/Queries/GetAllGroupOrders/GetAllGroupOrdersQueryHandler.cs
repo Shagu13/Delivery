@@ -193,6 +193,14 @@ public sealed class GetAllGroupOrdersQueryHandler
             soQuery = soQuery.Where(o => o.CourierId == courierId);
         }
 
+        // ── Customer (History page filter) — GroupOrder.CustomerId for batches,
+        //    Order.CustomerId directly for standalone orders. ──────────────────────────
+        if (request.CustomerId is Guid customerId)
+        {
+            goQuery = goQuery.Where(go => go.CustomerId == customerId);
+            soQuery = soQuery.Where(o => o.CustomerId == customerId);
+        }
+
         // ── Unpriced (missing financials) — mirrors GetAllOrdersQuery's Delivery-page
         //    definition so both pages agree on what "unpriced" means. ─────────────────────
         if (request.Unpriced)
