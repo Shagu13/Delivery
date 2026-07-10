@@ -797,20 +797,28 @@ function Stat({ label, value, accent, color }: { label: string; value: string; a
     );
 }
 
-// A single order's free-text note. Empty → an em-dash. Present → the localized word
-// "Comment", which reveals the full note as a hover/focus tooltip (read-only, not clickable).
+// A single order's free-text notes for the finance grid: the package Description and/or the
+// combined Comment (order note + postpone/cancellation). Each present one shows as the localized
+// word ("Description" / "Comment") that reveals its full text as a hover/focus tooltip
+// (read-only, not clickable) — Description on top, Comment below. Shows "—" when neither exists.
 // Uses the native title tooltip so it can't be clipped by the table's scroll container.
-function CommentCell({ text }: { text: string | null }) {
+function CommentCell({ description, comment }: { description: string | null; comment: string | null }) {
     const { t } = useLanguage();
-    if (!text) return <span style={{ color: 'var(--color-text-subtle)' }}>—</span>;
-    return (
+    if (!description && !comment) return <span style={{ color: 'var(--color-text-subtle)' }}>—</span>;
+    const trigger = (label: string, text: string) => (
         <span
             title={text}
             tabIndex={0}
             style={{ color: 'var(--color-accent)', fontWeight: 600, cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
         >
-            {t.ofinColComment}
+            {label}
         </span>
+    );
+    return (
+        <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+            {description && trigger(t.ofinColDescription, description)}
+            {comment && trigger(t.ofinColComment, comment)}
+        </div>
     );
 }
 
@@ -1196,10 +1204,13 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                                 <div>{t.ofinColDelivered}: {o.deliveredAt ? formatGeorgianDateTime(o.deliveredAt) : t.ofinNotDelivered}</div>
                                             </div>
                                         </td>
-                                        {/* Comment — the customer's order note plus any postpone / cancellation
-                                            free-text note; hover to read the full text. */}
+                                        {/* Comment — the package description and/or the customer's order note
+                                            plus any postpone / cancellation note; hover each to read the text. */}
                                         <td style={{ ...fcell, textAlign: 'center' }}>
-                                            <CommentCell text={[o.orderNote, o.postponeComment, o.cancellationComment].filter(Boolean).join(' · ') || null} />
+                                            <CommentCell
+                                                description={o.description || null}
+                                                comment={[o.orderNote, o.postponeComment, o.cancellationComment].filter(Boolean).join(' · ') || null}
+                                            />
                                         </td>
                                         {/* Company fee + inline edit, with who pays it. */}
                                         <td style={{ ...fcell, textAlign: 'right', whiteSpace: 'nowrap' }}>

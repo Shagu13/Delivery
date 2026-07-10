@@ -409,7 +409,8 @@ internal static class OrderFinanceQueries
             CancellationReason:           o.CancellationReason?.ToString(),
             CancellationComment:          o.CancellationComment,
             PostponeComment:              o.PostponeComment,
-            OrderNote:                    o.GroupOrder?.Note
+            OrderNote:                    o.GroupOrder?.Note,
+            Description:                  o.Description
         );
     }
 }

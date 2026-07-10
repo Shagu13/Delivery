@@ -80,5 +80,7 @@ public sealed record OrderFinanceLineDto(
     string?  PostponeComment,
     /// <summary>The note the customer typed when placing the batch (GroupOrder.Note), if any.
     /// Null for standalone Return orders (no parent GroupOrder).</summary>
-    string?  OrderNote
+    string?  OrderNote,
+    /// <summary>The package description entered for this order, if any.</summary>
+    string?  Description
 );

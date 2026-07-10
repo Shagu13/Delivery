@@ -63,6 +63,8 @@ export interface OrderFinanceLine {
     postponeComment: string | null;
     /** The note the customer typed when placing the batch (GroupOrder.Note), if any. */
     orderNote: string | null;
+    /** The package description entered for this order, if any. */
+    description: string | null;
 }
 
 export interface OrderPaymentRequest {
