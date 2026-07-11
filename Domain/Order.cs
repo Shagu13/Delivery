@@ -210,6 +210,15 @@ public class Order
     public string?   CancellationComment { get; set; }
     public DateTime? CancelledAt         { get; set; }
 
+    /// <summary>
+    /// When an admin marked this already-cancelled order (cancelled by admin, or declined by a
+    /// courier → OrderNotAccepted) as physically returned to the sender. Null until marked.
+    /// Purely a logistics marker: the order keeps its cancelled <see cref="Status"/> and its
+    /// billing is unchanged (finance keys off <see cref="CancellationReason"/>, not this field).
+    /// Send/Exchange only — standalone Returns run their own returned-to-sender flow.
+    /// </summary>
+    public DateTime? CancelledReturnedToSenderAt { get; set; }
+
     // ── Navigation ───────────────────────────────────────────────────────────
     public ICollection<TrackingEvent> TrackingEvents { get; set; } = new List<TrackingEvent>();
 }

@@ -80,7 +80,8 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             DeliveryDateTo:                   o.DeliveryDateTo,
             DeliveredAt:                      o.DeliveredAt,
             CancellationReason:               o.CancellationReason,
-            CancellationComment:              o.CancellationComment);
+            CancellationComment:              o.CancellationComment,
+            CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt);
 
         var groupCards = groupOrders.Select(go => new AdminGroupOrderDto(
             Id:                      go.Id,

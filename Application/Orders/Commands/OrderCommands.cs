@@ -82,6 +82,16 @@ public sealed record CancelOrderByAdminCommand(
 public sealed record MarkSendReturnedToSenderCommand(Guid OrderId) : IRequest;
 
 /// <summary>
+/// Admin marks an already-cancelled Send/Exchange order — cancelled by admin
+/// (<see cref="Domain.Enums.OrderStatus.CancelledByAdmin"/>) or declined by a courier
+/// (<see cref="Domain.Enums.OrderStatus.OrderNotAccepted"/>) — as physically returned to the
+/// sender. Records <see cref="Domain.Order.CancelledReturnedToSenderAt"/>. The order keeps its
+/// cancelled Status and its billing is unchanged (finance keys off CancellationReason, not this
+/// marker). Standalone Returns are excluded — they run their own returned-to-sender flow.
+/// </summary>
+public sealed record MarkCancelledReturnedToSenderCommand(Guid OrderId) : IRequest;
+
+/// <summary>
 /// Admin undoes a courier's mistaken terminal status and returns the order to the
 /// delivery flow (CourierAssignedToDeliver), keeping the assigned courier:
 ///  • <see cref="OrderStatusCorrection.UnCancel"/> — order was cancelled by mistake

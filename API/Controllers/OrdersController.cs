@@ -397,6 +397,17 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/{id}/mark-cancelled-returned-to-sender  (Admin/Operator) ──
+    [HttpPut("{id:guid}/mark-cancelled-returned-to-sender")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> MarkCancelledReturnedToSender(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new MarkCancelledReturnedToSenderCommand(id), ct);
+        return NoContent();
+    }
+
     // ── PUT /api/orders/{id}/correct-status  (Admin/Operator) ────────────────
     [HttpPut("{id:guid}/correct-status")]
     [Authorize(Roles = "Admin,Operator")]

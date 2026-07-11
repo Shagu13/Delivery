@@ -213,6 +213,12 @@ export const adminMarkReturnAtWarehouse  = (token: string, id: string) => orderA
  */
 export const markSendReturnedToSender    = (token: string, id: string) => orderAction(token, id, 'mark-send-returned-to-sender');
 /**
+ * Admin adds a final step onto an already-cancelled Send/Exchange order (cancelled by admin or
+ * declined by courier): stamps CancelledReturnedToSenderAt to record the parcel was physically
+ * handed back to the sender. Keeps the cancelled status; billing is unchanged.
+ */
+export const markCancelledReturnedToSender = (token: string, id: string) => orderAction(token, id, 'mark-cancelled-returned-to-sender');
+/**
  * Admin corrects a courier's mistaken terminal status, returning the order to the
  * delivery flow (CourierAssignedToDeliver). 'UnCancel' revives a wrongly cancelled
  * order; 'UnDeliver' reverts a wrongly delivered one (clearing its recorded cash/payment).

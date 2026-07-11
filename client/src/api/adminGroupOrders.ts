@@ -61,6 +61,8 @@ export interface AdminOrder {
     deliveredAt: string | null;
     cancellationReason?: 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other' | 'WarehouseNotReceived' | null;
     cancellationComment?: string | null;
+    /** Set once an admin marked this cancelled order as physically returned to the sender. */
+    cancelledReturnedToSenderAt?: string | null;
 }
 
 export interface AdminGroupOrder {

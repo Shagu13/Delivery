@@ -27,9 +27,15 @@ import { CustomerStatisticsPage } from './CustomerStatisticsPage';
 import '../../styles/dashboard.css';
 
 
-type View = 'overview' | 'shipments' | 'finance' | 'statistics' | 'profile' | 'password' | 'calculator';
+type View = 'overview' | 'shipments' | 'returned' | 'finance' | 'statistics' | 'profile' | 'password' | 'calculator';
 
-const CUSTOMER_VIEWS: readonly View[] = ['overview', 'shipments', 'finance', 'statistics', 'profile', 'password', 'calculator'];
+const CUSTOMER_VIEWS: readonly View[] = ['overview', 'shipments', 'returned', 'finance', 'statistics', 'profile', 'password', 'calculator'];
+
+// A package belongs on the "Returned Packages" page when it's a Return or Exchange (any status),
+// or a Send order an admin has marked physically returned to the sender after cancellation.
+function isReturnedPackage(o: CustomerOrder): boolean {
+  return o.orderType === 'Return' || o.orderType === 'Exchange' || o.cancelledReturnedToSenderAt != null;
+}
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
@@ -217,6 +223,7 @@ export function CustomerDashboard() {
   const navItems: [View, string, React.ReactNode][] = [
     ['overview',   t.sidebarOverview,    overviewIcon],
     ['shipments',  t.custNavShipments,   shipmentsIcon],
+    ['returned',   t.custNavReturned,    returnedIcon],
     ['finance',    t.navFinance,         financeIcon],
     ['statistics', t.navStatistics,      statisticsIcon],
     ['calculator', t.custNavCalculator,  calcIcon],
@@ -387,6 +394,7 @@ export function CustomerDashboard() {
           <span className="dashboard__topbar-title">
             {view === 'overview'    && t.sidebarOverview}
             {view === 'shipments'   && t.custNavShipments}
+            {view === 'returned'    && t.custNavReturned}
             {view === 'finance'     && t.navFinance}
             {view === 'statistics'  && t.navStatistics}
             {view === 'calculator'  && t.custTopbarCalculator}
@@ -445,6 +453,16 @@ export function CustomerDashboard() {
                 />
               )}
               {view === 'shipments'   && <ShipmentsView orders={orders} token={token ?? ''} onRefresh={refreshOrders} />}
+              {view === 'returned'    && (
+                <ShipmentsView
+                  orders={orders}
+                  token={token ?? ''}
+                  onRefresh={refreshOrders}
+                  packageFilter={isReturnedPackage}
+                  title={t.custNavReturned}
+                  emptyText={t.custReturnedNoneHint}
+                />
+              )}
               {view === 'finance'     && <CustomerFinancePage />}
               {view === 'statistics'  && <CustomerStatisticsPage />}
               {view === 'calculator'  && token && <PriceCalculatorCard token={token} />}
@@ -526,7 +544,17 @@ function OverviewView({
 
 // ── Shipments ─────────────────────────────────────────────────────────────────
 
-function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrder[]; token: string; onRefresh: () => void }) {
+function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyText }: {
+  orders: CustomerGroupOrder[];
+  token: string;
+  onRefresh: () => void;
+  /** When set, each group is narrowed to matching packages and empty groups are dropped. */
+  packageFilter?: (o: CustomerOrder) => boolean;
+  /** Heading shown in the empty state (defaults to "My Shipments"). */
+  title?: string;
+  /** Hint shown when there are no packages to display (defaults to the no-shipments hint). */
+  emptyText?: string;
+}) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<CustomerOrder | null>(null);
   const [cancelTarget, setCancelTarget] = useState<CustomerOrder | null>(null);
@@ -538,13 +566,21 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
   const query = search.trim().toLowerCase();
   const searching = query.length > 0;
 
-  // When searching, narrow each group to the packages that match and drop groups
-  // with no matches. Each entry carries the packages to render for that card.
-  const visibleGroups: { go: CustomerGroupOrder; pkgs: CustomerOrder[] }[] = searching
+  // Base set: when a packageFilter is supplied (e.g. the Returned Packages page), narrow each
+  // group to matching packages and drop empty groups; otherwise every package is in scope.
+  const baseGroups: { go: CustomerGroupOrder; pkgs: CustomerOrder[] }[] = packageFilter
     ? orders
-        .map(go => ({ go, pkgs: go.orders.filter(o => orderMatchesSearch(o, query)) }))
+        .map(go => ({ go, pkgs: go.orders.filter(packageFilter) }))
         .filter(entry => entry.pkgs.length > 0)
     : orders.map(go => ({ go, pkgs: go.orders }));
+
+  // When searching, further narrow each group to the packages that match and drop groups
+  // with no matches. Each entry carries the packages to render for that card.
+  const visibleGroups: { go: CustomerGroupOrder; pkgs: CustomerOrder[] }[] = searching
+    ? baseGroups
+        .map(({ go, pkgs }) => ({ go, pkgs: pkgs.filter(o => orderMatchesSearch(o, query)) }))
+        .filter(entry => entry.pkgs.length > 0)
+    : baseGroups;
 
   const handleCancel = async () => {
     if (!cancelTarget) return;
@@ -563,19 +599,19 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
   const cityName     = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
   const districtName = (en: string, geo?: string) => lang === 'ka' && geo ? geo : en;
 
-  if (orders.length === 0) {
+  if (baseGroups.length === 0) {
     return (
       <div className="content-card">
         <div className="content-card__header">
-          <span className="content-card__title">{t.custNavShipments}</span>
+          <span className="content-card__title">{title ?? t.custNavShipments}</span>
         </div>
         <div className="empty-state">
           <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
             <rect x="4" y="8" width="32" height="28" rx="3" stroke="currentColor" strokeWidth="1.5" />
             <path d="M12 16h16M12 22h10M12 28h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <span className="empty-state__text">{t.custNoShipmentsHint}</span>
-          <a href="/send" className="btn-primary" style={{ marginTop: 12 }}>{t.custSendPackage}</a>
+          <span className="empty-state__text">{emptyText ?? t.custNoShipmentsHint}</span>
+          {!packageFilter && <a href="/send" className="btn-primary" style={{ marginTop: 12 }}>{t.custSendPackage}</a>}
         </div>
       </div>
     );
@@ -763,6 +799,15 @@ function ShipmentsView({ orders, token, onRefresh }: { orders: CustomerGroupOrde
                       </td>
                       <td style={{ padding: '10px 16px' }}>
                         <StatusBadge status={o.status} />
+                        {o.cancelledReturnedToSenderAt && (
+                          <span style={{
+                            display: 'inline-block', marginLeft: 6, padding: '2px 8px', borderRadius: 100,
+                            fontSize: '0.68rem', fontWeight: 700,
+                            background: 'rgba(16,185,129,0.12)', color: '#059669',
+                          }}>
+                            {t.custReturnedToSenderBadge}
+                          </span>
+                        )}
                         {CANCELLED_STATUSES.has(o.status) && o.cancellationReason && (
                           <div style={{ marginTop: 4, fontSize: '0.72rem', color: NON_BILLABLE_CANCEL_REASONS.has(o.cancellationReason) ? '#059669' : '#ef4444', maxWidth: 200, lineHeight: 1.35 }}>
                             {t.cdCancelReasons[o.cancellationReason]}
@@ -1191,6 +1236,13 @@ const shipmentsIcon = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
     <path d="M8 1L14 4.5V11.5L8 15L2 11.5V4.5L8 1Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
     <path d="M8 1v14M2 4.5l6 3.5 6-3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const returnedIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M6 3L2.5 6.5 6 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M2.5 6.5H10a3.5 3.5 0 0 1 3.5 3.5v0A3.5 3.5 0 0 1 10 13.5H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 

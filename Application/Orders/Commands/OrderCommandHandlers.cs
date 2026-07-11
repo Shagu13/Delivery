@@ -663,6 +663,48 @@ public sealed class MarkSendReturnedToSenderCommandHandler : IRequestHandler<Mar
     }
 }
 
+// ── MarkCancelledReturnedToSender ─────────────────────────────────────────────
+// Admin adds a final logistics step onto an already-cancelled Send/Exchange order (cancelled by
+// admin, or declined by a courier → OrderNotAccepted): the parcel was physically handed back to
+// the sender. This only stamps CancelledReturnedToSenderAt — the order keeps its cancelled Status
+// and CancellationReason, so all finance (billable-failed etc.) is unchanged.
+public sealed class MarkCancelledReturnedToSenderCommandHandler : IRequestHandler<MarkCancelledReturnedToSenderCommand>
+{
+    private static readonly OrderStatus[] AllowedFrom =
+    {
+        OrderStatus.CancelledByAdmin,   // admin cancelled
+        OrderStatus.OrderNotAccepted,   // courier declined
+    };
+
+    private readonly IAppDbContext _context;
+    private readonly IRealtimeNotifier _notifier;
+    public MarkCancelledReturnedToSenderCommandHandler(IAppDbContext context, IRealtimeNotifier notifier)
+    {
+        _context  = context;
+        _notifier = notifier;
+    }
+
+    public async Task Handle(MarkCancelledReturnedToSenderCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
+            ?? throw new NotFoundException("Order", request.OrderId);
+
+        if (order.OrderType == OrderType.Return)
+            throw new ConflictException("Returns use their own returned-to-sender action.");
+
+        if (!AllowedFrom.Contains(order.Status))
+            throw new ConflictException(
+                $"Only an admin- or courier-cancelled order can be marked returned to sender. Current: {order.Status}.");
+
+        // Logistics-only marker — Status, CancellationReason and all finance stay as-is.
+        order.CancelledReturnedToSenderAt = CustomTime.Now;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        _notifier.NotifyAdminsOrdersChanged();
+    }
+}
+
 // ── AdminCorrectOrderStatus ───────────────────────────────────────────────────
 // Admin undoes a courier's mistaken terminal status: a cancel that should have been a
 // postpone (UnCancel), or a delivery that should not have happened (UnDeliver). Both

@@ -5,7 +5,7 @@ import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, OrderStatus } from '../../api/adminGroupOrders';
 import { fetchReturnExchangeOrders } from '../../api/returnExchange';
 import type { ReturnExchangeOrder } from '../../api/returnExchange';
-import { correctOrderStatus } from '../../api/orders';
+import { correctOrderStatus, markCancelledReturnedToSender } from '../../api/orders';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
 import { getCustomers } from '../../api/customers';
@@ -42,11 +42,12 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── History categories ──────────────────────────────────────────────────────
 
-type HistoryFilter = 'delivered' | 'cancelled' | 'returned' | 'exchanged' | 'pickedup';
+type HistoryFilter = 'delivered' | 'cancelled' | 'cancelledReturned' | 'returned' | 'exchanged' | 'pickedup';
 
 const HISTORY_PILLS: { value: HistoryFilter; labelKey: string }[] = [
   { value: 'delivered', labelKey: 'histPillDelivered' },
   { value: 'cancelled', labelKey: 'histPillCancelled' },
+  { value: 'cancelledReturned', labelKey: 'histPillCancelledReturned' },
   { value: 'returned',  labelKey: 'histPillReturned' },
   { value: 'exchanged', labelKey: 'histPillExchanged' },
   { value: 'pickedup',  labelKey: 'histPillPickedUp' },
@@ -70,6 +71,9 @@ function orderCategory(o: AdminOrder): HistoryFilter | null {
   if (o.status === 'DeliveredToRecipient' && o.orderType !== 'Exchange') return 'delivered';
   if (o.status === 'ExchangeCompleted') return 'exchanged';
   if (o.status === 'ReturnedToSender') return 'returned';
+  // A cancelled order the admin has since marked physically returned to the sender moves out
+  // of "Cancelled" into its own bucket (its Status stays a cancelled one — the marker decides).
+  if (o.cancelledReturnedToSenderAt) return 'cancelledReturned';
   if (CANCELLED_STATUSES.has(o.status)) return 'cancelled';
   return null;
 }
@@ -430,6 +434,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   const counts = useMemo(() => ({
     delivered: dayOrders.filter(f => f.category === 'delivered').length,
     cancelled: dayOrders.filter(f => f.category === 'cancelled').length,
+    cancelledReturned: dayOrders.filter(f => f.category === 'cancelledReturned').length,
     returned:  dayOrders.filter(f => f.category === 'returned').length,
     exchanged: dayOrders.filter(f => f.category === 'exchanged').length,
     pickedup:  pickedUpGroups.length,
@@ -474,6 +479,33 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
       setActionError(e instanceof Error ? e.message : 'Correction failed.');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  // ── Mark a cancelled order "returned to sender" ─────────────────────────────
+  // The extra logistics step admins add onto an admin-cancelled / courier-declined
+  // Send/Exchange order once the parcel is physically back with the sender.
+  const [markConfirmId, setMarkConfirmId] = useState<string | null>(null);
+  const [markBusyId,    setMarkBusyId]    = useState<string | null>(null);
+
+  const canMarkReturned = (f: FlatHistoryOrder): boolean =>
+    f.category === 'cancelled'
+    && f.order.orderType !== 'Return'
+    && (f.order.status === 'CancelledByAdmin' || f.order.status === 'OrderNotAccepted');
+
+  const handleMarkReturned = async (orderId: string) => {
+    setMarkBusyId(orderId);
+    setActionError(null);
+    try {
+      await markCancelledReturnedToSender(token, orderId);
+      setMarkConfirmId(null);
+      // It now carries the marker, so it moves to the "Cancelled & Returned" pill on reload.
+      setLoading(true);
+      await load(search);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Failed to mark returned to sender.');
+    } finally {
+      setMarkBusyId(null);
     }
   };
 
@@ -704,7 +736,11 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
                         <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', maxWidth: 220, whiteSpace: 'normal' }}>{o.recipientAddress}</div>
                       )}
                     </td>
-                    <td><StatusBadge status={o.status} /></td>
+                    <td>
+                      {f.category === 'cancelledReturned'
+                        ? <span className="status-badge status-badge--delivered" title={o.cancelledReturnedToSenderAt ? formatDate(o.cancelledReturnedToSenderAt) : undefined}>{t.histPillCancelledReturned}</span>
+                        : <StatusBadge status={o.status} />}
+                    </td>
                     <td>
                       <span style={{
                         fontSize: '0.74rem',
@@ -777,6 +813,37 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
                             onClick={() => { setConfirmId(o.id); setActionError(null); }}
                           >
                             {correction === 'UnCancel' ? t.histUnCancel : t.histUnDeliver}
+                          </button>
+                        )
+                      )}
+                      {canMarkReturned(f) && (
+                        markConfirmId === o.id ? (
+                          <span style={{ display: 'inline-flex', gap: 4 }}>
+                            <button
+                              type="button"
+                              className="hist-fix-btn hist-fix-btn--confirm"
+                              disabled={markBusyId === o.id}
+                              onClick={() => void handleMarkReturned(o.id)}
+                            >
+                              {markBusyId === o.id ? '…' : t.goConfirm}
+                            </button>
+                            <button
+                              type="button"
+                              className="hist-fix-btn"
+                              disabled={markBusyId === o.id}
+                              onClick={() => setMarkConfirmId(null)}
+                            >
+                              {t.cancel}
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="hist-fix-btn"
+                            title={t.histPillCancelledReturned}
+                            onClick={() => { setMarkConfirmId(o.id); setActionError(null); }}
+                          >
+                            {t.histMarkReturned}
                           </button>
                         )
                       )}

@@ -450,6 +450,9 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("CancelledAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("CancelledReturnedToSenderAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal?>("CodPaidToCustomerAmount")
                         .HasColumnType("decimal(18,2)");
 

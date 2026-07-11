@@ -80,6 +80,8 @@ export interface CustomerOrder {
   cancellationReason?: 'DidNotLike' | 'DidNotWant' | 'WrongSize' | 'Other' | 'WarehouseNotReceived' | null;
   /** Free-text note captured for the "Other" reason. */
   cancellationComment?: string | null;
+  /** Set once an admin marked this cancelled order as physically returned to the sender. */
+  cancelledReturnedToSenderAt?: string | null;
 }
 
 export interface CustomerGroupOrder {
