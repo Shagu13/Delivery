@@ -697,6 +697,13 @@ public sealed class MarkCancelledReturnedToSenderCommandHandler : IRequestHandle
             throw new ConflictException(
                 $"Only an admin- or courier-cancelled order can be marked returned to sender. Current: {order.Status}.");
 
+        // Markable as long as the order carries a real cancellation reason (any of the enum
+        // values) — that signals it was received then cancelled. A null reason is a plain early
+        // cancel with nothing to hand back.
+        if (order.CancellationReason is null)
+            throw new ConflictException(
+                "Only a cancelled order that has a cancellation reason can be marked returned to sender.");
+
         // Logistics-only marker — Status, CancellationReason and all finance stay as-is.
         order.CancelledReturnedToSenderAt = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);

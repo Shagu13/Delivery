@@ -491,7 +491,10 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   const canMarkReturned = (f: FlatHistoryOrder): boolean =>
     f.category === 'cancelled'
     && f.order.orderType !== 'Return'
-    && (f.order.status === 'CancelledByAdmin' || f.order.status === 'OrderNotAccepted');
+    && (f.order.status === 'CancelledByAdmin' || f.order.status === 'OrderNotAccepted')
+    // Markable whenever the order carries a cancellation reason (received then cancelled);
+    // a null reason is a plain early cancel with nothing to hand back.
+    && f.order.cancellationReason != null;
 
   const handleMarkReturned = async (orderId: string) => {
     setMarkBusyId(orderId);
@@ -737,9 +740,19 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
                       )}
                     </td>
                     <td>
-                      {f.category === 'cancelledReturned'
-                        ? <span className="status-badge status-badge--delivered" title={o.cancelledReturnedToSenderAt ? formatDate(o.cancelledReturnedToSenderAt) : undefined}>{t.histPillCancelledReturned}</span>
-                        : <StatusBadge status={o.status} />}
+                      {/* Always show the real (cancelled/…) status. When the parcel was physically
+                          handed back, append a green "Returned to Sender" chip (marker not null). */}
+                      <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+                        <StatusBadge status={o.status} />
+                        {o.cancelledReturnedToSenderAt && (
+                          <span
+                            className="status-badge status-badge--delivered"
+                            title={formatDate(o.cancelledReturnedToSenderAt)}
+                          >
+                            {t.histReturnedToStore}
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td>
                       <span style={{

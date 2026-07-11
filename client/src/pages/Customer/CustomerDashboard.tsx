@@ -461,6 +461,7 @@ export function CustomerDashboard() {
                   packageFilter={isReturnedPackage}
                   title={t.custNavReturned}
                   emptyText={t.custReturnedNoneHint}
+                  readOnly
                 />
               )}
               {view === 'finance'     && <CustomerFinancePage />}
@@ -544,7 +545,7 @@ function OverviewView({
 
 // ── Shipments ─────────────────────────────────────────────────────────────────
 
-function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyText }: {
+function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyText, readOnly = false }: {
   orders: CustomerGroupOrder[];
   token: string;
   onRefresh: () => void;
@@ -554,6 +555,8 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
   title?: string;
   /** Hint shown when there are no packages to display (defaults to the no-shipments hint). */
   emptyText?: string;
+  /** Read-only view (e.g. Returned Packages): hides the edit/cancel actions entirely. */
+  readOnly?: boolean;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<CustomerOrder | null>(null);
@@ -843,7 +846,7 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
                                 {printIcon}
                                 {t.custLabelBtn}
                               </button>
-                              {canCustomerEdit(o) && (
+                              {!readOnly && canCustomerEdit(o) && (
                                 <button
                                   type="button"
                                   onClick={() => setEditingOrder(o)}
@@ -861,7 +864,7 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
                                   {t.ceoEditBtn}
                                 </button>
                               )}
-                              {canCustomerCancel(o) && (
+                              {!readOnly && canCustomerCancel(o) && (
                                 <button
                                   type="button"
                                   onClick={() => { setCancelError(null); setCancelTarget(o); }}

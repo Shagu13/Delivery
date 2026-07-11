@@ -77,5 +77,8 @@ public sealed record AdminOrderResponse(
     DateTime? DeliveredAt,
     // Courier cancellation reason ("DidNotLike" | "DidNotWant" | "WrongSize" | "Other") + optional note.
     string? CancellationReason = null,
-    string? CancellationComment = null
+    string? CancellationComment = null,
+    /// <summary>When an admin marked this cancelled order as physically returned to the sender.
+    /// Null otherwise — drives the History "Cancelled &amp; Returned" bucket.</summary>
+    DateTime? CancelledReturnedToSenderAt = null
 );
