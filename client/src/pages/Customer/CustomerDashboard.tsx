@@ -808,7 +808,7 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
                             fontSize: '0.68rem', fontWeight: 700,
                             background: 'rgba(16,185,129,0.12)', color: '#059669',
                           }}>
-                            {t.custReturnedToSenderBadge}
+                            {t.custReturnedToSenderBadge} · {new Date(o.cancelledReturnedToSenderAt).toLocaleDateString()}
                           </span>
                         )}
                         {CANCELLED_STATUSES.has(o.status) && o.cancellationReason && (

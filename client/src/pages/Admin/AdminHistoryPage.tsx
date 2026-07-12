@@ -749,7 +749,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
                             className="status-badge status-badge--delivered"
                             title={formatDate(o.cancelledReturnedToSenderAt)}
                           >
-                            {t.histReturnedToStore}
+                            {t.histReturnedToStore} · {formatDate(o.cancelledReturnedToSenderAt)}
                           </span>
                         )}
                       </span>

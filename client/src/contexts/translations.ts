@@ -3254,7 +3254,7 @@ const ka: typeof en = {
   histPillExchanged:         'გაცვლა შედგა',
   histPillPickedUp:          'აღებული პარტიები',
   histMarkReturned:          '→ დაუბრუნდა გამგზავნს',
-  histReturnedToStore:       'დაბრუნდა მაღაზიას',
+  histReturnedToStore:       'დაუბრუნდა მაღაზიას',
   histUnCancel:              '↺ გაუქმების გაუქმება',
   histUnDeliver:             '↺ ჩაბარების გაუქმება',
   histThCourier:             'კურიერი',
