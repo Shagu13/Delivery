@@ -17,7 +17,7 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     // ── GroupOrder flow ───────────────────────────────────────────────────────
     Pending:                         { short: 'Pending',          description: 'Order placed — awaiting acceptance by the operator.' },
     AcceptedGroupOrder:              { short: 'Accepted',         description: 'Company Accepted the Order' },
-    OrderNotAccepted:                { short: 'Not Accepted',     description: 'Order was not accepted by the operator.' },
+    OrderNotAccepted:                { short: 'Not Accepted',     description: 'Package was cancelled.' },
     CourierAssignedToPickUp:         { short: 'Assigned',         description: 'A courier has been assigned to pick up your order.' },
     CourierOnTheWayToPickUp:         { short: 'Picking Up',       description: 'Courier is on the way to your pickup address.' },
     CourierDeliveringToWarehouse:    { short: 'To Warehouse',     description: 'Courier is transporting your order to the warehouse.' },
@@ -46,11 +46,11 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     ExchangeCompleted:               { short: 'Exchanged',        description: 'Exchange parcel has been delivered to the recipient.' },
   },
 
-  ka: {
+  ka: { 
     // ── GroupOrder flow ───────────────────────────────────────────────────────
     Pending:                         { short: 'მოლოდინში',        description: 'შეკვეთა განხილვის მოლოდინშია.' },
     AcceptedGroupOrder:              { short: 'მიღებულია',        description: 'კომპანიამ შეკვეთა მიიღო.' },
-    OrderNotAccepted:                { short: 'არ მიღებულა',      description: 'შეკვეთა ოპერატორმა არ მიიღო.' },
+    OrderNotAccepted:                { short: 'არ მიღებულა',      description: 'ამანათი გაუქმდა.' },
     CourierAssignedToPickUp:         { short: 'კურიერი დაინიშნა', description: 'კურიერი დაინიშნა თქვენი ამანათის ასაღებად.' },
     CourierOnTheWayToPickUp:         { short: 'მოდის',            description: 'კურიერი მოემართება თქვენს მისამართზე.' },
     CourierDeliveringToWarehouse:    { short: 'საწყობისკენ',      description: 'კურიერს ამანათი საწყობში მიაქვს.' },

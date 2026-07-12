@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
@@ -7,7 +8,6 @@ import { fetchReturnExchangeOrders } from '../../api/returnExchange';
 import type { ReturnExchangeOrder } from '../../api/returnExchange';
 import { correctOrderStatus, markCancelledReturnedToSender } from '../../api/orders';
 import { fetchCouriers } from '../../api/couriers';
-import type { Courier } from '../../api/couriers';
 import { getCustomers } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -268,13 +268,10 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
 
-  const [groupOrders,   setGroupOrders]  = useState<AdminGroupOrder[]>([]);
-  const [returnOrders,  setReturnOrders] = useState<AdminGroupOrder[]>([]);
-  const [couriers,      setCouriers]     = useState<Courier[]>([]);
-  const [loading,       setLoading]      = useState(true);
-  const [error,         setError]        = useState<string | null>(null);
-  const [search,        setSearch]       = useState('');
-  const [customer,      setCustomer]     = useState<SelectedCustomer | null>(null);
+  const queryClient = useQueryClient();
+  const [search,         setSearch]         = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [customer,       setCustomer]       = useState<SelectedCustomer | null>(null);
   const [filterStatus,  setFilterStatus] = useState<HistoryFilter>('delivered');
   // Date navigator — filters by completion date (delivery date, or created date when
   // cancelled). `rangeFrom` is the single day / range start (defaults to today);
@@ -284,39 +281,43 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   const [viewingOrder,  setViewingOrder] = useState<AdminOrderItem | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async (term: string) => {
-    try {
-      const { items } = await fetchGroupOrders(token, {
-        search: term || undefined, pageSize: 1000, customerId: customer?.id,
-      });
-      setGroupOrders(items);
-      setError(null);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load history.');
-    } finally {
-      setLoading(false);
-    }
-  }, [token, customer]);
-
-  useEffect(() => {
-    void (async () => { setLoading(true); await load(''); })();
-  }, [load]);
+  // Group orders (batches) — search-filtered server-side by the debounced term.
+  // keepPreviousData holds the last list on screen while a new search resolves,
+  // and the shared query cache is persisted to IndexedDB, so a refresh repaints
+  // instantly from last-known data instead of a spinner.
+  const groupOrdersQuery = useQuery({
+    queryKey: ['admin', 'history', 'groupOrders', debouncedSearch, customer?.id ?? null] as const,
+    queryFn: () => fetchGroupOrders(token, {
+      search: debouncedSearch || undefined, pageSize: 1000, customerId: customer?.id,
+    }),
+    placeholderData: keepPreviousData,
+  });
+  const groupOrders = groupOrdersQuery.data?.items ?? [];
+  const loading = groupOrdersQuery.isPending;
+  const error = groupOrdersQuery.isError
+    ? (groupOrdersQuery.error instanceof Error ? groupOrdersQuery.error.message : 'Failed to load history.')
+    : null;
 
   // Standalone Return orders are not part of any GroupOrder, so fetch them
   // separately and keep the terminal ones (returned to sender / cancelled).
-  useEffect(() => {
-    fetchReturnExchangeOrders(token)
-      .then(orders => setReturnOrders(
-        orders
-          .filter(o => o.orderType === 'Return'
-            && (o.status === 'ReturnedToSender' || o.status === 'CancelledByAdmin'))
-          .map(wrapReturnAsGroupOrder)
-      ))
-      .catch(() => setReturnOrders([]));
-  }, [token]);
+  const returnOrdersQuery = useQuery({
+    queryKey: ['admin', 'history', 'returnOrders'] as const,
+    queryFn: async () => {
+      const orders = await fetchReturnExchangeOrders(token);
+      return orders
+        .filter(o => o.orderType === 'Return'
+          && (o.status === 'ReturnedToSender' || o.status === 'CancelledByAdmin'))
+        .map(wrapReturnAsGroupOrder);
+    },
+  });
+  const returnOrders = returnOrdersQuery.data ?? [];
 
   // Courier roster — only to resolve a last-mile courier's name for the View modal.
-  useEffect(() => { fetchCouriers(token).then(setCouriers).catch(() => {}); }, [token]);
+  const couriersQuery = useQuery({
+    queryKey: ['admin', 'couriers'] as const,
+    queryFn: () => fetchCouriers(token),
+  });
+  const couriers = couriersQuery.data ?? [];
   const courierNameById = useMemo(() => {
     const m = new Map<string, string>();
     couriers.forEach(c => m.set(c.courierId, c.fullName));
@@ -372,11 +373,9 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      void (async () => { setLoading(true); await load(search); })();
-    }, 350);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search, customer, load]);
+  }, [search]);
 
   // ── Date navigator ────────────────────────────────────────────────────────
   // null `rangeFrom` = All days; otherwise an inclusive [fromKey..toKey] window.
@@ -473,8 +472,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
       await correctOrderStatus(token, orderId, correction);
       setConfirmId(null);
       // The corrected order leaves terminal status, so it drops out of History on reload.
-      setLoading(true);
-      await load(search);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'history'] });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Correction failed.');
     } finally {
@@ -503,8 +501,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
       await markCancelledReturnedToSender(token, orderId);
       setMarkConfirmId(null);
       // It now carries the marker, so it moves to the "Cancelled & Returned" pill on reload.
-      setLoading(true);
-      await load(search);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'history'] });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Failed to mark returned to sender.');
     } finally {
