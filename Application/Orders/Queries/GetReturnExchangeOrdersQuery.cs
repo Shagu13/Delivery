@@ -29,5 +29,8 @@ public sealed record ReturnExchangeOrderDto(
     DateTime  CreatedAt,
     DateTime? PickedUpFromRecipientAt,
     DateTime? DeliveredToWarehouseAt,
-    DateTime? DeliveredAt
+    DateTime? DeliveredAt,
+    // Logistics marker: parcel physically handed back to the sender/store. Set when the
+    // order is marked returned-to-sender, so History classifies it as "Cancelled & Returned".
+    DateTime? CancelledReturnedToSenderAt
 );

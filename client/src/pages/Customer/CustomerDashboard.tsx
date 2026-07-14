@@ -31,10 +31,17 @@ type View = 'overview' | 'shipments' | 'returned' | 'finance' | 'statistics' | '
 
 const CUSTOMER_VIEWS: readonly View[] = ['overview', 'shipments', 'returned', 'finance', 'statistics', 'profile', 'password', 'calculator'];
 
-// A package belongs on the "Returned Packages" page when it's a Return or Exchange (any status),
-// or a Send order an admin has marked physically returned to the sender after cancellation.
+// A package belongs on the "Returned Packages" page when it has to go back to the sender:
+//  • a Return or Exchange (any status),
+//  • an order already marked physically returned to the sender (marker set),
+//  • a delivery the recipient refused (OrderNotAccepted — the parcel comes back), or
+//  • a Send/Exchange that was received then cancelled (carries a cancellation reason). A plain
+//    early cancel has no reason — it never shipped, so there's nothing to return.
 function isReturnedPackage(o: CustomerOrder): boolean {
-  return o.orderType === 'Return' || o.orderType === 'Exchange' || o.cancelledReturnedToSenderAt != null;
+  if (o.orderType === 'Return' || o.orderType === 'Exchange') return true;
+  if (o.cancelledReturnedToSenderAt != null) return true;
+  if (o.status === 'OrderNotAccepted') return true;
+  return CANCELLED_STATUSES.has(o.status) && o.cancellationReason != null;
 }
 
 // ── Status helpers ─────────────────────────────────────────────────────────────

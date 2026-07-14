@@ -58,6 +58,26 @@ function isCompleted(o: ReturnExchangeOrder) {
     return TERMINAL_STATUSES.has(o.status);
 }
 
+// Client-side pagination: cap how many rows render at once.
+const RE_PAGE_SIZE = 50;
+
+// Search scope: match the typed term against the sender side (customer name/phone) or the
+// recipient side (name/phone/city/district/address). Tracking number matches under either
+// scope — it's an identifier, not a party field. (All orders are loaded, so this is local.)
+function matchesReSearch(o: ReturnExchangeOrder, term: string, party: 'sender' | 'recipient'): boolean {
+    const q = term.trim().toLowerCase();
+    if (!q) return true;
+    if (o.trackingNumber.toLowerCase().includes(q)) return true;
+    if (party === 'sender') {
+        return (o.senderName ?? '').toLowerCase().includes(q)
+            || (o.senderPhone ?? '').toLowerCase().includes(q);
+    }
+    return [
+        o.recipientName, o.recipientPhone, o.recipientCity, o.recipientDistrict, o.recipientAddress,
+        o.returnPickupCity, o.returnPickupDistrict, o.returnPickupAddress,
+    ].some(f => (f ?? '').toLowerCase().includes(q));
+}
+
 function matchesStatusFilter(o: ReturnExchangeOrder, f: FilterStatus): boolean {
     if (f === 'All') return true;
     if (f === 'Pending') return o.status === 'Pending' || o.status === 'CourierAssignedToPickUp';
@@ -522,6 +542,9 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
     const [error, setError]           = useState<string | null>(null);
     const [typeFilter, setTypeFilter] = useState<FilterType>('All');
     const [statusFilter, setStatusFilter] = useState<FilterStatus>('All');
+    const [search, setSearch]         = useState('');
+    const [searchParty, setSearchParty] = useState<'sender' | 'recipient'>('sender');
+    const [page, setPage]             = useState(1);
 
     const load = useCallback(async (silent = false) => {
         if (!silent) { setLoading(true); setError(null); }
@@ -541,19 +564,30 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
     // change) pushes 'adminOrdersChanged' — refetch silently so it appears immediately.
     useOrdersChangedSignal(token, 'adminOrdersChanged', () => { void load(true); });
 
-    const filtered = orders.filter(o => {
+    // Search narrows the working set first; the type/status pill counts and the table all
+    // derive from it, so the numbers always match what's shown.
+    const searchedOrders = orders.filter(o => matchesReSearch(o, search, searchParty));
+
+    const filtered = searchedOrders.filter(o => {
         if (typeFilter !== 'All' && o.orderType !== typeFilter) return false;
         return matchesStatusFilter(o, statusFilter);
     });
 
     const countFor = (sf: FilterStatus) =>
-        orders.filter(o => {
+        searchedOrders.filter(o => {
             if (typeFilter !== 'All' && o.orderType !== typeFilter) return false;
             return matchesStatusFilter(o, sf);
         }).length;
 
-    const returnCount   = orders.filter(o => o.orderType === 'Return').length;
-    const exchangeCount = orders.filter(o => o.orderType === 'Exchange').length;
+    const returnCount   = searchedOrders.filter(o => o.orderType === 'Return').length;
+    const exchangeCount = searchedOrders.filter(o => o.orderType === 'Exchange').length;
+
+    // ── Pagination ──────────────────────────────────────────────────────────────
+    useEffect(() => { setPage(1); }, [search, searchParty, typeFilter, statusFilter]);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / RE_PAGE_SIZE));
+    const safePage   = Math.min(page, totalPages);
+    const pageStart  = (safePage - 1) * RE_PAGE_SIZE;
+    const paged      = filtered.slice(pageStart, pageStart + RE_PAGE_SIZE);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -585,6 +619,56 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
                 </div>
             </div>
 
+            {/* Search + scope toggle */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'inline-flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', flexShrink: 0 }}>
+                    {(['sender', 'recipient'] as const).map(p => (
+                        <button
+                            key={p}
+                            type="button"
+                            onClick={() => setSearchParty(p)}
+                            style={{
+                                padding: '7px 14px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                                border: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                                background: searchParty === p ? 'var(--color-accent)' : 'transparent',
+                                color: searchParty === p ? '#fff' : 'var(--color-text-subtle)',
+                            }}
+                        >
+                            {p === 'sender' ? t.goSender : t.goThRecipient}
+                        </button>
+                    ))}
+                </div>
+                <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                        <circle cx="6.5" cy="6.5" r="4.5" stroke="var(--color-text-subtle)" strokeWidth="1.4"/>
+                        <path d="M10 10l3 3" stroke="var(--color-text-subtle)" strokeWidth="1.4" strokeLinecap="round"/>
+                    </svg>
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder={t.goSearchPh}
+                        autoComplete="off"
+                        style={{
+                            width: '100%', padding: '9px 32px', borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--color-border)', background: 'var(--color-bg)',
+                            color: 'var(--color-text)', fontSize: '0.85rem', fontFamily: 'var(--font-body)',
+                            boxSizing: 'border-box',
+                        }}
+                    />
+                    {search && (
+                        <button
+                            type="button"
+                            onClick={() => setSearch('')}
+                            aria-label="Clear search"
+                            style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)' }}
+                        >
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                        </button>
+                    )}
+                </div>
+            </div>
+
             {/* Type filter */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t.reTypeLabel}</span>
@@ -597,7 +681,7 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
                         key={f}
                         label={label}
                         active={typeFilter === f}
-                        count={f === 'All' ? orders.length : f === 'Return' ? returnCount : exchangeCount}
+                        count={f === 'All' ? searchedOrders.length : f === 'Return' ? returnCount : exchangeCount}
                         onClick={() => setTypeFilter(f)}
                     />
                 ))}
@@ -657,7 +741,7 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.map(o => (
+                            {paged.map(o => (
                                 <OrderRow
                                     key={o.id}
                                     order={o}
@@ -668,6 +752,41 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {/* Pagination — rendered rows are capped at RE_PAGE_SIZE. */}
+            {!loading && !error && filtered.length > RE_PAGE_SIZE && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                    <button
+                        type="button"
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={safePage <= 1}
+                        style={{
+                            padding: '6px 14px', borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--color-border)', background: 'var(--color-bg-3)',
+                            color: 'var(--color-text)', fontSize: '0.8rem', fontWeight: 600,
+                            cursor: safePage <= 1 ? 'not-allowed' : 'pointer', opacity: safePage <= 1 ? 0.5 : 1,
+                        }}
+                    >
+                        {t.histPrevPage}
+                    </button>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>
+                        {pageStart + 1}–{Math.min(pageStart + RE_PAGE_SIZE, filtered.length)} / {filtered.length}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={safePage >= totalPages}
+                        style={{
+                            padding: '6px 14px', borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--color-border)', background: 'var(--color-bg-3)',
+                            color: 'var(--color-text)', fontSize: '0.8rem', fontWeight: 600,
+                            cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', opacity: safePage >= totalPages ? 0.5 : 1,
+                        }}
+                    >
+                        {t.histNextPage}
+                    </button>
                 </div>
             )}
         </div>

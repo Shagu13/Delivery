@@ -178,6 +178,8 @@ public sealed class AdminSetReturnOrderStatusCommandHandler
 
             case OrderStatus.ReturnedToSender:
                 order.DeliveredAt ??= CustomTime.Now;
+                // Logistics marker → History classifies it under "Cancelled & Returned".
+                order.CancelledReturnedToSenderAt ??= CustomTime.Now;
                 break;
         }
 
@@ -221,6 +223,11 @@ public sealed class MarkReturnedToSenderCommandHandler
             default:
                 throw new ConflictException("Only Return or Exchange orders can be marked ReturnedToSender via this endpoint.");
         }
+
+        // Stamp the logistics marker so History classifies it under "Cancelled & Returned"
+        // (parcel physically returned to the sender/store), the same bucket as a
+        // cancelled-then-returned Send/Exchange order.
+        order.CancelledReturnedToSenderAt ??= CustomTime.Now;
 
         await _context.SaveChangesAsync(ct);
     }

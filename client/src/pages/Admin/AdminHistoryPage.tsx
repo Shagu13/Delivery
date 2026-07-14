@@ -74,10 +74,12 @@ const CANCELLED_STATUSES = new Set<string>(['CancelledBySender', 'CancelledByAdm
 function orderCategory(o: AdminOrder): HistoryFilter | null {
   if (o.status === 'DeliveredToRecipient' && o.orderType !== 'Exchange') return 'delivered';
   if (o.status === 'ExchangeCompleted') return 'exchanged';
-  if (o.status === 'ReturnedToSender') return 'returned';
-  // A cancelled order the admin has since marked physically returned to the sender moves out
-  // of "Cancelled" into its own bucket (its Status stays a cancelled one — the marker decides).
+  // Any order physically returned to the sender/store (marker set) belongs in "Cancelled &
+  // Returned" — this includes Return/Exchange orders marked returned-to-sender (whose Status
+  // is ReturnedToSender) and cancelled Send/Exchange orders that were handed back. Checked
+  // before the ReturnedToSender status so the marker wins.
   if (o.cancelledReturnedToSenderAt) return 'cancelledReturned';
+  if (o.status === 'ReturnedToSender') return 'returned';
   if (CANCELLED_STATUSES.has(o.status)) return 'cancelled';
   return null;
 }
@@ -142,6 +144,7 @@ function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
       deliveryDateFrom: null,
       deliveryDateTo: null,
       deliveredAt: r.deliveredAt ?? r.deliveredToWarehouseAt,
+      cancelledReturnedToSenderAt: r.cancelledReturnedToSenderAt,
     }],
   };
 }

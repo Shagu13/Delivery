@@ -37,6 +37,7 @@ export interface ReturnExchangeOrder {
     pickedUpFromRecipientAt: string | null;
     deliveredToWarehouseAt: string | null;
     deliveredAt: string | null;
+    cancelledReturnedToSenderAt: string | null;
 }
 
 export async function fetchReturnExchangeOrders(token: string): Promise<ReturnExchangeOrder[]> {

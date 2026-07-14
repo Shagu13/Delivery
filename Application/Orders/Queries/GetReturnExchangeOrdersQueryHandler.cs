@@ -53,7 +53,8 @@ public sealed class GetReturnExchangeOrdersQueryHandler
                 CreatedAt:               o.CreatedAt,
                 PickedUpFromRecipientAt: o.PickedUpFromRecipientAt,
                 DeliveredToWarehouseAt:  o.DeliveredToWarehouseAt,
-                DeliveredAt:             o.DeliveredAt
+                DeliveredAt:             o.DeliveredAt,
+                CancelledReturnedToSenderAt: o.CancelledReturnedToSenderAt
             );
         }).ToList();
     }
