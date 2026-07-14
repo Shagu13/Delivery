@@ -44,6 +44,10 @@ function StatusBadge({ status }: { status: string }) {
 
 type HistoryFilter = 'delivered' | 'cancelled' | 'cancelledReturned' | 'returned' | 'exchanged' | 'pickedup';
 
+// Client-side pagination: render at most this many rows at once. With "All" days selected
+// a category can hold thousands of rows; rendering them all is what makes the page janky.
+const PAGE_SIZE = 100;
+
 const HISTORY_PILLS: { value: HistoryFilter; labelKey: string }[] = [
   { value: 'delivered', labelKey: 'histPillDelivered' },
   { value: 'cancelled', labelKey: 'histPillCancelled' },
@@ -154,17 +158,24 @@ interface FlatHistoryOrder {
 }
 
 // Group orders are searched server-side; the standalone (wrapped) returns are not,
-// so match them here on sender + their single package.
-function returnMatchesSearch(go: AdminGroupOrder, term: string): boolean {
+// so match them here — scoped to the same side (sender vs recipient) as the server query.
+function returnMatchesSearch(go: AdminGroupOrder, term: string, party: 'sender' | 'recipient'): boolean {
   const q = term.trim().toLowerCase();
   if (!q) return true;
-  if (go.senderBusinessName.toLowerCase().includes(q)) return true;
-  if (go.senderPhone.toLowerCase().includes(q)) return true;
-  if (go.pickUpCity.toLowerCase().includes(q)) return true;
+  if (party === 'sender') {
+    return go.senderBusinessName.toLowerCase().includes(q)
+        || go.senderPhone.toLowerCase().includes(q)
+        || go.pickUpCity.toLowerCase().includes(q)
+        || go.pickUpDistrict.toLowerCase().includes(q)
+        || go.pickUpAddress.toLowerCase().includes(q);
+  }
+  // recipient
   return go.orders.some(o =>
     o.recipientName.toLowerCase().includes(q) ||
     o.recipientPhone.toLowerCase().includes(q) ||
     o.recipientCity.toLowerCase().includes(q) ||
+    o.recipientDistrict.toLowerCase().includes(q) ||
+    o.recipientAddress.toLowerCase().includes(q) ||
     o.trackingNumber.toLowerCase().includes(q));
 }
 
@@ -271,6 +282,8 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   const queryClient = useQueryClient();
   const [search,         setSearch]         = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Which side the free-text search matches: sender/customer (default) or recipient.
+  const [searchParty,    setSearchParty]    = useState<'sender' | 'recipient'>('sender');
   const [customer,       setCustomer]       = useState<SelectedCustomer | null>(null);
   const [filterStatus,  setFilterStatus] = useState<HistoryFilter>('delivered');
   // Date navigator — filters by completion date (delivery date, or created date when
@@ -279,6 +292,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   const [rangeFrom,     setRangeFrom]    = useState<Date | null>(() => georgianToday());
   const [rangeTo,       setRangeTo]      = useState<Date | null>(null);
   const [viewingOrder,  setViewingOrder] = useState<AdminOrderItem | null>(null);
+  const [page,          setPage]         = useState(1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Group orders (batches) — search-filtered server-side by the debounced term.
@@ -286,9 +300,9 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   // and the shared query cache is persisted to IndexedDB, so a refresh repaints
   // instantly from last-known data instead of a spinner.
   const groupOrdersQuery = useQuery({
-    queryKey: ['admin', 'history', 'groupOrders', debouncedSearch, customer?.id ?? null] as const,
+    queryKey: ['admin', 'history', 'groupOrders', debouncedSearch, searchParty, customer?.id ?? null] as const,
     queryFn: () => fetchGroupOrders(token, {
-      search: debouncedSearch || undefined, pageSize: 1000, customerId: customer?.id,
+      search: debouncedSearch || undefined, party: searchParty, pageSize: 1000, customerId: customer?.id,
     }),
     placeholderData: keepPreviousData,
   });
@@ -394,7 +408,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
     const all = [
       ...groupOrders,
       ...returnOrders.filter(go =>
-        returnMatchesSearch(go, search) && (!customer || go.customerId === customer.id)),
+        returnMatchesSearch(go, debouncedSearch, searchParty) && (!customer || go.customerId === customer.id)),
     ];
     for (const go of all) {
       for (const o of go.orders) {
@@ -411,7 +425,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
       }
     }
     return result;
-  }, [groupOrders, returnOrders, search, customer]);
+  }, [groupOrders, returnOrders, debouncedSearch, searchParty, customer]);
 
   // Narrow to the selected completion day / range.
   const dayOrders = useMemo(
@@ -450,6 +464,17 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   // its own result set and table.
   const isPickedUp  = filterStatus === 'pickedup';
   const resultCount = isPickedUp ? pickedUpGroups.length : visible.length;
+
+  // ── Pagination ──────────────────────────────────────────────────────────────
+  // Reset to the first page whenever the result set changes (filter/search/range/customer).
+  useEffect(() => { setPage(1); }, [filterStatus, debouncedSearch, searchParty, customer, fromKey, toKey]);
+
+  const totalPages = Math.max(1, Math.ceil(resultCount / PAGE_SIZE));
+  // Guard against a stale page beyond the new result set (e.g. after narrowing a filter).
+  const safePage   = Math.min(page, totalPages);
+  const pageStart  = (safePage - 1) * PAGE_SIZE;
+  const pagedVisible     = useMemo(() => visible.slice(pageStart, pageStart + PAGE_SIZE), [visible, pageStart]);
+  const pagedPickedUp    = useMemo(() => pickedUpGroups.slice(pageStart, pageStart + PAGE_SIZE), [pickedUpGroups, pageStart]);
 
   // ── Mistaken-status correction (un-cancel / un-deliver) ─────────────────────
   // Delivered & cancelled orders only live here in History, so the admin fixes a
@@ -577,6 +602,24 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
 
       {/* Search */}
       <div className="go-toolbar go-toolbar--search" style={{ gap: 10, alignItems: 'center' }}>
+        {/* Search scope: match the typed term against the sender/customer or the recipient. */}
+        <div style={{ display: 'inline-flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', flexShrink: 0 }}>
+          {(['sender', 'recipient'] as const).map(p => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setSearchParty(p)}
+              style={{
+                padding: '7px 14px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                border: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                background: searchParty === p ? 'var(--color-accent)' : 'transparent',
+                color: searchParty === p ? '#fff' : 'var(--color-text-subtle)',
+              }}
+            >
+              {p === 'sender' ? t.goSender : t.goThRecipient}
+            </button>
+          ))}
+        </div>
         <div className="go-search" style={{ flexShrink: 0 }}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
             <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
@@ -664,7 +707,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
               </tr>
             </thead>
             <tbody>
-              {pickedUpGroups.map(go => (
+              {pagedPickedUp.map(go => (
                 <tr key={go.id}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{go.senderBusinessName || '—'}</div>
@@ -709,7 +752,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
               </tr>
             </thead>
             <tbody>
-              {visible.map(f => {
+              {pagedVisible.map(f => {
                 const o = f.order;
                 const correction = correctionFor(f);
                 return (
@@ -877,6 +920,31 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
               </tfoot>
             )}
           </table>
+        </div>
+      )}
+
+      {/* Pagination — rendered rows are capped at PAGE_SIZE; step through the rest. */}
+      {!loading && !error && resultCount > PAGE_SIZE && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '14px 20px' }}>
+          <button
+            type="button"
+            className="hist-fix-btn"
+            disabled={safePage <= 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+          >
+            {t.histPrevPage}
+          </button>
+          <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>
+            {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, resultCount)} / {resultCount}
+          </span>
+          <button
+            type="button"
+            className="hist-fix-btn"
+            disabled={safePage >= totalPages}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+          >
+            {t.histNextPage}
+          </button>
         </div>
       )}
 
