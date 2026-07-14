@@ -582,6 +582,21 @@ public sealed class OrdersController : BaseController
         await Sender.Send(new MarkReturnedToSenderCommand(id), ct);
         return NoContent();
     }
+
+    // ── PUT /api/orders/{id}/set-return-status  (Admin/Operator) ──────────────
+    // Free-form status override for a standalone Return order.
+    [HttpPut("{id:guid}/set-return-status")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SetReturnStatus(
+        Guid id,
+        [FromBody] SetReturnStatusRequest request,
+        CancellationToken ct)
+    {
+        await Sender.Send(new AdminSetReturnOrderStatusCommand(id, request.Status), ct);
+        return NoContent();
+    }
 }
 
 // ── Request models ────────────────────────────────────────────────────────────
@@ -596,6 +611,8 @@ public sealed record CancelDeliveryRequest(Domain.Enums.CancellationReason Reaso
 /// <summary>Optional body for admin cancel: a reason makes it a billable "cancel &amp; charge"; omit for a plain cancel.</summary>
 public sealed record CancelByAdminRequest(Domain.Enums.CancellationReason? Reason, string? Comment);
 public sealed record DeliveredPaidToSenderRequest(bool ServiceFeeAlsoPaidToSender);
+/// <summary>Admin override target status for a standalone Return order.</summary>
+public sealed record SetReturnStatusRequest(Domain.Enums.OrderStatus Status);
 /// <summary>Body for correct-status: which mistaken-status correction to apply.</summary>
 public sealed record CorrectStatusRequest(Application.Orders.Commands.OrderStatusCorrection Correction);
 

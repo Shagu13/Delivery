@@ -64,6 +64,33 @@ export async function markReturnedToSender(token: string, orderId: string): Prom
     if (!res.ok) throw new Error('Failed to mark returned to sender');
 }
 
+// Admin override: force a standalone Return order to any status in its flow.
+export type ReturnFlowStatus =
+    | 'Pending'
+    | 'CourierAssignedToPickUp'
+    | 'PickedUpFromRecipient'
+    | 'DeliveredReturnOrderToWarehouse'
+    | 'ReturnedToSender'
+    | 'CancelledByAdmin';
+
+export const RETURN_FLOW_STATUSES: ReturnFlowStatus[] = [
+    'Pending',
+    'CourierAssignedToPickUp',
+    'PickedUpFromRecipient',
+    'DeliveredReturnOrderToWarehouse',
+    'ReturnedToSender',
+    'CancelledByAdmin',
+];
+
+export async function setReturnStatus(token: string, orderId: string, status: ReturnFlowStatus): Promise<void> {
+    const res = await fetch(`${BASE}/${orderId}/set-return-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error('Failed to set return status');
+}
+
 // Courier actions
 export async function markReturnPickedUp(token: string, orderId: string): Promise<void> {
     const res = await fetch(`${BASE}/${orderId}/return-picked-up`, {

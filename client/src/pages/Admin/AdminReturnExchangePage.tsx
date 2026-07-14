@@ -4,9 +4,12 @@ import {
     fetchReturnExchangeOrders,
     assignReturnCourier,
     markReturnedToSender,
+    setReturnStatus,
+    RETURN_FLOW_STATUSES,
     type ReturnExchangeOrder,
+    type ReturnFlowStatus,
 } from '../../api/returnExchange';
-import { setCourierSalary, setCompanyServicePrice, adminMarkReturnAtWarehouse } from '../../api/orders';
+import { setCourierSalary, setCompanyServicePrice } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { SalaryWarningModal } from './SalaryWarningModal';
@@ -148,6 +151,7 @@ function OrderRow({
     const { t, lang } = useLanguage();
     const [assigning, setAssigning]         = useState(false);
     const [completing, setCompleting]       = useState(false);
+    const [settingStatus, setSettingStatus] = useState(false);
     const [selectedCourier, setSelected]    = useState('');
     const [rowError, setRowError]           = useState<string | null>(null);
     const [showSalaryWarning, setShowSalaryWarning] = useState(false);
@@ -222,31 +226,36 @@ function OrderRow({
         } finally { setCompleting(false); }
     };
 
-    const handleMarkAtWarehouse = async () => {
-        setCompleting(true); setRowError(null);
+    const handleSetStatus = async (newStatus: ReturnFlowStatus) => {
+        if (newStatus === order.status) return;
+        setSettingStatus(true); setRowError(null);
         try {
-            await adminMarkReturnAtWarehouse(token, order.id);
+            await setReturnStatus(token, order.id, newStatus);
             onRefresh();
         } catch (e) {
             setRowError(e instanceof Error ? e.message : t.reActionFailed);
-        } finally { setCompleting(false); }
+        } finally { setSettingStatus(false); }
     };
 
     const canAssign = order.orderType === 'Return' &&
         (order.status === 'Pending' || order.status === 'CourierAssignedToPickUp');
 
-    // Admin can advance a picked-up return to the warehouse (mirrors the courier's own step,
-    // for when the courier didn't record it).
-    const canMarkAtWarehouse = order.orderType === 'Return' &&
-        order.status === 'PickedUpFromRecipient';
-
-    const canMarkReturned = order.orderType === 'Return' &&
-        order.status === 'DeliveredReturnOrderToWarehouse';
-
     // An Exchange has no warehouse leg; once it's delivered the admin can confirm the
     // swapped-out item went back to the sender (its own terminal), same endpoint as returns.
     const canMarkExchangeReturned = order.orderType === 'Exchange' &&
         (order.status === 'DeliveredToRecipient' || order.status === 'ExchangeCompleted');
+
+    // Full status override for Return orders: admin can jump the parcel to any status in
+    // its flow (fills the gaps left by the step-by-step courier/admin actions).
+    const returnStatusLabels: Record<ReturnFlowStatus, string> = {
+        Pending:                         t.reStPending,
+        CourierAssignedToPickUp:         t.reStCourierAssigned,
+        PickedUpFromRecipient:           t.reStPickedUp,
+        DeliveredReturnOrderToWarehouse: t.reStAtWarehouse,
+        ReturnedToSender:                t.reStReturned,
+        CancelledByAdmin:                t.reStCancelled,
+    };
+    const statusInFlow = (RETURN_FLOW_STATUSES as string[]).includes(order.status);
 
     const done = isCompleted(order);
 
@@ -330,22 +339,30 @@ function OrderRow({
                             </button>
                         </>
                     )}
-                    {canMarkAtWarehouse && (
-                        <button
-                            className="go-action-btn"
-                            onClick={handleMarkAtWarehouse}
-                            disabled={completing}
+                    {order.orderType === 'Return' && (
+                        <select
+                            value={order.status}
+                            onChange={e => void handleSetStatus(e.target.value as ReturnFlowStatus)}
+                            disabled={settingStatus}
+                            title={t.reSetStatus}
                             style={{
-                                fontSize: '0.75rem', padding: '4px 10px',
-                                background: 'rgba(249,115,22,0.1)',
-                                color: '#f97316',
-                                border: '1px solid rgba(249,115,22,0.3)',
+                                background: 'var(--color-bg)',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: 'var(--radius-sm)',
+                                color: 'var(--color-text)',
+                                fontSize: '0.78rem', padding: '4px 8px',
+                                minWidth: 150, opacity: settingStatus ? 0.6 : 1,
                             }}
                         >
-                            {completing ? '…' : t.reMarkAtWarehouse}
-                        </button>
+                            {!statusInFlow && (
+                                <option value={order.status} disabled>{order.status}</option>
+                            )}
+                            {RETURN_FLOW_STATUSES.map(s => (
+                                <option key={s} value={s}>{returnStatusLabels[s]}</option>
+                            ))}
+                        </select>
                     )}
-                    {(canMarkReturned || canMarkExchangeReturned) && (
+                    {canMarkExchangeReturned && (
                         <button
                             className="go-action-btn"
                             onClick={handleMarkReturned}

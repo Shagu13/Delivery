@@ -91,17 +91,16 @@ function specialTypes(go: CustomerGroupOrder): string[] {
 // Terminal "cancelled" statuses (mirrors the customer statistics page).
 const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
 
-// A customer may edit or cancel a package until it's handed to a courier for
-// last-mile delivery — from CourierAssignedToDeliver onward the order is locked.
-// (Mirrors the backend CustomerOrderActionPolicy.)
+// A customer may edit or cancel a package only until a courier has physically picked
+// the parcel up. Pickup sets a batch package to CourierDeliveringToWarehouse (and a
+// standalone Return to PickedUpFromRecipient) — neither is in this set, so both lock
+// at pickup. (Mirrors the backend CustomerOrderActionPolicy.)
 const CUSTOMER_MODIFIABLE_STATUSES = new Set([
   'Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp',
-  'CourierDeliveringToWarehouse', 'DeliveredToWarehouse', 'AdminAcceptedOrderInWareHouse',
-  'AcceptedOrder', 'OrderIsOnItsWayToRecipientsCity',
 ]);
 
 // Cancel is allowed for any package type (Send/Exchange and Returns) while still
-// in an early status. For Returns the early statuses (Pending / assigned-to-pickup)
+// before pickup. For Returns the pre-pickup statuses (Pending / assigned-to-pickup)
 // fall in the same set, so cancel locks once the courier has collected the parcel.
 function canCustomerCancel(o: CustomerOrder): boolean {
   return CUSTOMER_MODIFIABLE_STATUSES.has(o.status);
@@ -462,6 +461,7 @@ export function CustomerDashboard() {
                   title={t.custNavReturned}
                   emptyText={t.custReturnedNoneHint}
                   readOnly
+                  showStatusFilter
                 />
               )}
               {view === 'finance'     && <CustomerFinancePage />}
@@ -545,7 +545,7 @@ function OverviewView({
 
 // ── Shipments ─────────────────────────────────────────────────────────────────
 
-function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyText, readOnly = false }: {
+function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyText, readOnly = false, showStatusFilter = false }: {
   orders: CustomerGroupOrder[];
   token: string;
   onRefresh: () => void;
@@ -557,6 +557,8 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
   emptyText?: string;
   /** Read-only view (e.g. Returned Packages): hides the edit/cancel actions entirely. */
   readOnly?: boolean;
+  /** Show a per-status dropdown filter (e.g. Returned Packages page). Defaults to All. */
+  showStatusFilter?: boolean;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<CustomerOrder | null>(null);
@@ -564,6 +566,7 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const { lang, t } = useLanguage();
 
   const query = search.trim().toLowerCase();
@@ -577,11 +580,23 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
         .filter(entry => entry.pkgs.length > 0)
     : orders.map(go => ({ go, pkgs: go.orders }));
 
-  // When searching, further narrow each group to the packages that match and drop groups
-  // with no matches. Each entry carries the packages to render for that card.
-  const visibleGroups: { go: CustomerGroupOrder; pkgs: CustomerOrder[] }[] = searching
+  // Distinct statuses present in the listed packages, for the status dropdown.
+  const availableStatuses = showStatusFilter
+    ? Array.from(new Set(baseGroups.flatMap(({ pkgs }) => pkgs.map(o => o.status))))
+    : [];
+
+  // Narrow each group to packages matching the active status filter and/or search, dropping
+  // groups with no remaining matches. Each entry carries the packages to render for that card.
+  const filtering = searching || statusFilter.length > 0;
+  const visibleGroups: { go: CustomerGroupOrder; pkgs: CustomerOrder[] }[] = filtering
     ? baseGroups
-        .map(({ go, pkgs }) => ({ go, pkgs: pkgs.filter(o => orderMatchesSearch(o, query)) }))
+        .map(({ go, pkgs }) => ({
+          go,
+          pkgs: pkgs.filter(o =>
+            (!statusFilter || o.status === statusFilter) &&
+            (!searching || orderMatchesSearch(o, query))
+          ),
+        }))
         .filter(entry => entry.pkgs.length > 0)
     : baseGroups;
 
@@ -622,8 +637,9 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Search bar */}
-      <div style={{ position: 'relative' }}>
+      {/* Search + status filter */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
              style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
           <circle cx="7" cy="7" r="5" stroke="var(--color-text-subtle)" strokeWidth="1.5" />
@@ -659,8 +675,27 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
           </button>
         )}
       </div>
+        {showStatusFilter && (
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            aria-label={t.custThStatus}
+            style={{
+              padding: '11px 14px', borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border)', background: 'var(--color-bg-2)',
+              color: 'var(--color-text)', fontSize: '0.88rem', fontFamily: 'var(--font-body)',
+              minWidth: 180, cursor: 'pointer',
+            }}
+          >
+            <option value="">{t.custStatusFilterAll}</option>
+            {availableStatuses.map(s => (
+              <option key={s} value={s}>{getStatusMeta(s, lang).short}</option>
+            ))}
+          </select>
+        )}
+      </div>
 
-      {searching && visibleGroups.length === 0 && (
+      {filtering && visibleGroups.length === 0 && (
         <div className="content-card">
           <div className="empty-state">
             <svg className="empty-state__icon" viewBox="0 0 40 40" fill="none">
@@ -673,8 +708,8 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
       )}
 
       {visibleGroups.map(({ go, pkgs }) => {
-        // While searching, force matching groups open so the hits are visible.
-        const isExpanded = searching || expanded === go.id;
+        // While searching or status-filtering, force matching groups open so the hits are visible.
+        const isExpanded = filtering || expanded === go.id;
         return (
         <div key={go.id} className="content-card">
           {/* Group order header */}

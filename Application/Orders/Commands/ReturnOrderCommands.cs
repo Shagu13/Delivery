@@ -1,3 +1,4 @@
+using Domain.Enums;
 using MediatR;
 
 namespace Application.Orders.Commands;
@@ -13,3 +14,10 @@ public sealed record MarkReturnDeliveredToWarehouseCommand(Guid OrderId, string 
 
 /// <summary>Admin marks a Return order as returned to the sender (terminal state).</summary>
 public sealed record MarkReturnedToSenderCommand(Guid OrderId) : IRequest;
+
+/// <summary>
+/// Admin/Operator override: force a standalone Return order to any status in its flow
+/// (incl. correcting a step a courier skipped, or moving it backward to fix a mistake).
+/// The relevant "reached" timestamp is stamped when moving forward into a milestone.
+/// </summary>
+public sealed record AdminSetReturnOrderStatusCommand(Guid OrderId, OrderStatus NewStatus) : IRequest;

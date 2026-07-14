@@ -111,6 +111,75 @@ public sealed class MarkReturnDeliveredToWarehouseCommandHandler
     }
 }
 
+// ── AdminSetReturnOrderStatus ─────────────────────────────────────────────────
+// Free admin override of a Return order's status. The per-step courier/admin actions
+// (assign → picked-up → warehouse → returned) only move the order forward one hop at a
+// time and leave gaps (e.g. no admin action for PickedUpFromRecipient); this lets an
+// admin set any status directly to correct a stuck or mis-recorded return.
+public sealed class AdminSetReturnOrderStatusCommandHandler
+    : IRequestHandler<AdminSetReturnOrderStatusCommand>
+{
+    private readonly IAppDbContext _context;
+    public AdminSetReturnOrderStatusCommandHandler(IAppDbContext context) => _context = context;
+
+    // The full set of statuses a standalone Return moves through, plus admin cancel.
+    private static readonly HashSet<OrderStatus> AllowedReturnStatuses = new()
+    {
+        OrderStatus.Pending,
+        OrderStatus.CourierAssignedToPickUp,
+        OrderStatus.PickedUpFromRecipient,
+        OrderStatus.DeliveredReturnOrderToWarehouse,
+        OrderStatus.ReturnedToSender,
+        OrderStatus.CancelledByAdmin,
+    };
+
+    public async Task Handle(AdminSetReturnOrderStatusCommand request, CancellationToken ct)
+    {
+        var order = await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == request.OrderId, ct)
+            ?? throw new NotFoundException(nameof(Domain.Order), request.OrderId);
+
+        if (order.OrderType != OrderType.Return)
+            throw new ConflictException("Only Return orders can have their status set via this action.");
+
+        if (!AllowedReturnStatuses.Contains(request.NewStatus))
+            throw new ConflictException($"{request.NewStatus} is not a valid Return status.");
+
+        order.Status = request.NewStatus;
+
+        // Stamp the milestone timestamp when advancing into it (leave any earlier stamp
+        // in place so an admin nudging the status doesn't wipe real recorded times).
+        switch (request.NewStatus)
+        {
+            case OrderStatus.CourierAssignedToPickUp:
+                order.AssignedToCourierAt ??= CustomTime.Now;
+                break;
+
+            case OrderStatus.PickedUpFromRecipient:
+                order.PickedUpFromRecipientAt ??= CustomTime.Now;
+                break;
+
+            case OrderStatus.DeliveredReturnOrderToWarehouse:
+                order.DeliveredToWarehouseAt ??= CustomTime.Now;
+                // Recipient-paid return: record the cash the courier collected once, mirroring
+                // the courier's own warehouse action so it flows into settlement.
+                if (order.WhoPaysForCompanyService == ServicePayer.Recipient
+                    && order.CompanyServicePaymentStatus != CompanyServicePaymentStatus.Paid)
+                {
+                    order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice;
+                    order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+                }
+                break;
+
+            case OrderStatus.ReturnedToSender:
+                order.DeliveredAt ??= CustomTime.Now;
+                break;
+        }
+
+        await _context.SaveChangesAsync(ct);
+    }
+}
+
 // ── MarkReturnedToSender ──────────────────────────────────────────────────────
 public sealed class MarkReturnedToSenderCommandHandler
     : IRequestHandler<MarkReturnedToSenderCommand>
