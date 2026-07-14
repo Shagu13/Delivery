@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { Highlight } from '../../components/ui/Highlight';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, OrderStatus } from '../../api/adminGroupOrders';
 import { fetchReturnExchangeOrders } from '../../api/returnExchange';
@@ -277,14 +278,14 @@ function CustomerTypeahead({ token, value, onChange }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function AdminHistoryPage({ token, canSeeRevenue = true }: { token: string; canSeeRevenue?: boolean }) {
+export default function AdminHistoryPage({ token, canSeeRevenue = true, initialSearch = '' }: { token: string; canSeeRevenue?: boolean; initialSearch?: string }) {
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
 
   const queryClient = useQueryClient();
-  const [search,         setSearch]         = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [search,         setSearch]         = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   // Which side the free-text search matches: sender/customer (default) or recipient.
   const [searchParty,    setSearchParty]    = useState<'sender' | 'recipient'>('sender');
   const [customer,       setCustomer]       = useState<SelectedCustomer | null>(null);
@@ -292,7 +293,9 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
   // Date navigator — filters by completion date (delivery date, or created date when
   // cancelled). `rangeFrom` is the single day / range start (defaults to today);
   // `rangeTo` (inclusive) widens it into a custom range, null = single day / All.
-  const [rangeFrom,     setRangeFrom]    = useState<Date | null>(() => georgianToday());
+  // When deep-linked with a search term (Order Search "Go To"), open on All days so the
+  // target order isn't hidden by the default single-day window.
+  const [rangeFrom,     setRangeFrom]    = useState<Date | null>(() => initialSearch ? null : georgianToday());
   const [rangeTo,       setRangeTo]      = useState<Date | null>(null);
   const [viewingOrder,  setViewingOrder] = useState<AdminOrderItem | null>(null);
   const [page,          setPage]         = useState(1);
@@ -760,17 +763,17 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
                 const correction = correctionFor(f);
                 return (
                   <tr key={o.id}>
-                    <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                    <td><span className="tn-badge"><Highlight text={o.trackingNumber} term={debouncedSearch} /></span></td>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{f.senderBusinessName || '—'}</div>
+                      <div style={{ fontWeight: 600 }}><Highlight text={f.senderBusinessName || '—'} term={debouncedSearch} /></div>
                       {f.senderName && (
-                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{f.senderName}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}><Highlight text={f.senderName} term={debouncedSearch} /></div>
                       )}
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
+                      <div style={{ fontWeight: 600 }}><Highlight text={recipientDisplayName(o.recipientName, t.recipientUnknown)} term={debouncedSearch} /></div>
                       <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>
-                        {o.recipientPhone}
+                        <Highlight text={o.recipientPhone} term={debouncedSearch} />
                       </div>
                     </td>
                     <td>
@@ -779,7 +782,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true }: { toke
                         {locDistrict(o.recipientDistrict, o.recipientDistrictGeo)}
                       </div>
                       {o.recipientAddress && (
-                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', maxWidth: 220, whiteSpace: 'normal' }}>{o.recipientAddress}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', maxWidth: 220, whiteSpace: 'normal' }}><Highlight text={o.recipientAddress} term={debouncedSearch} /></div>
                       )}
                     </td>
                     <td>

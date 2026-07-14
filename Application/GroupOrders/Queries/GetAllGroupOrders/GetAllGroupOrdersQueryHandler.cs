@@ -94,9 +94,11 @@ public sealed class GetAllGroupOrdersQueryHandler
         {
             var term = request.SearchTerm.Trim().ToLower();
             // Party = "recipient" restricts the search to each order's own recipient fields
-            // (name/phone/address/city/district/tracking) — sender/pickup fields are excluded
-            // so a recipient-side search never matches on the sender's name. Party = "sender"
+            // (name/phone/address/city/district) — sender/pickup fields are excluded so a
+            // recipient-side search never matches on the sender's name. Party = "sender"
             // restricts to sender/pickup fields. Otherwise (null) it matches either side.
+            // The tracking number is a unique identifier, so it always matches regardless of
+            // the party scope (this is what lets a deep-link/"Go To" find an order by TN).
             var matchesSender    = request.Party != "recipient";
             var matchesRecipient = request.Party != "sender";
 
@@ -117,8 +119,9 @@ public sealed class GetAllGroupOrdersQueryHandler
                         o.RecipientPhone.Contains(term) ||
                         o.RecipientCity.ToLower().Contains(term) ||
                         o.RecipientDistrict.ToLower().Contains(term) ||
-                        o.RecipientAddress.ToLower().Contains(term) ||
-                        o.TrackingNumber.ToLower().Contains(term)))
+                        o.RecipientAddress.ToLower().Contains(term)))
+                ||
+                go.Orders.Any(o => o.TrackingNumber.ToLower().Contains(term))
             );
 
             soQuery = soQuery.Where(o =>
@@ -127,8 +130,7 @@ public sealed class GetAllGroupOrdersQueryHandler
                      o.RecipientPhone.Contains(term) ||
                      o.RecipientCity.ToLower().Contains(term) ||
                      o.RecipientDistrict.ToLower().Contains(term) ||
-                     o.RecipientAddress.ToLower().Contains(term) ||
-                     o.TrackingNumber.ToLower().Contains(term)))
+                     o.RecipientAddress.ToLower().Contains(term)))
                 ||
                 (matchesSender && o.Customer != null &&
                     (o.Customer.BusinessName.ToLower().Contains(term) ||
@@ -138,6 +140,8 @@ public sealed class GetAllGroupOrdersQueryHandler
                      o.Customer.City.ToLower().Contains(term) ||
                      o.Customer.District.ToLower().Contains(term) ||
                      o.Customer.Address.ToLower().Contains(term)))
+                ||
+                o.TrackingNumber.ToLower().Contains(term)
             );
         }
 

@@ -119,10 +119,13 @@ function canCustomerEdit(o: CustomerOrder): boolean {
   return o.orderType !== 'Return' && CUSTOMER_MODIFIABLE_STATUSES.has(o.status);
 }
 
-// A batch stays open to new packages until a pickup courier is assigned. Mirrors the
-// backend GroupOrderAppendPolicy (Pending / AcceptedGroupOrder). Return-only cards are
-// standalone orders, not real batches, so they can't take added packages.
-const APPENDABLE_GROUP_STATUSES = new Set(['Pending', 'AcceptedGroupOrder']);
+// A batch stays open to new packages until the courier physically collects it — every
+// status before pickup accepts additions (pickup sets CourierDeliveringToWarehouse).
+// Mirrors the backend GroupOrderAppendPolicy. Return-only cards are standalone orders,
+// not real batches, so they can't take added packages.
+const APPENDABLE_GROUP_STATUSES = new Set([
+  'Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp',
+]);
 
 function canAddPackages(go: CustomerGroupOrder): boolean {
   const isReturnCard = go.orders.length > 0 && go.orders.every(o => o.orderType === 'Return');

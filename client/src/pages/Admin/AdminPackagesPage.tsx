@@ -255,17 +255,20 @@ function OrderTypeBadge({ orderType }: { orderType: string }) {
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage, canGroup = canManage, canSeeRevenue = true }: { canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean; canSeeRevenue?: boolean }) {
+export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage, canGroup = canManage, canSeeRevenue = true, initialSearch = '' }: { canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean; canSeeRevenue?: boolean; initialSearch?: string }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
 
   // ── Pickup state (mirrors AdminOrders) ──────────────────────────────────────
-  const [search,      setSearch]      = useState('');
+  // Deep-link seed from the global Order Search "Go To". With the date navigator untouched
+  // and a search term present, resolveDateWindow reaches the whole DB, so the order shows
+  // regardless of day.
+  const [search,      setSearch]      = useState(initialSearch);
   // The list/window/locations queries refetch 350ms after the admin stops typing; other
   // filters (dropdowns, date picker) apply immediately.
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(timer);

@@ -34,6 +34,7 @@ import { TenantHomepageEditor } from '../Tenant/TenantHomepageEditor';
 import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
+import AdminOrderSearchPage from './AdminOrderSearchPage';
 import AdminOperatorsPage from './AdminOperatorsPage';
 import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
@@ -113,9 +114,9 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'packagesTest' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage';
+type AdminView = 'overview' | 'orders' | 'packages' | 'packagesTest' | 'couriers' | 'customers' | 'cities' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'couriers', 'customers', 'cities', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch'];
 
 // Views an Operator (partial-admin role) may open. Operators now have full admin-level
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
@@ -137,6 +138,9 @@ export function AdminDashboard() {
   const tabParam    = searchParams.get('tab') ?? '';
   const statusParam = searchParams.get('status') ?? '';
   const viewParam   = searchParams.get('view') ?? '';
+  // Deep-link search term (from the global Order Search "Go To"): seeds the destination
+  // page's search box so it lands on that exact order.
+  const qParam      = searchParams.get('q') ?? '';
 
   // Operators are a partial-admin role: same dashboard, restricted to Overview + Pick-Up.
   const isOperator = user?.role === 'Operator';
@@ -157,11 +161,20 @@ export function AdminDashboard() {
     // Block a non-systemadmin Admin from landing on the Tenants/Partner API/Tenant
     // Settlements pages via the URL.
     : (requestedView === 'tenants' || requestedView === 'partners' || requestedView === 'tenantSettlements') && !isSystemAdmin ? 'overview'
+    // Global Order Search is Admin-only (operators/tenants are clamped out).
+    : requestedView === 'orderSearch' && (isOperator || isTenant) ? 'overview'
     : requestedView;
 
   const goTo = (view: AdminView) => {
     // Persist the view in the URL (replace, no history spam) so refresh restores it.
     navigate(view === 'overview' ? '/admin' : `/admin?view=${view}`, { replace: true });
+    setSidebarView(view);
+  };
+
+  // Jump from the global Order Search to the page an order lives on, seeding that page's
+  // search box with the tracking number so it lands on exactly that order.
+  const goToOrder = (view: AdminView, trackingNumber: string) => {
+    navigate(`/admin?view=${view}&q=${encodeURIComponent(trackingNumber)}`, { replace: true });
     setSidebarView(view);
   };
 
@@ -389,6 +402,20 @@ export function AdminDashboard() {
             )}
           </button>
           )}
+          {/* Global Order Search — Admin only (search any order across every page). */}
+          {!isOperator && !isTenant && (
+          <button
+            className={`sidebar__link ${activeView === 'orderSearch' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('orderSearch')}
+            title={t.osTitle}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.4"/>
+              <path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            <span className="sidebar__link-text">{t.osTitle}</span>
+          </button>
+          )}
           {/* Finance — Admin + Tenant co-admin; company P&L stays hidden from operators. */}
           {!isOperator && (
           <button
@@ -456,6 +483,7 @@ export function AdminDashboard() {
             {activeView === 'finance' && t.navFinance}
             {activeView === 'homepage' && 'Homepage'}
             {activeView === 'operators' && t.topbarOperators}
+            {activeView === 'orderSearch' && t.osTitle}
           </span>
           {activeView === 'couriers' && (
             <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
@@ -474,7 +502,7 @@ export function AdminDashboard() {
           {/* Delivery: read-only for tenant co-admins; operators manage fully but never see company revenue. */}
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isTenant} canSeeRevenue={!isOperator} />}
           {/* TEST: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
-          {activeView === 'packagesTest' && <AdminPackagesPage canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} />}
+          {activeView === 'packagesTest' && <AdminPackagesPage canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} initialSearch={qParam} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} canSeeRevenue={!isOperator} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
@@ -485,7 +513,10 @@ export function AdminDashboard() {
           {activeView === 'partners' && isSystemAdmin && token && <AdminPartnersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && isSystemAdmin && token && <AdminTenantSettlementsPage token={token} />}
-          {activeView === 'history' && <AdminHistoryPage token={token ?? ''} canSeeRevenue={!isOperator} />}
+          {activeView === 'history' && <AdminHistoryPage token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} />}
+          {activeView === 'orderSearch' && !isOperator && !isTenant && token && (
+            <AdminOrderSearchPage token={token} onGoTo={goToOrder} />
+          )}
           {/* Finance: tenant co-admin sees the scoped tenant finance, never the company-wide P&L. */}
           {activeView === 'finance' && (isTenant ? <TenantFinanceView /> : <AdminFinancePage token={token ?? ''} />)}
           {/* Homepage: tenant co-admin edits their own white-label storefront. */}
@@ -495,6 +526,7 @@ export function AdminDashboard() {
               token={token}
               couriers={couriers}
               onBack={() => goTo('overview')}
+              initialSearch={qParam}
             />
           )}
         </main>

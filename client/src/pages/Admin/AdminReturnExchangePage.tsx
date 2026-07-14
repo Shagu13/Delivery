@@ -16,6 +16,7 @@ import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { Highlight } from '../../components/ui/Highlight';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -178,12 +179,13 @@ function Pill({ label, active, count, onClick }: {
 // ── Row component ─────────────────────────────────────────────────────────────
 
 function OrderRow({
-    order, couriers, token, onRefresh,
+    order, couriers, token, onRefresh, highlight = '',
 }: {
     order: ReturnExchangeOrder;
     couriers: Courier[];
     token: string;
     onRefresh: () => void;
+    highlight?: string;
 }) {
     const { t, lang } = useLanguage();
     const [assigning, setAssigning]         = useState(false);
@@ -310,21 +312,21 @@ function OrderRow({
     return (
         <tr style={{ opacity: done ? 0.6 : 1 }}>
             <td>
-                <span className="tn-badge" style={{ fontSize: '0.75rem' }}>{order.trackingNumber}</span>
+                <span className="tn-badge" style={{ fontSize: '0.75rem' }}><Highlight text={order.trackingNumber} term={highlight} /></span>
             </td>
             <td><TypeBadge type={order.orderType} /></td>
             <td>
-                <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{order.senderName}</div>
+                <div style={{ fontWeight: 600, fontSize: '0.82rem' }}><Highlight text={order.senderName} term={highlight} /></div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', fontFamily: 'monospace' }}>
-                    {order.senderPhone}
+                    <Highlight text={order.senderPhone} term={highlight} />
                 </div>
             </td>
             <td>
                 <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                    {recipientDisplayName(order.recipientName, t.recipientUnknown)}
+                    <Highlight text={recipientDisplayName(order.recipientName, t.recipientUnknown)} term={highlight} />
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', fontFamily: 'monospace' }}>
-                    {order.recipientPhone}
+                    <Highlight text={order.recipientPhone} term={highlight} />
                 </div>
             </td>
             <td style={{ fontSize: '0.8rem' }}>
@@ -533,16 +535,18 @@ interface Props {
     token: string;
     couriers: Courier[];
     onBack: () => void;
+    /** Deep-link seed from the global Order Search "Go To" — pre-fills the search box. */
+    initialSearch?: string;
 }
 
-export default function AdminReturnExchangePage({ token, couriers, onBack }: Props) {
+export default function AdminReturnExchangePage({ token, couriers, onBack, initialSearch = '' }: Props) {
     const { t } = useLanguage();
     const [orders, setOrders]         = useState<ReturnExchangeOrder[]>([]);
     const [loading, setLoading]       = useState(true);
     const [error, setError]           = useState<string | null>(null);
     const [typeFilter, setTypeFilter] = useState<FilterType>('All');
     const [statusFilter, setStatusFilter] = useState<FilterStatus>('All');
-    const [search, setSearch]         = useState('');
+    const [search, setSearch]         = useState(initialSearch);
     const [searchParty, setSearchParty] = useState<'sender' | 'recipient'>('sender');
     const [page, setPage]             = useState(1);
 
@@ -748,6 +752,7 @@ export default function AdminReturnExchangePage({ token, couriers, onBack }: Pro
                                     couriers={couriers}
                                     token={token}
                                     onRefresh={() => void load(true)}
+                                    highlight={search}
                                 />
                             ))}
                         </tbody>
