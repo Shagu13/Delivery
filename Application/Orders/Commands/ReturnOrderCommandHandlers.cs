@@ -29,7 +29,12 @@ public sealed class AssignCourierToReturnOrderCommandHandler
 
         order.CourierId = courier.Id;
         order.AssignedToCourierAt = CustomTime.Now;
-        order.Status    = OrderStatus.CourierAssignedToPickUp;
+
+        // Only advance a fresh (Pending) return into the assigned state. A return that is
+        // already further along (picked up, at warehouse) keeps its status so an admin can
+        // (re)attach or change the courier without rewinding the flow.
+        if (order.Status == OrderStatus.Pending)
+            order.Status = OrderStatus.CourierAssignedToPickUp;
 
         await _context.SaveChangesAsync(ct);
     }

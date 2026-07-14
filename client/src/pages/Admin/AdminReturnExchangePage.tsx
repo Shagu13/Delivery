@@ -9,7 +9,7 @@ import {
     type ReturnExchangeOrder,
     type ReturnFlowStatus,
 } from '../../api/returnExchange';
-import { setCourierSalary, setCompanyServicePrice } from '../../api/orders';
+import { setCourierSalary, setCompanyServicePrice, assignCourierToOrder } from '../../api/orders';
 import type { Courier } from '../../api/couriers';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { SalaryWarningModal } from './SalaryWarningModal';
@@ -36,6 +36,23 @@ type FilterType = 'All' | 'Return' | 'Exchange';
 type FilterStatus = 'All' | 'Pending' | 'PickedUp' | 'AtWarehouse' | 'Completed';
 
 const TERMINAL_STATUSES = new Set(['ReturnedToSender', 'ExchangeCompleted', 'DeliveredToRecipient', 'CancelledByAdmin']);
+
+// A Return is "done" (no more courier assignment) once returned to sender or cancelled
+// (by admin or by the customer before pickup).
+const RETURN_TERMINAL_STATUSES = new Set<string>(['ReturnedToSender', 'CancelledByAdmin', 'CancelledBySender']);
+
+// An Exchange runs the Send last-mile flow, so a DELIVERY courier is assignable where the
+// Delivery/Packages page allows it (AssignCourierToOrderCommand's valid statuses) — plus,
+// on this page, straight from the batch-accepted state (AcceptedOrder), letting an admin
+// assign an Exchange without first running it through the pickup + warehouse ceremony.
+const EXCHANGE_ASSIGNABLE_STATUSES = new Set<string>([
+    'AcceptedOrder',
+    'AdminAcceptedOrderInWareHouse',
+    'OrderIsOnItsWayToRecipientsCity',
+    'CourierAssignedToDeliver',
+    'CourierDeliveringTheOrderToRecipient',
+    'DeliveryPostponed',
+]);
 
 function isCompleted(o: ReturnExchangeOrder) {
     return TERMINAL_STATUSES.has(o.status);
@@ -152,7 +169,7 @@ function OrderRow({
     const [assigning, setAssigning]         = useState(false);
     const [completing, setCompleting]       = useState(false);
     const [settingStatus, setSettingStatus] = useState(false);
-    const [selectedCourier, setSelected]    = useState('');
+    const [selectedCourier, setSelected]    = useState(order.courierId ?? '');
     const [rowError, setRowError]           = useState<string | null>(null);
     const [showSalaryWarning, setShowSalaryWarning] = useState(false);
     const [showSalaryModal, setShowSalaryModal]     = useState(false);
@@ -166,7 +183,13 @@ function OrderRow({
     const doAssign = async () => {
         setAssigning(true); setRowError(null);
         try {
-            await assignReturnCourier(token, order.id, selectedCourier);
+            // Returns use the standalone-pickup assign; Exchanges use the standard last-mile
+            // delivery assign (same command the Delivery/Packages page uses).
+            if (order.orderType === 'Return') {
+                await assignReturnCourier(token, order.id, selectedCourier);
+            } else {
+                await assignCourierToOrder(token, order.id, selectedCourier);
+            }
             onRefresh();
         } catch (e) {
             setRowError(e instanceof Error ? e.message : t.reActionFailed);
@@ -237,8 +260,13 @@ function OrderRow({
         } finally { setSettingStatus(false); }
     };
 
-    const canAssign = order.orderType === 'Return' &&
-        (order.status === 'Pending' || order.status === 'CourierAssignedToPickUp');
+    // A Return can be (re)assigned a courier in any active status — not just Pending —
+    // so an admin can attach or change the courier at any point up to the terminal states.
+    // An Exchange (Send last-mile flow) can be assigned a delivery courier exactly where the
+    // Delivery/Packages page allows it.
+    const canAssignReturn   = order.orderType === 'Return'   && !RETURN_TERMINAL_STATUSES.has(order.status);
+    const canAssignExchange = order.orderType === 'Exchange' && EXCHANGE_ASSIGNABLE_STATUSES.has(order.status);
+    const canAssign = canAssignReturn || canAssignExchange;
 
     // An Exchange has no warehouse leg; once it's delivered the admin can confirm the
     // swapped-out item went back to the sender (its own terminal), same endpoint as returns.

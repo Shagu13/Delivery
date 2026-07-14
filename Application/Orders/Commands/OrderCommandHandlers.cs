@@ -55,7 +55,7 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
 
-        var validStatuses = new[]
+        var validStatuses = new List<OrderStatus>
         {
             OrderStatus.AdminAcceptedOrderInWareHouse,
             OrderStatus.OrderIsOnItsWayToRecipientsCity,
@@ -69,11 +69,18 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
             OrderStatus.DeliveryPostponed,
         };
 
+        // Exchanges can be assigned a delivery courier straight from the batch-accepted state,
+        // bypassing the pickup + warehouse ceremony — an admin action from the Return & Exchange
+        // page. (Send orders still require warehouse acceptance first.)
+        if (order.OrderType == OrderType.Exchange)
+            validStatuses.Add(OrderStatus.AcceptedOrder);
+
         if (!validStatuses.Contains(order.Status))
             throw new ConflictException(
                 $"Cannot assign courier from status {order.Status}. " +
                 "Expected AdminAcceptedOrderInWareHouse, OrderIsOnItsWayToRecipientsCity, " +
-                "CourierAssignedToDeliver, CourierDeliveringTheOrderToRecipient (re-assignment), or DeliveryPostponed.");
+                "CourierAssignedToDeliver, CourierDeliveringTheOrderToRecipient (re-assignment), or DeliveryPostponed" +
+                (order.OrderType == OrderType.Exchange ? ", or AcceptedOrder (Exchange)." : "."));
 
         var courier = await _context.Couriers
             .FirstOrDefaultAsync(c => c.Id == request.CourierId, cancellationToken)
