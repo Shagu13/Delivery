@@ -749,7 +749,22 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     return picked;
   }, [selected, itemById, bulkMode]);
 
-  const missingSalaryOrders  = useMemo(() => actionPool.filter(o => o.courierSalary == null), [actionPool]);
+  // Only warn when no applicable courier default rate covers the order — mirrors the backend
+  // auto-fill (a Tbilisi/Rustavi courier's DefaultSalary is applied on assign/deliver) and the
+  // Delivery page's gate. Assigning targets the chosen bulkCourierId; delivering keeps an
+  // existing assignee and only falls back to bulkCourierId for orders still missing one.
+  const missingSalaryOrders  = useMemo(() => {
+    const bulkCourierDefault = couriers.find(c => c.courierId === bulkCourierId)?.defaultSalary ?? null;
+    return actionPool.filter(o => {
+      if (o.courierSalary != null) return false;
+      const ownerDefault = bulkMode === 'assign'
+        ? bulkCourierDefault
+        : o.courierId
+          ? (couriers.find(c => c.courierId === o.courierId)?.defaultSalary ?? null)
+          : bulkCourierDefault;
+      return ownerDefault == null;
+    });
+  }, [actionPool, couriers, bulkCourierId, bulkMode]);
   const missingPriceOrders   = useMemo(() => actionPool.filter(o => !o.companyServicePrice), [actionPool]);
   const missingCourierOrders = useMemo(() => actionPool.filter(o => !o.courierId), [actionPool]);
 
