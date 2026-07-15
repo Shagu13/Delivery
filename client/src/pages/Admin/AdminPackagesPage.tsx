@@ -1124,7 +1124,15 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     // overflow must stay visible (not hidden) or the sticky bulk-action bar below can't
     // stick to the window — an overflow:hidden ancestor traps position:sticky. The inner
     // tables keep their own overflow-x wrappers, so nothing spills horizontally.
-    <div className="content-card" style={{ overflow: 'visible' }}>
+    <div className="content-card pkg-page" style={{ overflow: 'visible' }}>
+      {/* Packages-page-only tint: give the collapsed group-order rows an explicit grey
+          and keep the expanded single orders crisp white, so the two levels of the
+          accordion read as clearly distinct. Scoped to .pkg-page so the Pick-Up page
+          (which shares these global go-* classes) is untouched. */}
+      <style>{`
+        .pkg-page .go-row-header { background: #e6e0d7; }
+        .pkg-page .go-orders { background: var(--color-bg-2); }
+      `}</style>
       {/* Day navigator — All, a single day, or a custom inclusive range */}
       <div className="pickup-daynav-wrap">
         <DateRangeNav
