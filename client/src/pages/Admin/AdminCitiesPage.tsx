@@ -23,12 +23,12 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
-        background: '#fff', borderRadius: 12, padding: '1.5rem',
+        background: 'var(--color-bg-2)', borderRadius: 12, padding: '1.5rem',
         width: 420, maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#6b7280' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--color-text-muted)' }}>✕</button>
         </div>
         {children}
       </div>
@@ -40,8 +40,8 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: '0.9rem' }}>
-      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: 4 }}>
-        {label}{required && <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>}
+      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: 4 }}>
+        {label}{required && <span style={{ color: 'var(--color-error)', marginLeft: 2 }}>*</span>}
       </label>
       {children}
     </div>
@@ -51,7 +51,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
 const INPUT: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
   padding: '0.45rem 0.65rem', borderRadius: 7,
-  border: '1px solid #d1d5db', fontSize: '0.88rem',
+  border: '1px solid var(--color-border)', fontSize: '0.88rem',
 };
 
 // ── main component ────────────────────────────────────────────────────────────
@@ -290,7 +290,7 @@ export default function AdminCitiesPage({ token }: Props) {
       <h2 style={{ marginBottom: '1rem' }}>{t.acpTitle}</h2>
 
       {error && (
-        <p style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '0.5rem 0.75rem', marginBottom: '1rem' }}>
+        <p style={{ color: 'var(--color-error)', background: 'var(--color-error-bg)', border: '1px solid var(--color-error)', borderRadius: 8, padding: '0.5rem 0.75rem', marginBottom: '1rem' }}>
           {error}
         </p>
       )}
@@ -300,14 +300,14 @@ export default function AdminCitiesPage({ token }: Props) {
         {/* ── City sidebar ─────────────────────────────────────────────────── */}
         <div className="acp-sidebar" style={{ minWidth: 200, flexShrink: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em' }}>{t.acpCitiesHeader}</h3>
+            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.05em' }}>{t.acpCitiesHeader}</h3>
             <button
               onClick={() => setShowAddCity(true)}
               title={t.acpAddCityBtn}
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
                 padding: '0.2rem 0.55rem', borderRadius: 6,
-                background: '#2563eb', color: '#fff',
+                background: 'var(--color-accent)', color: '#fff',
                 border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
               }}
             >
@@ -324,7 +324,7 @@ export default function AdminCitiesPage({ token }: Props) {
             style={{
               width: '100%', boxSizing: 'border-box',
               padding: '0.4rem 0.6rem', marginBottom: '0.5rem',
-              borderRadius: 7, border: '1px solid #d1d5db',
+              borderRadius: 7, border: '1px solid var(--color-border)',
               fontSize: '0.83rem',
             }}
           />
@@ -335,9 +335,9 @@ export default function AdminCitiesPage({ token }: Props) {
             style={{
               display: 'block', width: '100%', marginBottom: '0.6rem',
               padding: '0.3rem 0.5rem', borderRadius: 6,
-              background: showDeletedCities ? '#fef2f2' : '#f9fafb',
-              border: `1px solid ${showDeletedCities ? '#fecaca' : '#e5e7eb'}`,
-              color: showDeletedCities ? '#b91c1c' : '#6b7280',
+              background: showDeletedCities ? 'var(--color-error-bg)' : 'var(--color-bg-3)',
+              border: `1px solid ${showDeletedCities ? 'var(--color-error)' : 'var(--color-border)'}`,
+              color: showDeletedCities ? 'var(--color-error)' : 'var(--color-text-muted)',
               cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
             }}
           >
@@ -346,17 +346,17 @@ export default function AdminCitiesPage({ token }: Props) {
 
           {showDeletedCities ? (
             loadingDeletedCities ? (
-              <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Loading…</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)' }}>Loading…</p>
             ) : filteredDeletedCities.length === 0 ? (
-              <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{t.acpNoDeletedCities}</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)' }}>{t.acpNoDeletedCities}</p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: '70vh', overflowY: 'auto' }}>
                 {filteredDeletedCities.map(c => (
                   <li key={c.id} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 3 }}>
                     <span style={{
                       flex: 1, padding: '0.45rem 0.75rem', borderRadius: 8,
-                      border: '1px solid #f3f4f6', background: '#fafafa',
-                      color: '#6b7280', fontSize: '0.87rem', textDecoration: 'line-through',
+                      border: '1px solid var(--color-border)', background: 'var(--color-bg-3)',
+                      color: 'var(--color-text-muted)', fontSize: '0.87rem', textDecoration: 'line-through',
                     }}>
                       {cityLabel(c)}
                     </span>
@@ -365,9 +365,9 @@ export default function AdminCitiesPage({ token }: Props) {
                       title={t.acpActivate}
                       style={{
                         padding: '0.35rem 0.6rem', borderRadius: 7,
-                        background: '#ecfdf5', border: '1px solid #a7f3d0',
+                        background: 'var(--color-success-bg)', border: '1px solid var(--color-success)',
                         cursor: 'pointer', fontSize: '0.78rem', flexShrink: 0,
-                        color: '#047857', fontWeight: 600,
+                        color: 'var(--color-success)', fontWeight: 600,
                       }}
                     >
                       ↩ {t.acpActivate}
@@ -377,9 +377,9 @@ export default function AdminCitiesPage({ token }: Props) {
               </ul>
             )
           ) : loadingCities ? (
-            <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Loading…</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)' }}>Loading…</p>
           ) : filteredCities.length === 0 ? (
-            <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{t.acpNoCitiesMatch}</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)' }}>{t.acpNoCitiesMatch}</p>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: '70vh', overflowY: 'auto' }}>
               {filteredCities.map(c => (
@@ -390,9 +390,9 @@ export default function AdminCitiesPage({ token }: Props) {
                       flex: 1, textAlign: 'left',
                       padding: '0.45rem 0.75rem',
                       borderRadius: 8, border: '1px solid',
-                      borderColor: selectedCity?.id === c.id ? '#2563eb' : '#e5e7eb',
-                      background: selectedCity?.id === c.id ? '#eff6ff' : '#fff',
-                      color: selectedCity?.id === c.id ? '#2563eb' : '#111',
+                      borderColor: selectedCity?.id === c.id ? 'var(--color-accent)' : 'var(--color-border)',
+                      background: selectedCity?.id === c.id ? 'var(--color-accent-dim)' : 'var(--color-bg-2)',
+                      color: selectedCity?.id === c.id ? 'var(--color-accent)' : 'var(--color-text)',
                       cursor: 'pointer', fontWeight: selectedCity?.id === c.id ? 600 : 400,
                       fontSize: '0.87rem',
                     }}
@@ -404,7 +404,7 @@ export default function AdminCitiesPage({ token }: Props) {
                     title="Edit city"
                     style={{
                       padding: '0.35rem 0.5rem', borderRadius: 7,
-                      background: '#f3f4f6', border: '1px solid #e5e7eb',
+                      background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
                       cursor: 'pointer', fontSize: '0.78rem', flexShrink: 0,
                     }}
                   >
@@ -415,8 +415,8 @@ export default function AdminCitiesPage({ token }: Props) {
                     title="Delete city"
                     style={{
                       padding: '0.35rem 0.5rem', borderRadius: 7,
-                      background: '#fef2f2', border: '1px solid #fecaca',
-                      cursor: 'pointer', fontSize: '0.78rem', flexShrink: 0, color: '#dc2626',
+                      background: 'var(--color-error-bg)', border: '1px solid var(--color-error)',
+                      cursor: 'pointer', fontSize: '0.78rem', flexShrink: 0, color: 'var(--color-error)',
                     }}
                   >
                     🗑
@@ -430,14 +430,14 @@ export default function AdminCitiesPage({ token }: Props) {
         {/* ── District panel ───────────────────────────────────────────────── */}
         <div style={{ flex: 1 }}>
           {!selectedCity ? (
-            <p style={{ color: '#9ca3af' }}>{t.acpSelectCityHint}</p>
+            <p style={{ color: 'var(--color-text-subtle)' }}>{t.acpSelectCityHint}</p>
           ) : loadingDistricts ? (
             <p>Loading districts…</p>
           ) : (
             <>
               {/* heading + Add District button */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em' }}>
+                <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.05em' }}>
                   {t.acpThDistrict.toUpperCase()} — {cityLabel(selectedCity).toUpperCase()}
                 </h3>
                 <button
@@ -445,7 +445,7 @@ export default function AdminCitiesPage({ token }: Props) {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 4,
                     padding: '0.25rem 0.65rem', borderRadius: 6,
-                    background: '#2563eb', color: '#fff',
+                    background: 'var(--color-accent)', color: '#fff',
                     border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
                   }}
                 >
@@ -463,16 +463,16 @@ export default function AdminCitiesPage({ token }: Props) {
                   style={{
                     flex: 1, boxSizing: 'border-box',
                     padding: '0.4rem 0.6rem', borderRadius: 7,
-                    border: '1px solid #d1d5db', fontSize: '0.83rem',
+                    border: '1px solid var(--color-border)', fontSize: '0.83rem',
                   }}
                 />
                 <button
                   onClick={toggleDeletedDistricts}
                   style={{
                     flexShrink: 0, padding: '0.4rem 0.7rem', borderRadius: 7,
-                    background: showDeletedDistricts ? '#fef2f2' : '#f9fafb',
-                    border: `1px solid ${showDeletedDistricts ? '#fecaca' : '#e5e7eb'}`,
-                    color: showDeletedDistricts ? '#b91c1c' : '#6b7280',
+                    background: showDeletedDistricts ? 'var(--color-error-bg)' : 'var(--color-bg-3)',
+                    border: `1px solid ${showDeletedDistricts ? 'var(--color-error)' : 'var(--color-border)'}`,
+                    color: showDeletedDistricts ? 'var(--color-error)' : 'var(--color-text-muted)',
                     cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap',
                   }}
                 >
@@ -485,9 +485,9 @@ export default function AdminCitiesPage({ token }: Props) {
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
                   marginBottom: '0.75rem', padding: '0.6rem 0.9rem',
-                  background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
+                  background: 'var(--color-accent-dim)', border: '1px solid var(--color-accent)', borderRadius: 8,
                 }}>
-                  <span style={{ fontSize: '0.85rem', color: '#1d4ed8', fontWeight: 500 }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--color-accent)', fontWeight: 500 }}>
                     {t.acpNDistrictsSelected(selectedIds.size)}
                   </span>
 
@@ -497,14 +497,14 @@ export default function AdminCitiesPage({ token }: Props) {
                     value={bulkValue}
                     onChange={e => setBulkValue(e.target.value)}
                     placeholder={t.acpNewPricePh}
-                    style={{ width: 130, padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #93c5fd', fontSize: '0.85rem' }}
+                    style={{ width: 130, padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid var(--color-accent)', fontSize: '0.85rem' }}
                   />
                   <button
                     onClick={saveBulk}
                     disabled={bulkSaving || bulkValue === ''}
                     style={{
                       padding: '0.3rem 0.8rem', borderRadius: 6,
-                      background: bulkSaving || bulkValue === '' ? '#93c5fd' : '#2563eb',
+                      background: bulkSaving || bulkValue === '' ? 'var(--color-accent)' : 'var(--color-accent)',
                       color: '#fff', border: 'none',
                       cursor: bulkSaving || bulkValue === '' ? 'not-allowed' : 'pointer',
                       fontSize: '0.85rem', fontWeight: 500,
@@ -513,17 +513,17 @@ export default function AdminCitiesPage({ token }: Props) {
                     {bulkSaving ? t.loading : t.acpSetPrice}
                   </button>
 
-                  <span style={{ width: 1, height: 22, background: '#bfdbfe', flexShrink: 0 }} />
+                  <span style={{ width: 1, height: 22, background: 'var(--color-accent)', flexShrink: 0 }} />
 
                   {/* ── Territory ── */}
-                  <span style={{ fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 500 }}>{t.acpTerritoryLabel}</span>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--color-accent)', fontWeight: 500 }}>{t.acpTerritoryLabel}</span>
                   <button
                     onClick={() => saveBulkTerritory(true, false)}
                     disabled={bulkTerritorySaving}
                     style={{
                       padding: '0.3rem 0.75rem', borderRadius: 6,
-                      background: bulkTerritorySaving ? '#fde68a' : '#fef3c7',
-                      color: '#92400e', border: '1px solid #fcd34d',
+                      background: bulkTerritorySaving ? 'var(--color-warning)' : 'var(--color-warning-bg)',
+                      color: 'var(--color-warning)', border: '1px solid var(--color-warning)',
                       cursor: bulkTerritorySaving ? 'not-allowed' : 'pointer',
                       fontSize: '0.82rem', fontWeight: 600,
                     }}
@@ -535,8 +535,8 @@ export default function AdminCitiesPage({ token }: Props) {
                     disabled={bulkTerritorySaving}
                     style={{
                       padding: '0.3rem 0.75rem', borderRadius: 6,
-                      background: bulkTerritorySaving ? '#bbf7d0' : '#dcfce7',
-                      color: '#14532d', border: '1px solid #86efac',
+                      background: bulkTerritorySaving ? 'var(--color-success)' : 'var(--color-success-bg)',
+                      color: 'var(--color-success)', border: '1px solid var(--color-success)',
                       cursor: bulkTerritorySaving ? 'not-allowed' : 'pointer',
                       fontSize: '0.82rem', fontWeight: 600,
                     }}
@@ -548,8 +548,8 @@ export default function AdminCitiesPage({ token }: Props) {
                     disabled={bulkTerritorySaving}
                     style={{
                       padding: '0.3rem 0.75rem', borderRadius: 6,
-                      background: bulkTerritorySaving ? '#f3f4f6' : '#f9fafb',
-                      color: '#6b7280', border: '1px solid #d1d5db',
+                      background: bulkTerritorySaving ? 'var(--color-bg-3)' : 'var(--color-bg-3)',
+                      color: 'var(--color-text-muted)', border: '1px solid var(--color-border)',
                       cursor: bulkTerritorySaving ? 'not-allowed' : 'pointer',
                       fontSize: '0.82rem', fontWeight: 600,
                     }}
@@ -559,7 +559,7 @@ export default function AdminCitiesPage({ token }: Props) {
 
                   <button
                     onClick={() => { setSelectedIds(new Set()); setBulkValue(''); }}
-                    style={{ padding: '0.3rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}
+                    style={{ padding: '0.3rem 0.6rem', borderRadius: 6, background: 'var(--color-bg-3)', border: 'none', cursor: 'pointer', fontSize: '0.85rem', marginLeft: 'auto' }}
                   >
                     {t.goClear}
                   </button>
@@ -568,8 +568,8 @@ export default function AdminCitiesPage({ token }: Props) {
 
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
                 <thead>
-                  <tr style={{ background: '#f5f5f5' }}>
-                    <th style={{ padding: '0.6rem 0.75rem', width: 36, borderBottom: '1px solid #ddd' }}>
+                  <tr style={{ background: 'var(--color-bg-3)' }}>
+                    <th style={{ padding: '0.6rem 0.75rem', width: 36, borderBottom: '1px solid var(--color-border)' }}>
                       <input
                         type="checkbox"
                         checked={allSelected}
@@ -579,17 +579,17 @@ export default function AdminCitiesPage({ token }: Props) {
                         title={t.aopSelectAll}
                       />
                     </th>
-                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t.acpThDistrict}</th>
-                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t.acpThTerritory}</th>
-                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>{t.acpThServicePrice}</th>
-                    <th style={{ padding: '0.6rem 0.75rem', width: 60, borderBottom: '1px solid #ddd' }} />
+                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>{t.acpThDistrict}</th>
+                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>{t.acpThTerritory}</th>
+                    <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>{t.acpThServicePrice}</th>
+                    <th style={{ padding: '0.6rem 0.75rem', width: 60, borderBottom: '1px solid var(--color-border)' }} />
                   </tr>
                 </thead>
                 <tbody>
                   {filteredDistricts.map(d => {
                     const isChecked = selectedIds.has(d.id);
                     return (
-                      <tr key={d.id} style={{ borderBottom: '1px solid #eee', background: isChecked ? '#f0f7ff' : undefined }}>
+                      <tr key={d.id} style={{ borderBottom: '1px solid var(--color-border)', background: isChecked ? 'var(--color-accent-dim)' : undefined }}>
                         <td style={{ padding: '0.6rem 0.75rem' }}>
                           <input type="checkbox" checked={isChecked} onChange={() => toggleSelect(d.id)} style={{ cursor: 'pointer' }} />
                         </td>
@@ -598,19 +598,19 @@ export default function AdminCitiesPage({ token }: Props) {
                           {d.isCapitalTerritory ? (
                             <span style={{
                               display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
-                              background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d',
+                              background: 'var(--color-warning-bg)', color: 'var(--color-warning)', border: '1px solid var(--color-warning)',
                               fontSize: '0.78rem', fontWeight: 600,
                             }}>{t.acpCapitalBadge}</span>
                           ) : d.isCityTerritory ? (
                             <span style={{
                               display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
-                              background: '#dcfce7', color: '#14532d', border: '1px solid #86efac',
+                              background: 'var(--color-success-bg)', color: 'var(--color-success)', border: '1px solid var(--color-success)',
                               fontSize: '0.78rem', fontWeight: 600,
                             }}>{t.acpCityBadge}</span>
                           ) : (
                             <span style={{
                               display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 99,
-                              background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb',
+                              background: 'var(--color-bg-3)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)',
                               fontSize: '0.78rem', fontWeight: 600,
                             }}>{t.acpDistrictBadge}</span>
                           )}
@@ -622,32 +622,32 @@ export default function AdminCitiesPage({ token }: Props) {
                                 type="number" value={editValue}
                                 onChange={e => setEditValue(e.target.value)}
                                 placeholder={t.acpNullPricePh}
-                                style={{ width: 90, padding: '0.25rem', borderRadius: 6, border: '1px solid #ccc' }}
+                                style={{ width: 90, padding: '0.25rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
                               />
                               <button onClick={() => saveEdit(d.id)} disabled={saving}
-                                style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                                style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: 'var(--color-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}>
                                 {t.save}
                               </button>
                               <button onClick={() => setEditingId(null)}
-                                style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer' }}>
+                                style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: 'var(--color-bg-3)', border: 'none', cursor: 'pointer' }}>
                                 ✕
                               </button>
                             </span>
                           ) : (
-                            <span>{d.companyServicePrice != null ? `₾${d.companyServicePrice}` : <em style={{ color: '#999' }}>{t.acpNotSet}</em>}</span>
+                            <span>{d.companyServicePrice != null ? `₾${d.companyServicePrice}` : <em style={{ color: 'var(--color-text-subtle)' }}>{t.acpNotSet}</em>}</span>
                           )}
                         </td>
                         <td style={{ padding: '0.6rem 0.75rem' }}>
                           <span style={{ display: 'flex', gap: 6 }}>
                             <button
                               onClick={() => setEditingDistrict(d)}
-                              style={{ padding: '0.2rem 0.55rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.8rem' }}
+                              style={{ padding: '0.2rem 0.55rem', borderRadius: 6, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.8rem' }}
                             >
                               ✎ {t.edit}
                             </button>
                             <button
                               onClick={() => setDeletingDistrict(d)}
-                              style={{ padding: '0.2rem 0.55rem', borderRadius: 6, background: '#fef2f2', border: '1px solid #fecaca', cursor: 'pointer', fontSize: '0.8rem', color: '#dc2626' }}
+                              style={{ padding: '0.2rem 0.55rem', borderRadius: 6, background: 'var(--color-error-bg)', border: '1px solid var(--color-error)', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--color-error)' }}
                                             >
                                               🗑 {t.delete}
                                             </button>
@@ -660,41 +660,41 @@ export default function AdminCitiesPage({ token }: Props) {
               </table>
 
               {filteredDistricts.length === 0 && districts.length > 0 && (
-                <p style={{ fontSize: '0.85rem', color: '#9ca3af', padding: '0.6rem 0' }}>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', padding: '0.6rem 0' }}>
                   {t.acpNoDistrictsMatch}
                 </p>
               )}
 
               {/* deleted districts */}
               {showDeletedDistricts && (
-                <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px dashed #e5e7eb' }}>
-                  <h3 style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', fontWeight: 700, color: '#b91c1c', letterSpacing: '0.05em' }}>
+                <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px dashed var(--color-border)' }}>
+                  <h3 style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-error)', letterSpacing: '0.05em' }}>
                     {t.acpDeletedDistrictsHeader}
                   </h3>
                   {loadingDeletedDistricts ? (
-                    <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Loading…</p>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)' }}>Loading…</p>
                   ) : deletedDistricts.length === 0 ? (
-                    <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{t.acpNoDeletedDistricts}</p>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)' }}>{t.acpNoDeletedDistricts}</p>
                   ) : (
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                       {deletedDistricts.map(d => (
                         <li key={d.id} style={{
                           display: 'flex', alignItems: 'center', gap: 8,
                           padding: '0.5rem 0.6rem', marginBottom: 4,
-                          background: '#fafafa', border: '1px solid #f3f4f6', borderRadius: 8,
+                          background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 8,
                         }}>
-                          <span style={{ flex: 1, color: '#6b7280', fontSize: '0.87rem', textDecoration: 'line-through' }}>
+                          <span style={{ flex: 1, color: 'var(--color-text-muted)', fontSize: '0.87rem', textDecoration: 'line-through' }}>
                             {districtLabel(d)}
                           </span>
                           {d.companyServicePrice != null && (
-                            <span style={{ color: '#9ca3af', fontSize: '0.82rem' }}>₾{d.companyServicePrice}</span>
+                            <span style={{ color: 'var(--color-text-subtle)', fontSize: '0.82rem' }}>₾{d.companyServicePrice}</span>
                           )}
                           <button
                             onClick={() => setRestoringDistrict(d)}
                             style={{
                               flexShrink: 0, padding: '0.25rem 0.6rem', borderRadius: 6,
-                              background: '#ecfdf5', border: '1px solid #a7f3d0',
-                              cursor: 'pointer', fontSize: '0.8rem', color: '#047857', fontWeight: 600,
+                              background: 'var(--color-success-bg)', border: '1px solid var(--color-success)',
+                              cursor: 'pointer', fontSize: '0.8rem', color: 'var(--color-success)', fontWeight: 600,
                             }}
                           >
                             ↩ {t.acpActivate}
@@ -861,14 +861,14 @@ function AddCityModal({ token, onClose, onCreated }: {
         <Field label={t.acpGeorgianName}>
           <input style={INPUT} value={cityNameGeo} onChange={e => setCityNameGeo(e.target.value)} placeholder={t.acpCityNameGeoPh} />
         </Field>
-        {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
+        {error && <p style={{ color: 'var(--color-error)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button type="button" onClick={onClose}
-            style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
+            style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.87rem' }}>
             {t.cancel}
           </button>
           <button type="submit" disabled={submitting}
-            style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
+            style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? 'var(--color-accent)' : 'var(--color-accent)', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
             {submitting ? t.submitting : t.acpCreateCityBtn}
           </button>
         </div>
@@ -930,7 +930,7 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
   const CHECKBOX_ROW: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 8,
     padding: '0.45rem 0.65rem', borderRadius: 7,
-    border: '1px solid #d1d5db', fontSize: '0.88rem',
+    border: '1px solid var(--color-border)', fontSize: '0.88rem',
     cursor: 'pointer', userSelect: 'none',
   };
 
@@ -951,23 +951,23 @@ function AddDistrictModal({ token, city, onClose, onCreated }: {
             <label style={CHECKBOX_ROW}>
               <input type="checkbox" checked={isCapitalTerritory}
                 onChange={e => { setIsCapitalTerritory(e.target.checked); if (e.target.checked) setIsCityTerritory(false); }} />
-              <span>{t.acpCapitalTerritory} <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{t.acpCapitalTerritoryHint}</span></span>
+              <span>{t.acpCapitalTerritory} <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>{t.acpCapitalTerritoryHint}</span></span>
             </label>
             <label style={CHECKBOX_ROW}>
               <input type="checkbox" checked={isCityTerritory}
                 onChange={e => { setIsCityTerritory(e.target.checked); if (e.target.checked) setIsCapitalTerritory(false); }} />
-              <span>{t.acpCityTerritory} <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{t.acpCityTerritoryHint}</span></span>
+              <span>{t.acpCityTerritory} <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>{t.acpCityTerritoryHint}</span></span>
             </label>
           </div>
         </Field>
-        {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
+        {error && <p style={{ color: 'var(--color-error)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button type="button" onClick={onClose}
-            style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
+            style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.87rem' }}>
             {t.cancel}
           </button>
           <button type="submit" disabled={submitting}
-            style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
+            style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? 'var(--color-accent)' : 'var(--color-accent)', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
             {submitting ? t.submitting : t.acpCreateDistrictBtn}
           </button>
         </div>
@@ -1018,14 +1018,14 @@ function EditCityModal({ token, city, onClose, onSaved }: {
         <Field label={t.acpGeorgianName}>
           <input style={INPUT} value={cityNameGeo} onChange={e => setCityNameGeo(e.target.value)} />
         </Field>
-        {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
+        {error && <p style={{ color: 'var(--color-error)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button type="button" onClick={onClose}
-            style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
+            style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.87rem' }}>
             {t.cancel}
           </button>
           <button type="submit" disabled={submitting}
-            style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
+            style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? 'var(--color-accent)' : 'var(--color-accent)', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
             {submitting ? t.loading : t.awptSaveBtn}
           </button>
         </div>
@@ -1078,7 +1078,7 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
   const CHECKBOX_ROW: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 8,
     padding: '0.45rem 0.65rem', borderRadius: 7,
-    border: '1px solid #d1d5db', fontSize: '0.88rem',
+    border: '1px solid var(--color-border)', fontSize: '0.88rem',
     cursor: 'pointer', userSelect: 'none',
   };
 
@@ -1099,23 +1099,23 @@ function EditDistrictModal({ token, district, onClose, onSaved }: {
             <label style={CHECKBOX_ROW}>
               <input type="checkbox" checked={isCapitalTerritory}
                 onChange={e => { setIsCapitalTerritory(e.target.checked); if (e.target.checked) setIsCityTerritory(false); }} />
-              <span>{t.acpCapitalTerritory} <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{t.acpCapitalTerritoryHint}</span></span>
+              <span>{t.acpCapitalTerritory} <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>{t.acpCapitalTerritoryHint}</span></span>
             </label>
             <label style={CHECKBOX_ROW}>
               <input type="checkbox" checked={isCityTerritory}
                 onChange={e => { setIsCityTerritory(e.target.checked); if (e.target.checked) setIsCapitalTerritory(false); }} />
-              <span>{t.acpCityTerritory} <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{t.acpCityTerritoryHint}</span></span>
+              <span>{t.acpCityTerritory} <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>{t.acpCityTerritoryHint}</span></span>
             </label>
           </div>
         </Field>
-        {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
+        {error && <p style={{ color: 'var(--color-error)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '0.5rem' }}>
           <button type="button" onClick={onClose}
-            style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
+            style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.87rem' }}>
             {t.cancel}
           </button>
           <button type="submit" disabled={submitting}
-            style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
+            style={{ padding: '0.4rem 1rem', borderRadius: 7, background: submitting ? 'var(--color-accent)' : 'var(--color-accent)', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
             {submitting ? t.loading : t.awptSaveBtn}
           </button>
         </div>
@@ -1148,15 +1148,15 @@ function ConfirmDeleteModal({ title, message, onClose, onConfirm }: {
 
   return (
     <Modal title={title} onClose={onClose}>
-      <p style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', color: '#374151' }}>{message}</p>
-      {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
+      <p style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', color: 'var(--color-text)' }}>{message}</p>
+      {error && <p style={{ color: 'var(--color-error)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button onClick={onClose} disabled={deleting}
-          style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
+          style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.87rem' }}>
           {t.cancel}
         </button>
         <button onClick={handleConfirm} disabled={deleting}
-          style={{ padding: '0.4rem 1rem', borderRadius: 7, background: deleting ? '#fca5a5' : '#dc2626', color: '#fff', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
+          style={{ padding: '0.4rem 1rem', borderRadius: 7, background: deleting ? 'var(--color-error)' : 'var(--color-error)', color: '#fff', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
           {deleting ? t.awptDeleting : t.delete}
         </button>
       </div>
@@ -1189,15 +1189,15 @@ function ConfirmActivateModal({ title, message, conflictMessage, onClose, onConf
 
   return (
     <Modal title={title} onClose={onClose}>
-      <p style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', color: '#374151' }}>{message}</p>
-      {error && <p style={{ color: '#dc2626', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
+      <p style={{ margin: '0 0 1.25rem', fontSize: '0.9rem', color: 'var(--color-text)' }}>{message}</p>
+      {error && <p style={{ color: 'var(--color-error)', fontSize: '0.82rem', margin: '0 0 0.75rem' }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button onClick={onClose} disabled={working}
-          style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: '#f3f4f6', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '0.87rem' }}>
+          style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.87rem' }}>
           {t.cancel}
         </button>
         <button onClick={handleConfirm} disabled={working}
-          style={{ padding: '0.4rem 1rem', borderRadius: 7, background: working ? '#6ee7b7' : '#059669', color: '#fff', border: 'none', cursor: working ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
+          style={{ padding: '0.4rem 1rem', borderRadius: 7, background: working ? 'var(--color-success)' : 'var(--color-success)', color: '#fff', border: 'none', cursor: working ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
           {working ? t.acpActivating : t.acpActivate}
         </button>
       </div>

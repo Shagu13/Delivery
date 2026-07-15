@@ -26,7 +26,7 @@ interface EditState {
 }
 
 function priceDisplay(v: number | null, defaultLabel: string) {
-  return v != null ? `₾${v}` : <em style={{ color: '#999' }}>{defaultLabel}</em>;
+  return v != null ? `₾${v}` : <em style={{ color: 'var(--color-text-subtle)' }}>{defaultLabel}</em>;
 }
 
 const PAGE_SIZE = 20;
@@ -132,7 +132,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
 
   const inputStyle: React.CSSProperties = {
     width: 80, padding: '0.25rem', borderRadius: 6,
-    border: '1px solid #ccc', fontSize: '0.82rem',
+    border: '1px solid var(--color-border)', fontSize: '0.82rem',
   };
 
   return (
@@ -145,13 +145,13 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
         value={search}
         onChange={e => setSearch(e.target.value)}
         style={{
-          padding: '0.5rem 0.75rem', borderRadius: 8, border: '1px solid #ddd',
+          padding: '0.5rem 0.75rem', borderRadius: 8, border: '1px solid var(--color-border)',
           width: '100%', maxWidth: 400, marginBottom: '1rem', fontSize: '0.9rem',
         }}
       />
 
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {notice && <p style={{ color: '#15803d' }}>{notice}</p>}
+      {error && <p style={{ color: 'var(--color-error)' }}>{error}</p>}
+      {notice && <p style={{ color: 'var(--color-success)' }}>{notice}</p>}
 
       {loading ? (
         <p>{t.loading}</p>
@@ -159,13 +159,13 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
         <div className="table-scroll">
         <table style={{ width: '100%', minWidth: 1080, borderCollapse: 'collapse', fontSize: '0.88rem' }}>
           <thead>
-            <tr style={{ background: '#f5f5f5' }}>
+            <tr style={{ background: 'var(--color-bg-3)' }}>
               {[
                 t.acupThBusiness, t.acupThName, t.acupThPhone, t.acupThCity, t.acupThDistrict, t.acupThAddress, t.acupThEmail, t.acupThActive,
                 ...(canManage ? [t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, t.acupThIncluded] : []),
                 t.acupThActions,
               ].map((h, i) => (
-                <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>
+                <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
                   {h}
                 </th>
               ))}
@@ -173,7 +173,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
           </thead>
           <tbody>
             {customers.map(c => (
-              <tr key={c.id} style={{ borderBottom: '1px solid #eee' }}>
+              <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.businessName}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.firstName} {c.lastName}</td>
                 <td style={{ padding: '0.6rem 0.75rem' }}>{c.phoneNumber}</td>
@@ -217,11 +217,11 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
                       <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button
                             onClick={() => saveEdit(c.id)} disabled={saving}
-                            style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}
+                            style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: 'var(--color-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
                           >{t.save}</button>
                           <button
                             onClick={() => setEditingId(null)}
-                            style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: '#e5e7eb', border: 'none', cursor: 'pointer' }}
+                            style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: 'var(--color-bg-3)', border: 'none', cursor: 'pointer' }}
                           >✕</button>
                       </span>
                     </td>
@@ -242,18 +242,18 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         <button
                           onClick={() => setEditCustomer(c)}
-                          style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#eef2ff', border: '1px solid #c7d2fe', color: '#4338ca', cursor: 'pointer', fontSize: '0.8rem' }}
+                          style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: 'var(--color-accent-dim)', border: '1px solid var(--color-accent)', color: 'var(--color-accent)', cursor: 'pointer', fontSize: '0.8rem' }}
                         >{t.edit}</button>
                         {canManage && (
                           <button
                             onClick={() => startEdit(c)}
-                            style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
+                            style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.8rem' }}
                           >{t.acupPricesBtn}</button>
                         )}
                         {canManage && (
                           <button
                             onClick={() => setPwdCustomer(c)}
-                            style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: '#f3f4f6', border: '1px solid #ddd', cursor: 'pointer', fontSize: '0.8rem' }}
+                            style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.8rem' }}
                           >{t.acupSetPwd}</button>
                         )}
                         {canManage && (
@@ -262,9 +262,9 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
                             disabled={togglingId === c.id}
                             style={{
                               padding: '0.2rem 0.5rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem',
-                              border: '1px solid ' + (c.isActive ? '#fca5a5' : '#86efac'),
-                              background: c.isActive ? '#fef2f2' : '#f0fdf4',
-                              color: c.isActive ? '#b91c1c' : '#15803d',
+                              border: '1px solid ' + (c.isActive ? 'var(--color-error)' : 'var(--color-success)'),
+                              background: c.isActive ? 'var(--color-error-bg)' : 'var(--color-success-bg)',
+                              color: c.isActive ? 'var(--color-error)' : 'var(--color-success)',
                             }}
                           >{c.isActive ? t.acupDeactivate : t.acupActivate}</button>
                         )}
@@ -283,13 +283,13 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
         <button
           disabled={page <= 1}
           onClick={() => setPage(p => p - 1)}
-          style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
+          style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid var(--color-border)', cursor: 'pointer' }}
         >{t.acupPrev}</button>
         <span>{t.acupPage(page, totalPages)}</span>
         <button
           disabled={page >= totalPages}
           onClick={() => setPage(p => p + 1)}
-          style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid #ddd', cursor: 'pointer' }}
+          style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid var(--color-border)', cursor: 'pointer' }}
         >Next →</button>
       </div>
 
