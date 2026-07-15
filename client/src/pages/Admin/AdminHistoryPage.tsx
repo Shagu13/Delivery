@@ -411,6 +411,20 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
   // already search-filtered server-side; the wrapped returns are filtered here.
   const flatOrders = useMemo<FlatHistoryOrder[]>(() => {
     const result: FlatHistoryOrder[] = [];
+    // Recipient search is filtered server-side at the batch level: a GroupOrder is returned
+    // when ANY child order's recipient matches. Its sibling orders (different recipients) come
+    // back too, so narrow to the actually-matching orders here. Sender search needs no per-order
+    // narrowing — all children of a batch share the sender. Tracking number always matches so a
+    // "Go To" / TN deep-link still resolves.
+    const q = debouncedSearch.trim().toLowerCase();
+    const recipientMatch = (o: AdminOrder): boolean =>
+      !q || searchParty !== 'recipient' ||
+      o.recipientName.toLowerCase().includes(q) ||
+      o.recipientPhone.toLowerCase().includes(q) ||
+      o.recipientCity.toLowerCase().includes(q) ||
+      o.recipientDistrict.toLowerCase().includes(q) ||
+      o.recipientAddress.toLowerCase().includes(q) ||
+      o.trackingNumber.toLowerCase().includes(q);
     const all = [
       ...groupOrders,
       ...returnOrders.filter(go =>
@@ -420,6 +434,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
       for (const o of go.orders) {
         const category = orderCategory(o);
         if (!category) continue;
+        if (!recipientMatch(o)) continue;
         result.push({
           order: o,
           go,
