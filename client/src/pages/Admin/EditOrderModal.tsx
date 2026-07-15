@@ -777,6 +777,15 @@ export function EditOrderModal({ order, open, onClose, onSaved, token, canMarkDe
                 .eom-tab--active { color:var(--color-accent);border-bottom-color:var(--color-accent); }
                 .eom-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
                 .eom-col-2 { grid-column:span 2; }
+                /* Phones: one column so inputs aren't cramped, and let the tab strip
+                   scroll sideways instead of overflowing the dialog. */
+                @media (max-width:560px) {
+                  .eom-grid { grid-template-columns:1fr; }
+                  .eom-col-2 { grid-column:span 1; }
+                  .eom-tabs { overflow-x:auto; }
+                  .modal__header, .modal__body { padding-left:16px;padding-right:16px; }
+                  .modal__footer { flex-wrap:wrap; }
+                }
                 .eom-field { display:flex;flex-direction:column;gap:4px; }
                 .eom-label { font-size:0.7rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-subtle); }
                 .eom-label--required::after { content:' *';color:var(--color-accent); }

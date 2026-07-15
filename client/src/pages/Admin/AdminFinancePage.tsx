@@ -380,7 +380,7 @@ function PaymentFilterSwitch({ value, counts, onChange }: {
     ];
     return (
         <div role="tablist" aria-label={t.finViewPayments}
-            style={{ display: 'inline-flex', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'var(--color-bg-2)' }}>
+            style={{ display: 'inline-flex', maxWidth: '100%', overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-2)' }}>
             {items.map((it, i) => {
                 const active = value === it.key;
                 return (

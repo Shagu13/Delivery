@@ -595,6 +595,15 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
         .hist-cust__item-name { font-size: 0.82rem; font-weight: 600; color: var(--color-text); }
         .hist-cust__item-sub { font-size: 0.72rem; color: var(--color-text-subtle); }
         .hist-cust__empty { padding: 10px; font-size: 0.78rem; color: var(--color-text-subtle); text-align: center; }
+
+        /* ── Mobile (≤768px) ── */
+        @media (max-width: 768px) {
+          .hist-daynav { padding: 10px 14px; }
+          /* Search + customer typeahead take the full row so they aren't squeezed.
+             The tables already scroll horizontally inside .hist-scroll. */
+          .hist-cust { width: 100%; }
+          .go-toolbar .go-search { flex-basis: 100%; max-width: none; }
+        }
       `}</style>
 
       {/* Date navigator — All ↔ single day ↔ custom inclusive from→to range.

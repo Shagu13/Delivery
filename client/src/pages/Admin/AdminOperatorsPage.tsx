@@ -343,7 +343,8 @@ export default function AdminOperatorsPage({ token }: Props) {
           <span className="empty-state__text">{t.operatorsEmpty}</span>
         </div>
       ) : (
-        <table className="courier-table">
+        <div className="table-scroll">
+        <table className="courier-table" style={{ minWidth: 0 }}>
           <thead>
             <tr>
               <th>{t.operatorColName}</th>
@@ -370,6 +371,7 @@ export default function AdminOperatorsPage({ token }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {toast && (

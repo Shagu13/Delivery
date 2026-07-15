@@ -376,6 +376,16 @@
   margin-top: 6px;
 }
 
+/* Horizontal-scroll wrapper for wide tables/grids so they stay usable on narrow
+   screens instead of overflowing the page (or being clipped by a parent's
+   overflow:hidden). Scroll happens inside the wrapper; the page never scrolls
+   sideways. */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ── Content card ── */
 .content-card {
   background: var(--color-bg-2);
@@ -489,10 +499,50 @@
   line-height: 1;
 }
 
-/* ── Mobile sidebar ── */
+/* ── Mobile sidebar (slide-in drawer) ── */
 @media (max-width: 768px) {
+  /* The sidebar becomes an off-canvas drawer instead of vanishing, so the admin
+     keeps full navigation on phones. It slides in when `.sidebar--mobile-open`
+     is set (hamburger in the mobile topbar); a backdrop closes it. */
   .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100dvh;
+    width: 264px !important;   /* ignore the desktop collapsed width on mobile */
+    z-index: 130;
+    transform: translateX(-100%);
+    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar--mobile-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
+  }
+
+  /* Collapsed-width tweaks are meaningless in the mobile drawer — always full. */
+  .sidebar--collapsed .sidebar__logo-text,
+  .sidebar--collapsed .sidebar__role-badge,
+  .sidebar--collapsed .sidebar__section-label,
+  .sidebar--collapsed .sidebar__divider,
+  .sidebar--collapsed .sidebar__link-text,
+  .sidebar--collapsed .sidebar__user-info,
+  .sidebar--collapsed .sidebar__badge--count {
+    display: revert;
+  }
+
+  /* The desktop collapse toggle is pointless in a drawer — hide it. */
+  .sidebar__collapse-btn {
     display: none;
+  }
+
+  .sidebar-mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 125;
+    animation: fade-up 0.18s ease both;
   }
 
   .dashboard__content {

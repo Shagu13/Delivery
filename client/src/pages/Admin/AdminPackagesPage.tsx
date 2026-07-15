@@ -1829,6 +1829,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         .aop-page-btn:hover:not(:disabled) { background: var(--color-bg-2); }
         .aop-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .aop-page-info { font-size: 0.82rem; color: var(--color-text-subtle); }
+
+        /* ── Mobile (≤768px) ── */
+        @media (max-width: 768px) {
+          /* Tighter side padding; toolbars/bulk bar already wrap. */
+          .pkg-delivery-toolbar, .aop-bulk-bar { padding-left: 14px; padding-right: 14px; }
+          .aop-pagination { padding: 14px; }
+        }
       `}</style>
     </div>
   );

@@ -136,7 +136,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
   };
 
   return (
-    <div style={{ padding: '1.5rem' }}>
+    <div style={{ padding: 'clamp(12px, 3vw, 1.5rem)' }}>
       <h2 style={{ marginBottom: '1rem' }}>{t.acupTitle}</h2>
 
       <input
@@ -156,7 +156,8 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
       {loading ? (
         <p>{t.loading}</p>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+        <div className="table-scroll">
+        <table style={{ width: '100%', minWidth: 1080, borderCollapse: 'collapse', fontSize: '0.88rem' }}>
           <thead>
             <tr style={{ background: '#f5f5f5' }}>
               {[
@@ -275,6 +276,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: '1rem', alignItems: 'center' }}>

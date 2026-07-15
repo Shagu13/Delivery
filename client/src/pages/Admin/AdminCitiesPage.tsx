@@ -278,7 +278,15 @@ export default function AdminCitiesPage({ token }: Props) {
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: '1.5rem' }}>
+    <div style={{ padding: 'clamp(12px, 3vw, 1.5rem)' }}>
+      <style>{`
+        /* On phones the city / district master-detail stacks vertically instead of
+           sitting side-by-side, and the city list takes the full width. */
+        @media (max-width: 768px) {
+          .acp-layout { flex-direction: column; gap: 1.25rem !important; }
+          .acp-sidebar { min-width: 0 !important; width: 100%; }
+        }
+      `}</style>
       <h2 style={{ marginBottom: '1rem' }}>{t.acpTitle}</h2>
 
       {error && (
@@ -287,10 +295,10 @@ export default function AdminCitiesPage({ token }: Props) {
         </p>
       )}
 
-      <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
+      <div className="acp-layout" style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
 
         {/* ── City sidebar ─────────────────────────────────────────────────── */}
-        <div style={{ minWidth: 200, flexShrink: 0 }}>
+        <div className="acp-sidebar" style={{ minWidth: 200, flexShrink: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em' }}>{t.acpCitiesHeader}</h3>
             <button

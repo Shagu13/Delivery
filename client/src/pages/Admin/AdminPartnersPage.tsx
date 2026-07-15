@@ -390,7 +390,7 @@ function WebhookSecretCell({ secret }: { secret: string }) {
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
     <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 10 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+      <table style={{ width: '100%', minWidth: 620, borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead>
           <tr style={{ background: 'var(--color-bg-3)' }}>
             {headers.map(h => (

@@ -169,6 +169,7 @@ export function AdminDashboard() {
     // Persist the view in the URL (replace, no history spam) so refresh restores it.
     navigate(view === 'overview' ? '/admin' : `/admin?view=${view}`, { replace: true });
     setSidebarView(view);
+    setMobileMenuOpen(false); // close the mobile drawer after navigating (no-op on desktop)
   };
 
   // Jump from the global Order Search to the page an order lives on, seeding that page's
@@ -183,6 +184,8 @@ export function AdminDashboard() {
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Mobile drawer (the desktop sidebar is hidden below 768px — see dashboard.css).
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Live return/exchange badge count (SignalR) — shared with the staff nav.
   const { returnExchange: returnExchangeCount } = useAdminPendingCounts(token ?? null, !isOperator);
@@ -221,7 +224,11 @@ export function AdminDashboard() {
 
   return (
     <div className="dashboard">
-      <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`}>
+      {/* Backdrop for the mobile drawer (only visible < 768px when open). */}
+      {mobileMenuOpen && (
+        <div className="sidebar-mobile-overlay" onClick={() => setMobileMenuOpen(false)} />
+      )}
+      <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}${mobileMenuOpen ? ' sidebar--mobile-open' : ''}`}>
         <div className="sidebar__logo">
           <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
             <rect width="28" height="28" rx="6" fill="currentColor" />
@@ -465,6 +472,29 @@ export function AdminDashboard() {
       </aside>
 
       <div className="dashboard__body">
+        {/* Mobile topbar (hidden on desktop) — hosts the hamburger that opens the drawer. */}
+        <div className="cust-mobile-topbar">
+          <div className="cust-mobile-topbar__left">
+            <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="6" fill="currentColor" />
+              <path d="M7 14h14M7 9h8M7 19h10" stroke="var(--color-bg)" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span className="cust-mobile-topbar__brand">{t.appName}</span>
+            <span className="cust-role-badge-sm">{isTenant ? 'Tenant' : isOperator ? 'Operator' : 'Admin'}</span>
+          </div>
+          <div className="cust-mobile-topbar__right">
+            <button
+              className="cust-hamburger"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open navigation"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              {t.custMenu}
+            </button>
+          </div>
+        </div>
         <div className="dashboard__topbar">
           <span className="dashboard__topbar-title">
             {activeView === 'overview'  && t.topbarOverview}
@@ -778,6 +808,27 @@ export function AdminDashboard() {
         .pickup-modal__selcount { margin-left: auto; font-size: 0.76rem; font-weight: 600; color: var(--color-accent); }
         .pickup-modal__error { margin-top: 12px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: var(--radius-sm); color: #ef4444; font-size: 0.82rem; padding: 10px 14px; }
         .pickup-modal__footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--color-border); }
+
+        /* ── Mobile (≤768px) ── */
+        @media (max-width: 768px) {
+          /* Tables keep a readable width and scroll inside their .table-scroll wrapper
+             instead of crushing columns to fit the phone width. */
+          .courier-table { min-width: 620px; }
+          /* Tighter horizontal padding so rows/toolbars use the narrow width well.
+             Allow wrapping so action buttons drop to their own line instead of
+             overflowing/clipping. */
+          .go-row-header { gap: 10px; padding: 12px 14px; flex-wrap: wrap; }
+          .go-toolbar, .go-status-bar { padding: 10px 14px; }
+          .pickup-daynav, .pickup-daynav-wrap, .pickup-controls, .pickup-summary { padding-left: 14px; padding-right: 14px; }
+          .go-note { padding-left: 14px; padding-right: 14px; }
+          /* The day navigator's "mode" toggle shouldn't get shoved off-screen. */
+          .pickup-modes { margin-left: 0; }
+          /* Give the search box the full row on phones. */
+          .go-search { max-width: none; flex-basis: 100%; }
+          /* Full-width action buttons wrap cleanly and stay tappable. */
+          .go-actions { width: 100%; margin-left: 0; }
+          .pickup-modal__footer { flex-wrap: wrap; }
+        }
       `}</style>
     </div>
   );
@@ -945,6 +996,7 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
                         <span className="empty-state__text">{t.goEmptyState ?? 'Orders will appear here'}</span>
                     </div>
                 ) : (
+                    <div className="table-scroll">
                     <table className="courier-table">
                         <thead>
                             <tr>
@@ -969,6 +1021,7 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 )}
             </div>
         </>
@@ -2946,7 +2999,7 @@ function AllCouriersList({
         {filtered.map(courier => (
           <div
             key={courier.courierId}
-            style={{ borderBottom: '1px solid var(--color-border)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isDeleted ? 0.6 : 1 }}
+            style={{ borderBottom: '1px solid var(--color-border)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', opacity: courier.isDeleted ? 0.6 : 1 }}
           >
             <div style={{ flex: 1 }}>
               <div className="courier-name">

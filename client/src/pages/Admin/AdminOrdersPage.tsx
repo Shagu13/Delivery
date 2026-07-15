@@ -2107,6 +2107,26 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         .aop-page-btn:hover:not(:disabled) { background: var(--color-bg-2); }
         .aop-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .aop-page-info { font-size: 0.82rem; color: var(--color-text-subtle); }
+
+        /* ── Mobile (≤768px) ── */
+        @media (max-width: 768px) {
+          /* On phones the wide table scrolls sideways inside its own wrapper instead
+             of forcing the whole page to scroll horizontally. (The desktop reason for
+             keeping this wrap non-scrolling — sticky column headers — doesn't apply on
+             phones, where fitting the layout to the screen matters more.) */
+          .aop-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          /* Non-sticky headers on mobile so they don't jump against the scroll box. */
+          .aop-th { position: static; box-shadow: none; }
+          /* Tighter side padding for narrow widths. */
+          .aop-daynav { padding: 10px 14px; }
+          .aop-pagination { padding: 14px; }
+          .aop-toolbar, .aop-bulk-bar, .aop-courier-banner { padding-left: 14px; padding-right: 14px; }
+          /* Let the courier banner wrap instead of overflowing on phones. */
+          .aop-courier-banner { flex-wrap: wrap; }
+          .aop-courier-banner__unpriced { margin-left: 0; }
+          /* Search takes the full row so it isn't squeezed by the filter chips. */
+          .aop-toolbar .go-search { flex-basis: 100%; max-width: none; }
+        }
       `}</style>
     </div>
   );
