@@ -537,9 +537,11 @@ interface Props {
     onBack: () => void;
     /** Deep-link seed from the global Order Search "Go To" — pre-fills the search box. */
     initialSearch?: string;
+    /** Sender/recipient scope chosen on Order Search — seeds the search-party toggle. */
+    initialParty?: 'sender' | 'recipient';
 }
 
-export default function AdminReturnExchangePage({ token, couriers, onBack, initialSearch = '' }: Props) {
+export default function AdminReturnExchangePage({ token, couriers, onBack, initialSearch = '', initialParty = 'sender' }: Props) {
     const { t } = useLanguage();
     const [orders, setOrders]         = useState<ReturnExchangeOrder[]>([]);
     const [loading, setLoading]       = useState(true);
@@ -547,7 +549,7 @@ export default function AdminReturnExchangePage({ token, couriers, onBack, initi
     const [typeFilter, setTypeFilter] = useState<FilterType>('All');
     const [statusFilter, setStatusFilter] = useState<FilterStatus>('All');
     const [search, setSearch]         = useState(initialSearch);
-    const [searchParty, setSearchParty] = useState<'sender' | 'recipient'>('sender');
+    const [searchParty, setSearchParty] = useState<'sender' | 'recipient'>(initialParty);
     const [page, setPage]             = useState(1);
 
     const load = useCallback(async (silent = false) => {

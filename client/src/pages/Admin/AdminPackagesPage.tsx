@@ -255,7 +255,7 @@ function OrderTypeBadge({ orderType }: { orderType: string }) {
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage, canGroup = canManage, canSeeRevenue = true, initialSearch = '' }: { canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean; canSeeRevenue?: boolean; initialSearch?: string }) {
+export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage, canGroup = canManage, canSeeRevenue = true, initialSearch = '', initialParty = 'sender' }: { canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean; canSeeRevenue?: boolean; initialSearch?: string; initialParty?: 'sender' | 'recipient' }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -277,7 +277,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // any filter (or an explicit day/range pick) reaches the whole DB instead.
   const [page,          setPage]          = useState(1);
   const [dateTouched,   setDateTouched]   = useState(false);
-  const [filterParty,     setFilterParty]     = useState<'sender' | 'recipient'>('sender');
+  const [filterParty,     setFilterParty]     = useState<'sender' | 'recipient'>(initialParty);
   const [filterCities,    setFilterCities]    = useState<string[]>([]);
   const [filterDistricts, setFilterDistricts] = useState<string[]>([]);
   const [filterStatus,    setFilterStatus]    = useState('');

@@ -111,7 +111,7 @@ function ResultRow({
 
 export default function AdminOrderSearchPage({ token, onGoTo }: {
   token: string;
-  onGoTo: (view: DestView, trackingNumber: string) => void;
+  onGoTo: (view: DestView, trackingNumber: string, party: Party) => void;
 }) {
   const { t } = useLanguage();
   // Remember the last search across visits: the page unmounts when the admin navigates away
@@ -173,7 +173,7 @@ export default function AdminOrderSearchPage({ token, onGoTo }: {
   };
 
   const goToOrder = (view: DestView, o: AdminOrder) => {
-    onGoTo(view, o.trackingNumber);
+    onGoTo(view, o.trackingNumber, party);
   };
 
   return (

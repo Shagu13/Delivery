@@ -141,6 +141,9 @@ export function AdminDashboard() {
   // Deep-link search term (from the global Order Search "Go To"): seeds the destination
   // page's search box so it lands on that exact order.
   const qParam      = searchParams.get('q') ?? '';
+  // The sender/recipient scope chosen on Order Search — seeds the destination's own
+  // search-party toggle so it matches what was searched.
+  const partyParam  = searchParams.get('party') === 'recipient' ? 'recipient' : 'sender';
 
   // Operators are a partial-admin role: same dashboard, restricted to Overview + Pick-Up.
   const isOperator = user?.role === 'Operator';
@@ -174,8 +177,8 @@ export function AdminDashboard() {
 
   // Jump from the global Order Search to the page an order lives on, seeding that page's
   // search box with the tracking number so it lands on exactly that order.
-  const goToOrder = (view: AdminView, trackingNumber: string) => {
-    navigate(`/admin?view=${view}&q=${encodeURIComponent(trackingNumber)}`, { replace: true });
+  const goToOrder = (view: AdminView, trackingNumber: string, party: 'sender' | 'recipient' = 'sender') => {
+    navigate(`/admin?view=${view}&q=${encodeURIComponent(trackingNumber)}&party=${party}`, { replace: true });
     setSidebarView(view);
   };
 
@@ -532,7 +535,7 @@ export function AdminDashboard() {
           {/* Delivery: read-only for tenant co-admins; operators manage fully but never see company revenue. */}
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isTenant} canSeeRevenue={!isOperator} />}
           {/* TEST: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
-          {activeView === 'packagesTest' && <AdminPackagesPage key={`pkg-${qParam}`} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} initialSearch={qParam} />}
+          {activeView === 'packagesTest' && <AdminPackagesPage key={`pkg-${qParam}`} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} canSeeRevenue={!isOperator} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
@@ -543,7 +546,7 @@ export function AdminDashboard() {
           {activeView === 'partners' && isSystemAdmin && token && <AdminPartnersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && isSystemAdmin && token && <AdminTenantSettlementsPage token={token} />}
-          {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} />}
+          {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
           {activeView === 'orderSearch' && !isOperator && !isTenant && token && (
             <AdminOrderSearchPage token={token} onGoTo={goToOrder} />
           )}
@@ -558,6 +561,7 @@ export function AdminDashboard() {
               couriers={couriers}
               onBack={() => goTo('overview')}
               initialSearch={qParam}
+              initialParty={partyParam}
             />
           )}
         </main>

@@ -278,7 +278,7 @@ function CustomerTypeahead({ token, value, onChange }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function AdminHistoryPage({ token, canSeeRevenue = true, initialSearch = '' }: { token: string; canSeeRevenue?: boolean; initialSearch?: string }) {
+export default function AdminHistoryPage({ token, canSeeRevenue = true, initialSearch = '', initialParty = 'sender' }: { token: string; canSeeRevenue?: boolean; initialSearch?: string; initialParty?: 'sender' | 'recipient' }) {
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -287,7 +287,7 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
   const [search,         setSearch]         = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   // Which side the free-text search matches: sender/customer (default) or recipient.
-  const [searchParty,    setSearchParty]    = useState<'sender' | 'recipient'>('sender');
+  const [searchParty,    setSearchParty]    = useState<'sender' | 'recipient'>(initialParty);
   const [customer,       setCustomer]       = useState<SelectedCustomer | null>(null);
   const [filterStatus,  setFilterStatus] = useState<HistoryFilter>('delivered');
   // Date navigator — filters by completion date (delivery date, or created date when
