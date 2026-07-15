@@ -532,7 +532,7 @@ export function AdminDashboard() {
           {/* Delivery: read-only for tenant co-admins; operators manage fully but never see company revenue. */}
           {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isTenant} canSeeRevenue={!isOperator} />}
           {/* TEST: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
-          {activeView === 'packagesTest' && <AdminPackagesPage canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} initialSearch={qParam} />}
+          {activeView === 'packagesTest' && <AdminPackagesPage key={`pkg-${qParam}`} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} initialSearch={qParam} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} canSeeRevenue={!isOperator} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
@@ -543,7 +543,7 @@ export function AdminDashboard() {
           {activeView === 'partners' && isSystemAdmin && token && <AdminPartnersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && isSystemAdmin && token && <AdminTenantSettlementsPage token={token} />}
-          {activeView === 'history' && <AdminHistoryPage token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} />}
+          {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} />}
           {activeView === 'orderSearch' && !isOperator && !isTenant && token && (
             <AdminOrderSearchPage token={token} onGoTo={goToOrder} />
           )}
@@ -553,6 +553,7 @@ export function AdminDashboard() {
           {activeView === 'homepage' && isTenant && <TenantHomepageEditor />}
           {activeView === 'returnExchange' && token && (
             <AdminReturnExchangePage
+              key={`re-${qParam}`}
               token={token}
               couriers={couriers}
               onBack={() => goTo('overview')}

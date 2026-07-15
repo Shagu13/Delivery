@@ -14,6 +14,11 @@ interface Dest { view: DestView; label: string; }
 const PAGE_SIZE = 50;
 const MIN_LEN   = 2;
 
+// Persist the last Order Search term + scope for the session so returning to the page
+// (after a "Go To" jump) restores what was typed.
+const OS_SEARCH_KEY = 'adminOrderSearch.search';
+const OS_PARTY_KEY  = 'adminOrderSearch.party';
+
 // Terminal statuses live on the History page. Anything else in-flow is "active" (Packages).
 const TERMINAL_STATUSES = new Set<string>([
   'DeliveredToRecipient', 'AllDelivered', 'ExchangeCompleted', 'ReturnedToSender',
@@ -109,15 +114,20 @@ export default function AdminOrderSearchPage({ token, onGoTo }: {
   onGoTo: (view: DestView, trackingNumber: string) => void;
 }) {
   const { t } = useLanguage();
-  const [search, setSearch]                 = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [party, setParty]                   = useState<Party>('sender');
+  // Remember the last search across visits: the page unmounts when the admin navigates away
+  // (e.g. via a "Go To"), so keep the term + scope in sessionStorage and re-seed on return.
+  const [search, setSearch]                 = useState(() => sessionStorage.getItem(OS_SEARCH_KEY) ?? '');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => sessionStorage.getItem(OS_SEARCH_KEY) ?? '');
+  const [party, setParty]                   = useState<Party>(() => (sessionStorage.getItem(OS_PARTY_KEY) as Party) || 'sender');
   const [page, setPage]                     = useState(1);
 
   useEffect(() => {
+    sessionStorage.setItem(OS_SEARCH_KEY, search);
     const id = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(id);
   }, [search]);
+
+  useEffect(() => { sessionStorage.setItem(OS_PARTY_KEY, party); }, [party]);
 
   useEffect(() => { setPage(1); }, [debouncedSearch, party]);
 
