@@ -28,13 +28,21 @@ public sealed class GetCourierDeliveryHistoryQueryHandler
         var terminalStatuses = new[]
         {
             OrderStatus.DeliveredToRecipient,
+            OrderStatus.ExchangeCompleted,
             OrderStatus.CancelledByAdmin,
+            OrderStatus.CancelledBySender,
         };
 
+        // A recorded CancellationReason is included whatever terminal it landed in: a courier
+        // decline (OrderNotAccepted) and an admin return-to-sender (ReturnedToSender) both stamp
+        // one, and both are billable failed deliveries the courier earns salary for — so they
+        // belong in their history. Orders cancelled at warehouse acceptance also carry a reason
+        // but have no last-mile CourierId, so the courier filter already excludes them.
         var orders = await _context.Orders
             .AsNoTracking()
-            .Where(o => o.CourierId == courier.Id && terminalStatuses.Contains(o.Status))
-            .OrderByDescending(o => o.DeliveredAt ?? o.CreatedAt)
+            .Where(o => o.CourierId == courier.Id
+                     && (terminalStatuses.Contains(o.Status) || o.CancellationReason != null))
+            .OrderByDescending(o => o.DeliveredAt ?? o.CancelledAt ?? o.CreatedAt)
             .ToListAsync(cancellationToken);
 
         return orders.Select(o => new CourierOrderHistoryDto(
@@ -47,7 +55,8 @@ public sealed class GetCourierDeliveryHistoryQueryHandler
             IsFragile:          o.IsFragile,
             Status:             o.Status,
             CreatedAt:          o.CreatedAt,
-            DeliveredAt:        o.DeliveredAt
+            DeliveredAt:        o.DeliveredAt,
+            CancelledAt:        o.CancelledAt
         )).ToList();
     }
 }

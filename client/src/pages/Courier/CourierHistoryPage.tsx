@@ -16,8 +16,15 @@ function fmt(dateStr: string | null | undefined): string {
     return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// ReturnedToSender is green in the shared map because for a standalone Return order it is the
+// intended happy ending. On this tab it only ever means a failed Send/Exchange delivery, so amber
+// keeps it from reading as a success next to the green delivered badges.
+const HISTORY_STATUS_COLORS: Record<string, [string, string]> = {
+    ReturnedToSender: ['rgba(217,119,6,0.12)', '#d97706'],
+};
+
 function StatusBadge({ status }: { status: string }) {
-    const [bg, color] = STATUS_COLORS[status] ?? ['rgba(100,100,100,0.1)', '#666'];
+    const [bg, color] = HISTORY_STATUS_COLORS[status] ?? STATUS_COLORS[status] ?? ['rgba(100,100,100,0.1)', '#666'];
     const { short } = getStatusMeta(status);
     return <span className="hist-badge" style={{ background: bg, color }}>{short}</span>;
 }
@@ -68,6 +75,11 @@ function HistoryState({ error, empty, emptyHint, onRetry, hasItems, children }: 
     return <div className="hist-list">{children}</div>;
 }
 
+// Only these two statuses mean the parcel actually reached the recipient. Everything else in
+// history ended without a delivery, so it must never render as "Delivered" — ReturnedToSender
+// stamps DeliveredAt (it dates the billing event) despite the parcel going back to the sender.
+const DELIVERED_STATUSES = ['DeliveredToRecipient', 'ExchangeCompleted'];
+
 // ── Delivery History Tab ──────────────────────────────────────────────────────
 function DeliveryHistoryTab({ token }: { token: string }) {
     const { t } = useLanguage();
@@ -100,7 +112,10 @@ function DeliveryHistoryTab({ token }: { token: string }) {
     return (
         <HistoryState error={error} empty={t.cdHistDeliveryEmpty} emptyHint={t.cdHistDeliveryEmptyHint}
             onRetry={retry} hasItems={items.length > 0}>
-            {items.map(order => (
+            {items.map(order => {
+                const delivered = DELIVERED_STATUSES.includes(order.status);
+                const closedAt  = delivered ? order.deliveredAt : (order.cancelledAt ?? order.deliveredAt);
+                return (
                 <HistoryCard key={order.id}
                     title={<>{order.isFragile ? '🥚' : '📦'} {recipientDisplayName(order.recipientName, t.recipientUnknown)}</>}
                     status={order.status}
@@ -109,12 +124,15 @@ function DeliveryHistoryTab({ token }: { token: string }) {
                     note={order.description}
                     dates={<>
                         <div className="hist-card__date">🗓 {t.cdHistCreated} {fmt(order.createdAt)}</div>
-                        {order.deliveredAt && (
-                            <div className="hist-card__date hist-card__date--done">✅ {t.cdHistDelivered} {fmt(order.deliveredAt)}</div>
+                        {closedAt && (
+                            delivered
+                                ? <div className="hist-card__date hist-card__date--done">✅ {t.cdHistDelivered} {fmt(closedAt)}</div>
+                                : <div className="hist-card__date">🚫 {t.cdHistCancelled} {fmt(closedAt)}</div>
                         )}
                     </>}
                 />
-            ))}
+                );
+            })}
         </HistoryState>
     );
 }

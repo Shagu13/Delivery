@@ -987,6 +987,7 @@ const en = {
   cdHistPickupEmptyHint: 'Completed pickups will appear here.',
   cdHistCreated:         'Created:',
   cdHistDelivered:       'Delivered:',
+  cdHistCancelled:       'Cancelled:',
   cdHistPickedUp:        'Picked up:',
   cdHistToWarehouse:     'To warehouse:',
 
@@ -2879,6 +2880,7 @@ const ka: typeof en = {
   cdHistPickupEmptyHint: 'დასრულებული აღებები აქ გამოჩნდება.',
   cdHistCreated:         'შეიქმნა:',
   cdHistDelivered:       'ჩაბარდა:',
+  cdHistCancelled:       'გაუქმდა:',
   cdHistPickedUp:        'გაიტანეს:',
   cdHistToWarehouse:     'საწყობში:',
 

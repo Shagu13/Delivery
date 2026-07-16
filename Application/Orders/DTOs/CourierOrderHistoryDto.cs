@@ -16,5 +16,6 @@ public sealed record CourierOrderHistoryDto(
     bool        IsFragile,
     OrderStatus Status,
     DateTime    CreatedAt,
-    DateTime?   DeliveredAt
+    DateTime?   DeliveredAt,
+    DateTime?   CancelledAt = null
 );
