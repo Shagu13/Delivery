@@ -4,6 +4,8 @@ using Application.Couriers.Commands.UpdateCourier;
 using Application.Couriers.Commands.SetCourierActiveStatus;
 using Application.Couriers.DTOs;
 using Application.Common.Interfaces;
+using Domain;
+using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +18,28 @@ namespace API.Controllers;
 // can't be loosened per-method (attributes combine with AND), so it lives per-action.
 public sealed class CouriersController : BaseController
 {
+    // An order is "closed" once it has left the courier's hands for good — it stops
+    // counting as something they currently hold on the day view.
+    private static readonly OrderStatus[] ClosedOrderStatuses =
+    [
+        OrderStatus.DeliveredToRecipient,
+        OrderStatus.ExchangeCompleted,
+        OrderStatus.DeliveredReturnOrderToWarehouse,
+        OrderStatus.ReturnedToSender,
+        OrderStatus.CancelledByAdmin,
+        OrderStatus.CancelledBySender,
+        OrderStatus.OrderNotAccepted,
+    ];
+
+    // A batch the pickup courier will never collect — excluded from "still out on".
+    private static readonly OrderStatus[] ClosedGroupOrderStatuses =
+    [
+        OrderStatus.CancelledByAdmin,
+        OrderStatus.CancelledBySender,
+        OrderStatus.OrderNotAccepted,
+        OrderStatus.AllDelivered,
+    ];
+
     private readonly IAppDbContext _context;
 
     public CouriersController(IAppDbContext context)
@@ -154,29 +178,47 @@ public sealed class CouriersController : BaseController
         return Ok(orders);
     }
 
-    // ── GET /api/couriers/assigned?from=ISO&to=ISO  (Admin) ───────────────────
+    // ── GET /api/couriers/assigned?date=YYYY-MM-DD  (Admin) ───────────────────
     /// <summary>
-    /// Returns every order assigned to a courier within [from, to) — regardless of
-    /// whether it has been delivered yet — each tagged with its courierId. The
-    /// caller (admin UI) passes the UTC bounds of a local calendar day and groups
-    /// the result by courier to show what each courier was assigned that day.
-    /// Dated by AssignedToCourierAt (the moment Order.CourierId was set).
+    /// Returns the orders that make up a courier's last-mile workload on the given
+    /// Georgian calendar day, each tagged with its courierId. The admin UI groups
+    /// the result by courier.
+    ///
+    /// Today  → everything the courier currently holds (assigned and not yet closed,
+    ///          no matter which day it was assigned on) plus what they closed today,
+    ///          so an order doesn't vanish from the list the moment it's delivered.
+    /// Past   → only what was actually completed that day, dated by
+    ///          DeliveredAt ?? DeliveredToWarehouseAt (Return orders finish at the
+    ///          warehouse and never get a DeliveredAt).
+    ///
+    /// `date` is a Georgian wall-clock day key — timestamps are stored as Georgian
+    /// wall-clock without an offset, so it compares directly against the columns.
     /// </summary>
     [HttpGet("assigned")]
     [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAssignedForRange(
-        [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)
+    public async Task<IActionResult> GetAssignedForDay(
+        [FromQuery] DateTime date, CancellationToken ct)
     {
-        var fromUtc = from.ToUniversalTime();
-        var toUtc   = to.ToUniversalTime();
+        DateTime day    = date.Date;
+        DateTime dayEnd = day.AddDays(1);
+        bool isToday    = day == CustomTime.Today;
+
+        IQueryable<Order> query = _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CourierId != null);
+
+        // Half-open range rather than .Date == day: sargable, and a null completion
+        // timestamp simply falls outside it.
+        query = isToday
+            ? query.Where(o => !ClosedOrderStatuses.Contains(o.Status)
+                            || ((o.DeliveredAt ?? o.DeliveredToWarehouseAt) >= day
+                             && (o.DeliveredAt ?? o.DeliveredToWarehouseAt) <  dayEnd))
+            : query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt) >= day
+                            && (o.DeliveredAt ?? o.DeliveredToWarehouseAt) <  dayEnd);
 
         bool hideRevenue = User.IsInRole("Operator");
-        var orders = await _context.Orders
-            .AsNoTracking()
-            .Where(o => o.CourierId != null
-                     && o.AssignedToCourierAt >= fromUtc
-                     && o.AssignedToCourierAt <  toUtc)
+        var orders = await query
             .OrderByDescending(o => o.AssignedToCourierAt)
             .Select(o => new
             {
@@ -209,28 +251,35 @@ public sealed class CouriersController : BaseController
         return Ok(orders);
     }
 
-    // ── GET /api/couriers/assigned-pickups?from=ISO&to=ISO  (Admin) ───────────
+    // ── GET /api/couriers/assigned-pickups?date=YYYY-MM-DD  (Admin) ───────────
     /// <summary>
-    /// Returns every group-order pickup that was actually collected from the sender
-    /// (PickedUpAt) within [from, to), each tagged with the courier who picked it up.
-    /// The admin UI groups the result by courier to show which courier collected which
-    /// batches — and how many single orders — on the chosen day. Mirrors
-    /// GetAssignedForRange, but for the pickup (warehouse-collection) leg.
+    /// The pickup-leg mirror of <see cref="GetAssignedForDay"/>: group-order batches
+    /// tagged with the courier who collects them, for one Georgian calendar day.
+    ///
+    /// Today → every batch the courier is still out on (assigned, not yet collected,
+    ///         not cancelled) plus the batches they collected today.
+    /// Past  → only the batches actually collected that day, dated by PickedUpAt.
     /// </summary>
     [HttpGet("assigned-pickups")]
     [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAssignedPickupsForRange(
-        [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)
+    public async Task<IActionResult> GetAssignedPickupsForDay(
+        [FromQuery] DateTime date, CancellationToken ct)
     {
-        var fromUtc = from.ToUniversalTime();
-        var toUtc   = to.ToUniversalTime();
+        DateTime day    = date.Date;
+        DateTime dayEnd = day.AddDays(1);
+        bool isToday    = day == CustomTime.Today;
 
-        var pickups = await _context.GroupOrders
+        IQueryable<GroupOrder> query = _context.GroupOrders
             .AsNoTracking()
-            .Where(g => g.CourierId != null
-                     && g.PickedUpAt >= fromUtc
-                     && g.PickedUpAt <  toUtc)
+            .Where(g => g.CourierId != null);
+
+        query = isToday
+            ? query.Where(g => (g.PickedUpAt >= day && g.PickedUpAt < dayEnd)
+                            || (g.PickedUpAt == null && !ClosedGroupOrderStatuses.Contains(g.Status)))
+            : query.Where(g => g.PickedUpAt >= day && g.PickedUpAt < dayEnd);
+
+        var pickups = await query
             .OrderByDescending(g => g.PickedUpAt)
             .Select(g => new
             {

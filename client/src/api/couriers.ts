@@ -111,14 +111,15 @@ export interface CourierDayDelivery extends CourierOrder {
     courierId: string;
 }
 
-/// Fetches every order assigned to a courier within [from, to) — delivered or not.
-/// `from`/`to` are the UTC bounds of the admin's chosen local calendar day.
-export async function fetchAssignedForRange(
-    from: Date,
-    to: Date,
+/// Fetches a day's last-mile workload per courier. `dayKey` is a Georgian calendar
+/// day ("YYYY-MM-DD"). For today the backend returns everything each courier
+/// currently holds plus what they closed today; for a past day, only what they
+/// completed that day.
+export async function fetchAssignedForDay(
+    dayKey: string,
     token: string,
 ): Promise<CourierDayDelivery[]> {
-    const qs = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+    const qs = new URLSearchParams({ date: dayKey });
     const res = await fetch(`/api/couriers/assigned?${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
     });
@@ -141,14 +142,13 @@ export interface CourierDayPickup {
     createdAt: string;
 }
 
-/// Fetches every group-order pickup collected (PickedUpAt) within [from, to),
-/// each tagged with its pickup courier. `from`/`to` are the UTC bounds of the chosen day.
-export async function fetchAssignedPickupsForRange(
-    from: Date,
-    to: Date,
+/// The pickup-leg mirror of `fetchAssignedForDay`: batches per pickup courier for one
+/// Georgian day — today's still-out-on plus collected-today, or a past day's collected.
+export async function fetchAssignedPickupsForDay(
+    dayKey: string,
     token: string,
 ): Promise<CourierDayPickup[]> {
-    const qs = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+    const qs = new URLSearchParams({ date: dayKey });
     const res = await fetch(`/api/couriers/assigned-pickups?${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
     });

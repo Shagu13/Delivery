@@ -13,7 +13,7 @@ import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/a
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import type { AdminOrderItem } from './AdminOrdersPage';
-import { fetchCouriers, fetchAssignedForRange, fetchAssignedPickupsForRange, setCourierActiveStatus } from '../../api/couriers';
+import { fetchCouriers, fetchAssignedForDay, fetchAssignedPickupsForDay, setCourierActiveStatus } from '../../api/couriers';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import { recipientDisplayName } from '../../utils/recipientName';
 import AdminCustomersPage from './AdminCustomersPage';
@@ -2657,6 +2657,9 @@ function groupByCourier<T extends { courierId: string }>(
     .sort((a, b) => b.items.length - a.items.length);
 }
 
+// One courier's work for the chosen day, in whichever leg the view is showing.
+type CourierDayRow = { courier: Courier; items: (CourierDayDelivery | CourierDayPickup)[] };
+
 // Matches a courier against a free-text query (name, username, phone, assigned city/district).
 function courierMatchesSearch(c: Courier, query: string): boolean {
   const q = query.trim().toLowerCase();
@@ -2688,8 +2691,10 @@ function AdminCouriers({
   const { t } = useLanguage();
   // Free-text courier search (name / username / phone / assigned area) for this view.
   const [search, setSearch] = useState('');
-  // Single global day for the whole list — defaults to today.
-  const [day, setDay] = useState<Date>(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; });
+  // Single global day for the whole list — defaults to today. Georgian, not browser-local:
+  // the backend dates rows by Georgian wall-clock, so a browser in another zone must not
+  // shift the day.
+  const [day, setDay] = useState<Date>(() => georgianToday());
   // Which sub-view is showing: the day's assigned orders ('today') or the plain roster ('all').
   const [view, setView] = useState<'today' | 'all'>('today');
   // Which leg the day's assignments are shown for: last-mile delivery or warehouse pickup.
@@ -2707,36 +2712,31 @@ function AdminCouriers({
     return () => clearTimeout(timer);
   }, [actionError]);
 
-  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
-  const isSameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  const isToday = isSameDay(day, today);
+  const today = useMemo(() => georgianToday(), []);
+  const dayKey = toDateKey(day);
+  const isToday = dayKey === toDateKey(today);
   const shiftDay = (delta: number) =>
     setDay(d => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; });
 
   // Fetch the day's assignments (delivery or pickup leg) whenever day or mode changes.
   useEffect(() => {
     let cancelled = false;
-    const dayStart = new Date(day);
-    const dayEnd = new Date(day); dayEnd.setDate(dayEnd.getDate() + 1);
     setLoading(true);
     setError(null);
     const request = mode === 'pickup'
-      ? fetchAssignedPickupsForRange(dayStart, dayEnd, token).then(d => { if (!cancelled) setPickups(d); })
-      : fetchAssignedForRange(dayStart, dayEnd, token).then(d => { if (!cancelled) setDeliveries(d); });
+      ? fetchAssignedPickupsForDay(dayKey, token).then(d => { if (!cancelled) setPickups(d); })
+      : fetchAssignedForDay(dayKey, token).then(d => { if (!cancelled) setDeliveries(d); });
     request
       .catch(() => { if (!cancelled) setError(mode === 'pickup' ? 'Failed to load assigned pickups' : 'Failed to load assigned orders'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [day, token, mode]);
+  }, [dayKey, token, mode]);
 
   // Silently re-fetch the day's deliveries after a per-row action (mark delivered/postpone/
   // cancel) mutates an order — no loading spinner, mirrors the Packages page's `loadSilent`.
   const reloadDeliveries = useCallback(() => {
-    const dayStart = new Date(day);
-    const dayEnd = new Date(day); dayEnd.setDate(dayEnd.getDate() + 1);
-    fetchAssignedForRange(dayStart, dayEnd, token).then(setDeliveries).catch(() => {});
-  }, [day, token]);
+    fetchAssignedForDay(dayKey, token).then(setDeliveries).catch(() => {});
+  }, [dayKey, token]);
 
   const courierById = useMemo(() => new Map(couriers.map(c => [c.courierId, c])), [couriers]);
 
@@ -2751,17 +2751,33 @@ function AdminCouriers({
     [pickups, courierById],
   );
 
-  const rows = mode === 'pickup' ? pickupRows : deliveryRows;
-  // Narrow the day's courier rows to those matching the search box.
-  const filteredRows = useMemo(
-    () => (search.trim() ? rows.filter(r => courierMatchesSearch(r.courier, search)) : rows),
-    [rows, search],
+  const rows: CourierDayRow[] = mode === 'pickup' ? pickupRows : deliveryRows;
+  // Narrow to couriers matching the search box. Searching looks at the whole roster, not
+  // just couriers with work on this day, so looking someone up answers "nothing on this
+  // day" instead of the ambiguous "no such courier".
+  const filteredRows = useMemo(() => {
+    if (!search.trim()) return rows;
+    const itemsByCourier = new Map(rows.map(r => [r.courier.courierId, r.items]));
+    return couriers
+      // Deactivated couriers only surface if they actually worked this day.
+      .filter(c => courierMatchesSearch(c, search) && (!c.isDeleted || itemsByCourier.has(c.courierId)))
+      .map(c => ({ courier: c, items: itemsByCourier.get(c.courierId) ?? [] }))
+      .sort((a, b) => b.items.length - a.items.length);
+  }, [rows, couriers, search]);
+
+  // Totals track what's actually on screen, so they stay honest while searching.
+  const totalAssigned = useMemo(
+    () => filteredRows.reduce((sum, r) => sum + r.items.length, 0),
+    [filteredRows],
   );
-  const totalAssigned = mode === 'pickup' ? pickups.length : deliveries.length;
-  // Pickup mode: total single orders (packages) collected across all batches that day.
+  // Pickup mode: total single orders (packages) across the batches shown.
   const totalSingleOrders = useMemo(
-    () => pickups.reduce((sum, p) => sum + p.numberOfPackages, 0),
-    [pickups],
+    () => (mode === 'pickup'
+      ? filteredRows.reduce(
+          (sum, r) => sum + (r.items as CourierDayPickup[]).reduce((s, p) => s + p.numberOfPackages, 0),
+          0)
+      : 0),
+    [filteredRows, mode],
   );
 
   if (couriers.length === 0) {
@@ -2824,7 +2840,9 @@ function AdminCouriers({
             ))}
           </div>
           <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-subtle)' }}>
-            {mode === 'pickup' ? t.crwNavPickedUpOn : t.crwNavAssignedOn}
+            {isToday
+              ? t.crwNavCurrentlyHeld
+              : mode === 'pickup' ? t.crwNavPickedUpOn : t.crwNavDeliveredOn}
           </span>
           <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.85rem', lineHeight: 1 }} onClick={() => shiftDay(-1)} title="Previous day">‹</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 210, justifyContent: 'center' }}>
@@ -2846,7 +2864,7 @@ function AdminCouriers({
             {filteredRows.length} courier{filteredRows.length !== 1 ? 's' : ''} ·{' '}
             {mode === 'pickup'
               ? <>{totalAssigned} {t.crwModePickup.toLowerCase()} · {totalSingleOrders} {t.crwOrdersWord}</>
-              : <>{totalAssigned} assigned</>}
+              : <>{totalAssigned} {isToday ? 'assigned' : 'delivered'}</>}
           </span>
         </div>
       </div>
