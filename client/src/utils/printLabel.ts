@@ -9,7 +9,7 @@ export interface ParcelLabelData {
     storeName: string;
     recipientName: string;
     recipientPhone: string;
-    recipientAddress: string;   // full line: address, district, city
+    recipientAddress: string;   // full line: city, district, address
     /** Pre-formatted amount due, e.g. "₾45.00", or the Georgian "paid" text. */
     amountText: string;
     /** Optional free-text order description entered by the customer; omitted from the
@@ -148,7 +148,14 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
 <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
-    body { font-family: 'Sylfaen', 'Noto Sans Georgian', 'BPG Arial', 'DejaVu Sans', sans-serif; color: #111; }
+    /* Pure black + exact color printing so low-dpi (thermal) printers don't dither
+       gray/anti-aliased edges into a blur. See the size blocks for per-size weight. */
+    body {
+        font-family: 'Noto Sans Georgian', 'BPG Arial', 'Sylfaen', 'DejaVu Sans', sans-serif;
+        color: #000;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        -webkit-font-smoothing: none;
+    }
 
     /* ── On-screen size picker (hidden when printing) ── */
     .toolbar {
@@ -177,9 +184,13 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
        :last-child — which left page-break-after:always on it and printed a blank page. */
     .label:last-of-type { page-break-after: auto; }
     .store { font-weight: 800; line-height: 1.15; margin-bottom: 2mm; word-break: break-word; overflow-wrap: anywhere; }
-    .rule { border-top: 1.5px dashed #999; margin: 4mm 0; }
-    .field { line-height: 1.4; margin-bottom: 1.5mm; word-break: break-word; overflow-wrap: anywhere; }
-    .lbl { color: #555; }
+    .rule { border-top: 1.5px dashed #000; margin: 4mm 0; }
+    /* Medium weight gives more ink coverage per glyph so strokes survive low-dpi
+       printing instead of thinning out to a blur. */
+    .field { line-height: 1.4; margin-bottom: 1.5mm; word-break: break-word; overflow-wrap: anywhere; font-weight: 500; }
+    .lbl { color: #000; font-weight: 500; }
+    .track { font-weight: 500; }
+    .qr__cap { font-weight: 500; }
     .strong { font-weight: 700; }
     .pay { margin-top: 1mm; overflow-wrap: anywhere; }
     .amount { font-weight: 800; }
@@ -191,8 +202,8 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .brand__logo { width: auto; object-fit: contain; }
     .qr { text-align: center; }
     .qr svg { display: block; }
-    .qr__cap { color: #555; margin-top: 0.5mm; letter-spacing: 0.3px; }
-    .track { letter-spacing: 0.5px; border-top: 1px solid #ddd; padding-top: 3mm; overflow-wrap: anywhere; }
+    .qr__cap { color: #000; margin-top: 0.5mm; letter-spacing: 0.3px; }
+    .track { letter-spacing: 0.5px; border-top: 1px solid #000; padding-top: 3mm; overflow-wrap: anywhere; }
 
     /* ── Size: A6 100×150mm (default) ── */
     .size-a6 .label { width: 100mm; height: 150mm; padding: 8mm; }
@@ -247,6 +258,8 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l58x40 .qr__cap { font-size: 3.5pt; margin-top: 0.2mm; }
     .size-l58x40 .track { font-size: 5pt; padding-top: 1mm; }
     .size-l58x40 .brand__logo { height: 6mm; max-width: 24mm; }
+    /* Tiny type dithers worst — go heavier so strokes stay solid on paper. */
+    .size-l58x40 .field, .size-l58x40 .lbl, .size-l58x40 .track { font-weight: 600; }
     .size-l58x40 .rule { margin: 0.8mm 0; }
     .size-l58x40 .brand { gap: 4mm; margin-bottom: 0.8mm; }
     .size-l58x40 .brand-top { margin-bottom: 0.8mm; }
@@ -262,6 +275,7 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l40x58 .qr__cap { font-size: 3.5pt; margin-top: 0.2mm; }
     .size-l40x58 .track { font-size: 5.5pt; padding-top: 1.2mm; }
     .size-l40x58 .brand__logo { height: 7mm; max-width: 30mm; }
+    .size-l40x58 .field, .size-l40x58 .lbl, .size-l40x58 .track { font-weight: 600; }
     .size-l40x58 .rule { margin: 1.2mm 0; }
     .size-l40x58 .brand { gap: 4mm; margin-bottom: 1.2mm; }
     .size-l40x58 .brand-top { margin-bottom: 1.5mm; }
