@@ -285,14 +285,17 @@ export function CreateGroupOrderPage() {
                 // picked-up batch to whichever batch is still open today, or starts a new
                 // one, so a closed batch is never a reason to block the customer here.
                 // Return-only cards are standalone orders with no real batch to append to.
+                // A Return card is a standalone order surfaced as a pseudo-batch, so its id
+                // is an Order id and matches here even though no such GroupOrder exists.
                 const isReturnOnly = !!found
                     && found.orders.length > 0
                     && found.orders.every(o => o.orderType === 'Return');
-                if (!found || isReturnOnly) { setAppendError(t.cgoAppendClosed); return; }
+                if (!found || isReturnOnly) { setAppendError(t.cgoAppendUnavailable); return; }
                 setAppendError(null);
                 setAppendBatch(found);
             } catch {
-                if (!cancelled) setAppendError(t.cgoAppendClosed);
+                // Transient — the batch itself may be perfectly fine.
+                if (!cancelled) setAppendError(t.cgoAppendLoadFailed);
             }
         })();
         return () => { cancelled = true; };
@@ -581,7 +584,9 @@ export function CreateGroupOrderPage() {
         );
     }
 
-    // Append target couldn't be loaded (not found, already picked up, or a return).
+    // Append target couldn't be used: unknown/foreign batch id, a Return card, or the
+    // lookup failed. A picked-up batch is NOT one of these — the backend redirects those
+    // to whichever batch is still open, or starts a new one.
     if (appendMode && appendError) {
         return (
             <div className="page">
@@ -792,6 +797,7 @@ export function CreateGroupOrderPage() {
                                 pickupDistrictName={appendMode ? appendBatch?.pickUpDistrict : sender.pickUpDistrict}
                                 districtLookup={districtLookup}
                                 serviceIncludedForced={serviceIncludedForced}
+                                allowReturn={!appendMode}
                                 onChange={handlePackageChange}
                                 onRemove={removePackage}
                             />
