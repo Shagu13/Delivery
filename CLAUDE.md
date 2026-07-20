@@ -80,7 +80,7 @@ External businesses (a partner = a `Customer` record) push orders into the DB se
 ### Key domain concepts
 
 **Order lifecycle & status flow** (`Domain/Enums/OrderStatus.cs` — one enum shared by `GroupOrder` and `Order`)
-- A customer places a **GroupOrder** (batch). Its child **Order** records exist from creation and mirror the GroupOrder's status through the **pickup flow**: `Pending → AcceptedGroupOrder → CourierAssignedToPickUp → CourierOnTheWayToPickUp → CourierDeliveringToWarehouse → DeliveredToWarehouse → AdminAcceptedOrderInWareHouse`.
+- A customer places a **GroupOrder** (batch). Its child **Order** records exist from creation and mirror the GroupOrder's status through the **pickup flow**: `Pending → AcceptedGroupOrder → CourierAssignedToPickUp → CourierDeliveringToWarehouse → DeliveredToWarehouse → AdminAcceptedOrderInWareHouse`.
 - At `AdminAcceptedOrderInWareHouse` each Order begins its **own last-mile flow**: `[non-Tbilisi: OrderIsOnItsWayToRecipientsCity →] CourierAssignedToDeliver → CourierDeliveringTheOrderToRecipient → DeliveredToRecipient`, with a `DeliveryPostponed` retry loop. Order pricing (`CompanyServicePrice`) is set at creation, not at warehouse acceptance.
 - Standalone **Return** orders skip the batch and run their own flow: `Pending → CourierAssignedToPickUp → PickedUpFromRecipient → DeliveredReturnOrderToWarehouse → ReturnedToSender`.
 - The **GroupOrder pickup courier** (`GroupOrder.CourierId`, drives `PickedUpAt`) is distinct from each Order's **last-mile delivery courier** (`Order.CourierId`); settlement attribution keys off `Order.CourierId` + the delivery timestamp.

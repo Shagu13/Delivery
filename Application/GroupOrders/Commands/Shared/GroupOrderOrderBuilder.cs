@@ -190,6 +190,35 @@ internal static class GroupOrderOrderBuilder
     }
 
     /// <summary>
+    /// Attaches freshly built packages to an <b>existing</b> batch.
+    ///
+    /// New packages adopt the batch's current status rather than keeping the default
+    /// <see cref="OrderStatus.Pending"/>: the whole batch is collected in a single pickup,
+    /// so a package added after the admin assigned a courier is just as "assigned" as the
+    /// ones already there. Leaving it Pending made one batch show two different statuses
+    /// and misrepresented the package to the customer, admin and courier alike.
+    ///
+    /// Orders are added explicitly with the FK set — attaching a child with a non-default
+    /// client-generated Id to an already-tracked batch would make EF attempt an UPDATE
+    /// (0 rows) → DbUpdateConcurrencyException. Explicit Add = INSERT.
+    ///
+    /// Does not touch <see cref="GroupOrder.NumberOfPackages"/>; the caller owns that,
+    /// since it also covers the new-batch case.
+    /// </summary>
+    public static void AttachToBatch(
+        IAppDbContext context,
+        GroupOrder batch,
+        IReadOnlyList<Order> orders)
+    {
+        foreach (var order in orders)
+        {
+            order.GroupOrderId = batch.Id;
+            order.Status       = batch.Status;
+            context.Orders.Add(order);
+        }
+    }
+
+    /// <summary>
     /// True when the customer has a negotiated price (&gt; 0) for the tier the recipient
     /// district falls into. When so, the recipient's own zone is priced off the customer's
     /// rate rather than being swapped to the pickup district. Checked per-tier: a customer

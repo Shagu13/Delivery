@@ -102,6 +102,13 @@ curl -X POST https://<your-delivery-domain>/api/partner/orders \
 
 Store the `trackingNumber` against your `externalReference`.
 
+> **`groupOrderId` is a pickup batch, not a per-request id.** Orders you post during the
+> same day from the same pickup address join the batch already waiting for collection, so
+> repeated calls will return the **same** `groupOrderId` — this is expected, and means our
+> courier makes one pickup run instead of one per call. Once the courier collects a batch,
+> the next order you post starts a new one and you will see a new `groupOrderId`.
+> Key your own records off `trackingNumber` / `externalReference`, never off `groupOrderId`.
+
 ### Errors
 - `401` — bad/missing API key.
 - `409` — one or more `externalReference` values were already submitted (duplicate). The body lists the duplicates.

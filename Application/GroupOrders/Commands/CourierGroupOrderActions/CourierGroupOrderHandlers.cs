@@ -45,9 +45,8 @@ public sealed class MarkPickedUpCommandHandler : IRequestHandler<MarkPickedUpCom
             _context, request.GroupOrderId, request.CourierUserId, cancellationToken);
 
         // The separate "on my way" pickup step was removed — the courier confirms pickup in one
-        // swipe from CourierAssignedToPickUp. CourierOnTheWayToPickUp is still accepted for any
-        // batches left mid-flight under the old two-step process.
-        if (go.Status is not (OrderStatus.CourierAssignedToPickUp or OrderStatus.CourierOnTheWayToPickUp))
+        // swipe from CourierAssignedToPickUp.
+        if (go.Status is not OrderStatus.CourierAssignedToPickUp)
             throw new ConflictException($"Expected CourierAssignedToPickUp. Current: {go.Status}.");
 
         go.Status      = OrderStatus.CourierDeliveringToWarehouse;

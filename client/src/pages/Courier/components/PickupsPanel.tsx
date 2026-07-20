@@ -38,9 +38,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
     const bulkActionFor = (status: string) => {
         switch (status) {
             // The "on my way" pickup step was removed — Picked-up is the first action now.
-            // CourierOnTheWayToPickUp is still handled for any batches left mid-flight.
             case 'CourierAssignedToPickUp':
-            case 'CourierOnTheWayToPickUp':
                 return { fn: (id: string) => markPickedUp(token, id),            label: t.cdPickupSwipePickedUp,   toast: t.cdPickupToastPickedUp,   variant: 'primary' as const };
             case 'CourierDeliveringToWarehouse':
                 return { fn: (id: string) => markDeliveredToWarehouse(token, id), label: t.cdPickupSwipeToWarehouse, toast: t.cdPickupToastToWarehouse, variant: 'success' as const };
@@ -331,7 +329,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                         {go.note && <div className="courier-card__note">{go.note}</div>}
                                     </div>
                                     <div className="courier-card__footer">
-                                        {(go.status === 'CourierAssignedToPickUp' || go.status === 'CourierOnTheWayToPickUp') && (
+                                        {go.status === 'CourierAssignedToPickUp' && (
                                             <SwipeButton label={t.cdPickupSwipePickedUp} variant="primary" disabled={busyId === go.id}
                                                 onSwipe={() => onAct(go.id, () => markPickedUp(token, go.id), t.cdPickupToastPickedUp)} />
                                         )}

@@ -35,7 +35,6 @@ const FORWARD_INDEX: Record<string, number> = {
   AcceptedGroupOrder: 0,
   AcceptedOrder: 0,
   CourierAssignedToPickUp: 1,
-  CourierOnTheWayToPickUp: 1,
   CourierDeliveringToWarehouse: 1,
   DeliveredToWarehouse: 2,
   AdminAcceptedOrderInWareHouse: 2,

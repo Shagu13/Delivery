@@ -8,7 +8,6 @@ export type OrderStatus =
     | 'AcceptedOrder'
     | 'OrderNotAccepted'
     | 'CourierAssignedToPickUp'
-    | 'CourierOnTheWayToPickUp'
     | 'CourierDeliveringToWarehouse'
     | 'DeliveredToWarehouse'
     | 'AdminAcceptedOrderInWareHouse'

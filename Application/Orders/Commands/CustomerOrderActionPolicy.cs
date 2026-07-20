@@ -17,6 +17,5 @@ public static class CustomerOrderActionPolicy
         OrderStatus.Pending,
         OrderStatus.AcceptedGroupOrder,
         OrderStatus.CourierAssignedToPickUp,
-        OrderStatus.CourierOnTheWayToPickUp,
     };
 }

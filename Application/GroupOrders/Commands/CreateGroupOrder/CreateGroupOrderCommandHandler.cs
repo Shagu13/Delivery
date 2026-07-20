@@ -66,15 +66,34 @@ public sealed class CreateGroupOrderCommandHandler
             }
         }
 
-        // ── Create the batch (GroupOrder) for the Send/Exchange packages ──────────
+        // ── Batch (GroupOrder) for the Send/Exchange packages ─────────────────────
+        //    Same-day orders from this sender fold into their still-open batch at the
+        //    same pickup address; otherwise a fresh batch is started. Identical to the
+        //    cart checkout path, so a partner pushing orders through the day builds up
+        //    one pickup per address instead of one per API call. ──
         GroupOrder? groupOrder = null;
+        var isNewGroupOrder = false;
 
         if (batchOrders.Count > 0)
         {
-            groupOrder = CreateNewBatch(dto);
+            if (dto.CustomerId is Guid customerId)
+            {
+                groupOrder = await OpenBatchResolver.FindOpenBatchAsync(
+                    _context, customerId, dto.PickUpCity, dto.PickUpDistrict, dto.PickUpAddress, cancellationToken);
+            }
 
-            foreach (var order in batchOrders)
-                groupOrder.Orders.Add(order);
+            if (groupOrder is not null)
+            {
+                GroupOrderOrderBuilder.AttachToBatch(_context, groupOrder, batchOrders);
+            }
+            else
+            {
+                isNewGroupOrder = true;
+                groupOrder = CreateNewBatch(dto);
+
+                foreach (var order in batchOrders)
+                    groupOrder.Orders.Add(order);
+            }
 
             groupOrder.NumberOfPackages += batchOrders.Count;
         }
@@ -82,7 +101,9 @@ public sealed class CreateGroupOrderCommandHandler
         await _context.SaveChangesAsync(cancellationToken);
 
         // ── Notify admin via SMS ──────────────────────────────────────────────────
-        if (groupOrder is not null)
+        //    Only a genuinely new batch is announced — packages folded into an already
+        //    announced open batch don't need a second notification.
+        if (isNewGroupOrder && groupOrder is not null)
         {
             try
             {

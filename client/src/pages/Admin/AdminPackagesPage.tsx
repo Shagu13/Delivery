@@ -52,11 +52,11 @@ const ACTIVE_ORDER_STATUSES_ONLY = new Set([
 
 const PICKUP_BUCKET: Record<string, number> = {
   Pending: 0, AcceptedGroupOrder: 0,
-  CourierAssignedToPickUp: 1, CourierOnTheWayToPickUp: 1, CourierDeliveringToWarehouse: 1,
+  CourierAssignedToPickUp: 1, CourierDeliveringToWarehouse: 1,
 };
 const pickupBucket = (groupStatus: string) => PICKUP_BUCKET[groupStatus] ?? 2;
 
-const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp']);
+const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp']);
 
 const PAGE_SIZE = 30;
 
@@ -68,7 +68,6 @@ const STATUS_PILLS = [
   { value: 'Pending',                         label: 'pillPending' },
   { value: 'AcceptedGroupOrder',              label: 'pillAccepted' },
   { value: 'CourierAssignedToPickUp',         label: 'pillCourierPickup' },
-  { value: 'CourierOnTheWayToPickUp',         label: 'pillOnTheWay' },
   { value: 'CourierDeliveringToWarehouse',    label: 'pillToWarehouse' },
   { value: 'DeliveredToWarehouse',            label: 'pillAtWarehouse' },
   { value: 'AdminAcceptedOrderInWareHouse',   label: 'pillWarehouseAccepted' },
@@ -79,7 +78,7 @@ const STATUS_PILLS = [
 
 const STATUS_CLASS_MAP: Record<string, string> = {
   Pending: 'pending', AcceptedGroupOrder: 'accepted', AcceptedOrder: 'accepted',
-  CourierAssignedToPickUp: 'assigned', CourierOnTheWayToPickUp: 'onway',
+  CourierAssignedToPickUp: 'assigned',
   CourierDeliveringToWarehouse: 'delivering', DeliveredToWarehouse: 'warehouse',
   AdminAcceptedOrderInWareHouse: 'warehouse', OrderIsOnItsWayToRecipientsCity: 'onway',
   CourierAssignedToDeliver: 'assigned', CourierDeliveringTheOrderToRecipient: 'delivering',

@@ -4,7 +4,7 @@ namespace Domain.Enums;
 /// Unified status enum shared by both GroupOrder and Order entities.
 ///
 /// GroupOrder path:
-///   Pending → AcceptedGroupOrder → CourierAssignedToPickUp → CourierOnTheWayToPickUp
+///   Pending → AcceptedGroupOrder → CourierAssignedToPickUp
 ///   → CourierDeliveringToWarehouse → DeliveredToWarehouse → AdminAcceptedOrderInWareHouse
 ///   → (each Order below gets its own last-mile flow)
 ///   Terminal: CancelledBySender | OrderNotAccepted | CancelledByAdmin
@@ -31,7 +31,10 @@ public enum OrderStatus
     AcceptedGroupOrder                   = 1,
     OrderNotAccepted                     = 2,
     CourierAssignedToPickUp              = 3,
-    CourierOnTheWayToPickUp              = 4,
+    // 4 = CourierOnTheWayToPickUp — retired. The courier confirms pickup in one step
+    // from CourierAssignedToPickUp. Do not reuse 4: statuses persist as their *name*
+    // (HasConversion<string>), and leaving the slot empty keeps the numbering of
+    // everything below stable.
     CourierDeliveringToWarehouse         = 5,
     DeliveredToWarehouse                 = 6,
     AdminAcceptedOrderInWareHouse        = 7,

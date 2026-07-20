@@ -41,7 +41,7 @@ public class GroupOrder
     /// <summary>
     /// Uses the unified OrderStatus enum.
     /// GroupOrder-relevant statuses: Pending, AcceptedGroupOrder, CourierAssignedToPickUp,
-    /// CourierOnTheWayToPickUp, CourierDeliveringToWarehouse, DeliveredToWarehouse,
+    /// CourierDeliveringToWarehouse, DeliveredToWarehouse,
     /// AdminAcceptedOrderInWareHouse, CancelledBySender, OrderNotAccepted, CancelledByAdmin.
     /// </summary>
     public OrderStatus Status { get; set; } = OrderStatus.Pending;

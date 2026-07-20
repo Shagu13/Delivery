@@ -33,7 +33,6 @@ public static class PartnerOrderStatusMapper
         OrderStatus.AcceptedOrder                        => PartnerOrderStatus.Accepted,
 
         OrderStatus.CourierAssignedToPickUp             => PartnerOrderStatus.PickupInProgress,
-        OrderStatus.CourierOnTheWayToPickUp             => PartnerOrderStatus.PickupInProgress,
         OrderStatus.CourierDeliveringToWarehouse        => PartnerOrderStatus.PickupInProgress,
 
         OrderStatus.DeliveredToWarehouse                 => PartnerOrderStatus.AtWarehouse,
@@ -70,7 +69,7 @@ public static class PartnerOrderStatusMapper
     {
         PartnerOrderStatus.Created          => [OrderStatus.Pending],
         PartnerOrderStatus.Accepted         => [OrderStatus.AcceptedGroupOrder, OrderStatus.AcceptedOrder],
-        PartnerOrderStatus.PickupInProgress => [OrderStatus.CourierAssignedToPickUp, OrderStatus.CourierOnTheWayToPickUp, OrderStatus.CourierDeliveringToWarehouse],
+        PartnerOrderStatus.PickupInProgress => [OrderStatus.CourierAssignedToPickUp, OrderStatus.CourierDeliveringToWarehouse],
         PartnerOrderStatus.AtWarehouse      => [OrderStatus.DeliveredToWarehouse, OrderStatus.AdminAcceptedOrderInWareHouse],
         PartnerOrderStatus.InTransit        => [OrderStatus.OrderIsOnItsWayToRecipientsCity],
         PartnerOrderStatus.OutForDelivery   => [OrderStatus.CourierAssignedToDeliver, OrderStatus.CourierDeliveringTheOrderToRecipient],

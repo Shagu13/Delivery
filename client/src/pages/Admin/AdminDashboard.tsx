@@ -95,7 +95,6 @@ const PICKUP_BUCKET: Record<string, number> = {
   Pending:                      0,
   AcceptedGroupOrder:           0,
   CourierAssignedToPickUp:      1,
-  CourierOnTheWayToPickUp:      1,
   CourierDeliveringToWarehouse: 1,
 };
 const pickupBucket = (groupStatus: string) => PICKUP_BUCKET[groupStatus] ?? 2;
@@ -107,7 +106,7 @@ const PICKUP_ELIGIBLE = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssign
 
 // Batches still open enough to be merged — mirrors the backend GroupOrderAppendPolicy
 // (anything before the courier marks the batch picked up).
-const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp']);
+const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp']);
 
 // Unite a customer's same-day batches: same customer + same physical pickup address.
 // Falls back to the sender phone when there's no linked customer (legacy/guest batches).
@@ -875,7 +874,6 @@ const STATUS_CLASS_MAP: Record<string, string> = {
   AcceptedGroupOrder:              'accepted',
   AcceptedOrder:                   'accepted',
   CourierAssignedToPickUp:         'assigned',
-  CourierOnTheWayToPickUp:         'onway',
   CourierDeliveringToWarehouse:    'delivering',
   DeliveredToWarehouse:            'warehouse',
   AdminAcceptedOrderInWareHouse:   'warehouse',
@@ -920,7 +918,7 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
     const totalOrders = groupOrders.reduce((sum, go) => sum + go.orders.length, 0);
     const pendingPickup = groupOrders.filter(go =>
         go.status === 'Pending' || go.status === 'AcceptedGroupOrder' ||
-        go.status === 'CourierAssignedToPickUp' || go.status === 'CourierOnTheWayToPickUp'
+        go.status === 'CourierAssignedToPickUp'
     ).length;
     const inTransit = groupOrders.reduce((sum, go) =>
         sum + go.orders.filter(o =>
@@ -1051,7 +1049,6 @@ const STATUS_PILLS = [
   { value: 'Pending',                         label: 'pillPending' },
   { value: 'AcceptedGroupOrder',              label: 'pillAccepted' },
   { value: 'CourierAssignedToPickUp',         label: 'pillCourierPickup' },
-  { value: 'CourierOnTheWayToPickUp',         label: 'pillOnTheWay' },
   { value: 'CourierDeliveringToWarehouse',    label: 'pillToWarehouse' },
   { value: 'DeliveredToWarehouse',            label: 'pillAtWarehouse' },
   { value: 'AdminAcceptedOrderInWareHouse',   label: 'pillWarehouseAccepted' },

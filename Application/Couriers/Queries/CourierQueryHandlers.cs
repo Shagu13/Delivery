@@ -26,7 +26,6 @@ public sealed class GetCourierGroupOrdersQueryHandler
         var activeStatuses = new[]
         {
             OrderStatus.CourierAssignedToPickUp,
-            OrderStatus.CourierOnTheWayToPickUp,
             OrderStatus.CourierDeliveringToWarehouse,
         };
 

@@ -298,7 +298,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 pickup). Skips the remaining steps; each package becomes ready for last-mile
                 delivery. The normal DeliveredToWarehouse → Accept step keeps its own button. */}
             {canManage && (status === 'Pending' || status === 'AcceptedGroupOrder' ||
-              status === 'CourierAssignedToPickUp' || status === 'CourierOnTheWayToPickUp' ||
+              status === 'CourierAssignedToPickUp' ||
               status === 'CourierDeliveringToWarehouse') &&
               !showCourierPicker && !showPickupDate && (
                 <button className="go-action-btn go-action-btn--warehouse" disabled={busy}

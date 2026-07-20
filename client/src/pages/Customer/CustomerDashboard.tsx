@@ -103,7 +103,7 @@ const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'Or
 // standalone Return to PickedUpFromRecipient) — neither is in this set, so both lock
 // at pickup. (Mirrors the backend CustomerOrderActionPolicy.)
 const CUSTOMER_MODIFIABLE_STATUSES = new Set([
-  'Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp',
+  'Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp',
 ]);
 
 // Cancel is allowed for any package type (Send/Exchange and Returns) while still
@@ -124,7 +124,7 @@ function canCustomerEdit(o: CustomerOrder): boolean {
 // Mirrors the backend GroupOrderAppendPolicy. Return-only cards are standalone orders,
 // not real batches, so they can't take added packages.
 const APPENDABLE_GROUP_STATUSES = new Set([
-  'Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp', 'CourierOnTheWayToPickUp',
+  'Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp',
 ]);
 
 function canAddPackages(go: CustomerGroupOrder): boolean {

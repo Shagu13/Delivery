@@ -3,7 +3,6 @@ export const STATUS_COLORS: Record<string, [string, string]> = {
     AcceptedGroupOrder: ['rgba(59,130,246,0.12)', '#3b82f6'],
     AcceptedOrder: ['rgba(59,130,246,0.12)', '#3b82f6'],
     CourierAssignedToPickUp: ['rgba(139,92,246,0.12)', '#8b5cf6'],
-    CourierOnTheWayToPickUp: ['rgba(139,92,246,0.12)', '#8b5cf6'],
     CourierDeliveringToWarehouse: ['rgba(249,115,22,0.12)', '#f97316'],
     DeliveredToWarehouse: ['rgba(16,185,129,0.12)', '#10b981'],
     AdminAcceptedOrderInWareHouse: ['rgba(16,185,129,0.12)', '#10b981'],

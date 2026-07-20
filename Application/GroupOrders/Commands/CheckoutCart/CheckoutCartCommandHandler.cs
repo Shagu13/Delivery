@@ -78,23 +78,14 @@ public sealed class CheckoutCartCommandHandler
         {
             if (dto.CustomerId is Guid customerId)
             {
-                var today = CustomTime.Today;
-                var todaysBatches = await _context.GroupOrders
-                    .Include(g => g.Orders)
-                    .Where(g => g.CustomerId == customerId && g.CreatedAt.Date == today)
-                    .ToListAsync(cancellationToken);
-
-                groupOrder = todaysBatches.FirstOrDefault(g =>
-                    GroupOrderAppendPolicy.Appendable.Contains(g.Status) && AddressMatches(g, dto));
+                groupOrder = await OpenBatchResolver.FindOpenBatchAsync(
+                    _context, customerId, dto.PickUpCity, dto.PickUpDistrict, dto.PickUpAddress, cancellationToken);
             }
 
             if (groupOrder is not null)
             {
-                foreach (var order in batchOrders)
-                    order.GroupOrderId = groupOrder.Id;
+                GroupOrderOrderBuilder.AttachToBatch(_context, groupOrder, batchOrders);
                 groupOrder.NumberOfPackages += batchOrders.Count;
-                foreach (var order in batchOrders)
-                    _context.Orders.Add(order);
             }
             else
             {
@@ -148,12 +139,4 @@ public sealed class CheckoutCartCommandHandler
                 .Select(o => new CreatedOrderDto(o.Id, o.TrackingNumber, o.RecipientName))
                 .ToList());
     }
-
-    // Same physical pickup location as the batch already open today — the courier only
-    // goes to one address per batch, so a differing address starts a fresh batch instead
-    // of silently folding in under the wrong pickup location.
-    private static bool AddressMatches(GroupOrder groupOrder, CreateGroupOrderDto dto) =>
-        string.Equals(groupOrder.PickUpCity.Trim(), dto.PickUpCity.Trim(), StringComparison.OrdinalIgnoreCase)
-        && string.Equals(groupOrder.PickUpDistrict.Trim(), dto.PickUpDistrict.Trim(), StringComparison.OrdinalIgnoreCase)
-        && string.Equals(groupOrder.PickUpAddress.Trim(), dto.PickUpAddress.Trim(), StringComparison.OrdinalIgnoreCase);
 }

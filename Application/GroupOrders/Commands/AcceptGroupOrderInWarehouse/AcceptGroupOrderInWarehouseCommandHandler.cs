@@ -31,7 +31,6 @@ public sealed class AcceptGroupOrderInWarehouseCommandHandler
             OrderStatus.Pending,
             OrderStatus.AcceptedGroupOrder,
             OrderStatus.CourierAssignedToPickUp,
-            OrderStatus.CourierOnTheWayToPickUp,
             OrderStatus.CourierDeliveringToWarehouse,
             OrderStatus.DeliveredToWarehouse,
         };

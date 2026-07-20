@@ -281,10 +281,14 @@ export function CreateGroupOrderPage() {
                 const all = await getMyOrders(token);
                 if (cancelled) return;
                 const found = all.find(g => g.id === batchId) ?? null;
-                const appendable = !!found
-                    && (found.status === 'Pending' || found.status === 'AcceptedGroupOrder')
-                    && !(found.orders.length > 0 && found.orders.every(o => o.orderType === 'Return'));
-                if (!found || !appendable) { setAppendError(t.cgoAppendClosed); return; }
+                // Deliberately no status check: the backend find-or-create resolves a
+                // picked-up batch to whichever batch is still open today, or starts a new
+                // one, so a closed batch is never a reason to block the customer here.
+                // Return-only cards are standalone orders with no real batch to append to.
+                const isReturnOnly = !!found
+                    && found.orders.length > 0
+                    && found.orders.every(o => o.orderType === 'Return');
+                if (!found || isReturnOnly) { setAppendError(t.cgoAppendClosed); return; }
                 setAppendError(null);
                 setAppendBatch(found);
             } catch {
