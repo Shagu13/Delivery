@@ -447,8 +447,8 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
             </button>
             {weightTiers.map(tier => {
               const label = tier.label
-                ? `${tier.label} (${tier.minWeightKg}–${tier.maxWeightKg}kg)`
-                : `${tier.minWeightKg}–${tier.maxWeightKg}kg`;
+                ? `${tier.label} (${tier.minWeightKg}–${tier.maxWeightKg}კგ)`
+                : `${tier.minWeightKg}–${tier.maxWeightKg}კგ`;
               return (
                 <button
                   key={tier.id}

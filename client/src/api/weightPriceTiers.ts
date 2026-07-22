@@ -30,9 +30,9 @@ export interface UpdateWeightPriceTierRequest {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Human-readable range label, e.g. "0 – 5 kg" */
+/** Human-readable range label, e.g. "0 – 5 კგ" */
 export function tierLabel(tier: WeightPriceTier): string {
-    return `${tier.minWeightKg} – ${tier.maxWeightKg} kg`;
+    return `${tier.minWeightKg} – ${tier.maxWeightKg} კგ`;
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────────

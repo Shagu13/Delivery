@@ -454,7 +454,7 @@ export default function AdminWeightPriceTiersPage({ token }: Props) {
                     {tier.label ?? <span style={{ color: 'var(--color-text-subtle)', fontStyle: 'italic' }}>—</span>}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontFamily: 'Courier New, monospace', fontWeight: 600 }}>
-                    {tier.minWeightKg} – {tier.maxWeightKg} kg
+                    {tier.minWeightKg} – {tier.maxWeightKg} კგ
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}><PriceCell value={tier.capitalPrice} /></td>
                   <td style={{ padding: '0.75rem 1rem' }}><PriceCell value={tier.cityPrice} /></td>
