@@ -250,18 +250,18 @@ export function CustomerFinancePage() {
     const cancelledNonBillable = (i: OrderFinanceLine) =>
         CANCELLED_STATUSES.has(i.status) && !i.isBillableFailedDelivery;
 
-    // Totals across the filtered orders. Failed deliveries and cancelled orders collected no COD
-    // (nothing owed back), and the sender owes the service fee even if originally recipient-pays —
-    // except non-billable cancellations, which owe nothing.
-    const codOutstanding = filtered.reduce(
-        (s, i) => (i.isBillableFailedDelivery || cancelledNonBillable(i))
-            ? s : s + ((i.codAmount ?? 0) - (i.codPaidToCustomerAmount ?? 0)), 0);
-    // COD the company has already paid out to the customer.
-    const codPaid = filtered.reduce((s, i) => s + (i.codPaidToCustomerAmount ?? 0), 0);
-    const serviceOutstanding = filtered.reduce(
-        (s, i) => (i.senderOwesService && !cancelledNonBillable(i))
-            ? s + (i.companyServicePrice - (i.servicePaidByCustomerAmount ?? 0))
-            : s, 0);
+    // Gross period totals (the reconciliation the customer sees, mirroring the admin Payments net):
+    //  · codGross     — COD the company collected for the customer's packages → the company owes it.
+    //  · serviceGross — sender-paid service fee the customer owes the company.
+    //  · netOwed      — COD − service = what the company owes the customer for the period.
+    // Failed/cancelled-non-billable orders collected no COD; a non-billable cancellation owes no
+    // service either. These are GROSS figures for the period — deliberately not reduced by payments
+    // already made, so the net stays e.g. 850 and explains why only 850 was ever transferred.
+    const codGross = filtered.reduce(
+        (s, i) => (i.isBillableFailedDelivery || cancelledNonBillable(i)) ? s : s + (i.codAmount ?? 0), 0);
+    const serviceGross = filtered.reduce(
+        (s, i) => (i.senderOwesService && !cancelledNonBillable(i)) ? s + i.companyServicePrice : s, 0);
+    const netOwed = codGross - serviceGross;
 
     // Receipts-mode totals: gross paid out per type, and the net cash handed to the customer
     // (COD paid out minus service fees collected).
@@ -465,18 +465,40 @@ export function CustomerFinancePage() {
                 </div>
             ) : (
                 <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${mode === 'placed' ? 4 : 3}, 1fr)`, gap: 10, marginBottom: 20 }}>
                         {[
-                            { label: t.ofinSumOrders,     value: filtered.length.toString(), accent: false },
-                            { label: t.ofinSumCodOut,     value: gel(codOutstanding),     accent: true  },
-                            { label: t.ofinSumCodPaidOut, value: gel(codPaid),            accent: false },
-                            { label: t.ofinSumServiceOut, value: gel(serviceOutstanding), accent: false },
-                        ].map(({ label, value, accent }) => (
-                            <div key={label} style={{ background: accent ? 'var(--color-accent-dim)' : 'var(--color-bg-2)', border: `1px solid ${accent ? 'rgba(196,127,23,0.25)' : 'var(--color-border)'}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</div>
+                            { label: t.ofinSumOrders,       value: filtered.length.toString(), color: undefined as string | undefined },
+                            { label: t.ofinSumCodCollected, value: gel(codGross),              color: undefined as string | undefined },
+                            { label: t.ofinSumYouOwe,       value: gel(serviceGross),          color: serviceGross > 0.005 ? '#b45309' : undefined },
+                        ].map(({ label, value, color }) => (
+                            <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: color ?? 'var(--color-text)' }}>{value}</div>
                                 <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
                             </div>
                         ))}
+                        {/* Net for the period: company owes you (COD − service). Green when the company
+                            owes you, amber when you owe the company. Gross — not reduced by payments made.
+                            Only shown in the 'placed' view — in Payments/Receipts the net would reflect
+                            just the already-paid subset, which is misleading as a period reconciliation. */}
+                        {mode === 'placed' && (() => {
+                            const owedToYou = netOwed >= -0.005;
+                            const fg = owedToYou ? '#059669' : '#b45309';
+                            return (
+                                <div style={{
+                                    background: owedToYou ? 'rgba(5,150,105,0.08)' : 'rgba(180,83,9,0.08)',
+                                    border: `1px solid ${owedToYou ? 'rgba(5,150,105,0.25)' : 'rgba(180,83,9,0.25)'}`,
+                                    borderRadius: 10, padding: '12px 10px', textAlign: 'center',
+                                }}>
+                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: fg }}>{gel(Math.abs(netOwed))}</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
+                                        {owedToYou ? t.ofinSumNetOwedToYou : t.ofinSumNetYouOwe}
+                                    </div>
+                                    <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>
+                                        {t.ofinSumNetFormula(gel(codGross), gel(serviceGross))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                     <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
