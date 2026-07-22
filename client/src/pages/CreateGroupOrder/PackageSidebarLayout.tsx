@@ -92,10 +92,6 @@ const ORDER_TYPE_COLORS: Record<OrderType, { bg: string; color: string; border: 
   Exchange: { bg: 'rgba(59,130,246,0.08)',    color: '#3b82f6',                  border: 'rgba(59,130,246,0.4)' },
 };
 
-// The weight price tier selector is hidden for now — packages default to no tier
-// (weightPriceTierId stays null). Flip this to re-enable the field.
-const SHOW_WEIGHT_TIER = false;
-
 // ── Detail panel ──────────────────────────────────────────────────────────────
 
 interface DetailProps {
@@ -369,20 +365,20 @@ function PackageDetail({
         <div className="psl-section">
           <div className="psl-section__label">{t.cgoPackageOptions}</div>
 
-          {SHOW_WEIGHT_TIER && weightTiers.length > 0 && (
+          {weightTiers.length > 0 && (
             <div className="form-field">
-              <label className="form-field__label">{t.cgoWeightTier} <span className="form-field__required">*</span></label>
+              <label className="form-field__label">{t.cgoWeightTier}</label>
               <select
                 className="form-field__input"
                 value={pkg.weightPriceTierId ?? ''}
                 onChange={e => handleWeightTierChange(e.target.value)}
               >
-                <option value="">{t.cgoWeightTierPlaceholder}</option>
+                {/* Default is "Standard" (no tier) — a chosen tier takes over pricing. */}
+                <option value="">{t.cgoWeightTierStandard}</option>
                 {weightTiers.map(tier => (
                   <option key={tier.id} value={tier.id}>{tierLabel(tier)}</option>
                 ))}
               </select>
-              {fe('weightPriceTierId') && <p className="form-field__error">{fe('weightPriceTierId')}</p>}
             </div>
           )}
 

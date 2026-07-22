@@ -18,4 +18,10 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Domain\Domain.csproj" />
 	</ItemGroup>
+
+	<!-- Test projects need to reach internal helpers (e.g. GroupOrderOrderBuilder). -->
+	<ItemGroup>
+		<InternalsVisibleTo Include="Application.UnitTests" />
+		<InternalsVisibleTo Include="API.IntegrationTests" />
+	</ItemGroup>
 </Project>

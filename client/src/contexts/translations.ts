@@ -286,6 +286,7 @@ const en = {
     // ── Create Group Order — weight tier field ────────────────────────────────
     cgoWeightTier: 'Package weight',
     cgoWeightTierPlaceholder: 'Select weight range…',
+    cgoWeightTierStandard: 'Standard',
   // ── City/District picker ──────────────────────────────────────────────────
   cdpNoCityMatch:      (q: string) => `No match for "${q}"`,
   cdpNoCities:         'No cities available',
@@ -2180,6 +2181,7 @@ const ka: typeof en = {
     // ── Create Group Order — weight tier field ────────────────────────────────
     cgoWeightTier: 'ამანათის წონა',
     cgoWeightTierPlaceholder: 'აირჩიეთ წონის დიაპაზონი…',
+    cgoWeightTierStandard: 'სტანდარტული',
   // ── City/District picker ──────────────────────────────────────────────────
   cdpNoCityMatch:      (q: string) => `"${q}" — შედეგი ვერ მოიძებნა`,
   cdpNoCities:         'ქალაქები არ არის',

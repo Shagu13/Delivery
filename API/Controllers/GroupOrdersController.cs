@@ -570,6 +570,14 @@ public sealed class GroupOrdersController : BaseController
             })
             .ToListAsync(ct);
 
+        // Active weight-price tiers drive the optional "Weight tier" dropdown column.
+        var tiers = await db.WeightPriceTiers
+            .AsNoTracking()
+            .Where(t => t.DateDeleted == null)
+            .OrderBy(t => t.MinWeightKg).ThenBy(t => t.MaxWeightKg)
+            .Select(t => new { t.Label, t.MinWeightKg, t.MaxWeightKg })
+            .ToListAsync(ct);
+
         using var workbook = new XLWorkbook();
 
         // ── Hidden Data sheet ─────────────────────────────────────────────────
@@ -646,6 +654,17 @@ public sealed class GroupOrdersController : BaseController
         wsData.Cell(2, payerRecipientCol).Value = recipientLabel;
         workbook.DefinedNames.Add("PayerRecipient", wsData.Range(2, payerRecipientCol, 2, payerRecipientCol));
 
+        // ── Weight tier option list (Standard + each active tier) ─────────────
+        string standardTierLabel = isGeo ? "სტანდარტული" : "Standard";
+        int tierListCol = cities.Count + 5;
+        wsData.Cell(1, tierListCol).Value = "WeightTiers";
+        wsData.Cell(2, tierListCol).Value = standardTierLabel;
+        for (int i = 0; i < tiers.Count; i++)
+            wsData.Cell(i + 3, tierListCol).Value =
+                TierDisplay(tiers[i].Label, tiers[i].MinWeightKg, tiers[i].MaxWeightKg, isGeo);
+        workbook.DefinedNames.Add("WeightTierList",
+            wsData.Range(2, tierListCol, tiers.Count + 2, tierListCol));
+
         // ── Orders sheet ──────────────────────────────────────────────────────
         var ws = workbook.Worksheets.Add("Orders");
 
@@ -661,7 +680,8 @@ public sealed class GroupOrdersController : BaseController
                 "ვინ იხდის საკურიეროს",
                 "მტვრევადია",
                     "ამანათის ფასი (₾)",
-                    "საკურიეროს საფასური ფასშია"
+                    "საკურიეროს საფასური ფასშია",
+                    "წონის ტარიფი"
               ]
             : [
                 "RecipientName",
@@ -674,10 +694,11 @@ public sealed class GroupOrdersController : BaseController
                 "WhoPaysForCourierFee",
                 "IsFragile",
                 "ParcelPrice (₾)",
-                "ServiceIncludedInPrice"
+                "ServiceIncludedInPrice",
+                "WeightTier"
               ];
 
-        bool[] required = [true, true, true, true, true, false, true, true, true, false, false];
+        bool[] required = [true, true, true, true, true, false, true, true, true, false, false, false];
 
         for (int i = 0; i < headers.Length; i++)
         {
@@ -707,6 +728,7 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 9).Value = "არა";
             ws.Cell(2, 10).Value = 45.00;
             ws.Cell(2, 11).Value = "არა";
+            ws.Cell(2, 12).Value = standardTierLabel;
         }
         else
         {
@@ -720,6 +742,7 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(2, 9).Value = "No";
             ws.Cell(2, 10).Value = 45.00;
             ws.Cell(2, 11).Value = "No";
+            ws.Cell(2, 12).Value = standardTierLabel;
         }
 
         // The row-2 example is a placeholder. Grey/italic it via CONDITIONAL
@@ -802,6 +825,12 @@ public sealed class GroupOrdersController : BaseController
         includedVal.ErrorTitle = isGeo ? "არასწორი მნიშვნელობა" : "Invalid value";
         includedVal.ErrorMessage = isGeo ? "აირჩიეთ: კი ან არა" : "Choose Yes or No";
 
+        // ── "Weight tier" dropdown (L2:L500) ──────────────────────────────────
+        // Optional: defaults to Standard (no tier). A chosen tier overrides pricing.
+        var tierVal = ws.Range("L2:L500").CreateDataValidation();
+        tierVal.List("WeightTierList", true);
+        tierVal.ShowErrorMessage = false;
+
         ws.Columns().AdjustToContents();
         ws.SheetView.FreezeRows(1);
 
@@ -868,6 +897,23 @@ public sealed class GroupOrdersController : BaseController
             .GroupBy(d => d.City.CityName)
             .Select(g => new { CityName = g.Key, DistrictName = g.Min(d => d.DistrictName) })
             .ToDictionaryAsync(x => x.CityName, x => x.DistrictName!, StringComparer.OrdinalIgnoreCase, ct);
+
+        // Active weight tiers, indexed by their display label (both languages + bare
+        // label) so a picked "Weight tier" cell maps back to the tier id on import.
+        var tiers = await db.WeightPriceTiers
+            .AsNoTracking()
+            .Where(t => t.DateDeleted == null)
+            .Select(t => new { t.Id, t.Label, t.MinWeightKg, t.MaxWeightKg })
+            .ToListAsync(ct);
+
+        var tierByDisplay = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tr in tiers)
+        {
+            tierByDisplay[TierDisplay(tr.Label, tr.MinWeightKg, tr.MaxWeightKg, isGeo: false)] = tr.Id;
+            tierByDisplay[TierDisplay(tr.Label, tr.MinWeightKg, tr.MaxWeightKg, isGeo: true)]  = tr.Id;
+            if (!string.IsNullOrWhiteSpace(tr.Label))
+                tierByDisplay[tr.Label!.Trim()] = tr.Id;
+        }
 
         // ── Parse file ────────────────────────────────────────────────────────
         using var stream = file.OpenReadStream();
@@ -950,6 +996,19 @@ public sealed class GroupOrdersController : BaseController
                 recipientDistrict = capitalDist;
             }
 
+            // ── Col L: weight tier ────────────────────────────────────────────
+            // Blank or "Standard"/"სტანდარტული" → no tier (standard pricing).
+            // Any other value maps back to a tier id; unrecognised text falls to null.
+            Guid? weightPriceTierId = null;
+            var tierRaw = ws.Cell(row, 12).GetString().Trim();
+            if (!string.IsNullOrWhiteSpace(tierRaw)
+                && !tierRaw.Equals("Standard", StringComparison.OrdinalIgnoreCase)
+                && !tierRaw.Equals("სტანდარტული", StringComparison.Ordinal)
+                && tierByDisplay.TryGetValue(tierRaw, out var matchedTierId))
+            {
+                weightPriceTierId = matchedTierId;
+            }
+
             orders.Add(new OrderItemRequest(
                 RecipientName: recipientName,
                 RecipientPhone: ws.Cell(row, 2).GetString().Trim(),
@@ -961,7 +1020,7 @@ public sealed class GroupOrdersController : BaseController
                 ProductPaymentStatus: paymentStatus,
                 WhoPaysForCompanyService: payer,
                 AmountToCollectForPackage: amountToCollect,
-                WeightPriceTierId: null,
+                WeightPriceTierId: weightPriceTierId,
                 // OrderType defaults to Send for Excel imports
                 IsCompanyServicePriceIncluded: isServiceIncluded
             ));
@@ -971,6 +1030,16 @@ public sealed class GroupOrdersController : BaseController
             return BadRequest(new { title = "No valid rows found." });
 
         return Ok(orders);
+    }
+
+    // Human-readable weight-tier label shown in the Excel dropdown and matched back
+    // on import. Uses the tier's own label when set, otherwise the weight range.
+    // Kept identical between template generation and parsing so the round-trip matches.
+    private static string TierDisplay(string? label, decimal min, decimal max, bool isGeo)
+    {
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        string range = $"{min.ToString("0.##", ci)}-{max.ToString("0.##", ci)} {(isGeo ? "კგ" : "kg")}";
+        return string.IsNullOrWhiteSpace(label) ? range : $"{label!.Trim()} ({range})";
     }
 
     // ══════════════════════════════════════════════════════════════════════════

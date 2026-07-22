@@ -98,7 +98,16 @@ internal static class GroupOrderOrderBuilder
                 var recipientDistrict = districts.FirstOrDefault(d =>
                     d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
 
-                district = pickUpSwapsPricing && !CustomerHasNegotiatedPriceForTier(customer, recipientDistrict)
+                // A chosen weight tier is prime — its zone price overrides the customer's
+                // negotiated price, so the negotiated-price swap suppression does NOT apply
+                // when a tier is in play: tiered Send/Exchange always price off the
+                // (non-capital) pickup district, exactly like a customer with no negotiated
+                // rate would. Only plain (no-tier) orders let a negotiated rate hold the
+                // pricing on the recipient's own zone.
+                bool hasTier = o.WeightPriceTierId.HasValue
+                    && weightTiers.Any(t => t.Id == o.WeightPriceTierId.Value);
+
+                district = pickUpSwapsPricing && (hasTier || !CustomerHasNegotiatedPriceForTier(customer, recipientDistrict))
                     ? pickUpDistrict
                     : recipientDistrict;
             }
