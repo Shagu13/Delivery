@@ -191,7 +191,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(g => g.PickUpDistrict).HasMaxLength(100).IsRequired();
             e.Property(g => g.PickUpAddress).HasMaxLength(250).IsRequired();
             e.Property(g => g.Note).HasMaxLength(500);
-            e.Property(g => g.Status).HasConversion<string>().HasMaxLength(50);
+            e.Property(g => g.Status).HasConversion<string>().HasMaxLength(50).IsUnicode(false);
         });
 
         // ── Order ─────────────────────────────────────────────────────────────
@@ -224,11 +224,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(o => o.ExternalReference);
             e.Property(o => o.ExternalReference).HasMaxLength(100);
             e.Property(o => o.Description).HasMaxLength(500);
-            e.Property(o => o.Status).HasConversion<string>().HasMaxLength(50);
-            e.Property(o => o.OrderType).HasConversion<string>().HasMaxLength(20);
-            e.Property(o => o.ProductPaymentStatus).HasConversion<string>().HasMaxLength(20);
-            e.Property(o => o.WhoPaysForCompanyService).HasConversion<string>().HasMaxLength(20);
-            e.Property(o => o.CompanyServicePaymentStatus).HasConversion<string>().HasMaxLength(20);
+            e.Property(o => o.Status).HasConversion<string>().HasMaxLength(50).IsUnicode(false);
+            e.Property(o => o.OrderType).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
+            e.Property(o => o.ProductPaymentStatus).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
+            e.Property(o => o.WhoPaysForCompanyService).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
+            e.Property(o => o.CompanyServicePaymentStatus).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
             e.Property(o => o.ReturnPickupAddress).HasMaxLength(250);
             e.Property(o => o.ReturnPickupCity).HasMaxLength(100);
             e.Property(o => o.ReturnPickupDistrict).HasMaxLength(100);
@@ -328,7 +328,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
              .HasForeignKey(d => d.WebhookId).OnDelete(DeleteBehavior.Cascade);
             e.Property(d => d.EventType).HasMaxLength(100).IsRequired();
             e.Property(d => d.PayloadJson).IsRequired();
-            e.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
+            e.Property(d => d.Status).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
             e.Property(d => d.LastError).HasMaxLength(1000);
         });
 

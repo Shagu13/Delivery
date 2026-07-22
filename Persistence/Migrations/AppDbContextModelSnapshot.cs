@@ -401,7 +401,8 @@ namespace Persistence.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
 
                     b.Property<Guid?>("WarehouseId")
                         .HasColumnType("uniqueidentifier");
@@ -477,7 +478,8 @@ namespace Persistence.Migrations
                     b.Property<string>("CompanyServicePaymentStatus")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
 
                     b.Property<decimal>("CompanyServicePrice")
                         .HasColumnType("decimal(18,2)");
@@ -550,7 +552,8 @@ namespace Persistence.Migrations
                     b.Property<string>("OrderType")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
 
                     b.Property<DateTime?>("PickedUpFromRecipientAt")
                         .HasColumnType("datetime2");
@@ -570,7 +573,8 @@ namespace Persistence.Migrations
                     b.Property<string>("ProductPaymentStatus")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
 
                     b.Property<string>("RecipientAddress")
                         .IsRequired()
@@ -624,7 +628,8 @@ namespace Persistence.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
 
                     b.Property<string>("TrackingNumber")
                         .IsRequired()
@@ -640,7 +645,8 @@ namespace Persistence.Migrations
                     b.Property<string>("WhoPaysForCompanyService")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
 
                     b.HasKey("Id");
 
@@ -1087,7 +1093,8 @@ namespace Persistence.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
 
                     b.Property<Guid>("WebhookId")
                         .HasColumnType("uniqueidentifier");
