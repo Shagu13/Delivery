@@ -193,6 +193,7 @@ const en = {
   loginSuccess:        'Account created! Sign in with your email below.',
   loginEmptyFields:    'Please enter your email / username and password.',
   loginForgotPassword: 'Forgot password?',
+  loginSavePassword:   'Save my password',
   loginPasswordResetSuccess: 'Password updated! Sign in with your new password.',
 
   // ── Forgot password page ──────────────────────────────────────────────────
@@ -2095,6 +2096,7 @@ const ka: typeof en = {
   loginSuccess:        'ანგარიში შეიქმნა! გაიარეთ ავტორიზაცია ქვემოთ.',
   loginEmptyFields:    'შეიყვანეთ ელ.ფოსტა/მომხმარებელი და პაროლი.',
   loginForgotPassword: 'დაგავიწყდათ პაროლი?',
+  loginSavePassword:   'პაროლის დამახსოვრება',
   loginPasswordResetSuccess: 'პაროლი განახლდა! შედით ახალი პაროლით.',
 
   // ── Forgot password page ──────────────────────────────────────────────────

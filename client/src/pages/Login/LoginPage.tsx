@@ -29,6 +29,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState<string | null>(null);
   const [loading,  setLoading]  = useState(false);
+  const [savePassword, setSavePassword] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +43,7 @@ export function LoginPage() {
       const userData = await login({ username: username.trim(), password });
       // Offer the credentials to the password manager while the form is still
       // mounted — signIn() flips isAuthenticated and unmounts this page.
-      await saveCredentials(username.trim(), password);
+      if (savePassword) await saveCredentials(username.trim(), password);
       signIn(userData);
       if (from && from !== '/login') {
         navigate(from, { replace: true });
@@ -128,8 +129,16 @@ export function LoginPage() {
             placeholder={t.phPassword}
           />
 
-          {/* Forgot password link — sits between field and submit button */}
+          {/* Save-password tick + forgot link — sit between field and submit button */}
           <div className="login-form__forgot-wrap">
+            <label className="login-form__save">
+              <input
+                type="checkbox"
+                checked={savePassword}
+                onChange={e => setSavePassword(e.target.checked)}
+              />
+              {t.loginSavePassword}
+            </label>
             <Link to="/forgot-password" className="login-form__forgot">
               {t.loginForgotPassword}
             </Link>
