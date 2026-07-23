@@ -27,7 +27,7 @@ export function FormField(props: FormFieldProps) {
 
   return (
     <div className={`form-field ${error ? 'form-field--error' : ''}`}>
-      <label className="form-field__label">
+      <label className="form-field__label" htmlFor={rest.id}>
         {label}
         {required && <span className="form-field__required">*</span>}
       </label>

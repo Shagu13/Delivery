@@ -99,10 +99,13 @@ export function LoginPage() {
             </div>
           )}
 
+          {/* name + id are what mobile password managers key off to offer "save password" */}
           <FormField
             label={t.emailOrUsername}
             required
             type="text"
+            id="login-username"
+            name="username"
             autoComplete="username"
             value={username}
             onChange={e => setUsername(e.target.value)}
@@ -113,6 +116,8 @@ export function LoginPage() {
             label={t.password}
             required
             type="password"
+            id="login-password"
+            name="password"
             autoComplete="current-password"
             value={password}
             onChange={e => setPassword(e.target.value)}
