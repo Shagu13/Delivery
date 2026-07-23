@@ -6,6 +6,7 @@ import { FormField } from '../../components/ui/FormField';
 import { homeFor } from '../../components/ProtectedRoute';
 import { useLanguage } from '../../contexts/useLanguage';
 import { useBranding } from '../../contexts/BrandingContext';
+import { saveCredentials } from '../../utils/saveCredentials';
 import './login.css';
 
 export function LoginPage() {
@@ -39,6 +40,9 @@ export function LoginPage() {
     setLoading(true);
     try {
       const userData = await login({ username: username.trim(), password });
+      // Offer the credentials to the password manager while the form is still
+      // mounted — signIn() flips isAuthenticated and unmounts this page.
+      await saveCredentials(username.trim(), password);
       signIn(userData);
       if (from && from !== '/login') {
         navigate(from, { replace: true });
