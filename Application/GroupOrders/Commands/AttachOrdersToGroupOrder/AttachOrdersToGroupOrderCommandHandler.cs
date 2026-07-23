@@ -34,15 +34,20 @@ public sealed class AttachOrdersToGroupOrderCommandHandler
         CancellationToken cancellationToken)
     {
         // Only the customer's own unattached, non-cancelled orders from the chosen set.
+        // Returns are excluded rather than rejected: they are collected from the recipient and
+        // stay standalone for their whole flow, so one caught in a day's selection is simply
+        // skipped instead of failing the whole grouping. Batching a Return would also null its
+        // CustomerId — its only owner link — and drop it off the assigned courier's pickups.
         var orders = await _context.Orders
             .Where(o => request.OrderIds.Contains(o.Id)
                      && o.CustomerId == request.CustomerId
                      && o.GroupOrderId == null
+                     && o.OrderType != OrderType.Return
                      && !CancelledStatuses.Contains(o.Status))
             .ToListAsync(cancellationToken);
 
         if (orders.Count == 0)
-            throw new ConflictException("None of the selected orders can be grouped (already grouped or cancelled).");
+            throw new ConflictException("None of the selected orders can be grouped (already grouped, cancelled, or a Return).");
 
         var date = request.Date.Date;
 

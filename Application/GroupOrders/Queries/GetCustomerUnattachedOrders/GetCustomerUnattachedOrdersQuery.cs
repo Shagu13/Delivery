@@ -32,10 +32,14 @@ public sealed class GetCustomerUnattachedOrdersQueryHandler
     {
         var date = request.Date.Date;
 
+        // Returns are permanently standalone (they are collected from the recipient, not from
+        // the sender's pickup address), so they are never groupable — keep them out of the
+        // modal rather than offering a checkbox the attach command would skip anyway.
         var orders = await _context.Orders
             .AsNoTracking()
             .Where(o => o.CustomerId == request.CustomerId
                      && o.GroupOrderId == null
+                     && o.OrderType != OrderType.Return
                      && o.CreatedAt.Date == date
                      && !CancelledStatuses.Contains(o.Status))
             .OrderBy(o => o.CreatedAt)

@@ -208,7 +208,11 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
             {
                 order.CourierId = courier.Id;
                 order.AssignedToCourierAt = now;
-                order.Status = OrderStatus.CourierAssignedToPickUp;
+                // Only a return still awaiting collection becomes a pickup job. One already
+                // picked up / at the warehouse / returned keeps its status, so a courier swap
+                // cannot rewind the flow (mirrors AssignCourierToReturnOrderCommandHandler).
+                if (ReturnAssignmentPolicy.MovesToPickUp(order.Status))
+                    order.Status = OrderStatus.CourierAssignedToPickUp;
                 succeeded.Add(order.Id);
                 continue;
             }

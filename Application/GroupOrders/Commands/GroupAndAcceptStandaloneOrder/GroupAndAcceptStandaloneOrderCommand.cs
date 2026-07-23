@@ -41,6 +41,12 @@ public sealed class GroupAndAcceptStandaloneOrderCommandHandler
 
         if (order.GroupOrderId != null)
             throw new ConflictException("This order is already part of a batch.");
+        // A Return is standalone by design — it is collected from the recipient, not from the
+        // sender's pickup address, so it has no place in a pickup batch. Batching one moves it
+        // out of the Return statuses the courier's pickup list is keyed on, and it silently
+        // vanishes from the assigned courier's dashboard. Manage returns on Return & Exchange.
+        if (order.OrderType == OrderType.Return)
+            throw new ConflictException("A Return order cannot be grouped into a batch — manage it on the Return & Exchange page.");
         if (order.CustomerId is not Guid customerId)
             throw new ConflictException("This standalone order has no owning customer to group it under.");
 

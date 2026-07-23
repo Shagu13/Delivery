@@ -40,7 +40,9 @@ public sealed class GetPickupDayQueryHandler
             .Select(o => new
             {
                 CustomerId   = o.CustomerId ?? o.GroupOrder!.CustomerId,
-                IsUnattached = o.GroupOrderId == null,
+                // Returns stay standalone for life and are never groupable, so they must not
+                // inflate the "N ungrouped" badge that opens an (empty) grouping modal.
+                IsUnattached = o.GroupOrderId == null && o.OrderType != OrderType.Return,
             })
             .ToListAsync(cancellationToken);
 

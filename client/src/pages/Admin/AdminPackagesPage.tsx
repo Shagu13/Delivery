@@ -1487,7 +1487,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                             </div>
                           </div>
                           {go.isStandalone ? (
-                            (canGroup || canManage) && go.customerId && (
+                            // Returns stay standalone for life — batching one drops it off the
+                            // assigned courier's pickup list (same guard as AdminDashboard, and
+                            // enforced server-side). They are driven from Return & Exchange.
+                            go.orders[0]?.orderType === 'Return' ? (
+                              <div style={{ paddingRight: 12, flexShrink: 0, fontSize: '0.72rem', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap' }}>
+                                {t.pickupReturnManagedElsewhere}
+                              </div>
+                            ) : (canGroup || canManage) && go.customerId && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                 {canGroup && <button className="go-action-btn go-action-btn--ghost" onClick={e => { e.stopPropagation(); setGroupingDate(new Date(georgianDateKeyOf(go.createdAt) + 'T00:00:00')); setGroupingCustomer({ customerId: go.customerId!, businessName: go.senderBusinessName, ordersPlaced: 1, unattachedOrders: 1 }); }}>{t.pickupGroupOrdersBtn}</button>}
                                 {canManage && <button className="go-action-btn go-action-btn--accept" onClick={e => { e.stopPropagation(); const bs = batchesFor(go.customerId!, georgianDateKeyOf(go.createdAt)); setAcceptTargetId(bs[0]?.id ?? ''); setAcceptStandalone(go); }}>{t.goAccept}</button>}

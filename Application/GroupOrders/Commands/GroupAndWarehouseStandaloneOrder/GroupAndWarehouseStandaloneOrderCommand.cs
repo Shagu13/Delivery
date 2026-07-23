@@ -52,6 +52,10 @@ public sealed class GroupAndWarehouseStandaloneOrderCommandHandler
 
         if (order.GroupOrderId != null)
             throw new ConflictException("This order is already part of a batch.");
+        // Returns never enter the batch/warehouse pickup flow — see the same guard in
+        // GroupAndAcceptStandaloneOrderCommandHandler.
+        if (order.OrderType == OrderType.Return)
+            throw new ConflictException("A Return order cannot be grouped into a batch — manage it on the Return & Exchange page.");
         if (order.CustomerId is not Guid customerId)
             throw new ConflictException("This standalone order has no owning customer to group it under.");
 

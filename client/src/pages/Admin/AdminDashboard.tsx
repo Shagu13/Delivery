@@ -2001,7 +2001,16 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                           </div>
                         </div>
                         {go.isStandalone ? (
-                          (canGroup || canManage) && go.customerId && (
+                          // A standalone Return is shown for visibility only. Grouping /
+                          // accepting / warehousing it would move it out of the Return
+                          // statuses the courier's pickup list is keyed on and it would
+                          // disappear from the assigned courier's dashboard — the backend
+                          // rejects those actions too. Returns are driven from Return & Exchange.
+                          go.orders[0]?.orderType === 'Return' ? (
+                            <div style={{ paddingRight: 12, flexShrink: 0, fontSize: '0.72rem', color: 'var(--color-text-subtle)', whiteSpace: 'nowrap' }}>
+                              {t.pickupReturnManagedElsewhere}
+                            </div>
+                          ) : (canGroup || canManage) && go.customerId && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingRight: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                               {canGroup && (
                                 <button className="go-action-btn go-action-btn--ghost"

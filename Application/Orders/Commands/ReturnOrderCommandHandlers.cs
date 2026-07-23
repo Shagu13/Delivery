@@ -30,10 +30,12 @@ public sealed class AssignCourierToReturnOrderCommandHandler
         order.CourierId = courier.Id;
         order.AssignedToCourierAt = CustomTime.Now;
 
-        // Only advance a fresh (Pending) return into the assigned state. A return that is
-        // already further along (picked up, at warehouse) keeps its status so an admin can
+        // Move any not-yet-collected return into the assigned state — not just a Pending one.
+        // A return sitting in some other pre-pickup status (e.g. AcceptedOrder after the
+        // Pick-Up page batched it) would otherwise gain a courier but stay invisible on that
+        // courier's dashboard. Past the collection the status is kept so an admin can
         // (re)attach or change the courier without rewinding the flow.
-        if (order.Status == OrderStatus.Pending)
+        if (ReturnAssignmentPolicy.MovesToPickUp(order.Status))
             order.Status = OrderStatus.CourierAssignedToPickUp;
 
         await _context.SaveChangesAsync(ct);
