@@ -263,6 +263,11 @@ export function CustomerFinancePage() {
         (s, i) => (i.senderOwesService && !cancelledNonBillable(i)) ? s + i.companyServicePrice : s, 0);
     const netOwed = codGross - serviceGross;
 
+    // COD the company has already paid out to the customer, and what that comes to once the
+    // service fee the customer owes is taken off it (codPaid − serviceGross).
+    const codPaid = filtered.reduce((s, i) => s + (i.codPaidToCustomerAmount ?? 0), 0);
+    const codPaidNet = codPaid - serviceGross;
+
     // Receipts-mode totals: gross paid out per type, and the net cash handed to the customer
     // (COD paid out minus service fees collected).
     const receiptsCodTotal = receipts.filter(r => !r.isService).reduce((s, r) => s + r.totalAmount, 0);
@@ -465,7 +470,7 @@ export function CustomerFinancePage() {
                 </div>
             ) : (
                 <>
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${mode === 'placed' ? 4 : 3}, 1fr)`, gap: 10, marginBottom: 20 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 20 }}>
                         {[
                             { label: t.ofinSumOrders,       value: filtered.length.toString(), color: undefined as string | undefined },
                             { label: t.ofinSumCodCollected, value: gel(codGross),              color: undefined as string | undefined },
@@ -495,6 +500,24 @@ export function CustomerFinancePage() {
                                     </div>
                                     <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>
                                         {t.ofinSumNetFormula(gel(codGross), gel(serviceGross))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                        {/* COD already paid out to the customer, then that same figure less the service
+                            fee they owe: the subtraction is spelled out in smaller type underneath, with
+                            the calculated amount on its own line (green = still in your favour). */}
+                        {(() => {
+                            const inYourFavour = codPaidNet >= -0.005;
+                            return (
+                                <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text)' }}>{gel(codPaid)}</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.ofinSumCodPaidOut}</div>
+                                    <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>
+                                        {t.ofinSumNetFormula(gel(codPaid), gel(serviceGross))}
+                                    </div>
+                                    <div style={{ fontSize: '0.74rem', fontWeight: 700, color: inYourFavour ? '#059669' : '#b45309', marginTop: 1 }}>
+                                        {inYourFavour ? '' : '−'}{gel(Math.abs(codPaidNet))}
                                     </div>
                                 </div>
                             );
