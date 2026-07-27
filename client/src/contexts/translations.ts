@@ -1695,6 +1695,9 @@ const en = {
     ofinSumNetOwedToYou: 'Company owes you (net)',
     ofinSumNetYouOwe:    'You owe company (net)',
     ofinSumNetFormula:   (cod: string, svc: string) => `${cod} − ${svc}`,
+    // Still-unsettled net: COD not yet paid out to you − service fee you have not yet paid.
+    ofinSumStillOwedToYou: 'Still owed to you',
+    ofinSumStillYouOwe:    'You still owe',
     ofinFilterPlaced:    'Placed on',
     ofinFilterDelivered: 'Delivered on',
     ofinPaidOn:          (d: string) => `Paid ${d}`,
@@ -3595,6 +3598,9 @@ const ka: typeof en = {
     ofinSumNetOwedToYou: 'კომპანიის ვალი (ჯამური)',
     ofinSumNetYouOwe:    'თქვენი ვალი (ჯამური)',
     ofinSumNetFormula:   (cod: string, svc: string) => `${cod} − ${svc}`,
+    // დარჩენილი სალდო: ჯერ არგადმორიცხული COD − ჯერ არგადახდილი საკურიერო.
+    ofinSumStillOwedToYou: 'დარჩენილი ვალი თქვენდამი',
+    ofinSumStillYouOwe:    'თქვენი დარჩენილი ვალი',
     ofinFilterPlaced:    'განთავსების თარიღი',
     ofinFilterDelivered: 'მიტანის თარიღი',
     ofinPaidOn:          (d: string) => `გადახდილია ${d}`,
