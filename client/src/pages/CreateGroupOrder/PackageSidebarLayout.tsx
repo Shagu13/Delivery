@@ -49,8 +49,12 @@ function pkgStatus(pkg: OrderItemRequest, errors: ValidationErrors, index: numbe
   return filled ? 'ok' : 'empty';
 }
 
+// `district` is the default pricing zone (the swapped pickup district when the swap
+// applies); `customerZone` is the delivery location, which is what the customer's
+// negotiated rates are always read off — the swap must not shift them to the pickup's zone.
 function computeFee(
   district: District,
+  customerZone: District | null,
   tierId: string | undefined,
   weightTiers: WeightPriceTier[],
   customerPricing?: CustomerPricing | null
@@ -65,9 +69,9 @@ function computeFee(
     }
   }
   if (customerPricing) {
-    if (district.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
+    if (customerZone?.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
       return customerPricing.companyServiceCapitalPrice!;
-    if (district.isCityTerritory && (customerPricing.companyServiceCityPrice ?? 0) > 0)
+    if (customerZone?.isCityTerritory && (customerPricing.companyServiceCityPrice ?? 0) > 0)
       return customerPricing.companyServiceCityPrice!;
     if ((customerPricing.companyServiceDistrictPrice ?? 0) > 0)
       return customerPricing.companyServiceDistrictPrice!;
@@ -131,7 +135,8 @@ function PackageDetail({
   const [selectedReturnDistrict, setSelectedReturnDistrict] = useState<District | null>(null);
 
   // Pickup district drives swapped pricing: when it isn't the capital (Tbilisi),
-  // Send/Exchange packages are priced off the pickup instead of the recipient.
+  // Send/Exchange packages take their *default* price from the pickup instead of the
+  // recipient. The customer's negotiated rates still follow the delivery district.
   const pickupDistrict = pickupDistrictName ? (districtLookup[pickupDistrictName] ?? null) : null;
   const pricingDistrictFor = useCallback((recipientDistrict: District | null): District | null =>
     pickupDistrict && !pickupDistrict.isCapitalTerritory ? pickupDistrict : recipientDistrict,
@@ -140,23 +145,24 @@ function PackageDetail({
   const handleDistrictSelect = useCallback((district: District | null) => {
     setSelectedDistrict(district);
     const priceDist = district ? pricingDistrictFor(district) : null;
-    onChange(index, 'companyServicePrice', priceDist ? computeFee(priceDist, pkg.weightPriceTierId, weightTiers, customerPricing) : null);
+    onChange(index, 'companyServicePrice', priceDist ? computeFee(priceDist, district, pkg.weightPriceTierId, weightTiers, customerPricing) : null);
   }, [index, pkg.weightPriceTierId, weightTiers, customerPricing, onChange, pricingDistrictFor]);
 
   const handleReturnDistrictSelect = useCallback((district: District | null) => {
     // Returns price off their own pickup district — no swap.
     setSelectedReturnDistrict(district);
-    if (district) onChange(index, 'companyServicePrice', computeFee(district, pkg.weightPriceTierId, weightTiers, customerPricing));
+    if (district) onChange(index, 'companyServicePrice', computeFee(district, district, pkg.weightPriceTierId, weightTiers, customerPricing));
     else onChange(index, 'companyServicePrice', null);
   }, [index, pkg.weightPriceTierId, weightTiers, customerPricing, onChange]);
 
   const handleWeightTierChange = (tierId: string) => {
     onChange(index, 'weightPriceTierId', tierId);
-    const activeDist = isReturn
+    const zoneDist = isReturn
       ? (selectedReturnDistrict ?? (pkg.returnPickupDistrict ? districtLookup[pkg.returnPickupDistrict] ?? null : null))
-      : pricingDistrictFor(selectedDistrict ?? (pkg.recipientDistrict ? districtLookup[pkg.recipientDistrict] ?? null : null));
+      : (selectedDistrict ?? (pkg.recipientDistrict ? districtLookup[pkg.recipientDistrict] ?? null : null));
+    const activeDist = isReturn ? zoneDist : pricingDistrictFor(zoneDist);
     if (activeDist) {
-      onChange(index, 'companyServicePrice', computeFee(activeDist, tierId || undefined, weightTiers, customerPricing));
+      onChange(index, 'companyServicePrice', computeFee(activeDist, zoneDist, tierId || undefined, weightTiers, customerPricing));
     }
   };
 

@@ -12,12 +12,15 @@ namespace Application.GroupOrders.Commands.Shared;
 ///
 /// Pricing is normally keyed off the recipient (delivery) district, but "swaps" to the
 /// batch pickup district when the pickup is NOT in the capital (Tbilisi): e.g. a parcel
-/// picked up in Rustavi for delivery to Tbilisi is priced at Rustavi's rate. The swap is
-/// suppressed per-tier when the customer has a negotiated price for the tier the RECIPIENT
-/// falls into (capital/city/district): a customer's own rate always wins for that zone, so
-/// only tiers the customer has NOT negotiated fall back to pickup pricing. Standalone
-/// Returns already price off their own pickup district, so the swap only affects
-/// Send/Exchange orders.
+/// picked up in Rustavi for delivery to Tbilisi is priced at Rustavi's rate.
+///
+/// The swap moves the *default* (district / weight-tier zone) price only. A customer's
+/// negotiated prices are always read off the DELIVERY location's zone, exactly as they are
+/// for a capital pickup: delivery to a district → their district rate, to a city → their
+/// city rate, to the capital → their capital rate. So a customer with negotiated rates is
+/// billed normally, and only a customer with no rate for the delivery zone falls through to
+/// the swapped pickup price. Standalone Returns already price off their own pickup district,
+/// so the swap only affects Send/Exchange orders.
 ///
 /// Placement is the caller's job: the returned orders carry no GroupOrderId or
 /// CustomerId — the create handler adds Send/Exchange to a GroupOrder and stamps
@@ -82,38 +85,36 @@ internal static class GroupOrderOrderBuilder
         {
             var o = orderDtos[i];
 
-            // Pricing district: Returns price off their own pickup; Send/Exchange normally
-            // price off the recipient, but swap to the batch pickup when it isn't the capital.
-            // The swap is suppressed when the customer has a negotiated price for the tier the
-            // recipient falls into — their own rate always wins for that zone (checked per-tier).
+            // Two districts drive the price:
+            //   • district        — the *default* pricing zone: Returns price off their own
+            //                       pickup; Send/Exchange price off the recipient, swapping to
+            //                       the batch pickup when it isn't the capital.
+            //   • customerZone    — the zone the customer's negotiated rates are read from.
+            //                       Always the delivery location (the return pickup for
+            //                       Returns), never the swapped-in batch pickup.
             District? district;
+            District? customerZone;
             if (o.OrderType == OrderType.Return)
             {
                 var returnName = o.ReturnPickupDistrict ?? o.RecipientDistrict;
                 district = districts.FirstOrDefault(d =>
                     d.DistrictName.Equals(returnName, StringComparison.OrdinalIgnoreCase));
+                customerZone = district;
             }
             else
             {
-                var recipientDistrict = districts.FirstOrDefault(d =>
+                customerZone = districts.FirstOrDefault(d =>
                     d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
 
-                // A chosen weight tier is prime — its zone price overrides the customer's
-                // negotiated price, so the negotiated-price swap suppression does NOT apply
-                // when a tier is in play: tiered Send/Exchange always price off the
-                // (non-capital) pickup district, exactly like a customer with no negotiated
-                // rate would. Only plain (no-tier) orders let a negotiated rate hold the
-                // pricing on the recipient's own zone.
-                bool hasTier = o.WeightPriceTierId.HasValue
-                    && weightTiers.Any(t => t.Id == o.WeightPriceTierId.Value);
-
-                district = pickUpSwapsPricing && (hasTier || !CustomerHasNegotiatedPriceForTier(customer, recipientDistrict))
-                    ? pickUpDistrict
-                    : recipientDistrict;
+                district = pickUpSwapsPricing ? pickUpDistrict : customerZone;
             }
 
             bool isCapital = district?.IsCapitalTerritory == true;
             bool isCity    = district?.IsCityTerritory    == true;
+
+            // Customer-rate zone flags — the delivery location, unaffected by the swap.
+            bool custIsCapital = customerZone?.IsCapitalTerritory == true;
+            bool custIsCity    = customerZone?.IsCityTerritory    == true;
 
             decimal companyServicePrice;
 
@@ -132,12 +133,12 @@ internal static class GroupOrderOrderBuilder
 
                 companyServicePrice = zonePrice is > 0
                     ? zonePrice.Value
-                    : ResolveStandardPrice(customer, district, isCapital, isCity);
+                    : ResolveStandardPrice(customer, district, custIsCapital, custIsCity);
             }
             // ── Step 3: standard pricing (customer negotiated → district fallback)
             else
             {
-                companyServicePrice = ResolveStandardPrice(customer, district, isCapital, isCity);
+                companyServicePrice = ResolveStandardPrice(customer, district, custIsCapital, custIsCity);
             }
 
             decimal? amountToCollect = null;
@@ -228,44 +229,29 @@ internal static class GroupOrderOrderBuilder
     }
 
     /// <summary>
-    /// True when the customer has a negotiated price (&gt; 0) for the tier the recipient
-    /// district falls into. When so, the recipient's own zone is priced off the customer's
-    /// rate rather than being swapped to the pickup district. Checked per-tier: a customer
-    /// who only set a District price is "negotiated" for plain-district recipients but not
-    /// for capital/city recipients.
+    /// Customer's negotiated rate for the delivery zone (<paramref name="custIsCapital"/> /
+    /// <paramref name="custIsCity"/> describe the DELIVERY district), falling back to
+    /// <paramref name="fallbackDistrict"/>'s default price — which is the swapped pickup
+    /// district when the swap applies.
     /// </summary>
-    private static bool CustomerHasNegotiatedPriceForTier(Customer? customer, District? recipientDistrict)
-    {
-        if (customer is null || recipientDistrict is null)
-            return false;
-
-        if (recipientDistrict.IsCapitalTerritory)
-            return customer.CompanyServiceCapitalPrice is > 0;
-
-        if (recipientDistrict.IsCityTerritory)
-            return customer.CompanyServiceCityPrice is > 0;
-
-        return customer.CompanyServiceDistrictPrice is > 0;
-    }
-
     private static decimal ResolveStandardPrice(
         Customer? customer,
-        District? district,
-        bool isCapital,
-        bool isCity)
+        District? fallbackDistrict,
+        bool custIsCapital,
+        bool custIsCity)
     {
         if (customer is not null)
         {
-            if (isCapital && customer.CompanyServiceCapitalPrice is > 0)
+            if (custIsCapital && customer.CompanyServiceCapitalPrice is > 0)
                 return customer.CompanyServiceCapitalPrice!.Value;
 
-            if (isCity && customer.CompanyServiceCityPrice is > 0)
+            if (custIsCity && customer.CompanyServiceCityPrice is > 0)
                 return customer.CompanyServiceCityPrice!.Value;
 
             if (customer.CompanyServiceDistrictPrice is > 0)
                 return customer.CompanyServiceDistrictPrice!.Value;
         }
 
-        return district?.CompanyServicePrice ?? 0;
+        return fallbackDistrict?.CompanyServicePrice ?? 0;
     }
 }

@@ -20,8 +20,10 @@ public sealed class CalculatorController : ControllerBase
     /// those are applied. Otherwise the district's default price is returned.
     ///
     /// When <paramref name="fromDistrictId"/> (the pickup district) is supplied and is
-    /// NOT the capital (Tbilisi), pricing "swaps" to the pickup location instead of the
-    /// destination — e.g. Rustavi → Tbilisi is priced at Rustavi's rate.
+    /// NOT the capital (Tbilisi), the default/weight-tier price "swaps" to the pickup
+    /// location instead of the destination — e.g. Rustavi → Tbilisi is priced at Rustavi's
+    /// rate. A customer's negotiated rates are not swapped: they always follow the
+    /// destination's zone (capital/city/district), as they do for a capital pickup.
     /// </summary>
     [HttpGet]
     [AllowAnonymous]
@@ -38,6 +40,10 @@ public sealed class CalculatorController : ControllerBase
             .FirstOrDefaultAsync(d => d.Id == districtId && d.DateDeleted == null, ct);
 
         if (district is null) return NotFound();
+
+        // The destination's zone — what the customer's negotiated rates are read off,
+        // whether or not the default price swaps to the pickup below.
+        var customerZone = district;
 
         // Swapped pricing: price off the pickup district when it's set and not the capital.
         if (fromDistrictId is Guid fromId && fromId != districtId)
@@ -64,12 +70,12 @@ public sealed class CalculatorController : ControllerBase
 
             if (customer is not null)
             {
-                if (district.IsCapitalTerritory && customer.CompanyServiceCapitalPrice is > 0)
+                if (customerZone.IsCapitalTerritory && customer.CompanyServiceCapitalPrice is > 0)
                 {
                     price = customer.CompanyServiceCapitalPrice!.Value;
                     tier  = "capital";
                 }
-                else if (district.IsCityTerritory && customer.CompanyServiceCityPrice is > 0)
+                else if (customerZone.IsCityTerritory && customer.CompanyServiceCityPrice is > 0)
                 {
                     price = customer.CompanyServiceCityPrice!.Value;
                     tier  = "city";

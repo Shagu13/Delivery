@@ -389,16 +389,17 @@ export function CreateGroupOrderPage() {
                 }
             }));
 
-            // Swapped pricing: when the batch pickup isn't the capital (Tbilisi), price
-            // imported Send/Exchange packages off the pickup district instead of the recipient.
+            // Swapped pricing: when the batch pickup isn't the capital (Tbilisi), imported
+            // Send/Exchange packages take their *default* price off the pickup district
+            // instead of the recipient. The customer's negotiated rates are unaffected by
+            // the swap — they always follow the delivery (recipient) district's zone.
             const pickupDistrictName = appendMode ? appendBatch?.pickUpDistrict : sender.pickUpDistrict;
             const pickupDistrict = pickupDistrictName ? districtLookup[pickupDistrictName] ?? null : null;
             const swapToPickup = !!pickupDistrict && !pickupDistrict.isCapitalTerritory;
 
             const withFees = normalised.map(o => {
-                const district = swapToPickup
-                    ? pickupDistrict
-                    : (districtMap[o.recipientCity]?.[o.recipientDistrict] ?? null);
+                const customerZone = districtMap[o.recipientCity]?.[o.recipientDistrict] ?? null;
+                const district = swapToPickup ? pickupDistrict : customerZone;
                 if (!district) return o;
                 let fee = 0;
                 const tierId = o.weightPriceTierId;
@@ -412,9 +413,9 @@ export function CreateGroupOrderPage() {
                     }
                 }
                 if (fee === 0 && customerPricing) {
-                    if (district.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
+                    if (customerZone?.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
                         fee = customerPricing.companyServiceCapitalPrice!;
-                    else if (district.isCityTerritory && (customerPricing.companyServiceCityPrice ?? 0) > 0)
+                    else if (customerZone?.isCityTerritory && (customerPricing.companyServiceCityPrice ?? 0) > 0)
                         fee = customerPricing.companyServiceCityPrice!;
                     else if ((customerPricing.companyServiceDistrictPrice ?? 0) > 0)
                         fee = customerPricing.companyServiceDistrictPrice!;
