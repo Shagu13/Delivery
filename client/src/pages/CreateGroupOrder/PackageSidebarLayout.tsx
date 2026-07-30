@@ -134,12 +134,15 @@ function PackageDetail({
   const [selectedDistrict,       setSelectedDistrict]       = useState<District | null>(null);
   const [selectedReturnDistrict, setSelectedReturnDistrict] = useState<District | null>(null);
 
-  // Pickup district drives swapped pricing: when it isn't the capital (Tbilisi),
-  // Send/Exchange packages take their *default* price from the pickup instead of the
-  // recipient. The customer's negotiated rates still follow the delivery district.
+  // Pickup district drives swapped pricing: when it isn't the capital (Tbilisi) and the
+  // package goes TO the capital, Send/Exchange packages take their *default* price from the
+  // pickup instead of the recipient. Non-capital → non-capital prices off the recipient as
+  // usual. The customer's negotiated rates always follow the delivery district.
   const pickupDistrict = pickupDistrictName ? (districtLookup[pickupDistrictName] ?? null) : null;
   const pricingDistrictFor = useCallback((recipientDistrict: District | null): District | null =>
-    pickupDistrict && !pickupDistrict.isCapitalTerritory ? pickupDistrict : recipientDistrict,
+    pickupDistrict && !pickupDistrict.isCapitalTerritory && recipientDistrict?.isCapitalTerritory
+      ? pickupDistrict
+      : recipientDistrict,
     [pickupDistrict]);
 
   const handleDistrictSelect = useCallback((district: District | null) => {

@@ -389,17 +389,19 @@ export function CreateGroupOrderPage() {
                 }
             }));
 
-            // Swapped pricing: when the batch pickup isn't the capital (Tbilisi), imported
-            // Send/Exchange packages take their *default* price off the pickup district
-            // instead of the recipient. The customer's negotiated rates are unaffected by
-            // the swap — they always follow the delivery (recipient) district's zone.
+            // Swapped pricing: when the batch pickup isn't the capital (Tbilisi) and the
+            // package is delivered TO the capital, imported Send/Exchange packages take their
+            // *default* price off the pickup district instead of the recipient. Non-capital →
+            // non-capital prices normally, off the recipient district. The customer's
+            // negotiated rates are unaffected by the swap — they always follow the delivery
+            // (recipient) district's zone.
             const pickupDistrictName = appendMode ? appendBatch?.pickUpDistrict : sender.pickUpDistrict;
             const pickupDistrict = pickupDistrictName ? districtLookup[pickupDistrictName] ?? null : null;
-            const swapToPickup = !!pickupDistrict && !pickupDistrict.isCapitalTerritory;
+            const pickupCanSwap = !!pickupDistrict && !pickupDistrict.isCapitalTerritory;
 
             const withFees = normalised.map(o => {
                 const customerZone = districtMap[o.recipientCity]?.[o.recipientDistrict] ?? null;
-                const district = swapToPickup ? pickupDistrict : customerZone;
+                const district = pickupCanSwap && customerZone?.isCapitalTerritory ? pickupDistrict : customerZone;
                 if (!district) return o;
                 let fee = 0;
                 const tierId = o.weightPriceTierId;

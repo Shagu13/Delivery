@@ -11,8 +11,11 @@ namespace Application.GroupOrders.Commands.Shared;
 /// customer negotiated → district default) and generating tracking numbers.
 ///
 /// Pricing is normally keyed off the recipient (delivery) district, but "swaps" to the
-/// batch pickup district when the pickup is NOT in the capital (Tbilisi): e.g. a parcel
-/// picked up in Rustavi for delivery to Tbilisi is priced at Rustavi's rate.
+/// batch pickup district when the pickup is NOT in the capital (Tbilisi) <b>and</b> the
+/// delivery IS the capital: e.g. a parcel picked up in Rustavi for delivery to Tbilisi is
+/// priced at Rustavi's rate. A non-capital pickup delivering to another non-capital
+/// location prices normally — off the delivery district (its city rate if the delivery
+/// district is a city territory, its district rate otherwise).
 ///
 /// The swap moves the *default* (district / weight-tier zone) price only. A customer's
 /// negotiated prices are always read off the DELIVERY location's zone, exactly as they are
@@ -71,13 +74,14 @@ internal static class GroupOrderOrderBuilder
 
         var trackingNumbers = await trackingGen.GenerateManyAsync(orderDtos.Count, ct);
 
-        // Resolve the batch pickup district once. When it exists and is NOT the capital
-        // (Tbilisi), Send/Exchange orders are priced off the pickup instead of the recipient.
+        // Resolve the batch pickup district once. A pickup outside the capital (Tbilisi) can
+        // swap the default price onto itself — but only for orders delivered TO the capital
+        // (checked per order below).
         var pickUpDistrict = string.IsNullOrWhiteSpace(pickUpDistrictName)
             ? null
             : districts.FirstOrDefault(d =>
                 d.DistrictName.Equals(pickUpDistrictName, StringComparison.OrdinalIgnoreCase));
-        bool pickUpSwapsPricing = pickUpDistrict is not null && !pickUpDistrict.IsCapitalTerritory;
+        bool pickUpCanSwapPricing = pickUpDistrict is not null && !pickUpDistrict.IsCapitalTerritory;
 
         var built = new List<Order>(orderDtos.Count);
 
@@ -88,7 +92,8 @@ internal static class GroupOrderOrderBuilder
             // Two districts drive the price:
             //   • district        — the *default* pricing zone: Returns price off their own
             //                       pickup; Send/Exchange price off the recipient, swapping to
-            //                       the batch pickup when it isn't the capital.
+            //                       the batch pickup only when the pickup isn't the capital
+            //                       and the delivery is.
             //   • customerZone    — the zone the customer's negotiated rates are read from.
             //                       Always the delivery location (the return pickup for
             //                       Returns), never the swapped-in batch pickup.
@@ -106,7 +111,11 @@ internal static class GroupOrderOrderBuilder
                 customerZone = districts.FirstOrDefault(d =>
                     d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
 
-                district = pickUpSwapsPricing ? pickUpDistrict : customerZone;
+                // Swap only for a non-capital pickup delivering INTO the capital. Non-capital
+                // → non-capital keeps the delivery district's own zone and default price.
+                bool swapToPickUp = pickUpCanSwapPricing && customerZone?.IsCapitalTerritory == true;
+
+                district = swapToPickUp ? pickUpDistrict : customerZone;
             }
 
             bool isCapital = district?.IsCapitalTerritory == true;

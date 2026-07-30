@@ -20,10 +20,11 @@ public sealed class CalculatorController : ControllerBase
     /// those are applied. Otherwise the district's default price is returned.
     ///
     /// When <paramref name="fromDistrictId"/> (the pickup district) is supplied and is
-    /// NOT the capital (Tbilisi), the default/weight-tier price "swaps" to the pickup
-    /// location instead of the destination — e.g. Rustavi → Tbilisi is priced at Rustavi's
-    /// rate. A customer's negotiated rates are not swapped: they always follow the
-    /// destination's zone (capital/city/district), as they do for a capital pickup.
+    /// NOT the capital (Tbilisi) while the destination IS the capital, the default/weight-tier
+    /// price "swaps" to the pickup location instead of the destination — e.g. Rustavi → Tbilisi
+    /// is priced at Rustavi's rate. Between two non-capital locations there is no swap: the
+    /// destination's own zone and default price apply. A customer's negotiated rates are never
+    /// swapped either — they always follow the destination's zone (capital/city/district).
     /// </summary>
     [HttpGet]
     [AllowAnonymous]
@@ -45,8 +46,9 @@ public sealed class CalculatorController : ControllerBase
         // whether or not the default price swaps to the pickup below.
         var customerZone = district;
 
-        // Swapped pricing: price off the pickup district when it's set and not the capital.
-        if (fromDistrictId is Guid fromId && fromId != districtId)
+        // Swapped pricing: price off the pickup district when it's set and not the capital —
+        // but only when delivering INTO the capital. Non-capital → non-capital prices normally.
+        if (fromDistrictId is Guid fromId && fromId != districtId && district.IsCapitalTerritory)
         {
             var fromDistrict = await _context.Districts
                 .AsNoTracking()

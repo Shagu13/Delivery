@@ -9,7 +9,8 @@ namespace Application.UnitTests;
 /// <summary>
 /// Pricing-waterfall tests for <c>GroupOrderOrderBuilder</c>:
 ///   explicit override → weight-tier zone price → customer-negotiated → district default,
-/// plus the non-capital pickup "swap" and the weight-tier "prime over customer price" rule.
+/// plus the non-capital-pickup-into-the-capital "swap" and the weight-tier "prime over
+/// customer price" rule.
 ///
 /// Districts used throughout:
 ///   • "TbilisiCenter" — capital  (default 6)
@@ -116,7 +117,7 @@ public class GroupOrderOrderBuilderTests
         Assert.Equal(6m, built[0].CompanyServicePrice);
     }
 
-    // ── Non-capital pickup "swap": tier prices off the pickup zone ─────────────
+    // ── Non-capital pickup → capital delivery "swap": prices off the pickup zone ───
 
     [Fact]
     public async Task Non_capital_pickup_prices_tier_off_the_pickup_zone()
@@ -136,16 +137,15 @@ public class GroupOrderOrderBuilderTests
     }
 
     [Fact]
-    public async Task Chosen_tier_ignores_customer_negotiation_when_deciding_the_swap()
+    public async Task Chosen_tier_beats_the_customer_rate_on_a_swapped_order()
     {
         using AppDbContext ctx = NewContext();
         SeedDistricts(ctx);
         WeightPriceTier tier = Tier(capital: null, city: 8m);
         ctx.WeightPriceTiers.Add(tier);
         ctx.SaveChanges();
-        // Customer HAS a negotiated capital rate. For a plain order that would suppress the
-        // swap and hold pricing on the capital zone — but a chosen tier is prime, so the
-        // swap still applies and the pickup (city) tier price wins.
+        // Customer HAS a negotiated capital rate, but a chosen tier is prime — and the tier's
+        // zone follows the swap, so the pickup (city) tier price wins.
         Customer customer = Cust(capital: 10m);
 
         List<Order> built = await Build(
@@ -155,23 +155,85 @@ public class GroupOrderOrderBuilderTests
     }
 
     [Fact]
-    public async Task Without_a_tier_customer_negotiation_still_suppresses_the_swap()
+    public async Task Without_a_tier_the_customers_delivery_zone_rate_holds_over_the_swap()
     {
         using AppDbContext ctx = NewContext();
         SeedDistricts(ctx);
         Customer customer = Cust(capital: 10m);
 
         // No tier: the customer's negotiated capital rate holds on the recipient's capital
-        // zone rather than swapping to the city pickup — the pre-existing behavior.
+        // zone rather than swapping to the city pickup's default.
         List<Order> built = await Build(
             ctx, customer, Order("TbilisiCenter"), pickupDistrict: "RustaviCenter");
 
         Assert.Equal(10m, built[0].CompanyServicePrice);
     }
 
-    // ── The swap never re-zones the customer's negotiated rates ────────────────
-    // A customer's rate is read off the DELIVERY location (capital/city/district), even
-    // when the default price swaps to a non-capital pickup.
+    // ── No swap between two non-capital locations ───────────────────────────────
+    // A non-capital pickup only swaps when the delivery IS the capital. Otherwise the
+    // delivery district's own zone and default price apply, exactly as for a capital pickup.
+
+    [Fact]
+    public async Task City_pickup_to_a_plain_district_uses_the_delivery_districts_default()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+
+        List<Order> built = await Build(
+            ctx, customer: null, Order("Village"), pickupDistrict: "RustaviCenter");
+
+        // Village's own default (4), not the Rustavi pickup's (5).
+        Assert.Equal(4m, built[0].CompanyServicePrice);
+    }
+
+    [Fact]
+    public async Task Plain_district_pickup_to_a_city_uses_the_delivery_citys_default()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+
+        List<Order> built = await Build(
+            ctx, customer: null, Order("RustaviCenter"), pickupDistrict: "Village");
+
+        // RustaviCenter's own default (5), not the Village pickup's (4).
+        Assert.Equal(5m, built[0].CompanyServicePrice);
+    }
+
+    [Fact]
+    public async Task Non_capital_to_non_capital_prices_the_tier_off_the_delivery_zone()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+        WeightPriceTier tier = Tier(capital: null, city: 8m, district: 3m);
+        ctx.WeightPriceTiers.Add(tier);
+        ctx.SaveChanges();
+
+        // City pickup, plain-district delivery → the tier's district price, not its city price.
+        List<Order> built = await Build(
+            ctx, customer: null, Order("Village", tier: tier.Id), pickupDistrict: "RustaviCenter");
+
+        Assert.Equal(3m, built[0].CompanyServicePrice);
+    }
+
+    [Fact]
+    public async Task Non_capital_to_non_capital_falls_back_to_the_delivery_default_not_the_pickups()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+        // No district price on the tier → nothing resolves for the delivery (plain) zone.
+        WeightPriceTier tier = Tier(capital: null, city: 8m, district: null);
+        ctx.WeightPriceTiers.Add(tier);
+        ctx.SaveChanges();
+
+        List<Order> built = await Build(
+            ctx, customer: null, Order("Village", tier: tier.Id), pickupDistrict: "RustaviCenter");
+
+        Assert.Equal(4m, built[0].CompanyServicePrice);
+    }
+
+    // ── Customer rates always follow the delivery zone ─────────────────────────
+    // A customer's rate is read off the DELIVERY location (capital/city/district) whatever
+    // the pickup is — even when the default price swaps to a non-capital pickup.
 
     [Fact]
     public async Task Swap_does_not_price_a_capital_delivery_off_the_customers_city_rate()
@@ -189,7 +251,7 @@ public class GroupOrderOrderBuilderTests
     }
 
     [Fact]
-    public async Task Swap_does_not_price_a_plain_district_delivery_off_the_customers_city_rate()
+    public async Task City_pickup_prices_a_plain_district_delivery_off_the_customers_district_rate()
     {
         using AppDbContext ctx = NewContext();
         SeedDistricts(ctx);
@@ -202,7 +264,7 @@ public class GroupOrderOrderBuilderTests
     }
 
     [Fact]
-    public async Task Swap_prices_a_city_delivery_off_the_customers_city_rate()
+    public async Task Plain_district_pickup_prices_a_city_delivery_off_the_customers_city_rate()
     {
         using AppDbContext ctx = NewContext();
         SeedDistricts(ctx);
