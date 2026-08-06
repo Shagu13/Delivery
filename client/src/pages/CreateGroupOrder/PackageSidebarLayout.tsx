@@ -430,7 +430,7 @@ function PackageDetail({
             <div className="form-field">
               <label className="form-field__label">{t.cgoPriceAllIn} <span className="form-field__required">*</span></label>
               <input
-                type="number" min={0} step="0.01"
+                type="number" min={0} step="0.01" inputMode="decimal"
                 className="form-field__input"
                 value={pkg.amountToCollectForPackage ?? ''}
                 onChange={e => { const v = parseFloat(e.target.value); onChange(index, 'amountToCollectForPackage', isNaN(v) ? null : v); }}
@@ -447,7 +447,7 @@ function PackageDetail({
               <div className="form-field">
                 <label className="form-field__label">{t.cgoParcelPrice} <span className="form-field__required">*</span></label>
                 <input
-                  type="number" min={0} step="0.01"
+                  type="number" min={0} step="0.01" inputMode="decimal"
                   className="form-field__input"
                   value={pkg.amountToCollectForPackage ?? ''}
                   onChange={e => { const v = parseFloat(e.target.value); onChange(index, 'amountToCollectForPackage', isNaN(v) ? null : v); }}
@@ -804,6 +804,23 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
         .psl-grid { display: grid; gap: 10px; }
         .psl-grid--2 { grid-template-columns: 1fr 1fr; }
 
+        /* Checkbox rows (fragile / all-in price) — these class names have no
+           stylesheet of their own, so they live here with their only consumer. */
+        .package-card__fragile-toggle {
+          display: flex; align-items: center; gap: 9px;
+          font-size: 0.85rem; color: var(--color-text);
+          cursor: pointer; user-select: none;
+          padding: 8px 10px; border-radius: var(--radius-sm);
+          border: 1px solid var(--color-border); background: var(--color-bg-3);
+          transition: border-color var(--transition), background var(--transition);
+        }
+        .package-card__fragile-toggle:hover { border-color: var(--color-accent); }
+        .package-card__fragile-toggle input[type="checkbox"] {
+          width: 18px; height: 18px; flex-shrink: 0;
+          accent-color: var(--color-accent); cursor: pointer; margin: 0;
+        }
+        .package-card__fragile-icon { color: var(--color-accent); font-size: 0.95rem; }
+
         /* ── Mobile collapse toggle (hidden on desktop) ── */
         .psl-sidebar__toggle {
           display: none;
@@ -857,13 +874,36 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
             padding: 12px;
             gap: 16px;
           }
+          /* Package navigation stays reachable while scrolling a long editor. */
           .psl-detail__header {
-            padding: 10px 12px;
-            flex-wrap: wrap;
+            position: sticky;
+            top: var(--staff-nav-h, 0px);
+            z-index: 4;
+            background: var(--color-bg-2);
+            padding: 8px 12px;
+            gap: 8px;
           }
+          .psl-detail__title { min-width: 0; }
+          .psl-detail__pkg-label { font-size: 0.82rem; }
+          .psl-nav-btn { width: 38px; height: 38px; }
+          .psl-nav-pos { font-size: 0.82rem; min-width: 42px; }
+          .psl-remove-btn { padding: 9px 12px; }
           .psl-grid--2 {
             grid-template-columns: 1fr;
           }
+          /* Full-width segmented control instead of three small chips. */
+          .psl-type-row { gap: 8px; }
+          .psl-type-btn {
+            flex: 1;
+            min-height: 44px;
+            padding: 10px 8px;
+            font-size: 0.88rem;
+          }
+          .psl-list-item { padding: 11px 12px; }
+          .psl-list-item__name { font-size: 0.85rem; }
+          .psl-sidebar__toggle { width: 34px; height: 34px; }
+          .package-card__fragile-toggle { padding: 11px 12px; font-size: 0.9rem; }
+          .package-card__fragile-toggle input[type="checkbox"] { width: 20px; height: 20px; }
         }
       `}</style>
     </div>

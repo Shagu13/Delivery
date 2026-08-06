@@ -35,16 +35,28 @@
         color: var(--color-text-subtle);
     }
 
+    /* background-color, not the `background` shorthand — the shorthand would wipe
+       the chevron background-image off <select>s on hover/focus. */
     .form-field__input:hover {
         border-color: #cdc7bf;
-        background: var(--color-bg-3);
+        background-color: var(--color-bg-3);
     }
 
     .form-field__input:focus {
         border-color: var(--color-border-focus);
         box-shadow: var(--shadow-focus);
-        background: var(--color-bg-3);
+        background-color: var(--color-bg-3);
     }
+
+/* `appearance: none` above strips the native dropdown arrow, so draw one back —
+   otherwise a <select> is indistinguishable from a text box. */
+select.form-field__input {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2 4.5l4 4 4-4' stroke='%236b6560' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 34px;
+    cursor: pointer;
+}
 
 .form-field__textarea {
     resize: vertical;
@@ -127,4 +139,23 @@
 
 .form-field--error .phone-field__prefix {
     border-color: var(--color-error);
+}
+
+/* ── Touch / small screens ───────────────────────────────────────────────── */
+/* Native controls under 16px make iOS Safari zoom the page in on focus. */
+@media (pointer: coarse), (max-width: 640px) {
+    .form-field__input {
+        font-size: 16px;
+        padding: 12px 14px;
+    }
+
+    select.form-field__input { padding-right: 34px; }
+
+    .form-field__input--password { padding-right: 44px; }
+
+    .form-field__textarea { min-height: 84px; }
+
+    .phone-field__prefix { font-size: 16px; }
+
+    .form-field__error { font-size: 0.8rem; }
 }

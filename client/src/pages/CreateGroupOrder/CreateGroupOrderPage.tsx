@@ -635,7 +635,9 @@ export function CreateGroupOrderPage() {
         <div className="page">
             {justAdded !== null && (
                 <div role="status" style={{
-                    position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 200,
+                    // Clears the sticky submit bar that the phone layout pins to the bottom.
+                    position: 'fixed', bottom: 'calc(88px + env(safe-area-inset-bottom, 0px))',
+                    left: '50%', transform: 'translateX(-50%)', zIndex: 200, maxWidth: 'calc(100vw - 32px)',
                     display: 'flex', alignItems: 'center', gap: 12, background: 'var(--color-text)', color: 'var(--color-bg)',
                     borderRadius: 'var(--radius-md)', padding: '12px 18px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
                     fontSize: '0.875rem', fontWeight: 600,

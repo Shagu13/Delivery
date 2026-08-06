@@ -22,22 +22,85 @@ interface DropdownPortalProps {
   children: React.ReactNode;
 }
 
+/** Tallest the suggestion panel ever gets. */
+const DROPDOWN_MAX_H = 264;
+/** Below this the list is too cramped to pick from — scroll the field up instead of shrinking further. */
+const DROPDOWN_MIN_H = 150;
+const DROPDOWN_GAP = 6;
+
+/** Nearest ancestor that actually scrolls — the picker is also used inside modals with their own scroller. */
+function scrollableAncestor(el: HTMLElement): HTMLElement | null {
+  let node = el.parentElement;
+  while (node) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/**
+ * The panel always drops *downwards* so it can never cover the field being typed
+ * in. On a phone the on-screen keyboard eats the bottom of the screen, and a
+ * panel that flipped upwards landed straight on top of the input. Instead the
+ * panel is capped to the room actually left below the field (measured against
+ * `visualViewport`, which excludes the keyboard), and when that room is too
+ * small the field is scrolled up to make some.
+ */
 function DropdownPortal({ anchorRef, open, children }: DropdownPortalProps) {
   const [style, setStyle] = useState<React.CSSProperties>({});
   useEffect(() => {
     if (!open || !anchorRef.current) return;
+    const vv = window.visualViewport;
+    // `position: fixed` is relative to the layout viewport; visualViewport's
+    // offset/height tell us which slice of it is actually on screen.
+    const visibleBottom = () => (vv ? vv.offsetTop + vv.height : window.innerHeight);
+
     const reposition = () => {
-      const rect = anchorRef.current!.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      const openUpward = spaceBelow < 248 && spaceAbove > spaceBelow;
-      setStyle({ position: 'fixed', left: rect.left, width: rect.width, zIndex: 9999,
-        ...(openUpward ? { bottom: window.innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }) });
+      const el = anchorRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const room = Math.max(0, visibleBottom() - rect.bottom - DROPDOWN_GAP - 8);
+      setStyle({
+        position: 'fixed',
+        left: rect.left,
+        width: rect.width,
+        top: rect.bottom + DROPDOWN_GAP,
+        zIndex: 9999,
+        '--cdp-max-h': `${Math.round(Math.min(DROPDOWN_MAX_H, Math.max(room, DROPDOWN_MIN_H)))}px`,
+      } as React.CSSProperties);
     };
+
     reposition();
+
+    // Wait for the mobile keyboard to finish animating in, then nudge the field up
+    // by exactly the shortfall — never so far that it slides under the sticky navbar.
+    const roomTimer = setTimeout(() => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const deficit = DROPDOWN_MIN_H + DROPDOWN_GAP + 8 - (visibleBottom() - rect.bottom);
+      if (deficit <= 0) return;
+      const navH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--staff-nav-h'), 10) || 0;
+      const headroom = Math.max(0, rect.top - (vv ? vv.offsetTop : 0) - navH - 8);
+      const delta = Math.min(deficit, headroom);
+      if (delta < 4) return;
+      const scroller = scrollableAncestor(el);
+      if (scroller) scroller.scrollBy({ top: delta, behavior: 'smooth' });
+      else window.scrollBy({ top: delta, behavior: 'smooth' });
+    }, 300);
+
     window.addEventListener('scroll', reposition, true);
     window.addEventListener('resize', reposition);
-    return () => { window.removeEventListener('scroll', reposition, true); window.removeEventListener('resize', reposition); };
+    vv?.addEventListener('resize', reposition);
+    vv?.addEventListener('scroll', reposition);
+    return () => {
+      clearTimeout(roomTimer);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+      vv?.removeEventListener('resize', reposition);
+      vv?.removeEventListener('scroll', reposition);
+    };
   }, [open, anchorRef]);
   if (!open) return null;
   return createPortal(<div className="cdp-portal" style={style}>{children}</div>, document.body);
@@ -180,6 +243,7 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
         <div className={`cdp-control${cityOpen ? ' cdp-control--open' : ''}${disabled ? ' cdp-control--disabled' : ''}`}>
           <input ref={cityInputRef} className="cdp-input" type="text"
             placeholder={t.phCity} value={citySearch} autoComplete="off"
+            autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="search"
             disabled={disabled}
             onFocus={() => { if (!disabled) setCityOpen(true); }} onKeyDown={handleCityKeyDown}
             onChange={e => {
@@ -224,6 +288,7 @@ export function CityDistrictPicker({ cityValue, districtValue, onCityChange, onD
           <input ref={districtInputRef} className="cdp-input" type="text"
             placeholder={selectedCityId ? t.phDistrict : t.phCityFirst}
             value={districtSearch} autoComplete="off" disabled={!selectedCityId || disabled}
+            autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="search"
             onFocus={() => { if (selectedCityId && !disabled) setDistrictOpen(true); }} onKeyDown={handleDistrictKeyDown}
             onChange={e => { if (disabled) return; setDistrictSearch(e.target.value); setDistrictOpen(true); if (!e.target.value) onDistrictChange(''); }}
           />

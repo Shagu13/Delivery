@@ -6,8 +6,10 @@
   gap: 0 1rem;
 }
 
-@media (max-width: 420px) {
-  .cdp-row { grid-template-columns: 1fr; }
+/* Matches `.grid--2` — below this two side-by-side comboboxes are too narrow to
+   read a city name in. */
+@media (max-width: 560px) {
+  .cdp-row { grid-template-columns: 1fr; gap: 14px 0; }
 }
 
 /* ─── Field wrapper ──────────────────────────────────────────────────────── */
@@ -144,8 +146,10 @@
   list-style: none;
   margin: 0;
   padding: 4px 0;
-  max-height: 232px;
+  /* Set by DropdownPortal from the room actually left below the field. */
+  max-height: var(--cdp-max-h, 232px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 
   scrollbar-width: thin;
@@ -241,3 +245,28 @@
 }
 
 @keyframes cdp-spin { to { transform: rotate(360deg); } }
+
+/* ─── Touch / small screens ──────────────────────────────────────────────── */
+/* Anything under 16px makes iOS Safari zoom the page in when the field takes
+   focus, which throws off every fixed-position measurement on the page. */
+
+@media (pointer: coarse), (max-width: 640px) {
+  .cdp-input {
+    font-size: 16px;
+    padding: 12px 40px 12px 12px;
+  }
+
+  .cdp-clear-btn { width: 26px; height: 26px; }
+
+  .cdp-option {
+    padding: 12px 14px;
+    font-size: 0.95rem;
+  }
+
+  .cdp-empty {
+    padding: 16px 14px;
+    font-size: 0.88rem;
+  }
+
+  .cdp-list::-webkit-scrollbar { width: 6px; }
+}
