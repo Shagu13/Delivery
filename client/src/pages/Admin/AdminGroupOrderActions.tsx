@@ -8,6 +8,7 @@ import {
     acceptGroupOrderInWarehouse,
     cancelGroupOrderByAdmin,
     setGroupOrderPickupDate,
+    revertGroupOrderToPending,
 } from '../../api/adminGroupOrders';
 import { sendOrderToCity, cancelOrderByAdmin } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
@@ -244,6 +245,17 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                         <button className="go-action-btn go-action-btn--ghost" disabled={busy}
                             onClick={() => setShowPickupDate(true)}>
                             {t.goSetPickupDate}
+                        </button>
+                    )}
+                    {/* Undo an accidental Accept — only before a pickup courier is assigned. */}
+                    {canManage && status === 'AcceptedGroupOrder' && (
+                        <button className="go-action-btn go-action-btn--revert" disabled={busy}
+                            title={t.goRevertToPendingConfirm}
+                            onClick={() => {
+                                if (!window.confirm(t.goRevertToPendingConfirm)) return;
+                                run(() => revertGroupOrderToPending(token, groupOrder.id), t.goGroupReverted);
+                            }}>
+                            {t.goRevertToPending}
                         </button>
                     )}
                 </>

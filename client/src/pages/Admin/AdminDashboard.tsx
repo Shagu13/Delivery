@@ -749,6 +749,7 @@ export function AdminDashboard() {
         .go-action-btn--warehouse { background: #3b82f6; color: #fff; }
         .go-action-btn--city      { background: #8b5cf6; color: #fff; }
         .go-action-btn--ghost     { background: var(--color-bg-3); border: 1px solid var(--color-border); color: var(--color-text); }
+        .go-action-btn--revert    { background: #f59e0b; color: #fff; }
         .go-action-hint { font-size: 0.72rem; color: var(--color-text-subtle); font-style: italic; }
         .go-courier-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .go-select--inline { min-width: 200px; padding: 6px 28px 6px 10px; font-size: 0.8rem; }

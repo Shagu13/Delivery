@@ -11,6 +11,7 @@ using Application.GroupOrders.Commands.CancelGroupOrderByAdmin;
 using Application.GroupOrders.Commands.CourierGroupOrderActions;
 using Application.GroupOrders.Commands.CreateGroupOrder;
 using Application.GroupOrders.Commands.DeclineGroupOrder;
+using Application.GroupOrders.Commands.RevertGroupOrderToPending;
 using Application.GroupOrders.Commands.GroupAndAcceptStandaloneOrder;
 using Application.GroupOrders.Commands.GroupAndWarehouseStandaloneOrder;
 using Application.GroupOrders.Commands.SetGroupOrderPickupDate;
@@ -416,6 +417,17 @@ public sealed class GroupOrdersController : BaseController
     public async Task<IActionResult> Decline(Guid id, CancellationToken ct)
     {
         await Sender.Send(new DeclineGroupOrderCommand(id), ct);
+        return NoContent();
+    }
+
+    // Undo an accidental Accept — only while still AcceptedGroupOrder (no courier assigned yet).
+    [HttpPut("{id:guid}/revert-to-pending")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RevertToPending(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new RevertGroupOrderToPendingCommand(id), ct);
         return NoContent();
     }
 

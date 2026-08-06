@@ -285,6 +285,8 @@ async function groupOrderAction(
 
 export const acceptGroupOrder         = (token: string, id: string) => groupOrderAction(token, id, 'accept');
 export const declineGroupOrder        = (token: string, id: string) => groupOrderAction(token, id, 'decline');
+/** Undo an accidental Accept — only while still AcceptedGroupOrder (no courier assigned yet). */
+export const revertGroupOrderToPending = (token: string, id: string) => groupOrderAction(token, id, 'revert-to-pending');
 /** Accept a batch in warehouse. Pass `presentOrderIds` to accept only the packages that
  *  physically arrived; the rest are cancelled as "not received". Omit it to accept all. */
 export const acceptGroupOrderInWarehouse = (token: string, id: string, presentOrderIds?: string[]) =>
