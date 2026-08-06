@@ -19,16 +19,36 @@ public sealed class RevertGroupOrderToPendingCommandHandler : IRequestHandler<Re
             .FirstOrDefaultAsync(go => go.Id == request.GroupOrderId, cancellationToken)
             ?? throw new NotFoundException("GroupOrder", request.GroupOrderId);
 
-        if (groupOrder.Status != OrderStatus.AcceptedGroupOrder)
-            throw new ConflictException($"Only an Accepted group order can be reverted to Pending. Current status: {groupOrder.Status}.");
+        var revertibleStatuses = new[]
+        {
+            OrderStatus.AcceptedGroupOrder,
+            OrderStatus.AdminAcceptedOrderInWareHouse,
+        };
+        if (!revertibleStatuses.Contains(groupOrder.Status))
+            throw new ConflictException($"Only an Accepted or warehouse-accepted group order can be reverted to Pending. Current status: {groupOrder.Status}.");
+
+        // Orders still sitting at the stage the batch-level step itself put them in are the
+        // ones to bounce back. An order an admin separately cancelled, or one that already
+        // moved on into its own last-mile flow, keeps its own status untouched.
+        // AcceptedGroupOrder mirrors onto Orders as the differently-named AcceptedOrder;
+        // every later shared stage (incl. AdminAcceptedOrderInWareHouse) uses the same name.
+        var orderStageStatus = groupOrder.Status == OrderStatus.AcceptedGroupOrder
+            ? OrderStatus.AcceptedOrder
+            : groupOrder.Status;
+        foreach (var order in groupOrder.Orders.Where(o => o.Status == orderStageStatus))
+            order.Status = OrderStatus.Pending;
+
+        if (groupOrder.Status == OrderStatus.AdminAcceptedOrderInWareHouse)
+        {
+            // Undoes the pickup courier's whole run, not just the warehouse-accept step —
+            // the batch goes back to square one.
+            groupOrder.CourierId              = null;
+            groupOrder.PickedUpAt             = null;
+            groupOrder.DeliveredToWarehouseAt = null;
+        }
 
         groupOrder.Status     = OrderStatus.Pending;
         groupOrder.AcceptedAt = null;
-
-        // Only bounce back the orders the Accept step itself moved — an order an admin
-        // separately cancelled in the meantime keeps its own status.
-        foreach (var order in groupOrder.Orders.Where(o => o.Status == OrderStatus.AcceptedOrder))
-            order.Status = OrderStatus.Pending;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

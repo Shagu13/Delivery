@@ -341,6 +341,19 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 <span className="go-action-hint">{t.goAssignPackagesHint}</span>
             )}
 
+            {/* Undo an accidental warehouse-accept — only bounces packages still at
+                AdminAcceptedOrderInWareHouse; any already assigned/out for delivery are untouched. */}
+            {canManage && status === 'AdminAcceptedOrderInWareHouse' && (
+                <button className="go-action-btn go-action-btn--revert" disabled={busy}
+                    title={t.goRevertWarehouseToPendingConfirm}
+                    onClick={() => {
+                        if (!window.confirm(t.goRevertWarehouseToPendingConfirm)) return;
+                        run(() => revertGroupOrderToPending(token, groupOrder.id), t.goGroupReverted);
+                    }}>
+                    {t.goRevertToPending}
+                </button>
+            )}
+
             {/* Cancel by Admin — always visible unless already terminal */}
             {canManage && !isCancelledOrDone && (
                 <button

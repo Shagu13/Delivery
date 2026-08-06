@@ -420,7 +420,8 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
-    // Undo an accidental Accept — only while still AcceptedGroupOrder (no courier assigned yet).
+    // Undo an accidental Accept (AcceptedGroupOrder) or warehouse-accept
+    // (AdminAcceptedOrderInWareHouse) — see RevertGroupOrderToPendingCommandHandler.
     [HttpPut("{id:guid}/revert-to-pending")]
     [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
