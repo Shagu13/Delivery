@@ -73,6 +73,19 @@ function DropdownPortal({ anchorRef, open, children }: DropdownPortalProps) {
 
     reposition();
 
+    // iOS Safari doesn't reliably fire `scroll`/`resize`/visualViewport events while
+    // the keyboard is animating in, so the panel can be left stranded at the field's
+    // pre-keyboard position for the whole animation — only "fixed" once something
+    // unrelated (e.g. tapping the keyboard's Done key) finally triggers a resize.
+    // Poll every frame for that window instead of trusting the events alone.
+    let raf = 0;
+    const trackUntil = performance.now() + 500;
+    const track = (now: number) => {
+      reposition();
+      if (now < trackUntil) raf = requestAnimationFrame(track);
+    };
+    raf = requestAnimationFrame(track);
+
     // Wait for the mobile keyboard to finish animating in, then nudge the field up
     // by exactly the shortfall — never so far that it slides under the sticky navbar.
     const roomTimer = setTimeout(() => {
@@ -95,6 +108,7 @@ function DropdownPortal({ anchorRef, open, children }: DropdownPortalProps) {
     vv?.addEventListener('resize', reposition);
     vv?.addEventListener('scroll', reposition);
     return () => {
+      cancelAnimationFrame(raf);
       clearTimeout(roomTimer);
       window.removeEventListener('scroll', reposition, true);
       window.removeEventListener('resize', reposition);
