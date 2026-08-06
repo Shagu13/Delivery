@@ -363,3 +363,11 @@ MigrationBackup/
 FodyWeavers.xsd
 /CitiesToBecomeDistrictsQuery.sql
 /Domain/TestFiles
+/Domain/CLAUDE.md
+/client/CLAUDE.md
+/Infrastructure/CLAUDE.md
+/Persistence/CLAUDE.md
+/CLAUDE.md
+/Application/CLAUDE.md
+/API/CLAUDE.md
+/CLAUDE.md
