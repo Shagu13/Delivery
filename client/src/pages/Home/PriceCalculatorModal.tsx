@@ -509,6 +509,27 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
           </>
         )}
 
+        {selectedEntry && (
+          <div style={{ marginTop: 10 }}>
+            <span style={{ fontSize: '0.78rem', color: C.textSubtle, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              {t.calcDeliveryDays}:{' '}
+            </span>
+            <span style={{ fontSize: '0.82rem', color: selectedEntry.scheduleSet ? C.text : C.textSubtle, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              {selectedEntry.scheduleSet
+                ? [
+                    selectedEntry.monday    && t.dayMonday,
+                    selectedEntry.tuesday   && t.dayTuesday,
+                    selectedEntry.wednesday && t.dayWednesday,
+                    selectedEntry.thursday  && t.dayThursday,
+                    selectedEntry.friday    && t.dayFriday,
+                    selectedEntry.saturday  && t.daySaturday,
+                    selectedEntry.sunday    && t.daySunday,
+                  ].filter(Boolean).join(', ') || t.calcDeliveryNotSet
+                : t.calcDeliveryNotSet}
+            </span>
+          </div>
+        )}
+
         {(selectedFromEntry || selectedEntry) && (
           <button
             type="button"

@@ -6,6 +6,7 @@ using Application.Cities.Commands.EditCity;
 using Application.Cities.Commands.EditDistrict;
 using Application.Cities.Commands.RestoreCity;
 using Application.Cities.Commands.RestoreDistrict;
+using Application.Cities.Commands.SetDeliverySchedule;
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using Application.Orders.Commands;
@@ -39,12 +40,14 @@ public sealed class CitiesController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<AllDistrictEntry>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllDistricts(CancellationToken ct)
     {
-        var districts = await _context.Districts
-            .AsNoTracking()
-            .Include(d => d.City)
-            .Where(d => d.DateDeleted == null && d.City.DateDeleted == null)
-            .OrderBy(d => d.City.CityName).ThenBy(d => d.DistrictName)
-            .Select(d => new AllDistrictEntry(
+        var districts = await (
+            from d in _context.Districts.AsNoTracking()
+            where d.DateDeleted == null && d.City.DateDeleted == null
+            join s in _context.DeliverySchedules.Where(s => s.DateDeleted == null)
+                on d.CityId equals s.CityId into schedules
+            from s in schedules.DefaultIfEmpty()
+            orderby d.City.CityName, d.DistrictName
+            select new AllDistrictEntry(
                 d.Id,
                 d.DistrictName,
                 d.DistrictNameGeo,
@@ -53,10 +56,62 @@ public sealed class CitiesController : ControllerBase
                 d.City.CityNameGeo,
                 d.CompanyServicePrice,
                 d.IsCapitalTerritory,
-                d.IsCityTerritory))
-            .ToListAsync(ct);
+                d.IsCityTerritory,
+                s != null,
+                s != null && s.Monday,
+                s != null && s.Tuesday,
+                s != null && s.Wednesday,
+                s != null && s.Thursday,
+                s != null && s.Friday,
+                s != null && s.Saturday,
+                s != null && s.Sunday)
+        ).ToListAsync(ct);
 
         return Ok(districts);
+    }
+
+    // ── GET /api/cities/{cityId}/delivery-schedule ────────────────────────────
+    /// <summary>
+    /// Which days of the week the city (and all its districts) receive deliveries.
+    /// scheduleSet is false when the city has never been configured — the day flags are
+    /// then meaningless and the caller should show a "not set" state rather than "no days".
+    /// </summary>
+    [HttpGet("{cityId:guid}/delivery-schedule")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(DeliveryScheduleResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDeliverySchedule(Guid cityId, CancellationToken ct)
+    {
+        var cityExists = await _context.Cities.AnyAsync(c => c.Id == cityId && c.DateDeleted == null, ct);
+        if (!cityExists) return NotFound();
+
+        var schedule = await _context.DeliverySchedules
+            .AsNoTracking()
+            .Where(s => s.CityId == cityId && s.DateDeleted == null)
+            .Select(s => new DeliveryScheduleResponse(true, s.Monday, s.Tuesday, s.Wednesday, s.Thursday, s.Friday, s.Saturday, s.Sunday))
+            .FirstOrDefaultAsync(ct);
+
+        return Ok(schedule ?? new DeliveryScheduleResponse(false, false, false, false, false, false, false, false));
+    }
+
+    // ── PUT /api/cities/{cityId}/delivery-schedule  (Admin) ───────────────────
+    [HttpPut("{cityId:guid}/delivery-schedule")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDeliverySchedule(
+        Guid cityId,
+        [FromBody] SetDeliveryScheduleRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new SetCityDeliveryScheduleCommand(
+                cityId, request.Monday, request.Tuesday, request.Wednesday, request.Thursday,
+                request.Friday, request.Saturday, request.Sunday), ct);
+            return NoContent();
+        }
+        catch (NotFoundException ex) { return NotFound(ex.Message); }
     }
 
     // ── GET /api/cities ───────────────────────────────────────────────────────
@@ -307,7 +362,13 @@ public sealed class CitiesController : ControllerBase
 // ── Request / Response records ────────────────────────────────────────────────
 public sealed record CityResponse(Guid Id, string CityName, string? CityNameGeo);
 public sealed record DistrictResponse(Guid Id, string DistrictName, string? DistrictNameGeo, decimal? CompanyServicePrice, bool IsCapitalTerritory, bool IsCityTerritory);
-public sealed record AllDistrictEntry(Guid DistrictId, string DistrictName, string? DistrictNameGeo, Guid CityId, string CityName, string? CityNameGeo, decimal? CompanyServicePrice, bool IsCapitalTerritory, bool IsCityTerritory);
+public sealed record AllDistrictEntry(
+    Guid DistrictId, string DistrictName, string? DistrictNameGeo,
+    Guid CityId, string CityName, string? CityNameGeo,
+    decimal? CompanyServicePrice, bool IsCapitalTerritory, bool IsCityTerritory,
+    bool ScheduleSet, bool Monday, bool Tuesday, bool Wednesday, bool Thursday, bool Friday, bool Saturday, bool Sunday);
+public sealed record DeliveryScheduleResponse(bool ScheduleSet, bool Monday, bool Tuesday, bool Wednesday, bool Thursday, bool Friday, bool Saturday, bool Sunday);
+public sealed record SetDeliveryScheduleRequest(bool Monday, bool Tuesday, bool Wednesday, bool Thursday, bool Friday, bool Saturday, bool Sunday);
 public sealed record SetDistrictServicePriceRequest(decimal? Price);
 public sealed record SetDistrictTerritoryRequest(bool IsCapitalTerritory, bool IsCityTerritory);
 public sealed record CreateCityRequest(string CityName, string? CityNameGeo);

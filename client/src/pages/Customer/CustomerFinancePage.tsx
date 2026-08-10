@@ -4,7 +4,7 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
-import { fetchMyOrderFinance, fetchMyPaymentReceipts } from '../../api/orderFinance';
+import { fetchMyOrderFinance, fetchMyPaymentReceipts, downloadMyOrderFinanceExcel } from '../../api/orderFinance';
 import type { OrderFinanceLine, PaymentReceipt } from '../../api/orderFinance';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
@@ -195,6 +195,7 @@ export function CustomerFinancePage() {
     const [expandedReceiptId, setExpandedReceiptId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [exporting, setExporting] = useState(false);
 
     const load = useCallback(() => {
         if (!token) return;
@@ -217,6 +218,25 @@ export function CustomerFinancePage() {
     }, [token, date, dateMode, from, to, mode, t.ofinErrLoad]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Exports the same rows currently on screen — reuses the exact date-filter translation `load` does.
+    const handleExport = async () => {
+        if (!token) return;
+        setExporting(true);
+        const opts = dateMode === 'range'
+            ? { from: from || undefined, to: to || undefined }
+            : dateMode === 'month'
+                ? { monthly: true }
+                : {};
+        const effDate = dateMode === 'range' ? undefined : (date || undefined);
+        try {
+            await downloadMyOrderFinanceExcel(token, effDate, mode === 'payments', opts);
+        } catch {
+            setError(t.ofinExportFail);
+        } finally {
+            setExporting(false);
+        }
+    };
 
     const todayStr = toDateStr(new Date());
     const monthStr = todayStr.slice(0, 7);
@@ -341,6 +361,11 @@ export function CustomerFinancePage() {
                     </>
                 )}
                 <button onClick={load} className="btn-ghost btn-ghost--sm" style={{ marginLeft: 4 }}>{t.statRefresh}</button>
+                {mode !== 'receipts' && (
+                    <button onClick={handleExport} disabled={exporting} className="btn-ghost btn-ghost--sm">
+                        {exporting ? '…' : t.ofinExport}
+                    </button>
+                )}
             </div>
 
             {/* Recipient-location filter (client-side over the loaded orders): city/district + address */}

@@ -23,6 +23,27 @@ export interface AllDistrictEntry {
   companyServicePrice: number | null;
   isCapitalTerritory: boolean;
   isCityTerritory: boolean;
+  /** False when the city's delivery schedule has never been configured — the day
+   *  flags below are then meaningless and callers should show a "not set" state. */
+  scheduleSet: boolean;
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+}
+
+export interface DeliverySchedule {
+  scheduleSet: boolean;
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
 }
 
 export async function fetchCities(): Promise<City[]> {
@@ -91,6 +112,29 @@ export async function setDistrictServicePrice(
     body: JSON.stringify({ price }),
   });
   if (!res.ok) throw new Error('Failed to update district service price');
+}
+
+export async function fetchCityDeliverySchedule(cityId: string): Promise<DeliverySchedule> {
+  const res = await fetch(`/api/cities/${cityId}/delivery-schedule`);
+  if (!res.ok) throw new Error('Failed to fetch delivery schedule');
+  return res.json();
+}
+
+export async function setCityDeliverySchedule(
+  cityId: string,
+  schedule: Omit<DeliverySchedule, 'scheduleSet'>,
+  token: string
+): Promise<void> {
+  const res = await fetch(`/api/cities/${cityId}/delivery-schedule`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(schedule),
+  });
+  if (res.status === 404) throw new Error('NOT_FOUND');
+  if (!res.ok) throw new Error('Failed to update delivery schedule');
 }
 
 export async function setDistrictTerritory(

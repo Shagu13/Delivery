@@ -10,6 +10,7 @@ import type { AdminCustomer, Customer } from '../../api/customers';
 import {
     fetchCustomerOrderFinance,
     fetchAllCustomersOrderFinance,
+    downloadCustomerOrderFinanceExcel,
     payCustomerOrders,
     OrderFinanceApiError,
 } from '../../api/orderFinance';
@@ -583,6 +584,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     const [address, setAddress] = useState('');
     const [payFilter, setPayFilter] = useState<PayFilter>('all');
     const [toast, setToast] = useState<string | null>(null);
+    const [exporting, setExporting] = useState(false);
     // Payment-action errors (e.g. a failed settlement save) reported by CustomerSettleCard —
     // distinct from (but displayed alongside) a failed lines fetch below.
     const [actionError, setActionError] = useState<string | null>(null);
@@ -607,6 +609,20 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
         : null;
     const error = actionError ?? fetchError;
     const load = () => { void linesQuery.refetch(); };
+
+    // Exports the selected customer's currently-filtered rows — reuses the same `dateOpts`
+    // the on-screen query is built from.
+    const handleExport = async () => {
+        if (!customer) return;
+        setExporting(true);
+        try {
+            await downloadCustomerOrderFinanceExcel(customer.id, token, dateOpts);
+        } catch {
+            setActionError(t.ofinExportFail);
+        } finally {
+            setExporting(false);
+        }
+    };
 
     // Load the all-customers grid for the current date window whenever no customer is picked
     // yet — reuses the same day/month/range controls the per-customer view already exposes.
@@ -713,6 +729,11 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                         {dateActive && (
                             <button onClick={() => { setDate(''); setFrom(''); setTo(''); }} title={t.finAllDates}
                                 style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)', width: 28, height: 28, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
+                        )}
+                        {customer && (
+                            <button onClick={handleExport} disabled={exporting} className="btn-ghost btn-ghost--sm">
+                                {exporting ? '…' : t.ofinExport}
+                            </button>
                         )}
                     </div>
                 </div>

@@ -21,6 +21,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<City>             Cities            => Set<City>();
     public DbSet<District>         Districts         => Set<District>();
     public DbSet<WeightPriceTier>  WeightPriceTiers  => Set<WeightPriceTier>();
+    public DbSet<DeliverySchedule> DeliverySchedules => Set<DeliverySchedule>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<PartnerApiKey>    PartnerApiKeys    => Set<PartnerApiKey>();
     public DbSet<PartnerWebhook>   PartnerWebhooks   => Set<PartnerWebhook>();
@@ -277,6 +278,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(d => d.DateDeleted);
             e.Property(d => d.DistrictName).HasMaxLength(100).IsRequired();
             e.Property(d => d.CompanyServicePrice).HasColumnType("decimal(18,2)");
+        });
+
+        // ── DeliverySchedule ─────────────────────────────────────────────────
+        modelBuilder.Entity<DeliverySchedule>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.CityId).IsUnique();
+            e.HasIndex(s => s.DateDeleted);
+            e.HasOne<City>()
+             .WithOne()
+             .HasForeignKey<DeliverySchedule>(s => s.CityId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── WeightPriceTier ───────────────────────────────────────────────────

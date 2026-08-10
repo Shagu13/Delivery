@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  type City, type District,
+  type City, type District, type DeliverySchedule,
   fetchCities, fetchDistricts, setDistrictServicePrice, setDistrictTerritory,
   createCity, createDistrict, editCity, editDistrict,
   deleteCity, deleteDistrict,
   fetchDeletedCities, fetchDeletedDistricts, restoreCity, restoreDistrict,
+  fetchCityDeliverySchedule, setCityDeliverySchedule,
 } from '../../api/cities';
 import { useLanguage } from '../../contexts/useLanguage';
 
@@ -94,6 +95,7 @@ export default function AdminCitiesPage({ token }: Props) {
   const [showAddCity, setShowAddCity]         = useState(false);
   const [showAddDistrict, setShowAddDistrict] = useState(false);
   const [editingCity, setEditingCity]         = useState<City | null>(null);
+  const [schedulingCity, setSchedulingCity]   = useState<City | null>(null);
   const [editingDistrict, setEditingDistrict] = useState<District | null>(null);
   const [deletingCity, setDeletingCity]       = useState<City | null>(null);
   const [deletingDistrict, setDeletingDistrict] = useState<District | null>(null);
@@ -409,6 +411,17 @@ export default function AdminCitiesPage({ token }: Props) {
                     }}
                   >
                     ✎
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); setSchedulingCity(c); }}
+                    title={t.acpScheduleBtn}
+                    style={{
+                      padding: '0.35rem 0.5rem', borderRadius: 7,
+                      background: 'var(--color-bg-3)', border: '1px solid var(--color-border)',
+                      cursor: 'pointer', fontSize: '0.78rem', flexShrink: 0,
+                    }}
+                  >
+                    🗓
                   </button>
                   <button
                     onClick={e => { e.stopPropagation(); setDeletingCity(c); }}
@@ -750,6 +763,16 @@ export default function AdminCitiesPage({ token }: Props) {
         />
       )}
 
+      {/* ── Delivery Schedule modal ─────────────────────────────────────────── */}
+      {schedulingCity && (
+        <EditDeliveryScheduleModal
+          token={token}
+          city={schedulingCity}
+          onClose={() => setSchedulingCity(null)}
+          onSaved={() => setSchedulingCity(null)}
+        />
+      )}
+
       {/* ── Edit District modal ───────────────────────────────────────────── */}
       {editingDistrict && (
         <EditDistrictModal
@@ -1030,6 +1053,91 @@ function EditCityModal({ token, city, onClose, onSaved }: {
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+// ── Edit Delivery Schedule Modal ────────────────────────────────────────────────
+type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+const DAY_KEYS: DayKey[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+function EditDeliveryScheduleModal({ token, city, onClose, onSaved }: {
+  token: string;
+  city: City;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useLanguage();
+  const dayLabel: Record<DayKey, string> = {
+    monday: t.dayMonday, tuesday: t.dayTuesday, wednesday: t.dayWednesday, thursday: t.dayThursday,
+    friday: t.dayFriday, saturday: t.daySaturday, sunday: t.daySunday,
+  };
+  const [days, setDays] = useState<Record<DayKey, boolean>>({
+    monday: false, tuesday: false, wednesday: false, thursday: false, friday: false, saturday: false, sunday: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCityDeliverySchedule(city.id)
+      .then((schedule: DeliverySchedule) => {
+        if (cancelled) return;
+        setDays({
+          monday: schedule.monday, tuesday: schedule.tuesday, wednesday: schedule.wednesday,
+          thursday: schedule.thursday, friday: schedule.friday, saturday: schedule.saturday, sunday: schedule.sunday,
+        });
+      })
+      .catch(() => { if (!cancelled) setError(t.acpScheduleErrLoad); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [city.id, t.acpScheduleErrLoad]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      await setCityDeliverySchedule(city.id, days, token);
+      onSaved();
+    } catch {
+      setError(t.acpScheduleErrFail);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const CHECKBOX_ROW: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8, padding: '0.3rem 0', cursor: 'pointer', fontSize: '0.87rem',
+  };
+
+  return (
+    <Modal title={t.acpScheduleTitle(city.cityName)} onClose={onClose}>
+      {loading ? (
+        <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)' }}>{t.loading}</p>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          {DAY_KEYS.map(day => (
+            <label key={day} style={CHECKBOX_ROW}>
+              <input type="checkbox" checked={days[day]}
+                onChange={e => setDays(prev => ({ ...prev, [day]: e.target.checked }))} />
+              {dayLabel[day]}
+            </label>
+          ))}
+          {error && <p style={{ color: 'var(--color-error)', fontSize: '0.82rem', margin: '0.75rem 0 0' }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <button type="button" onClick={onClose}
+              style={{ padding: '0.4rem 0.9rem', borderRadius: 7, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.87rem' }}>
+              {t.cancel}
+            </button>
+            <button type="submit" disabled={submitting}
+              style={{ padding: '0.4rem 1rem', borderRadius: 7, background: 'var(--color-accent)', color: '#fff', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: '0.87rem', fontWeight: 600 }}>
+              {submitting ? t.loading : t.awptSaveBtn}
+            </button>
+          </div>
+        </form>
+      )}
     </Modal>
   );
 }

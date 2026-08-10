@@ -16,6 +16,7 @@ public interface IAppDbContext
     DbSet<City>                 Cities               { get; }
     DbSet<District>             Districts            { get; }
     DbSet<WeightPriceTier>      WeightPriceTiers     { get; }
+    DbSet<DeliverySchedule>     DeliverySchedules    { get; }
     DbSet<PasswordResetToken>   PasswordResetTokens  { get; }
     DbSet<PartnerApiKey>        PartnerApiKeys       { get; }
     DbSet<PartnerWebhook>       PartnerWebhooks      { get; }

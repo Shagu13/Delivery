@@ -99,6 +99,26 @@ async function handle<T>(res: Response, fallback: string): Promise<T> {
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` });
 const jsonHeaders = (token: string) => ({ 'Content-Type': 'application/json', ...authHeaders(token) });
 
+/** Fetches an Excel file and triggers a browser download, reading the filename off
+ *  Content-Disposition when present. Shared by the finance export functions below. */
+async function downloadExcel(url: string, token: string, fallbackFilename: string): Promise<void> {
+    const res = await fetch(url, { headers: authHeaders(token) });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new OrderFinanceApiError(res.status, body?.title ?? `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match = /filename[^;=\n]*=(['"]?)([^;"'\n]*)\1/.exec(disposition);
+    const filename = match?.[2]?.trim() || fallbackFilename;
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+}
+
 // ── Customer (read-only) — own orders ────────────────────────────────────────────
 // Placement view (default): all orders, `date` narrows by CreatedAt.
 // Payments view (paymentsMode): only paid orders, `date` narrows by CodPaidToCustomerAt.
@@ -117,6 +137,21 @@ export async function fetchMyOrderFinance(
     return handle<OrderFinanceLine[]>(res, 'Failed to load orders');
 }
 
+// ── Customer — download own orders as Excel, matching the same date filter ───────
+export async function downloadMyOrderFinanceExcel(
+    token: string, date?: string, paymentsMode = false,
+    opts: { monthly?: boolean; from?: string; to?: string } = {},
+): Promise<void> {
+    const params = new URLSearchParams();
+    if (date) params.set('date', date);
+    if (paymentsMode) params.set('paymentsMode', 'true');
+    if (opts.monthly) params.set('monthly', 'true');
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    const q = params.toString() ? `?${params}` : '';
+    await downloadExcel(`/api/orderfinance/my/export${q}`, token, 'finance.xlsx');
+}
+
 // ── Admin — a customer's orders by delivery date ─────────────────────────────────
 // `monthly` widens the `date` filter to its whole calendar month (day ignored).
 export async function fetchCustomerOrderFinance(
@@ -132,6 +167,19 @@ export async function fetchCustomerOrderFinance(
         headers: authHeaders(token), cache: 'no-store',
     });
     return handle<OrderFinanceLine[]>(res, 'Failed to load orders');
+}
+
+// ── Admin — download a customer's orders as Excel, matching the same date filter ──
+export async function downloadCustomerOrderFinanceExcel(
+    customerId: string, token: string,
+    opts: { date?: string; monthly?: boolean; from?: string; to?: string } = {},
+): Promise<void> {
+    const params = new URLSearchParams({ customerId });
+    if (opts.date) params.set('date', opts.date);
+    if (opts.monthly) params.set('monthly', 'true');
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    await downloadExcel(`/api/orderfinance/customer/export?${params}`, token, 'finance.xlsx');
 }
 
 // ── Admin — every customer's orders for a date/range, grouped client-side by customer ──

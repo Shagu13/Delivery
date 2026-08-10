@@ -282,6 +282,52 @@ namespace Persistence.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("Domain.DeliverySchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateDeleted")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("Friday")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Monday")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Saturday")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Sunday")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Thursday")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Tuesday")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Wednesday")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CityId")
+                        .IsUnique();
+
+                    b.HasIndex("DateDeleted");
+
+                    b.ToTable("DeliverySchedules");
+                });
+
             modelBuilder.Entity("Domain.District", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1310,6 +1356,15 @@ namespace Persistence.Migrations
                     b.Navigation("ApplicationUser");
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("Domain.DeliverySchedule", b =>
+                {
+                    b.HasOne("Domain.City", null)
+                        .WithOne()
+                        .HasForeignKey("Domain.DeliverySchedule", "CityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Domain.District", b =>

@@ -1,3 +1,4 @@
+using API.Excel;
 using Application.CustomerSettlements.Commands;
 using Application.CustomerSettlements.DTOs;
 using Application.CustomerSettlements.Queries;
@@ -31,6 +32,26 @@ public sealed class OrderFinanceController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/orderfinance/my/export  (Customer) — own orders as Excel ─────
+    [HttpGet("my/export")]
+    [Authorize(Roles = "Customer")]
+    [Produces("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")]
+    public async Task<IActionResult> ExportMy(
+        [FromQuery] DateOnly? date,
+        [FromQuery] bool paymentsMode,
+        [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(
+            new GetMyOrderFinanceLinesQuery(CurrentUserId, date, paymentsMode, monthly, from, to), ct);
+
+        byte[] bytes = FinanceExcelBuilder.Build(result, "DILO FINANCE");
+        string filename = $"Dilo-Finance-{Domain.CustomTime.Now:yyyy-MM-dd}.xlsx";
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
+    }
+
     // ── GET /api/orderfinance/customer  (Admin) — a customer's orders, by delivery date ──
     [HttpGet("customer")]
     [Authorize(Roles = "Admin")]
@@ -43,6 +64,23 @@ public sealed class OrderFinanceController : BaseController
     {
         var result = await Sender.Send(new GetCustomerOrderFinanceLinesQuery(customerId, date, monthly, from, to), ct);
         return Ok(result);
+    }
+
+    // ── GET /api/orderfinance/customer/export  (Admin) — a customer's orders as Excel ──
+    [HttpGet("customer/export")]
+    [Authorize(Roles = "Admin")]
+    [Produces("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ExportForCustomer(
+        [FromQuery] Guid customerId, [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCustomerOrderFinanceLinesQuery(customerId, date, monthly, from, to), ct);
+
+        byte[] bytes = FinanceExcelBuilder.Build(result, "DILO FINANCE");
+        string filename = $"Dilo-Finance-{Domain.CustomTime.Now:yyyy-MM-dd}.xlsx";
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
     }
 
     // ── GET /api/orderfinance/all-customers  (Admin) — every customer's orders, by delivery date ──
