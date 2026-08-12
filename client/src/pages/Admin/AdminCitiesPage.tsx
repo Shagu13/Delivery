@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   type City, type District, type DeliverySchedule,
   fetchCities, fetchDistricts, setDistrictServicePrice, setDistrictTerritory,
@@ -58,6 +59,7 @@ const INPUT: React.CSSProperties = {
 // ── main component ────────────────────────────────────────────────────────────
 export default function AdminCitiesPage({ token }: Props) {
   const { lang, t } = useLanguage();
+  const queryClient = useQueryClient();
 
   const cityLabel     = (c: City)     => (lang === 'ka' && c.cityNameGeo)     ? c.cityNameGeo     : c.cityName;
   const districtLabel = (d: District) => (lang === 'ka' && d.districtNameGeo) ? d.districtNameGeo : d.districtName;
@@ -769,7 +771,13 @@ export default function AdminCitiesPage({ token }: Props) {
           token={token}
           city={schedulingCity}
           onClose={() => setSchedulingCity(null)}
-          onSaved={() => setSchedulingCity(null)}
+          onSaved={() => {
+            setSchedulingCity(null);
+            // The Schedule page (Admin + Customer) reads the same data through this
+            // react-query key — invalidate it here too so an edit made from this older
+            // per-city editor doesn't leave that page showing stale days.
+            queryClient.invalidateQueries({ queryKey: ['cities', 'allDistricts'] });
+          }}
         />
       )}
 

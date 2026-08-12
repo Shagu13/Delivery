@@ -61,7 +61,6 @@ export function CityScheduleBoard({ onEditCity }: Props) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['cities', 'allDistricts'],
     queryFn: fetchAllDistrictsFlat,
-    staleTime: 5 * 60 * 1000,
   });
 
   const dayLabel: Record<DayKey, string> = {
