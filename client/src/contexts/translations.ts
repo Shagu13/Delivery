@@ -1049,6 +1049,13 @@ const en = {
   acpScheduleTitle:          (city: string) => `Delivery Schedule — ${city}`,
   acpScheduleErrFail:        'Failed to save the delivery schedule.',
   acpScheduleErrLoad:        'Failed to load the delivery schedule.',
+
+  // ── Schedule page (Admin + Customer) ──────────────────────────────────────
+  scheduleSearchPlaceholder: 'Search city or district…',
+  scheduleNoResults:         'No matching cities or districts.',
+  scheduleEmpty:             'No cities configured yet.',
+  scheduleLoadError:         'Failed to load delivery schedules.',
+  scheduleDistrictsLabel:    'Districts',
   acpDeleteCityTitle:        'Delete City',
   acpDeleteCityMsg:          (name: string) => `Are you sure you want to delete "${name}"? All its districts will also be deleted.`,
   acpDeleteDistrictTitle:    'Delete District',
@@ -1449,6 +1456,7 @@ const en = {
     // ── Finance / Statistics (CustomerSettlement) ─────────────────────────────
     navFinance:    'Finance',
     navStatistics: 'Statistics',
+    navSchedule:   'Schedule',
     statsYearLabel:          'Year',
     statsLoading:            'Loading statistics…',
     statsLoadFailed:         'Failed to load statistics.',
@@ -2973,6 +2981,13 @@ const ka: typeof en = {
   acpScheduleTitle:          (city: string) => `მიწოდების განრიგი — ${city}`,
   acpScheduleErrFail:        'მიწოდების განრიგის შენახვა ვერ მოხერხდა.',
   acpScheduleErrLoad:        'მიწოდების განრიგის ჩატვირთვა ვერ მოხერხდა.',
+
+  // ── Schedule page (Admin + Customer) ──────────────────────────────────────
+  scheduleSearchPlaceholder: 'ძებნა ქალაქის ან რაიონის მიხედვით…',
+  scheduleNoResults:         'ქალაქი ან რაიონი ვერ მოიძებნა.',
+  scheduleEmpty:             'ჯერ არცერთი ქალაქი არ არის დამატებული.',
+  scheduleLoadError:         'გრაფიკების ჩატვირთვა ვერ მოხერხდა.',
+  scheduleDistrictsLabel:    'რაიონები',
   acpDeleteCityTitle:        'ქალაქის წაშლა',
   acpDeleteCityMsg:          (name: string) => `დარწმუნებული ხართ, რომ გსურთ "${name}"-ის წაშლა? მისი ყველა რაიონიც/სოფელიც წაიშლება.`,
   acpDeleteDistrictTitle:    'რაიონის/სოფლის წაშლა',
@@ -3371,6 +3386,7 @@ const ka: typeof en = {
     // ── Finance / Statistics (CustomerSettlement) ─────────────────────────────
     navFinance:    'ფინანსები',
     navStatistics: 'სტატისტიკა',
+    navSchedule:   'გრაფიკი',
     statsYearLabel:          'წელი',
     statsLoading:            'სტატისტიკა იტვირთება…',
     statsLoadFailed:         'სტატისტიკის ჩატვირთვა ვერ მოხერხდა.',

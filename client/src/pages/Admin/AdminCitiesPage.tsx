@@ -1061,7 +1061,7 @@ function EditCityModal({ token, city, onClose, onSaved }: {
 type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 const DAY_KEYS: DayKey[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-function EditDeliveryScheduleModal({ token, city, onClose, onSaved }: {
+export function EditDeliveryScheduleModal({ token, city, onClose, onSaved }: {
   token: string;
   city: City;
   onClose: () => void;

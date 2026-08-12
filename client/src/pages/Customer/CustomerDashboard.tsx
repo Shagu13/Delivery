@@ -24,12 +24,13 @@ import { recipientDisplayName } from '../../utils/recipientName';
 import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
 import { CustomerFinancePage } from './CustomerFinancePage';
 import { CustomerStatisticsPage } from './CustomerStatisticsPage';
+import { CityScheduleBoard } from '../Schedule/CityScheduleBoard';
 import '../../styles/dashboard.css';
 
 
-type View = 'overview' | 'shipments' | 'returned' | 'finance' | 'statistics' | 'profile' | 'password' | 'calculator';
+type View = 'overview' | 'shipments' | 'returned' | 'finance' | 'statistics' | 'schedule' | 'profile' | 'password' | 'calculator';
 
-const CUSTOMER_VIEWS: readonly View[] = ['overview', 'shipments', 'returned', 'finance', 'statistics', 'profile', 'password', 'calculator'];
+const CUSTOMER_VIEWS: readonly View[] = ['overview', 'shipments', 'returned', 'finance', 'statistics', 'schedule', 'profile', 'password', 'calculator'];
 
 // A package belongs on the "Returned Packages" page when it has to go back to the sender:
 //  • a Return or Exchange (any status),
@@ -235,6 +236,7 @@ export function CustomerDashboard() {
     ['returned',   t.custNavReturned,    returnedIcon],
     ['finance',    t.navFinance,         financeIcon],
     ['statistics', t.navStatistics,      statisticsIcon],
+    ['schedule',   t.navSchedule,        scheduleIcon],
     ['calculator', t.custNavCalculator,  calcIcon],
     ['profile',    t.custNavProfile,     profileIcon],
     ['password',   t.custNavPassword,    lockIcon],
@@ -406,6 +408,7 @@ export function CustomerDashboard() {
             {view === 'returned'    && t.custNavReturned}
             {view === 'finance'     && t.navFinance}
             {view === 'statistics'  && t.navStatistics}
+            {view === 'schedule'    && t.navSchedule}
             {view === 'calculator'  && t.custTopbarCalculator}
             {view === 'profile'     && t.custNavProfile}
             {view === 'password'    && t.custTopbarPassword}
@@ -476,6 +479,7 @@ export function CustomerDashboard() {
               )}
               {view === 'finance'     && <CustomerFinancePage />}
               {view === 'statistics'  && <CustomerStatisticsPage />}
+              {view === 'schedule'    && <CityScheduleBoard />}
               {view === 'calculator'  && token && <PriceCalculatorCard token={token} />}
               {view === 'profile'   && profile && token && (
                 <EditProfileView
@@ -1315,6 +1319,14 @@ const statisticsIcon = (
     <rect x="4.5" y="8" width="2.2" height="4" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
     <rect x="8.2" y="5" width="2.2" height="7" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
     <rect x="11.9" y="9.5" width="2.2" height="2.5" rx="0.6" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+);
+
+const scheduleIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="1.5" y="2.5" width="13" height="12" rx="2" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M1.5 6h13" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M4.5 1.2v2.6M11.5 1.2v2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
   </svg>
 );
 
