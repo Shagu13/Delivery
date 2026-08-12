@@ -1717,8 +1717,8 @@ const en = {
     ofinSumCodOut:       'COD outstanding',
     ofinSumServiceOut:   'Service outstanding',
     // Customer finance summary — gross period totals (COD company owes you / service you owe).
-    ofinSumCodCollected: 'COD (company owes you)',
-    ofinSumYouOwe:       'You owe (service)',
+    ofinSumCodCollected: 'COD',
+    ofinSumYouOwe:       'Service Fee',
     // Balance: COD already paid out to you minus service fee you've already paid — cash that
     // has actually moved so far.
     ofinSumBalance:      'Balance',
@@ -3647,8 +3647,8 @@ const ka: typeof en = {
     ofinSumCodOut:       'COD ნაშთი',
     ofinSumServiceOut:   'მომსახურების ნაშთი',
     // მომხმარებლის ფინანსების ჯამი — პერიოდის ჯამური თანხები (COD, რომელიც კომპანიას გმართებთ / საკურიერო).
-    ofinSumCodCollected: 'COD (კომპანიის ვალი)',
-    ofinSumYouOwe:       'თქვენი ვალი (საკურიერო)',
+    ofinSumCodCollected: 'COD',
+    ofinSumYouOwe:       'საკურიერო',
     // ბალანსი: თქვენზე უკვე გადმორიცხული COD მინუს თქვენ მიერ უკვე გადახდილი საკურიერო — ფაქტობრივად გადაადგილებული თანხა.
     ofinSumBalance:      'ბალანსი',
     ofinSumNetFormula:   (cod: string, svc: string) => `${cod} − ${svc}`,

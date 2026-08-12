@@ -14,8 +14,6 @@ const gel = (n: number) => `₾${n.toFixed(2)}`;
 
 // Terminal cancelled statuses — listed for transparency with "—" amounts (no money owed).
 const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
-// Terminal successfully-completed statuses across all three order types (Send / Return / Exchange).
-const DELIVERED_STATUSES = new Set(['DeliveredToRecipient', 'ExchangeCompleted', 'ReturnedToSender']);
 
 /** Format a Date as a local "YYYY-MM-DD" string (matches the date-input value). */
 const toDateStr = (d: Date) =>
@@ -272,11 +270,6 @@ export function CustomerFinancePage() {
     const cancelledNonBillable = (i: OrderFinanceLine) =>
         CANCELLED_STATUSES.has(i.status) && !i.isBillableFailedDelivery;
 
-    // Status breakdown for the period (counts, not money).
-    const deliveredCount = filtered.filter(i => DELIVERED_STATUSES.has(i.status)).length;
-    const cancelledCount = filtered.filter(i => CANCELLED_STATUSES.has(i.status)).length;
-    const postponedCount = filtered.filter(i => i.status === 'DeliveryPostponed').length;
-
     // Gross period totals (the reconciliation the customer sees, mirroring the admin Payments net):
     //  · codGross     — COD the company collected for the customer's packages → the company owes it.
     //  · serviceGross — sender-paid service fee the customer owes the company.
@@ -504,17 +497,6 @@ export function CustomerFinancePage() {
             ) : (
                 <>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 20 }}>
-                        {[
-                            { label: t.ofinSumOrders,       value: filtered.length.toString(), color: undefined as string | undefined },
-                            { label: t.ofinSumDelivered,    value: deliveredCount.toString(),  color: undefined as string | undefined },
-                            { label: t.ofinSumCancelled,    value: cancelledCount.toString(),  color: undefined as string | undefined },
-                            { label: t.ofinSumPostponed,    value: postponedCount.toString(),  color: undefined as string | undefined },
-                        ].map(({ label, value, color }) => (
-                            <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: color ?? 'var(--color-text)' }}>{value}</div>
-                                <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
-                            </div>
-                        ))}
                         {/* Balance: COD already paid out to the customer minus the service fee they've
                             already paid — cash that has actually changed hands so far, in the customer's
                             favour when green, against them when amber. */}
@@ -536,11 +518,11 @@ export function CustomerFinancePage() {
                             );
                         })()}
                         {[
-                            { label: t.ofinSumCodCollected, value: gel(codGross), color: undefined as string | undefined },
-                            { label: t.ofinSumYouOwe,       value: gel(serviceGross), color: serviceGross > 0.005 ? '#b45309' : undefined },
+                            { label: t.ofinSumCodCollected, value: gel(codGross), color: '#059669' },
+                            { label: t.ofinSumYouOwe,       value: gel(serviceGross), color: '#dc2626' },
                         ].map(({ label, value, color }) => (
                             <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: color ?? 'var(--color-text)' }}>{value}</div>
+                                <div style={{ fontSize: '1.05rem', fontWeight: 800, color }}>{value}</div>
                                 <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
                             </div>
                         ))}
