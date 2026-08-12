@@ -192,7 +192,11 @@ export function CityScheduleBoard({ onEditCity }: Props) {
           </div>
           <div className="content-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {g.scheduleSet ? DAY_KEYS.map(day => (
+              {/* A row with every day false is practically the same as "not configured" —
+                  no day is actually served either way. The Calculator already collapses
+                  these two cases for display (PriceCalculatorModal's `.join(', ') || notSet`
+                  fallback); mirror that here instead of showing seven all-grey pills. */}
+              {g.scheduleSet && DAY_KEYS.some(day => g.days[day]) ? DAY_KEYS.map(day => (
                 <span
                   key={day}
                   title={dayLabel[day]}
