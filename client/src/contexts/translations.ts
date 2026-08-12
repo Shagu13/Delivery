@@ -1711,18 +1711,18 @@ const en = {
     finGridPickHint:       'Pick a customer below to view and settle their orders, or search above to jump straight to one.',
     finGridBreakdownTitle: 'Customer breakdown',
     ofinSumOrders:       'Orders',
+    ofinSumDelivered:    'Delivered',
+    ofinSumCancelled:    'Cancelled',
+    ofinSumPostponed:    'Postponed',
     ofinSumCodOut:       'COD outstanding',
     ofinSumServiceOut:   'Service outstanding',
-    ofinSumCodPaidOut:   'COD paid out',
-    // Customer finance summary — gross period net (COD company owes you − service you owe).
+    // Customer finance summary — gross period totals (COD company owes you / service you owe).
     ofinSumCodCollected: 'COD (company owes you)',
     ofinSumYouOwe:       'You owe (service)',
-    ofinSumNetOwedToYou: 'Company owes you (net)',
-    ofinSumNetYouOwe:    'You owe company (net)',
+    // Balance: COD already paid out to you minus service fee you've already paid — cash that
+    // has actually moved so far.
+    ofinSumBalance:      'Balance',
     ofinSumNetFormula:   (cod: string, svc: string) => `${cod} − ${svc}`,
-    // Still-unsettled net: COD not yet paid out to you − service fee you have not yet paid.
-    ofinSumStillOwedToYou: 'Still owed to you',
-    ofinSumStillYouOwe:    'You still owe',
     ofinFilterPlaced:    'Placed on',
     ofinFilterDelivered: 'Delivered on',
     ofinPaidOn:          (d: string) => `Paid ${d}`,
@@ -3641,18 +3641,17 @@ const ka: typeof en = {
     finGridPickHint:       'აირჩიეთ მომხმარებელი ქვემოთ მისი შეკვეთების სანახავად და დასარეგულირებლად, ან მოძებნეთ ზემოთ პირდაპირ გადასასვლელად.',
     finGridBreakdownTitle: 'მომხმარებლების ჩაშლა',
     ofinSumOrders:       'შეკვეთა',
+    ofinSumDelivered:    'ჩაბარებული',
+    ofinSumCancelled:    'გაუქმებული',
+    ofinSumPostponed:    'გადადებული',
     ofinSumCodOut:       'COD ნაშთი',
     ofinSumServiceOut:   'მომსახურების ნაშთი',
-    ofinSumCodPaidOut:   'გადახდილი COD',
-    // მომხმარებლის ფინანსების ჯამი — პერიოდის ჯამური სალდო (COD, რომელიც კომპანიას გმართებთ − საკურიერო).
+    // მომხმარებლის ფინანსების ჯამი — პერიოდის ჯამური თანხები (COD, რომელიც კომპანიას გმართებთ / საკურიერო).
     ofinSumCodCollected: 'COD (კომპანიის ვალი)',
     ofinSumYouOwe:       'თქვენი ვალი (საკურიერო)',
-    ofinSumNetOwedToYou: 'კომპანიის ვალი (ჯამური)',
-    ofinSumNetYouOwe:    'თქვენი ვალი (ჯამური)',
+    // ბალანსი: თქვენზე უკვე გადმორიცხული COD მინუს თქვენ მიერ უკვე გადახდილი საკურიერო — ფაქტობრივად გადაადგილებული თანხა.
+    ofinSumBalance:      'ბალანსი',
     ofinSumNetFormula:   (cod: string, svc: string) => `${cod} − ${svc}`,
-    // დარჩენილი სალდო: ჯერ არგადმორიცხული COD − ჯერ არგადახდილი საკურიერო.
-    ofinSumStillOwedToYou: 'დარჩენილი ვალი თქვენდამი',
-    ofinSumStillYouOwe:    'თქვენი დარჩენილი ვალი',
     ofinFilterPlaced:    'განთავსების თარიღი',
     ofinFilterDelivered: 'მიტანის თარიღი',
     ofinPaidOn:          (d: string) => `გადახდილია ${d}`,

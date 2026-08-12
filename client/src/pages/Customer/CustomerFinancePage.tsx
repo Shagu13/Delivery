@@ -14,6 +14,8 @@ const gel = (n: number) => `₾${n.toFixed(2)}`;
 
 // Terminal cancelled statuses — listed for transparency with "—" amounts (no money owed).
 const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
+// Terminal successfully-completed statuses across all three order types (Send / Return / Exchange).
+const DELIVERED_STATUSES = new Set(['DeliveredToRecipient', 'ExchangeCompleted', 'ReturnedToSender']);
 
 /** Format a Date as a local "YYYY-MM-DD" string (matches the date-input value). */
 const toDateStr = (d: Date) =>
@@ -270,39 +272,29 @@ export function CustomerFinancePage() {
     const cancelledNonBillable = (i: OrderFinanceLine) =>
         CANCELLED_STATUSES.has(i.status) && !i.isBillableFailedDelivery;
 
+    // Status breakdown for the period (counts, not money).
+    const deliveredCount = filtered.filter(i => DELIVERED_STATUSES.has(i.status)).length;
+    const cancelledCount = filtered.filter(i => CANCELLED_STATUSES.has(i.status)).length;
+    const postponedCount = filtered.filter(i => i.status === 'DeliveryPostponed').length;
+
     // Gross period totals (the reconciliation the customer sees, mirroring the admin Payments net):
     //  · codGross     — COD the company collected for the customer's packages → the company owes it.
     //  · serviceGross — sender-paid service fee the customer owes the company.
-    //  · netOwed      — COD − service = what the company owes the customer for the period.
     // Failed/cancelled-non-billable orders collected no COD; a non-billable cancellation owes no
     // service either. These are GROSS figures for the period — deliberately not reduced by payments
-    // already made, so the net stays e.g. 850 and explains why only 850 was ever transferred.
+    // already made.
     const codGross = filtered.reduce(
         (s, i) => (i.isBillableFailedDelivery || cancelledNonBillable(i)) ? s : s + (i.codAmount ?? 0), 0);
     const serviceGross = filtered.reduce(
         (s, i) => (i.senderOwesService && !cancelledNonBillable(i)) ? s + i.companyServicePrice : s, 0);
-    const netOwed = codGross - serviceGross;
 
-    // Settled so far, on both flows: COD the company has already paid out to the customer, and
-    // service fee the customer has already paid the company. Their difference is the cash that has
-    // actually changed hands in the customer's favour. Each side carries the same exclusions as its
-    // gross counterpart above, so paid + remaining reconciles exactly against the period net.
+    // Balance — cash that has actually changed hands so far: COD the company has already paid out
+    // to the customer, minus the service fee the customer has already paid the company.
     const codPaid = filtered.reduce(
         (s, i) => (i.isBillableFailedDelivery || cancelledNonBillable(i)) ? s : s + (i.codPaidToCustomerAmount ?? 0), 0);
     const servicePaid = filtered.reduce(
         (s, i) => (i.senderOwesService && !cancelledNonBillable(i)) ? s + (i.servicePaidByCustomerAmount ?? 0) : s, 0);
     const codPaidNet = codPaid - servicePaid;
-
-    // Still unsettled — gross minus what has already been paid on each flow, clamped per-order the
-    // same way the admin Payments view does it (`AdminFinancePage` serviceOutstanding/codOutstanding)
-    // so an overpayment on one order can't cancel out a genuine debt on another.
-    const codRemaining = filtered.reduce(
-        (s, i) => (i.isBillableFailedDelivery || cancelledNonBillable(i))
-            ? s : s + Math.max(0, (i.codAmount ?? 0) - (i.codPaidToCustomerAmount ?? 0)), 0);
-    const serviceRemaining = filtered.reduce(
-        (s, i) => (i.senderOwesService && !cancelledNonBillable(i))
-            ? s + Math.max(0, i.companyServicePrice - (i.servicePaidByCustomerAmount ?? 0)) : s, 0);
-    const netRemaining = codRemaining - serviceRemaining;
 
     // Receipts-mode totals: gross paid out per type, and the net cash handed to the customer
     // (COD paid out minus service fees collected).
@@ -514,78 +506,44 @@ export function CustomerFinancePage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 20 }}>
                         {[
                             { label: t.ofinSumOrders,       value: filtered.length.toString(), color: undefined as string | undefined },
-                            { label: t.ofinSumCodCollected, value: gel(codGross),              color: undefined as string | undefined },
-                            { label: t.ofinSumYouOwe,       value: gel(serviceGross),          color: serviceGross > 0.005 ? '#b45309' : undefined },
+                            { label: t.ofinSumDelivered,    value: deliveredCount.toString(),  color: undefined as string | undefined },
+                            { label: t.ofinSumCancelled,    value: cancelledCount.toString(),  color: undefined as string | undefined },
+                            { label: t.ofinSumPostponed,    value: postponedCount.toString(),  color: undefined as string | undefined },
                         ].map(({ label, value, color }) => (
                             <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '1.05rem', fontWeight: 800, color: color ?? 'var(--color-text)' }}>{value}</div>
                                 <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
                             </div>
                         ))}
-                        {/* Net for the period: company owes you (COD − service). Green when the company
-                            owes you, amber when you owe the company. Gross — not reduced by payments made.
-                            Only shown in the 'placed' view — in Payments/Receipts the net would reflect
-                            just the already-paid subset, which is misleading as a period reconciliation. */}
-                        {mode === 'placed' && (() => {
-                            const owedToYou = netOwed >= -0.005;
-                            const fg = owedToYou ? '#059669' : '#b45309';
-                            return (
-                                <div style={{
-                                    background: owedToYou ? 'rgba(5,150,105,0.08)' : 'rgba(180,83,9,0.08)',
-                                    border: `1px solid ${owedToYou ? 'rgba(5,150,105,0.25)' : 'rgba(180,83,9,0.25)'}`,
-                                    borderRadius: 10, padding: '12px 10px', textAlign: 'center',
-                                }}>
-                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: fg }}>{gel(Math.abs(netOwed))}</div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
-                                        {owedToYou ? t.ofinSumNetOwedToYou : t.ofinSumNetYouOwe}
-                                    </div>
-                                    <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>
-                                        {t.ofinSumNetFormula(gel(codGross), gel(serviceGross))}
-                                    </div>
-                                </div>
-                            );
-                        })()}
-                        {/* COD already paid out to the customer, then that same figure less the service
-                            fee they have already paid: the subtraction is spelled out in smaller type
-                            underneath, with the calculated amount on its own line (green = in your
-                            favour). Both sides are *paid* figures, so this is money actually moved. */}
+                        {/* Balance: COD already paid out to the customer minus the service fee they've
+                            already paid — cash that has actually changed hands so far, in the customer's
+                            favour when green, against them when amber. */}
                         {(() => {
                             const inYourFavour = codPaidNet >= -0.005;
+                            const fg = inYourFavour ? '#059669' : '#b45309';
                             return (
-                                <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
-                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-text)' }}>{gel(codPaid)}</div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.ofinSumCodPaidOut}</div>
+                                <div style={{
+                                    background: inYourFavour ? 'rgba(5,150,105,0.08)' : 'rgba(180,83,9,0.08)',
+                                    border: `1px solid ${inYourFavour ? 'rgba(5,150,105,0.25)' : 'rgba(180,83,9,0.25)'}`,
+                                    borderRadius: 10, padding: '12px 10px', textAlign: 'center',
+                                }}>
+                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: fg }}>{gel(Math.abs(codPaidNet))}</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.ofinSumBalance}</div>
                                     <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>
                                         {t.ofinSumNetFormula(gel(codPaid), gel(servicePaid))}
                                     </div>
-                                    <div style={{ fontSize: '0.74rem', fontWeight: 700, color: inYourFavour ? '#059669' : '#b45309', marginTop: 1 }}>
-                                        {inYourFavour ? '' : '−'}{gel(Math.abs(codPaidNet))}
-                                    </div>
                                 </div>
                             );
                         })()}
-                        {/* What is still unsettled once every payment made so far is accounted for:
-                            COD not yet paid out to you − service fee you have not yet paid. Green when
-                            the company still owes you, amber when the balance has tipped the other way. */}
-                        {(() => {
-                            const owedToYou = netRemaining >= -0.005;
-                            const fg = owedToYou ? '#059669' : '#b45309';
-                            return (
-                                <div style={{
-                                    background: owedToYou ? 'rgba(5,150,105,0.08)' : 'rgba(180,83,9,0.08)',
-                                    border: `1px solid ${owedToYou ? 'rgba(5,150,105,0.25)' : 'rgba(180,83,9,0.25)'}`,
-                                    borderRadius: 10, padding: '12px 10px', textAlign: 'center',
-                                }}>
-                                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: fg }}>{gel(Math.abs(netRemaining))}</div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
-                                        {owedToYou ? t.ofinSumStillOwedToYou : t.ofinSumStillYouOwe}
-                                    </div>
-                                    <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>
-                                        {t.ofinSumNetFormula(gel(codRemaining), gel(serviceRemaining))}
-                                    </div>
-                                </div>
-                            );
-                        })()}
+                        {[
+                            { label: t.ofinSumCodCollected, value: gel(codGross), color: undefined as string | undefined },
+                            { label: t.ofinSumYouOwe,       value: gel(serviceGross), color: serviceGross > 0.005 ? '#b45309' : undefined },
+                        ].map(({ label, value, color }) => (
+                            <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: color ?? 'var(--color-text)' }}>{value}</div>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{label}</div>
+                            </div>
+                        ))}
                     </div>
                     <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
