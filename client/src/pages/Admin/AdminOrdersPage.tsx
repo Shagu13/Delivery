@@ -17,6 +17,7 @@ import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel'
 import { recipientDisplayName } from '../../utils/recipientName';
 import { resolveDateWindow } from '../../utils/dateWindow';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
+import { DebouncedSearchBox } from '../../components/ui/DebouncedSearchBox';
 import type { PagedResult } from '../../types/paging';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -364,18 +365,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // fully (canManage=true) but never see company revenue/margin: canSeeRevenue=false hides
   // the Revenue column here and in the view/bulk modals (server also strips the value).
 
-  const [search,          setSearch]          = useState('');
-  // The list/locations/unpriced-count queries refetch 300ms after the admin stops typing;
-  // other filters (dropdowns, date picker) apply immediately. A single character is too broad
-  // a prefix to be a useful filter and still costs a real (indexed) query on every keystroke,
-  // so hold off until there's at least MIN_SEARCH_CHARS, or the box is cleared back to empty.
+  // The raw per-keystroke value and its debounce live inside DebouncedSearchBox — this only
+  // ever sees the settled value, so typing doesn't re-render this (large) page per character.
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  useEffect(() => {
-    const trimmed = search.trim();
-    if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_CHARS) return;
-    const timer = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(timer);
-  }, [search]);
+  // Bumped by "Clear filters" to force DebouncedSearchBox to remount back to empty — the
+  // parent can no longer reach into its internal keystroke state directly.
+  const [searchResetKey, setSearchResetKey] = useState(0);
   // Packages view tab: 'pending' = orders with no courier yet, 'assigned' = courier set.
   const [assignTab,       setAssignTab]       = useState<'pending' | 'assigned'>('pending');
   const [filterCity,      setFilterCity]      = useState('');
@@ -661,12 +656,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     setSelectAllBusy(true);
     try {
       const { date, dateTo } = dateTouched
-        ? resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd })
+        ? resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd })
         : {};
       const full = await fetchAllOrders(token, {
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
-        search:    search || undefined,
+        search:    debouncedSearch || undefined,
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
         assigned:  assignTab === 'assigned',
@@ -702,12 +697,12 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     setExporting(true);
     try {
       const { date, dateTo } = dateTouched
-        ? resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd })
+        ? resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd })
         : {};
       await exportOrdersExcel(token, {
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
-        search:    search || undefined,
+        search:    debouncedSearch || undefined,
         courierId: filterCourier?.courierId,
         unpriced:  filterUnpriced || undefined,
         assigned:  assignTab === 'assigned',
@@ -1045,9 +1040,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeAction, loading, showSalaryWarning, showSalaryModal, showPriceWarning, showPriceModal]);
 
-  const hasActiveFilters = filterCity || filterDistrict || search || filterCourier || filterUnpriced;
+  const hasActiveFilters = filterCity || filterDistrict || debouncedSearch || filterCourier || filterUnpriced;
   const clearAll = () => {
-    setFilterCity(''); setFilterDistrict(''); setSearch('');
+    setFilterCity(''); setFilterDistrict('');
+    setDebouncedSearch(''); setSearchResetKey(k => k + 1);
     setFilterCourier(null); setFilterUnpriced(false);
   };
 
@@ -1232,28 +1228,14 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
 
       {/* Toolbar */}
       <div className="aop-toolbar">
-        <div className="go-search">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M10.5 10.5l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          <input
-            type="text"
-            placeholder={t.aopSearchPh}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          {search && (
-            <button className="go-search-clear" onClick={() => setSearch('')}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </button>
-          )}
-        </div>
-        {search.trim().length > 0 && search.trim().length < MIN_SEARCH_CHARS && (
-          <span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>{t.goSearchMinChars}</span>
-        )}
+        <DebouncedSearchBox
+          key={searchResetKey}
+          onChange={setDebouncedSearch}
+          placeholder={t.aopSearchPh}
+          debounceMs={300}
+          minChars={MIN_SEARCH_CHARS}
+          minCharsHint={t.goSearchMinChars}
+        />
 
         <CourierPicker
           couriers={couriers}

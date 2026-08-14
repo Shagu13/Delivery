@@ -25,6 +25,7 @@ import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel'
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { LocationMultiPicker } from '../../components/ui/LocationMultiPicker';
+import { DebouncedSearchBox } from '../../components/ui/DebouncedSearchBox';
 import {
   fetchGroupOrders, fetchGroupOrderLocations, fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup,
   mergeGroupOrders, moveOrderToGroup, groupAndAcceptStandalone, groupAndWarehouseStandalone,
@@ -269,18 +270,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // Deep-link seed from the global Order Search "Go To". With the date navigator untouched
   // and a search term present, resolveDateWindow reaches the whole DB, so the order shows
   // regardless of day.
-  const [search,      setSearch]      = useState(initialSearch);
-  // The list/window/locations queries refetch 350ms after the admin stops typing; other
-  // filters (dropdowns, date picker) apply immediately. A single character is too broad a
-  // prefix to be a useful filter and still costs a real (indexed) query on every keystroke,
-  // so hold off until there's at least MIN_SEARCH_CHARS, or the box is cleared back to empty.
+  // The raw per-keystroke value and its debounce live inside DebouncedSearchBox — this only
+  // ever sees the settled value, so typing doesn't re-render this (large) page per character.
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
-  useEffect(() => {
-    const trimmed = search.trim();
-    if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_CHARS) return;
-    const timer = setTimeout(() => setDebouncedSearch(search), 350);
-    return () => clearTimeout(timer);
-  }, [search]);
+  // DebouncedSearchBox's initialValue only applies on mount, so "Clear filters" resets it by
+  // remounting: bump searchResetKey and drop searchSeed to '' (not back to initialSearch —
+  // the deep-link seed is a one-time thing, a clear should mean truly empty).
+  const [searchSeed,     setSearchSeed]     = useState(initialSearch);
+  const [searchResetKey, setSearchResetKey] = useState(0);
   // Server-side pagination — untouched/no-filter default is a rolling last-7-days window;
   // any filter (or an explicit day/range pick) reaches the whole DB instead.
   const [page,          setPage]          = useState(1);
@@ -623,9 +620,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const displayList = pickupMode === 'ungrouped' ? ungroupedListOrders : listOrders;
 
   const hasLocationFilter = filterCities.length > 0 || filterDistricts.length > 0;
-  const hasFilters = search || hasLocationFilter || filterStatus || filterCourier || filterUnpriced;
+  const hasFilters = debouncedSearch || hasLocationFilter || filterStatus || filterCourier || filterUnpriced;
   const clearAll = () => {
-    setSearch(''); setFilterCities([]); setFilterDistricts([]); setFilterStatus('');
+    setDebouncedSearch(''); setSearchSeed(''); setSearchResetKey(k => k + 1);
+    setFilterCities([]); setFilterDistricts([]); setFilterStatus('');
     setFilterCourier(''); setFilterUnpriced(false);
   };
 
@@ -795,7 +793,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
       await exportOrdersExcel(token ?? '', {
         city:      filterCities.length === 1 ? filterCities[0] : undefined,
         district:  filterDistricts.length === 1 ? filterDistricts[0] : undefined,
-        search:    search || undefined,
+        search:    debouncedSearch || undefined,
         courierId: filterCourier || undefined,
         unpriced:  filterUnpriced || undefined,
         activeOnly: selected.size === 0,
@@ -1216,14 +1214,15 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
       {pickupMode === 'grouped' && (<>
         {/* Search + location filter */}
         <div className="go-toolbar go-toolbar--search" style={{ flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
-          <div className="go-search" style={{ flexShrink: 0 }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.4"/><path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-            <input type="text" placeholder={t.goSearchPh} value={search} onChange={e => setSearch(e.target.value)} autoComplete="off" />
-            {search && <button onClick={() => setSearch('')} className="go-search-clear" aria-label="Clear search"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg></button>}
-          </div>
-          {search.trim().length > 0 && search.trim().length < MIN_SEARCH_CHARS && (
-            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>{t.goSearchMinChars}</span>
-          )}
+          <DebouncedSearchBox
+            key={searchResetKey}
+            initialValue={searchSeed}
+            onChange={setDebouncedSearch}
+            placeholder={t.goSearchPh}
+            debounceMs={350}
+            minChars={MIN_SEARCH_CHARS}
+            minCharsHint={t.goSearchMinChars}
+          />
           <div style={{ width: 1, height: 28, background: 'var(--color-border)', flexShrink: 0, alignSelf: 'center' }} />
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap', flex: 1 }}>
             <div className="go-filter-step">
