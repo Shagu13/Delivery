@@ -78,6 +78,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(c => c.BusinessName).IsUnique();
             e.HasIndex(c => c.City);
             e.HasIndex(c => c.CreatedAt);
+            // Admin search (standalone-order path) — StartsWith needs an index per searched
+            // field (see Order above).
+            e.HasIndex(c => c.FirstName);
+            e.HasIndex(c => c.LastName);
+            e.HasIndex(c => c.District);
+            e.HasIndex(c => c.Address);
             e.HasOne(c => c.ApplicationUser).WithOne()
              .HasForeignKey<Customer>(c => c.ApplicationUserId)
              .OnDelete(DeleteBehavior.Restrict);
@@ -176,6 +182,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(g => g.CreatedAt);
             e.HasIndex(g => g.CustomerId);
             e.HasIndex(g => new { g.PickUpCity, g.PickUpDistrict });
+            // Admin search — StartsWith needs an index per searched field (see Order above).
+            // PickUpCity is already the leading column of the composite index above.
+            e.HasIndex(g => g.SenderFirstName);
+            e.HasIndex(g => g.SenderLastName);
+            e.HasIndex(g => g.SenderBusinessName);
+            e.HasIndex(g => g.SenderPhone);
+            e.HasIndex(g => g.AlternativeSenderPhone);
+            e.HasIndex(g => g.PickUpDistrict);
+            e.HasIndex(g => g.PickUpAddress);
             e.HasOne(g => g.Courier).WithMany(c => c.GroupOrders)
              .HasForeignKey(g => g.CourierId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(g => g.Warehouse).WithMany()
@@ -206,6 +221,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(o => o.GroupOrderId);
             e.HasIndex(o => o.CompanyServicePaymentStatus);
             e.HasIndex(o => o.HasCompanyPaidTheSender);
+            // Admin search (Packages/Delivery pages) matches these as StartsWith — sargable
+            // only with an index per field. RecipientCity is already the leading column of
+            // the composite index above.
+            e.HasIndex(o => o.RecipientName);
+            e.HasIndex(o => o.RecipientPhone);
+            e.HasIndex(o => o.RecipientAddress);
+            e.HasIndex(o => o.RecipientDistrict);
             e.HasOne(o => o.Customer).WithMany()
              .HasForeignKey(o => o.CustomerId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(o => o.Courier).WithMany(c => c.Orders)

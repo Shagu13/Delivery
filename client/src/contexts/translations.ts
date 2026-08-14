@@ -483,6 +483,7 @@ const en = {
 
   // ── Admin Dashboard / Group Orders
   goSearchPh:              'Search by sender, recipient, phone, city, address, TN…',
+  goSearchMinChars:        'Type at least 2 characters',
   goOrderCount:            (n: number, total: number) => `${n}${n !== total ? `/${total}` : ''} group order${n !== 1 ? 's' : ''}`,
   goOrdersMatched:         'matched',
   goFilterByLocation:      'Filter by location',
@@ -2416,6 +2417,7 @@ const ka: typeof en = {
 
   // ── Admin Dashboard / Group Orders
   goSearchPh:              'ძებნა გამგზავნით, მიმღებით, ტელ., ქალაქით, TN…',
+  goSearchMinChars:        'აკრიფეთ მინიმუმ 2 სიმბოლო',
   goOrderCount:            (n: number, total: number) => `${n}${n !== total ? `/${total}` : ''} ჯგუფური შეკვეთა`,
   goOrdersMatched:         'ნაპოვნი',
   goFilterByLocation:      'ფილტრი მდებარეობით',

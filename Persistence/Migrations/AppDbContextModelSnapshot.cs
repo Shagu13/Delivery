@@ -265,6 +265,8 @@ namespace Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Address");
+
                     b.HasIndex("ApplicationUserId")
                         .IsUnique();
 
@@ -274,6 +276,12 @@ namespace Persistence.Migrations
                     b.HasIndex("City");
 
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("District");
+
+                    b.HasIndex("FirstName");
+
+                    b.HasIndex("LastName");
 
                     b.HasIndex("PhoneNumber");
 
@@ -458,11 +466,25 @@ namespace Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AlternativeSenderPhone");
+
                     b.HasIndex("CourierId");
 
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("PickUpAddress");
+
+                    b.HasIndex("PickUpDistrict");
+
+                    b.HasIndex("SenderBusinessName");
+
+                    b.HasIndex("SenderFirstName");
+
+                    b.HasIndex("SenderLastName");
+
+                    b.HasIndex("SenderPhone");
 
                     b.HasIndex("Status");
 
@@ -711,6 +733,14 @@ namespace Persistence.Migrations
                     b.HasIndex("HasCompanyPaidTheSender");
 
                     b.HasIndex("OrderType");
+
+                    b.HasIndex("RecipientAddress");
+
+                    b.HasIndex("RecipientDistrict");
+
+                    b.HasIndex("RecipientName");
+
+                    b.HasIndex("RecipientPhone");
 
                     b.HasIndex("Status");
 

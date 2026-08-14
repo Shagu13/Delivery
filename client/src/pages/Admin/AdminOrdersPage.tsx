@@ -351,6 +351,10 @@ function CourierPicker({ couriers, selected, onSelect }: CourierPickerProps) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 30;
+// The backend matches search as a prefix (StartsWith) per field — fast because it's
+// index-backed, but a 1-character prefix is too broad to be a useful filter and would still
+// fire a real query on every keystroke.
+const MIN_SEARCH_CHARS = 2;
 
 export default function AdminOrdersPage({ token: tokenProp, canManage = true, canSeeRevenue = true }: { token: string; canManage?: boolean; canSeeRevenue?: boolean }) {
   const { token: authToken } = useAuth();
@@ -362,9 +366,13 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
 
   const [search,          setSearch]          = useState('');
   // The list/locations/unpriced-count queries refetch 300ms after the admin stops typing;
-  // other filters (dropdowns, date picker) apply immediately.
+  // other filters (dropdowns, date picker) apply immediately. A single character is too broad
+  // a prefix to be a useful filter and still costs a real (indexed) query on every keystroke,
+  // so hold off until there's at least MIN_SEARCH_CHARS, or the box is cleared back to empty.
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
+    const trimmed = search.trim();
+    if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_CHARS) return;
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
@@ -1243,6 +1251,9 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
             </button>
           )}
         </div>
+        {search.trim().length > 0 && search.trim().length < MIN_SEARCH_CHARS && (
+          <span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>{t.goSearchMinChars}</span>
+        )}
 
         <CourierPicker
           couriers={couriers}

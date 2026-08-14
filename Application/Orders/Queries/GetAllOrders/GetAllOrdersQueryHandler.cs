@@ -104,32 +104,35 @@ public sealed class GetAllOrdersQueryHandler
         // city/district/address). Otherwise (null) it matches either side.
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
-            var term = request.Search.Trim().ToLower();
+            // Prefix match, not "contains anywhere" — see GetAllGroupOrdersQueryHandler's
+            // search block for why (sargable StartsWith + an index per field vs. a Contains()
+            // scan; DB collation is case-insensitive so .ToLower() is unnecessary either way).
+            var term = request.Search.Trim();
             var matchesRecipient = request.Party != "sender";
             var matchesSender    = request.Party != "recipient";
             query = query.Where(o =>
                 (matchesRecipient &&
-                    (o.TrackingNumber.ToLower().Contains(term) ||
-                     o.RecipientName.ToLower().Contains(term) ||
-                     o.RecipientPhone.Contains(term) ||
-                     o.RecipientAddress.ToLower().Contains(term) ||
-                     o.RecipientCity.ToLower().Contains(term) ||
-                     o.RecipientDistrict.ToLower().Contains(term)))
+                    (o.TrackingNumber.StartsWith(term) ||
+                     o.RecipientName.StartsWith(term) ||
+                     o.RecipientPhone.StartsWith(term) ||
+                     o.RecipientAddress.StartsWith(term) ||
+                     o.RecipientCity.StartsWith(term) ||
+                     o.RecipientDistrict.StartsWith(term)))
                 ||
                 (matchesSender &&
-                    ((o.GroupOrder != null && o.GroupOrder.SenderBusinessName.ToLower().Contains(term)) ||
-                     (o.GroupOrder != null && o.GroupOrder.SenderFirstName.ToLower().Contains(term)) ||
-                     (o.GroupOrder != null && o.GroupOrder.SenderLastName.ToLower().Contains(term)) ||
-                     (o.GroupOrder != null && o.GroupOrder.SenderPhone.Contains(term)) ||
-                     (o.GroupOrder != null && o.GroupOrder.AlternativeSenderPhone != null && o.GroupOrder.AlternativeSenderPhone.Contains(term)) ||
-                     (o.GroupOrder != null && o.GroupOrder.PickUpCity.ToLower().Contains(term)) ||
-                     (o.GroupOrder != null && o.GroupOrder.PickUpDistrict.ToLower().Contains(term)) ||
-                     (o.GroupOrder != null && o.GroupOrder.PickUpAddress.ToLower().Contains(term)) ||
-                     (o.Customer != null && o.Customer.BusinessName.ToLower().Contains(term)) ||
-                     (o.Customer != null && o.Customer.PhoneNumber.Contains(term)) ||
-                     (o.Customer != null && o.Customer.City.ToLower().Contains(term)) ||
-                     (o.Customer != null && o.Customer.District.ToLower().Contains(term)) ||
-                     (o.Customer != null && o.Customer.Address.ToLower().Contains(term)))));
+                    ((o.GroupOrder != null && o.GroupOrder.SenderBusinessName.StartsWith(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.SenderFirstName.StartsWith(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.SenderLastName.StartsWith(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.SenderPhone.StartsWith(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.AlternativeSenderPhone != null && o.GroupOrder.AlternativeSenderPhone.StartsWith(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.PickUpCity.StartsWith(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.PickUpDistrict.StartsWith(term)) ||
+                     (o.GroupOrder != null && o.GroupOrder.PickUpAddress.StartsWith(term)) ||
+                     (o.Customer != null && o.Customer.BusinessName.StartsWith(term)) ||
+                     (o.Customer != null && o.Customer.PhoneNumber.StartsWith(term)) ||
+                     (o.Customer != null && o.Customer.City.StartsWith(term)) ||
+                     (o.Customer != null && o.Customer.District.StartsWith(term)) ||
+                     (o.Customer != null && o.Customer.Address.StartsWith(term)))));
         }
 
         // ── Count then page ──────────────────────────────────────────────────

@@ -105,7 +105,13 @@ public sealed class GetAllGroupOrdersQueryHandler
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
-            var term = request.SearchTerm.Trim().ToLower();
+            // Prefix match, not "contains anywhere": the DB's collation
+            // (SQL_Latin1_General_CP1_CI_AS, verified — case-insensitive, so no .ToLower()
+            // needed) lets StartsWith translate to a sargable LIKE 'term%', which every field
+            // below now has an index for. A single non-sargable Contains() branch anywhere in
+            // this OR chain would force a full scan of the whole predicate regardless of how
+            // many other branches are indexed, so every branch has to make the same switch.
+            var term = request.SearchTerm.Trim();
             // Party = "recipient" restricts the search to each order's own recipient fields
             // (name/phone/address/city/district) — sender/pickup fields are excluded so a
             // recipient-side search never matches on the sender's name. Party = "sender"
@@ -117,44 +123,44 @@ public sealed class GetAllGroupOrdersQueryHandler
 
             goQuery = goQuery.Where(go =>
                 (matchesSender &&
-                    (go.SenderFirstName.ToLower().Contains(term) ||
-                     go.SenderLastName.ToLower().Contains(term) ||
-                     go.SenderBusinessName.ToLower().Contains(term) ||
-                     go.SenderPhone.Contains(term) ||
-                     (go.AlternativeSenderPhone != null && go.AlternativeSenderPhone.Contains(term)) ||
-                     go.PickUpCity.ToLower().Contains(term) ||
-                     go.PickUpDistrict.ToLower().Contains(term) ||
-                     go.PickUpAddress.ToLower().Contains(term)))
+                    (go.SenderFirstName.StartsWith(term) ||
+                     go.SenderLastName.StartsWith(term) ||
+                     go.SenderBusinessName.StartsWith(term) ||
+                     go.SenderPhone.StartsWith(term) ||
+                     (go.AlternativeSenderPhone != null && go.AlternativeSenderPhone.StartsWith(term)) ||
+                     go.PickUpCity.StartsWith(term) ||
+                     go.PickUpDistrict.StartsWith(term) ||
+                     go.PickUpAddress.StartsWith(term)))
                 ||
                 (matchesRecipient &&
                     go.Orders.Any(o =>
-                        o.RecipientName.ToLower().Contains(term) ||
-                        o.RecipientPhone.Contains(term) ||
-                        o.RecipientCity.ToLower().Contains(term) ||
-                        o.RecipientDistrict.ToLower().Contains(term) ||
-                        o.RecipientAddress.ToLower().Contains(term)))
+                        o.RecipientName.StartsWith(term) ||
+                        o.RecipientPhone.StartsWith(term) ||
+                        o.RecipientCity.StartsWith(term) ||
+                        o.RecipientDistrict.StartsWith(term) ||
+                        o.RecipientAddress.StartsWith(term)))
                 ||
-                go.Orders.Any(o => o.TrackingNumber.ToLower().Contains(term))
+                go.Orders.Any(o => o.TrackingNumber.StartsWith(term))
             );
 
             soQuery = soQuery.Where(o =>
                 (matchesRecipient &&
-                    (o.RecipientName.ToLower().Contains(term) ||
-                     o.RecipientPhone.Contains(term) ||
-                     o.RecipientCity.ToLower().Contains(term) ||
-                     o.RecipientDistrict.ToLower().Contains(term) ||
-                     o.RecipientAddress.ToLower().Contains(term)))
+                    (o.RecipientName.StartsWith(term) ||
+                     o.RecipientPhone.StartsWith(term) ||
+                     o.RecipientCity.StartsWith(term) ||
+                     o.RecipientDistrict.StartsWith(term) ||
+                     o.RecipientAddress.StartsWith(term)))
                 ||
                 (matchesSender && o.Customer != null &&
-                    (o.Customer.BusinessName.ToLower().Contains(term) ||
-                     o.Customer.FirstName.ToLower().Contains(term) ||
-                     o.Customer.LastName.ToLower().Contains(term) ||
-                     o.Customer.PhoneNumber.Contains(term) ||
-                     o.Customer.City.ToLower().Contains(term) ||
-                     o.Customer.District.ToLower().Contains(term) ||
-                     o.Customer.Address.ToLower().Contains(term)))
+                    (o.Customer.BusinessName.StartsWith(term) ||
+                     o.Customer.FirstName.StartsWith(term) ||
+                     o.Customer.LastName.StartsWith(term) ||
+                     o.Customer.PhoneNumber.StartsWith(term) ||
+                     o.Customer.City.StartsWith(term) ||
+                     o.Customer.District.StartsWith(term) ||
+                     o.Customer.Address.StartsWith(term)))
                 ||
-                o.TrackingNumber.ToLower().Contains(term)
+                o.TrackingNumber.StartsWith(term)
             );
         }
 

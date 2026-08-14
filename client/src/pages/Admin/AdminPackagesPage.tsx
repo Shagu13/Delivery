@@ -45,6 +45,11 @@ import type { AdminOrderItem } from './AdminOrdersPage';
 
 // ── Constants copied from the Pick-Up page (AdminDashboard.tsx) ───────────────
 
+// The backend now matches search as a prefix (StartsWith) per field — fast because it's
+// index-backed, but a 1-character prefix is too broad to be a useful filter and would still
+// fire a real query on every keystroke.
+const MIN_SEARCH_CHARS = 2;
+
 const ACTIVE_ORDER_STATUSES_ONLY = new Set([
   'DeliveredToRecipient', 'CancelledBySender', 'CancelledByAdmin',
   'OrderNotAccepted', 'ReturnedToSender', 'ExchangeCompleted',
@@ -266,9 +271,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // regardless of day.
   const [search,      setSearch]      = useState(initialSearch);
   // The list/window/locations queries refetch 350ms after the admin stops typing; other
-  // filters (dropdowns, date picker) apply immediately.
+  // filters (dropdowns, date picker) apply immediately. A single character is too broad a
+  // prefix to be a useful filter and still costs a real (indexed) query on every keystroke,
+  // so hold off until there's at least MIN_SEARCH_CHARS, or the box is cleared back to empty.
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
   useEffect(() => {
+    const trimmed = search.trim();
+    if (trimmed.length > 0 && trimmed.length < MIN_SEARCH_CHARS) return;
     const timer = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(timer);
   }, [search]);
@@ -1212,6 +1221,9 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
             <input type="text" placeholder={t.goSearchPh} value={search} onChange={e => setSearch(e.target.value)} autoComplete="off" />
             {search && <button onClick={() => setSearch('')} className="go-search-clear" aria-label="Clear search"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg></button>}
           </div>
+          {search.trim().length > 0 && search.trim().length < MIN_SEARCH_CHARS && (
+            <span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>{t.goSearchMinChars}</span>
+          )}
           <div style={{ width: 1, height: 28, background: 'var(--color-border)', flexShrink: 0, alignSelf: 'center' }} />
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap', flex: 1 }}>
             <div className="go-filter-step">
