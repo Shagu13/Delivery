@@ -48,6 +48,19 @@ public sealed class GetAllGroupOrdersQueryHandler
         OrderStatus.CancelledByAdmin,
     };
 
+    // The Packages page runs this query twice per refresh with identical filters and only
+    // Page/PageSize differing (a paginated view + an up-to-500-row "window scoped" view used
+    // to detect same-day merge candidates). "Phase 1" below — the free-text search scan — has
+    // no Skip/Take, so both calls pay its full cost. Cache the id list it produces (keyed on
+    // every filter except Page/PageSize) for a few seconds so the second call reuses it.
+    private sealed record Phase1Row(Guid Id, DateTime CreatedAt);
+    private sealed record Phase1Result(List<Phase1Row> GoRows, List<Phase1Row> SoRows);
+    private static readonly TimeSpan Phase1CacheDuration = TimeSpan.FromSeconds(5);
+
+    private static string BuildPhase1CacheKey(GetAllGroupOrdersQuery r) =>
+        $"grouporders:phase1:{r.SearchTerm}|{r.Date:O}|{r.DateTo:O}|{r.Cities}|{r.Districts}|" +
+        $"{r.Party}|{r.Status}|{r.CourierId}|{r.Unpriced}|{r.ExcludeCompleted}|{r.CustomerId}";
+
     private readonly IAppDbContext _context;
     private readonly ICacheService _cache;
     public GetAllGroupOrdersQueryHandler(IAppDbContext context, ICacheService cache)
@@ -220,12 +233,24 @@ public sealed class GetAllGroupOrdersQueryHandler
         // goQuery/soQuery are unpaginated and share the exact predicates used above, so
         // the row counts double as the totals — no need for two extra CountAsync round
         // trips against the same (non-concurrent-safe) DbContext.
-        var goRows = await goQuery
-            .Select(go => new { go.Id, go.CreatedAt })
-            .ToListAsync(cancellationToken);
-        var soRows = await soQuery
-            .Select(o => new { o.Id, o.CreatedAt })
-            .ToListAsync(cancellationToken);
+        // This is the expensive step when a free-text search is active (the Contains() scan
+        // above can't use an index) — cache it briefly so the paginated + window-scoped calls
+        // the Packages page fires for the same filters don't each pay for it separately.
+        var phase1CacheKey = BuildPhase1CacheKey(request);
+        var phase1 = await _cache.GetAsync<Phase1Result>(phase1CacheKey, cancellationToken);
+        if (phase1 is null)
+        {
+            var goRowsFresh = await goQuery
+                .Select(go => new Phase1Row(go.Id, go.CreatedAt))
+                .ToListAsync(cancellationToken);
+            var soRowsFresh = await soQuery
+                .Select(o => new Phase1Row(o.Id, o.CreatedAt))
+                .ToListAsync(cancellationToken);
+            phase1 = new Phase1Result(goRowsFresh, soRowsFresh);
+            await _cache.SetAsync(phase1CacheKey, phase1, Phase1CacheDuration, cancellationToken);
+        }
+        var goRows = phase1.GoRows;
+        var soRows = phase1.SoRows;
         var totalCount = goRows.Count + soRows.Count;
 
         var pageIds = goRows.Select(x => (x.Id, x.CreatedAt, IsStandalone: false))

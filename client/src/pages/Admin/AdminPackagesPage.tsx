@@ -444,7 +444,19 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, filterCities, filterDistricts, filterParty, filterStatus, filterCourier, filterUnpriced, dateTouched, pkgDate, pkgDateTo]);
 
-  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void reload(); void loadSummary(); void loadWindowScoped(); });
+  // Skip a query the SignalR ping wants refetched when it's already fetching or was
+  // fetched moments ago — almost always an echo of the reload this same admin's own
+  // action just triggered directly (reload()/reloadAfterAction()), not new data from
+  // someone else. Halves the grouporders calls fired per action on this (slow) list.
+  const SELF_ECHO_MS = 4000;
+  const isQueryFresh = (q: { isFetching: boolean; dataUpdatedAt: number }) =>
+    q.isFetching || Date.now() - q.dataUpdatedAt < SELF_ECHO_MS;
+
+  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
+    if (!isQueryFresh(mainQuery)) void reload();
+    if (!isQueryFresh(summaryQuery)) void loadSummary();
+    if (!isQueryFresh(windowScopedQuery)) void loadWindowScoped();
+  });
 
   // After a delivery mutation: silently reload and clear the selection.
   const reloadAfterAction = useCallback(() => {
