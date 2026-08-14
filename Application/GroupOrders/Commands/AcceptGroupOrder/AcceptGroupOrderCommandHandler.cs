@@ -50,9 +50,22 @@ public sealed class AcceptGroupOrderCommandHandler : IRequestHandler<AcceptGroup
         groupOrder.Status     = OrderStatus.AcceptedGroupOrder;
         groupOrder.AcceptedAt = CustomTime.Now;
 
+        // Skip packages the customer already cancelled while the batch sat Pending —
+        // accepting the batch must not resurrect them (see AcceptGroupOrderInWarehouse's
+        // same guard).
         foreach (var order in groupOrder.Orders)
+        {
+            if (IsTerminal(order.Status))
+                continue;
+
             order.Status = OrderStatus.AcceptedOrder;
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
     }
+
+    private static bool IsTerminal(OrderStatus status) =>
+        status is OrderStatus.CancelledBySender
+               or OrderStatus.CancelledByAdmin
+               or OrderStatus.OrderNotAccepted;
 }

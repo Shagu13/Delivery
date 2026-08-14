@@ -20,4 +20,15 @@ public interface IOrderAssignmentNotifier
         string? senderBusinessName,
         string recipientCity,
         string recipientDistrict);
+
+    /// <summary>
+    /// Queues the "new pickup" push for a courier assigned to collect a GroupOrder
+    /// batch (no recipient/tracking number — the batch hasn't reached last-mile yet).
+    /// Returns immediately — failures are logged, never surfaced to the caller.
+    /// </summary>
+    void NotifyCourierAssignedPickup(
+        Guid courierId,
+        string? senderBusinessName,
+        string pickUpCity,
+        string pickUpDistrict);
 }

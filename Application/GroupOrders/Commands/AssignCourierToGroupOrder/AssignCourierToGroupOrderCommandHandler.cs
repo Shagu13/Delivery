@@ -10,12 +10,12 @@ public sealed class AssignCourierToGroupOrderCommandHandler
     : IRequestHandler<AssignCourierToGroupOrderCommand>
 {
     private readonly IAppDbContext _context;
-    private readonly IWebPushService _push;
+    private readonly IOrderAssignmentNotifier _assignmentNotifier;
 
-    public AssignCourierToGroupOrderCommandHandler(IAppDbContext context, IWebPushService push)
+    public AssignCourierToGroupOrderCommandHandler(IAppDbContext context, IOrderAssignmentNotifier assignmentNotifier)
     {
         _context = context;
-        _push = push;
+        _assignmentNotifier = assignmentNotifier;
     }
 
     public async Task Handle(AssignCourierToGroupOrderCommand request, CancellationToken cancellationToken)
@@ -53,10 +53,10 @@ public sealed class AssignCourierToGroupOrderCommandHandler
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Heads-up push so the courier notices the new pickup even with the app closed.
-        var location = $"{groupOrder.PickUpCity}, {groupOrder.PickUpDistrict}";
-        var body = string.IsNullOrWhiteSpace(groupOrder.SenderBusinessName)
-            ? location : $"{groupOrder.SenderBusinessName} — {location}";
-        await _push.NotifyNewOrderAsync(courier.Id, "ახალი ასაღები · New pickup", body, "/", cancellationToken);
+        // Heads-up push so the courier notices the new pickup even with the app closed —
+        // a real network call to the push service, run in the background (see
+        // IOrderAssignmentNotifier) so a slow gateway never adds to this request's latency.
+        _assignmentNotifier.NotifyCourierAssignedPickup(
+            courier.Id, groupOrder.SenderBusinessName, groupOrder.PickUpCity, groupOrder.PickUpDistrict);
     }
 }

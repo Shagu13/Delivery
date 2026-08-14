@@ -61,4 +61,33 @@ public sealed class OrderAssignmentNotifier : IOrderAssignmentNotifier
             _logger.LogError(ex, "Failed to send recipient notification SMS for order {TrackingNumber}", trackingNumber);
         }
     }
+
+    public void NotifyCourierAssignedPickup(
+        Guid courierId,
+        string? senderBusinessName,
+        string pickUpCity,
+        string pickUpDistrict)
+        => _ = RunPickupAsync(courierId, senderBusinessName, pickUpCity, pickUpDistrict);
+
+    private async Task RunPickupAsync(
+        Guid courierId,
+        string? senderBusinessName,
+        string pickUpCity,
+        string pickUpDistrict)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var push = scope.ServiceProvider.GetRequiredService<IWebPushService>();
+
+        var location = $"{pickUpCity}, {pickUpDistrict}";
+        var body = string.IsNullOrWhiteSpace(senderBusinessName) ? location : $"{senderBusinessName} — {location}";
+
+        try
+        {
+            await push.NotifyNewOrderAsync(courierId, "ახალი ასაღები · New pickup", body, "/", CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to push new-pickup notification to courier {CourierId}", courierId);
+        }
+    }
 }
