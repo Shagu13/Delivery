@@ -1005,6 +1005,14 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     const [selCod, setSelCod] = useState<Sel>({});
     const [selSvc, setSelSvc] = useState<Sel>({});
 
+    // A checked row freezes its outstanding amount into `sel` (so the admin can hand-edit
+    // it) — but that freeze goes stale the moment the underlying figures change, e.g. an
+    // admin corrects CompanyServicePrice from the fee editor further down this same card.
+    // Without this, the Net settlement bar and a Settle submission would silently keep
+    // using the pre-edit amount. Drop the selection whenever fresh lines come in so the
+    // admin re-ticks against the current outstanding.
+    useEffect(() => { setSelCod({}); setSelSvc({}); }, [lines]);
+
     // Outstanding per order for each flow (shared module helpers — see their definitions).
     const codOut = codOutstanding;
     const svcOut = serviceOutstanding;
