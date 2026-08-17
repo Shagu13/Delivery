@@ -800,6 +800,7 @@ const en = {
   // Footer
   cgoFooterCount:           (n: number): string => `${n} package${n !== 1 ? 's' : ''}`,
   cgoFooterHint:            'Ready to submit',
+  cgoCheckCartHint:         'Check cart to finish order',
   cgoSubmit:                'Save',
   cgoSubmitting:            'Placing Order…',
   cgoGlobalError:           'An unexpected error occurred. Please try again.',
@@ -2763,6 +2764,7 @@ const ka: typeof en = {
   // Footer
   cgoFooterCount:           (n: number): string => `${n} ამანათი`,
   cgoFooterHint:            'გაგზავნისთვის მზადაა',
+  cgoCheckCartHint:         'შეკვეთის განსათავსებლად გადადით კალათაში',
   cgoSubmit:                'შენახვა',
   cgoSubmitting:            'შეკვეთა განთავსდება…',
   cgoGlobalError:           'დაფიქსირდა მოულოდნელი შეცდომა. გთხოვთ სცადოთ ხელახლა.',

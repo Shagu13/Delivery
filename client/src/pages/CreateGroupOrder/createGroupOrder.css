@@ -233,6 +233,18 @@ body {
         cursor: not-allowed;
     }
 
+/* "Add to cart" submit — distinct green so it doesn't read as the same accent-colored action
+   as "+ Add Package"/other in-page buttons; this one leaves the page (goes to the Cart). */
+.btn--cart {
+    background: var(--color-success);
+}
+
+    .btn--cart:hover:not(:disabled) {
+        background: var(--color-success);
+        filter: brightness(1.1);
+        box-shadow: 0 4px 20px var(--color-success-bg);
+    }
+
 .btn--add-package {
     background: var(--color-accent);
     border: 2px solid var(--color-accent);

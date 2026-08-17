@@ -122,7 +122,7 @@ const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'pa
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
 // stay hidden (stripped server-side + revenue columns hidden via canSeeRevenue below).
 // Still Admin-only: Finance, Operators management, Partner API, Weight Tiers, Tenants.
-const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'history', 'returnExchange'];
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'history', 'returnExchange', 'orderSearch'];
 
 // Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
 // accept-only and Delivery is read-only (both via canManage=false); Finance renders the
@@ -164,8 +164,8 @@ export function AdminDashboard() {
     // Block a non-systemadmin Admin from landing on the Tenants/Partner API/Tenant
     // Settlements pages via the URL.
     : (requestedView === 'tenants' || requestedView === 'partners' || requestedView === 'tenantSettlements') && !isSystemAdmin ? 'overview'
-    // Global Order Search is Admin-only (operators/tenants are clamped out).
-    : requestedView === 'orderSearch' && (isOperator || isTenant) ? 'overview'
+    // Global Order Search is Admin/Operator (tenants are clamped out).
+    : requestedView === 'orderSearch' && isTenant ? 'overview'
     : requestedView;
 
   const goTo = (view: AdminView) => {
@@ -423,8 +423,8 @@ export function AdminDashboard() {
             )}
           </button>
           )}
-          {/* Global Order Search — Admin only (search any order across every page). */}
-          {!isOperator && !isTenant && (
+          {/* Global Order Search — Admin + Operator (search any order across every page). */}
+          {!isTenant && (
           <button
             className={`sidebar__link ${activeView === 'orderSearch' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('orderSearch')}
@@ -560,7 +560,7 @@ export function AdminDashboard() {
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && isSystemAdmin && token && <AdminTenantSettlementsPage token={token} />}
           {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
-          {activeView === 'orderSearch' && !isOperator && !isTenant && token && (
+          {activeView === 'orderSearch' && !isTenant && token && (
             <AdminOrderSearchPage token={token} onGoTo={goToOrder} />
           )}
           {/* Finance: tenant co-admin sees the scoped tenant finance, never the company-wide P&L. */}
