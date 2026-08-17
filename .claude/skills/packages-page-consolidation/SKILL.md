@@ -29,8 +29,9 @@ don't treat "consolidate the pages" as license to silently drop a page mid-task.
 ## 2. Confirm the direction with the user, don't assume it
 
 As of the current docs, `packagesTest` (`AdminPackagesPage.tsx`) is described as the *newer*
-last-mile page and is the only one with same-day batch grouping (`groupByDate`, `handleMerge`,
-`GroupingModal`). That's a signal it's the intended survivor, not a guarantee — re-verify by
+last-mile page and is the only one with same-day batch grouping (`groupByDate` in the entry file;
+`MergeModal`/`GroupingModal` under its `AdminPackages/` folder — see `client/CLAUDE.md` §3.2).
+That's a signal it's the intended survivor, not a guarantee — re-verify by
 diffing the two files' current feature sets (grep the function-name table from
 `packages-page-dual-fix`) before committing to a direction, and state the direction back to the
 user explicitly before deleting the losing page.
@@ -74,7 +75,10 @@ Mirror every addition point from the `new-admin-view` skill, in reverse, for the
 
 Delete `client/src/pages/Admin/<LosingPage>.tsx` and its co-located `.css` only after step 5's
 edits leave zero references (`Grep` the component name across `client/src/`). Remove its now-dead
-import from `AdminDashboard.tsx`.
+import from `AdminDashboard.tsx`. **If `AdminPackagesPage.tsx` is the losing page**, also delete
+its `client/src/pages/Admin/AdminPackages/` folder (its hook + extracted subcomponents — see
+`client/CLAUDE.md` §3.2) — confirm nothing in it is imported from outside that folder first
+(it shouldn't be; it was never part of the planned `features/` layer, see §3.1/§3.2).
 
 ## 7. Clean up translations
 

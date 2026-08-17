@@ -40,9 +40,16 @@ grep the same name in the other:
 | Price edit | `handlePriceSave` |
 | Search / filter state | look for `filtered`, `filterCities`, `filterDistricts`, `filterParty`-style state near the top of the component |
 
-`AdminPackagesPage.tsx` additionally has same-day batch grouping (`groupByDate`, `handleMerge`,
-`GroupingModal`) that `AdminOrdersPage.tsx` does not — don't assume every feature exists in both;
-confirm before promising a symmetric fix.
+**On the `AdminPackagesPage.tsx` side, every handler in that table now lives in
+`client/src/pages/Admin/AdminPackages/usePackageSelection.ts`, not in `AdminPackagesPage.tsx`
+itself** (that file was split — see `client/CLAUDE.md` §3.2). Grep the whole `AdminPackages/`
+folder, not just the entry file, or you'll get a false "doesn't exist here" and miss the fix.
+`AdminOrdersPage.tsx` still has all of these inline in the one file.
+
+`AdminPackagesPage.tsx` additionally has same-day batch grouping (`groupByDate` — stays in the
+entry file; `MergeModal`/`GroupingModal` — now their own files under `AdminPackages/`) that
+`AdminOrdersPage.tsx` does not — don't assume every feature exists in both; confirm before
+promising a symmetric fix.
 
 ## 3. Apply the same conceptual fix in both
 
@@ -60,8 +67,10 @@ From `client/CLAUDE.md` §7 "Known duplication" — if the bug touches these, fi
 
 ## 5. Before calling it done
 
-- Re-grep the function/state name you changed across both page files to confirm you didn't miss
-  a third call site within the same file (both files are 2000+ lines).
+- Re-grep the function/state name you changed across both page files (and, for
+  `AdminPackagesPage.tsx`, its `AdminPackages/` folder) to confirm you didn't miss a third call
+  site. `AdminOrdersPage.tsx` is still 2000+ lines in one file; `AdminPackagesPage.tsx` itself is
+  ~1150 lines with the rest spread across `AdminPackages/`.
 - State explicitly in your summary to the user which of the two files you touched and why (or
   why the second file didn't need the same change) — don't let "fixed the packages page" be
   ambiguous about which one.
