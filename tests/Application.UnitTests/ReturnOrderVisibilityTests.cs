@@ -419,6 +419,9 @@ internal sealed class NoopAssignmentNotifier : Application.Common.Interfaces.IOr
     public void NotifyCourierAssigned(
         Guid courierId, string recipientPhone, string trackingNumber,
         string? senderBusinessName, string recipientCity, string recipientDistrict) { }
+
+    public void NotifyCourierAssignedPickup(
+        Guid courierId, string? senderBusinessName, string pickUpCity, string pickUpDistrict) { }
 }
 
 /// <summary>SignalR refetch pings — no dashboards connected in tests.</summary>

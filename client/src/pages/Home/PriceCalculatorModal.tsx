@@ -103,7 +103,7 @@ function isEponymous(d: AllDistrictEntry): boolean {
 // ── API ───────────────────────────────────────────────────────────────────────
 interface PriceResult {
   price: number;
-  tier: 'capital' | 'city' | 'district' | 'default';
+  tier: 'special' | 'capital' | 'city' | 'district' | 'default';
 }
 
 async function fetchBasePrice(
@@ -502,7 +502,7 @@ export function CalcCore({ token, compact }: CalcCoreProps) {
             {!isFlatRate && basePrice && basePrice.tier !== 'default' && token && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: 600, padding: '2px 8px', borderRadius: 100, background: C.accentDim, color: C.accent, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                  {basePrice.tier === 'capital' ? '🏙 Capital rate' : basePrice.tier === 'city' ? '🌆 City rate' : '📍 District rate'}
+                  {basePrice.tier === 'special' ? '⭐ Special rate' : basePrice.tier === 'capital' ? '🏙 Capital rate' : basePrice.tier === 'city' ? '🌆 City rate' : '📍 District rate'}
                 </span>
               </div>
             )}

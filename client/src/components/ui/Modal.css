@@ -80,6 +80,10 @@
 .ui-modal__body {
     padding: 22px;
     overflow-y: auto;
+    /* Defensive guard: modal content must never force horizontal scroll — anything
+       genuinely wide (a table, a long unbreakable value) should wrap or truncate
+       instead. Sideways scroll inside a 440px-wide modal reads as broken, not scrollable. */
+    overflow-x: hidden;
 }
 
 /* Two-column row for paired fields (collapses on narrow screens). */

@@ -18,6 +18,11 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+  /* Grid/flex items default to min-width:auto (their content's min-content size), which
+     can be wider than an evenly-split 1fr track — the long Georgian "რაიონი/სოფელი" label
+     was doing exactly that and pushing the District field outside a narrow (440px modal)
+     container instead of letting it shrink. min-width:0 lets the track win. */
+  min-width: 0;
 }
 
 .cdp-label {
@@ -25,6 +30,9 @@
   font-weight: 600;
   color: var(--color-text-muted, #6b7280);
   letter-spacing: 0.01em;
+  /* The Georgian "რაიონი/სოფელი" label has no space to break on — let it wrap mid-word
+     in a narrow field instead of forcing the field wider than its grid track. */
+  overflow-wrap: anywhere;
 }
 
 .cdp-required {

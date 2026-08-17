@@ -5,6 +5,7 @@ import type { AdminOrderItem } from './AdminOrdersPage';
 import type { Courier } from '../../api/couriers';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import type { District } from '../../api/cities';
+import type { CustomerSpecialPrice } from '../../api/customers';
 import { GeorgianPhoneField, sanitizeGeorgianMobile, isValidGeorgianMobile } from '../../components/ui/GeorgianPhoneField';
 import { useLanguage } from '../../contexts/useLanguage';
 
@@ -13,13 +14,18 @@ export interface CustomerServicePricing {
     capital: number | null;
     city: number | null;
     district: number | null;
+    /** Per-district price exceptions on top of the tiers above (districtId -> price). */
+    specialPrices?: CustomerSpecialPrice[];
 }
 
-// Resolve the company service price for a selected district. Customer-specific tier
-// wins by territory (capital → city → generic district), falling back to the district's
-// own configured price. Returns null when nothing is configured (leaves the field empty).
+// Resolve the company service price for a selected district. A per-district special price
+// wins first, then the customer-specific tier by territory (capital → city → generic
+// district), falling back to the district's own configured price. Returns null when
+// nothing is configured (leaves the field empty).
 function resolveServicePrice(d: District, cp?: CustomerServicePricing | null): number | null {
     if (cp) {
+        const special = cp.specialPrices?.find(s => s.districtId === d.id);
+        if (special) return special.price;
         if (d.isCapitalTerritory && (cp.capital ?? 0) > 0) return cp.capital!;
         if (d.isCityTerritory    && (cp.city    ?? 0) > 0) return cp.city!;
         if ((cp.district ?? 0) > 0) return cp.district!;

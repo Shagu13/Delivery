@@ -35,6 +35,22 @@ export interface CreateCustomerResponse {
   customerId: string; email: string; fullName: string;
 }
 
+/** Lean (district, price) pair — used for pricing-preview payloads. */
+export interface CustomerSpecialPriceLite {
+  districtId: string;
+  price: number;
+}
+
+/** Full row for the admin "manage special prices" screen — includes display names. */
+export interface CustomerSpecialPrice {
+  id: string;
+  districtId: string;
+  districtName: string;
+  districtNameGeo: string | null;
+  cityName: string;
+  price: number;
+}
+
 export interface Customer {
   id: string;
   firstName: string; lastName: string; idNumber: string | null;
@@ -46,6 +62,10 @@ export interface Customer {
   companyServiceDistrictPrice: number | null;
   /** When true, this customer's package prices are all-in (service fee deducted in background). */
   isCompanyServicePriceIncludedInPrice: boolean;
+  /** Per-district price exceptions on top of the tiers above (e.g. a special Rustavi rate).
+   *  Present on /customers/me and /customers/{id}; absent on the paginated admin list (fetch
+   *  via getCustomerSpecialPrices when the admin opens the special-prices management modal). */
+  specialPrices?: CustomerSpecialPriceLite[];
 }
 
 export interface AdminCustomer extends Customer {
@@ -275,5 +295,33 @@ export async function setCustomerCompanyPrice(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(prices),
+  }));
+}
+
+/** All of a customer's per-district price exceptions, for the admin management modal. */
+export async function getCustomerSpecialPrices(id: string, token: string): Promise<CustomerSpecialPrice[]> {
+  return handle(await fetch(`/api/customers/${id}/special-prices`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
+/** Admin upserts a customer's negotiated price for one specific district. Returns the fresh list. */
+export async function setCustomerSpecialPrice(
+  id: string, districtId: string, price: number, token: string,
+): Promise<CustomerSpecialPrice[]> {
+  return handle(await fetch(`/api/customers/${id}/special-prices`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ districtId, price }),
+  }));
+}
+
+/** Admin removes one district price exception. Returns the fresh list. */
+export async function deleteCustomerSpecialPrice(
+  id: string, specialPriceId: string, token: string,
+): Promise<CustomerSpecialPrice[]> {
+  return handle(await fetch(`/api/customers/${id}/special-prices/${specialPriceId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
   }));
 }

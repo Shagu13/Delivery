@@ -8,7 +8,8 @@ namespace Application.GroupOrders.Commands.Shared;
 /// <summary>
 /// Builds <see cref="Order"/> entities from <see cref="DTOs.CreateOrderDto"/> inputs,
 /// resolving the company service fee (explicit override → weight-tier zone price →
-/// customer negotiated → district default) and generating tracking numbers.
+/// customer's per-district special price → customer negotiated tier → district default)
+/// and generating tracking numbers.
 ///
 /// Pricing is normally keyed off the recipient (delivery) district, but "swaps" to the
 /// batch pickup district when the pickup is NOT in the capital (Tbilisi) <b>and</b> the
@@ -56,6 +57,21 @@ internal static class GroupOrderOrderBuilder
             .AsNoTracking()
             .Where(d => districtNames.Contains(d.DistrictName))
             .ToListAsync(ct);
+
+        // Bulk-load this customer's per-district special prices for the districts in play —
+        // avoids a per-order query, mirroring how weight tiers and districts are loaded above.
+        var specialPrices = new Dictionary<Guid, decimal>();
+        if (customer is not null)
+        {
+            var districtIds = districts.Select(d => d.Id).ToList();
+            if (districtIds.Count > 0)
+            {
+                specialPrices = await context.CustomerSpecialPrices
+                    .AsNoTracking()
+                    .Where(s => s.CustomerId == customer.Id && districtIds.Contains(s.DistrictId))
+                    .ToDictionaryAsync(s => s.DistrictId, s => s.Price, ct);
+            }
+        }
 
         // Load all weight price tiers referenced by orders (bulk — avoids N+1).
         var tierIds = orderDtos
@@ -142,12 +158,12 @@ internal static class GroupOrderOrderBuilder
 
                 companyServicePrice = zonePrice is > 0
                     ? zonePrice.Value
-                    : ResolveStandardPrice(customer, district, custIsCapital, custIsCity);
+                    : ResolveStandardPrice(customer, district, customerZone, specialPrices, custIsCapital, custIsCity);
             }
-            // ── Step 3: standard pricing (customer negotiated → district fallback)
+            // ── Step 3: standard pricing (special price → customer negotiated → district fallback)
             else
             {
-                companyServicePrice = ResolveStandardPrice(customer, district, custIsCapital, custIsCity);
+                companyServicePrice = ResolveStandardPrice(customer, district, customerZone, specialPrices, custIsCapital, custIsCity);
             }
 
             decimal? amountToCollect = null;
@@ -238,17 +254,24 @@ internal static class GroupOrderOrderBuilder
     }
 
     /// <summary>
-    /// Customer's negotiated rate for the delivery zone (<paramref name="custIsCapital"/> /
+    /// Special price → customer's negotiated rate for the delivery zone (<paramref name="custIsCapital"/> /
     /// <paramref name="custIsCity"/> describe the DELIVERY district), falling back to
     /// <paramref name="fallbackDistrict"/>'s default price — which is the swapped pickup
-    /// district when the swap applies.
+    /// district when the swap applies. The special price, like the negotiated tier, is always
+    /// read off <paramref name="customerZone"/> (the delivery location), never the swapped-in
+    /// pickup district.
     /// </summary>
     private static decimal ResolveStandardPrice(
         Customer? customer,
         District? fallbackDistrict,
+        District? customerZone,
+        IReadOnlyDictionary<Guid, decimal> specialPrices,
         bool custIsCapital,
         bool custIsCity)
     {
+        if (customerZone is not null && specialPrices.TryGetValue(customerZone.Id, out var specialPrice))
+            return specialPrice;
+
         if (customer is not null)
         {
             if (custIsCapital && customer.CompanyServiceCapitalPrice is > 0)

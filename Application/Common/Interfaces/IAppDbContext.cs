@@ -7,6 +7,7 @@ public interface IAppDbContext
 {
     DbSet<Domain.Courier>       Couriers             { get; }
     DbSet<Customer>             Customers            { get; }
+    DbSet<CustomerSpecialPrice> CustomerSpecialPrices { get; }
     DbSet<Tenant>               Tenants              { get; }
     DbSet<TenantSettlement>     TenantSettlements    { get; }
     DbSet<Warehouse>            Warehouses           { get; }

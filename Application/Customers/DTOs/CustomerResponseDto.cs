@@ -24,5 +24,7 @@ public sealed record CustomerResponseDto(
     decimal? CompanyServiceCityPrice,
     decimal? CompanyServiceDistrictPrice,
     /// <summary>When true, this customer's package prices are all-in; the per-order checkbox is forced on and hidden.</summary>
-    bool     IsCompanyServicePriceIncludedInPrice
+    bool     IsCompanyServicePriceIncludedInPrice,
+    /// <summary>Per-district price exceptions on top of the tiers above (e.g. a special Rustavi rate).</summary>
+    IReadOnlyList<CustomerSpecialPriceLite> SpecialPrices
 );

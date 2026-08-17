@@ -23,6 +23,7 @@ public sealed class GetCustomerByIdQueryHandler
     {
         var c = await _context.Customers
             .Include(c => c.ApplicationUser)
+            .Include(c => c.SpecialPrices)
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException(nameof(Customer), request.Id);
@@ -49,6 +50,7 @@ public sealed class GetCustomerByApplicationUserIdQueryHandler
     {
         var c = await _context.Customers
             .Include(c => c.ApplicationUser)
+            .Include(c => c.SpecialPrices)
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.ApplicationUserId, cancellationToken)
             ?? throw new NotFoundException(nameof(Customer), request.ApplicationUserId);
@@ -77,6 +79,7 @@ internal static class CustomerProjection
         c.CompanyServiceCapitalPrice,
         c.CompanyServiceCityPrice,
         c.CompanyServiceDistrictPrice,
-        c.IsCompanyServicePriceIncludedInPrice
+        c.IsCompanyServicePriceIncludedInPrice,
+        c.SpecialPrices.Select(s => new CustomerSpecialPriceLite(s.DistrictId, s.Price)).ToList()
     );
 }

@@ -290,6 +290,34 @@ namespace Persistence.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("Domain.CustomerSpecialPrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DistrictId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DistrictId");
+
+                    b.HasIndex("CustomerId", "DistrictId")
+                        .IsUnique();
+
+                    b.ToTable("CustomerSpecialPrices");
+                });
+
             modelBuilder.Entity("Domain.DeliverySchedule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1388,6 +1416,25 @@ namespace Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Domain.CustomerSpecialPrice", b =>
+                {
+                    b.HasOne("Domain.Customer", "Customer")
+                        .WithMany("SpecialPrices")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Domain.District", "District")
+                        .WithMany()
+                        .HasForeignKey("DistrictId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("District");
+                });
+
             modelBuilder.Entity("Domain.DeliverySchedule", b =>
                 {
                     b.HasOne("Domain.City", null)
@@ -1635,6 +1682,11 @@ namespace Persistence.Migrations
                     b.Navigation("GroupOrders");
 
                     b.Navigation("Orders");
+                });
+
+            modelBuilder.Entity("Domain.Customer", b =>
+                {
+                    b.Navigation("SpecialPrices");
                 });
 
             modelBuilder.Entity("Domain.GroupOrder", b =>

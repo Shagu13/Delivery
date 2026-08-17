@@ -65,6 +65,9 @@ internal static class TestSupport
             IsCompanyServicePriceIncludedInPrice = allIn,
         };
 
+    public static CustomerSpecialPrice SpecialPrice(Guid customerId, Guid districtId, decimal price) =>
+        new() { CustomerId = customerId, DistrictId = districtId, Price = price };
+
     public static CreateOrderDto Order(
         string district,
         Guid? tier = null,

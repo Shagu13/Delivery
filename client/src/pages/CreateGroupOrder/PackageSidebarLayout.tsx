@@ -7,11 +7,14 @@ import type { WeightPriceTier } from '../../api/weightPriceTiers';
 import { tierLabel } from '../../api/weightPriceTiers';
 import type { OrderItemRequest, ValidationErrors, OrderType } from '../../types/groupOrder';
 import { useLanguage } from '../../contexts/useLanguage';
+import type { CustomerSpecialPriceLite } from '../../api/customers';
 
 interface CustomerPricing {
   companyServiceCapitalPrice:  number | null;
   companyServiceCityPrice:     number | null;
   companyServiceDistrictPrice: number | null;
+  /** Per-district price exceptions on top of the tiers above (e.g. a special Rustavi rate). */
+  specialPrices?: CustomerSpecialPriceLite[];
 }
 
 interface Props {
@@ -69,6 +72,8 @@ function computeFee(
     }
   }
   if (customerPricing) {
+    const special = customerZone && customerPricing.specialPrices?.find(s => s.districtId === customerZone.id);
+    if (special) return special.price;
     if (customerZone?.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
       return customerPricing.companyServiceCapitalPrice!;
     if (customerZone?.isCityTerritory && (customerPricing.companyServiceCityPrice ?? 0) > 0)

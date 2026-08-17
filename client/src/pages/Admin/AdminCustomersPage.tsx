@@ -3,14 +3,17 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import {
   type AdminCustomer,
   getCustomers,
-  setCustomerCompanyPrice,
   setCustomerActive,
 } from '../../api/customers';
 import type { PagedResult } from '../../types/paging';
 import { AdminSetPasswordModal } from './AdminSetPasswordModal';
 import { EditCustomerModal } from './EditCustomerModal';
+import { EditCompanyPriceModal } from './EditCompanyPriceModal';
+import { CustomerSpecialPricesModal } from './CustomerSpecialPricesModal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { RowActionsMenu, type RowActionItem } from '../../components/ui/RowActionsMenu';
 import { useLanguage } from '../../contexts/useLanguage';
+import './AdminCustomersPage.css';
 
 interface Props {
   token: string;
@@ -18,18 +21,32 @@ interface Props {
   canManage?: boolean;
 }
 
-interface EditState {
-  capitalPrice:  string;
-  cityPrice:     string;
-  districtPrice: string;
-  included:      boolean;
-}
-
-function priceDisplay(v: number | null, defaultLabel: string) {
-  return v != null ? `₾${v}` : <em style={{ color: 'var(--color-text-subtle)' }}>{defaultLabel}</em>;
-}
-
 const PAGE_SIZE = 20;
+
+function initials(businessName: string): string {
+  const trimmed = businessName.trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/);
+  return parts.length === 1
+    ? trimmed.slice(0, 2).toUpperCase()
+    : (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function PricingPills({ c }: { c: AdminCustomer }) {
+  const { t } = useLanguage();
+  const pill = (set: boolean, label: string, value: number | null) => (
+    <span className={`acp-price-pill${set ? ' acp-price-pill--set' : ''}`}>
+      {label}{set ? ` ₾${value}` : ''}
+    </span>
+  );
+  return (
+    <div className="acp-price-pills">
+      {pill(c.companyServiceCapitalPrice  != null, t.acupPillCapital,  c.companyServiceCapitalPrice)}
+      {pill(c.companyServiceCityPrice     != null, t.acupPillCity,     c.companyServiceCityPrice)}
+      {pill(c.companyServiceDistrictPrice != null, t.acupPillDistrict, c.companyServiceDistrictPrice)}
+    </div>
+  );
+}
 
 export default function AdminCustomersPage({ token, canManage = true }: Props) {
   const { t } = useLanguage();
@@ -42,12 +59,11 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
     return () => clearTimeout(timer);
   }, [search]);
   const [page, setPage]                 = useState(1);
-  const [editingId, setEditingId]       = useState<string | null>(null);
-  const [editState, setEditState]       = useState<EditState>({ capitalPrice: '', cityPrice: '', districtPrice: '', included: false });
-  const [saving, setSaving]             = useState(false);
   const [actionError, setActionError]   = useState('');
   const [pwdCustomer, setPwdCustomer]   = useState<AdminCustomer | null>(null);
   const [editCustomer, setEditCustomer] = useState<AdminCustomer | null>(null);
+  const [priceCustomer, setPriceCustomer] = useState<AdminCustomer | null>(null);
+  const [specialPricesCustomer, setSpecialPricesCustomer] = useState<AdminCustomer | null>(null);
   const [togglingId, setTogglingId]     = useState<string | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<AdminCustomer | null>(null);
   const [notice, setNotice]             = useState('');
@@ -74,42 +90,6 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
       prev ? { ...prev, items: prev.items.map(c => c.id === id ? patch(c) : c) } : prev);
   };
 
-  function startEdit(c: AdminCustomer) {
-    setEditingId(c.id);
-    setEditState({
-      capitalPrice:  c.companyServiceCapitalPrice  != null ? String(c.companyServiceCapitalPrice)  : '',
-      cityPrice:     c.companyServiceCityPrice     != null ? String(c.companyServiceCityPrice)     : '',
-      districtPrice: c.companyServiceDistrictPrice != null ? String(c.companyServiceDistrictPrice) : '',
-      included:      c.isCompanyServicePriceIncludedInPrice,
-    });
-  }
-
-  async function saveEdit(id: string) {
-    setSaving(true);
-    try {
-      const parse = (v: string) => v === '' ? null : Number(v);
-      const prices = {
-        capitalPrice:  parse(editState.capitalPrice),
-        cityPrice:     parse(editState.cityPrice),
-        districtPrice: parse(editState.districtPrice),
-        isCompanyServicePriceIncludedInPrice: editState.included,
-      };
-      await setCustomerCompanyPrice(id, prices, token);
-      patchCustomer(id, c => ({
-        ...c,
-        companyServiceCapitalPrice:  prices.capitalPrice,
-        companyServiceCityPrice:     prices.cityPrice,
-        companyServiceDistrictPrice: prices.districtPrice,
-        isCompanyServicePriceIncludedInPrice: prices.isCompanyServicePriceIncludedInPrice,
-      }));
-      setEditingId(null);
-    } catch {
-      setActionError(t.acupSaveFail);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   // Deactivating needs confirmation (it blocks login); reactivating is immediate.
   function onToggleClick(c: AdminCustomer) {
     if (c.isActive) setDeactivateTarget(c);
@@ -130,10 +110,25 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: 80, padding: '0.25rem', borderRadius: 6,
-    border: '1px solid var(--color-border)', fontSize: '0.82rem',
-  };
+  function rowActions(c: AdminCustomer): RowActionItem[] {
+    const items: RowActionItem[] = [
+      { label: t.edit, onClick: () => setEditCustomer(c) },
+    ];
+    if (canManage) {
+      items.push(
+        { label: t.acupPricesBtn, onClick: () => setPriceCustomer(c) },
+        { label: t.acupSpecialPricesBtn, onClick: () => setSpecialPricesCustomer(c) },
+        { label: t.acupSetPwd, onClick: () => setPwdCustomer(c) },
+        {
+          label: c.isActive ? t.acupDeactivate : t.acupActivate,
+          onClick: () => onToggleClick(c),
+          disabled: togglingId === c.id,
+          danger: c.isActive,
+        },
+      );
+    }
+    return items;
+  }
 
   return (
     <div style={{ padding: 'clamp(12px, 3vw, 1.5rem)' }}>
@@ -155,128 +150,111 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
 
       {loading ? (
         <p>{t.loading}</p>
+      ) : customers.length === 0 ? (
+        <div className="empty-state">
+          <p className="empty-state__text">{t.acupNoResults}</p>
+        </div>
       ) : (
-        <div className="table-scroll">
-        <table style={{ width: '100%', minWidth: 1080, borderCollapse: 'collapse', fontSize: '0.88rem' }}>
-          <thead>
-            <tr style={{ background: 'var(--color-bg-3)' }}>
-              {[
-                t.acupThBusiness, t.acupThName, t.acupThPhone, t.acupThCity, t.acupThDistrict, t.acupThAddress, t.acupThEmail, t.acupThActive,
-                ...(canManage ? [t.acupThCapital, t.acupThCityPrice, t.acupThDistrictPrice, t.acupThIncluded] : []),
-                t.acupThActions,
-              ].map((h, i) => (
-                <th key={i} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {customers.map(c => (
-              <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.businessName}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.firstName} {c.lastName}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.phoneNumber}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.city}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.district}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.address}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.email}</td>
-                <td style={{ padding: '0.6rem 0.75rem' }}>{c.isActive ? t.acupActive : t.acupInactive}</td>
-
-                {editingId === c.id ? (
-                  <>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>
-                      <input
-                        type="number" style={inputStyle} value={editState.capitalPrice}
-                        placeholder="null"
-                        onChange={e => setEditState(s => ({ ...s, capitalPrice: e.target.value }))}
-                      />
-                    </td>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>
-                      <input
-                        type="number" style={inputStyle} value={editState.cityPrice}
-                        placeholder="null"
-                        onChange={e => setEditState(s => ({ ...s, cityPrice: e.target.value }))}
-                      />
-                    </td>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>
-                      <input
-                        type="number" style={inputStyle} value={editState.districtPrice}
-                        placeholder="null"
-                        onChange={e => setEditState(s => ({ ...s, districtPrice: e.target.value }))}
-                      />
-                    </td>
-                    <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={editState.included}
-                        onChange={e => setEditState(s => ({ ...s, included: e.target.checked }))}
-                      />
-                    </td>
-                    <td style={{ padding: '0.6rem 0.75rem' }}>
-                      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <button
-                            onClick={() => saveEdit(c.id)} disabled={saving}
-                            style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: 'var(--color-accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
-                          >{t.save}</button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            style={{ padding: '0.25rem 0.6rem', borderRadius: 6, background: 'var(--color-bg-3)', border: 'none', cursor: 'pointer' }}
-                          >✕</button>
-                      </span>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    {canManage && (
-                      <>
-                        <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCapitalPrice, t.acupDefault)}</td>
-                        <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceCityPrice, t.acupDefault)}</td>
-                        <td style={{ padding: '0.6rem 0.75rem' }}>{priceDisplay(c.companyServiceDistrictPrice, t.acupDefault)}</td>
-                        <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
-                          {c.isCompanyServicePriceIncludedInPrice ? t.acupYes : t.acupNo}
-                        </td>
-                      </>
-                    )}
-                    <td style={{ padding: '0.6rem 0.75rem' }}>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() => setEditCustomer(c)}
-                          style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: 'var(--color-accent-dim)', border: '1px solid var(--color-accent)', color: 'var(--color-accent)', cursor: 'pointer', fontSize: '0.8rem' }}
-                        >{t.edit}</button>
-                        {canManage && (
-                          <button
-                            onClick={() => startEdit(c)}
-                            style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.8rem' }}
-                          >{t.acupPricesBtn}</button>
-                        )}
-                        {canManage && (
-                          <button
-                            onClick={() => setPwdCustomer(c)}
-                            style={{ padding: '0.2rem 0.5rem', borderRadius: 6, background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.8rem' }}
-                          >{t.acupSetPwd}</button>
-                        )}
-                        {canManage && (
-                          <button
-                            onClick={() => onToggleClick(c)}
-                            disabled={togglingId === c.id}
-                            style={{
-                              padding: '0.2rem 0.5rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem',
-                              border: '1px solid ' + (c.isActive ? 'var(--color-error)' : 'var(--color-success)'),
-                              background: c.isActive ? 'var(--color-error-bg)' : 'var(--color-success-bg)',
-                              color: c.isActive ? 'var(--color-error)' : 'var(--color-success)',
-                            }}
-                          >{c.isActive ? t.acupDeactivate : t.acupActivate}</button>
-                        )}
+        <>
+          {/* Desktop / tablet: dense data grid */}
+          <div className="table-scroll acp-table-wrap">
+            <table className="acp-table">
+              <thead>
+                <tr>
+                  <th>{t.acupThBusiness}</th>
+                  <th>{t.acupThContact}</th>
+                  <th>{t.acupThLocation}</th>
+                  <th>{t.acupThStatus}</th>
+                  {canManage && <th>{t.acupThPricing}</th>}
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map(c => (
+                  <tr key={c.id}>
+                    <td>
+                      <div className="acp-business-cell">
+                        <div className="acp-avatar">{initials(c.businessName)}</div>
+                        <div>
+                          <div className="acp-primary">{c.businessName}</div>
+                          <div className="acp-secondary">{c.firstName} {c.lastName}</div>
+                        </div>
                       </div>
                     </td>
-                  </>
-                )}
-              </tr>
+                    <td>
+                      <div className="acp-primary">{c.phoneNumber}</div>
+                      <div className="acp-secondary">{c.email}</div>
+                    </td>
+                    <td>
+                      <div className="acp-primary">{c.city}</div>
+                      <div className="acp-secondary">{c.district}</div>
+                    </td>
+                    <td>
+                      <span className={`acp-badge ${c.isActive ? 'acp-badge--active' : 'acp-badge--inactive'}`}>
+                        {c.isActive ? t.acupActive : t.acupInactive}
+                      </span>
+                    </td>
+                    {canManage && (
+                      <td><PricingPills c={c} /></td>
+                    )}
+                    <td>
+                      <RowActionsMenu items={rowActions(c)} label={t.acupActionsLabel(c.businessName)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Phone-width: card list */}
+          <div className="acp-cards">
+            {customers.map(c => (
+              <div className="acp-card" key={c.id}>
+                <div className="acp-card__head">
+                  <div className="acp-card__id">
+                    <div className="acp-avatar">{initials(c.businessName)}</div>
+                    <div className="acp-card__name">
+                      <div className="acp-card__business">{c.businessName}</div>
+                      <div className="acp-card__person">{c.firstName} {c.lastName}</div>
+                    </div>
+                  </div>
+                  <span className={`acp-badge ${c.isActive ? 'acp-badge--active' : 'acp-badge--inactive'}`}>
+                    {c.isActive ? t.acupActive : t.acupInactive}
+                  </span>
+                </div>
+
+                <div className="acp-card__rows">
+                  <div className="acp-card__row">
+                    <span className="acp-card__row-label">{t.phoneNumber}</span>
+                    <span className="acp-card__row-value">{c.phoneNumber}</span>
+                  </div>
+                  <div className="acp-card__row">
+                    <span className="acp-card__row-label">{t.emailAddress}</span>
+                    <span className="acp-card__row-value">{c.email}</span>
+                  </div>
+                  <div className="acp-card__row">
+                    <span className="acp-card__row-label">{t.city} / {t.district}</span>
+                    <span className="acp-card__row-value">{c.city}, {c.district}</span>
+                  </div>
+                  {canManage && (
+                    <div className="acp-card__row">
+                      <span className="acp-card__row-label">{t.acupThPricing}</span>
+                      <span className="acp-card__row-value"><PricingPills c={c} /></span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="acp-card__footer">
+                  <button
+                    onClick={() => setEditCustomer(c)}
+                    style={{ padding: '0.3rem 0.7rem', borderRadius: 6, background: 'var(--color-accent-dim)', border: '1px solid var(--color-accent)', color: 'var(--color-accent)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                  >{t.edit}</button>
+                  <RowActionsMenu items={rowActions(c)} label={t.acupActionsLabel(c.businessName)} />
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-        </div>
+          </div>
+        </>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: '1rem', alignItems: 'center' }}>
@@ -290,7 +268,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
           disabled={page >= totalPages}
           onClick={() => setPage(p => p + 1)}
           style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid var(--color-border)', cursor: 'pointer' }}
-        >Next →</button>
+        >{t.acupNext}</button>
       </div>
 
       <AdminSetPasswordModal
@@ -307,6 +285,20 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
           setEditCustomer(null);
           setNotice(t.acupEditSuccess);
         }}
+      />
+
+      <EditCompanyPriceModal
+        customer={priceCustomer}
+        onClose={() => setPriceCustomer(null)}
+        onSaved={patch => {
+          if (priceCustomer) patchCustomer(priceCustomer.id, x => ({ ...x, ...patch }));
+          setPriceCustomer(null);
+        }}
+      />
+
+      <CustomerSpecialPricesModal
+        customer={specialPricesCustomer}
+        onClose={() => setSpecialPricesCustomer(null)}
       />
 
       <ConfirmDialog

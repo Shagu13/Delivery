@@ -12,6 +12,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
 
     public DbSet<Courier>          Couriers          => Set<Courier>();
     public DbSet<Customer>         Customers         => Set<Customer>();
+    public DbSet<CustomerSpecialPrice> CustomerSpecialPrices => Set<CustomerSpecialPrice>();
     public DbSet<Tenant>           Tenants           => Set<Tenant>();
     public DbSet<TenantSettlement> TenantSettlements => Set<TenantSettlement>();
     public DbSet<Warehouse>        Warehouses        => Set<Warehouse>();
@@ -107,6 +108,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(c => c.CompanyServiceCapitalPrice).HasColumnType("decimal(18,2)");
             e.Property(c => c.CompanyServiceCityPrice).HasColumnType("decimal(18,2)");
             e.Property(c => c.CompanyServiceDistrictPrice).HasColumnType("decimal(18,2)");
+        });
+
+        // ── CustomerSpecialPrice (per-district negotiated price exceptions) ────
+        modelBuilder.Entity<CustomerSpecialPrice>(e =>
+        {
+            e.HasKey(s => s.Id);
+            // One row per customer per district — SetCustomerSpecialPriceCommand upserts on it.
+            e.HasIndex(s => new { s.CustomerId, s.DistrictId }).IsUnique();
+            e.HasOne(s => s.Customer).WithMany(c => c.SpecialPrices)
+             .HasForeignKey(s => s.CustomerId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.District).WithMany()
+             .HasForeignKey(s => s.DistrictId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(s => s.Price).HasColumnType("decimal(18,2)");
         });
 
         // ── Tenant (white-label brand) ────────────────────────────────────────

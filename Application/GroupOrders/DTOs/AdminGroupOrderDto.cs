@@ -1,3 +1,4 @@
+using Application.Customers.DTOs;
 using Domain.Enums;
 
 namespace Application.GroupOrders.DTOs;
@@ -38,6 +39,9 @@ public sealed record AdminGroupOrderDto(
     decimal? CompanyServiceCapitalPrice,
     decimal? CompanyServiceCityPrice,
     decimal? CompanyServiceDistrictPrice,
+    // Per-district price exceptions on top of the tiers above (empty when the batch has no
+    // linked customer or the customer has none). Same auto-fill purpose as the tiers above.
+    IReadOnlyList<CustomerSpecialPriceDto> CustomerSpecialPrices,
     // Child orders
     IReadOnlyList<AdminOrderDto> Orders,
     // True for a synthetic "batch" wrapping a single standalone order (GroupOrderId

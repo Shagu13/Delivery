@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Customers.DTOs;
 using Application.GroupOrders.DTOs;
 using Domain;
 using MediatR;
@@ -108,6 +109,7 @@ public sealed class GetTenantGroupOrdersQueryHandler
             CompanyServiceCapitalPrice:  null,
             CompanyServiceCityPrice:     null,
             CompanyServiceDistrictPrice: null,
+            CustomerSpecialPrices:   new List<CustomerSpecialPriceDto>(),
             Orders:                  go.Orders.OrderBy(o => o.CreatedAt).Select(MapOrder).ToList()
         ));
 
@@ -137,6 +139,7 @@ public sealed class GetTenantGroupOrdersQueryHandler
             CompanyServiceCapitalPrice:  null,
             CompanyServiceCityPrice:     null,
             CompanyServiceDistrictPrice: null,
+            CustomerSpecialPrices:   new List<CustomerSpecialPriceDto>(),
             Orders:                  new List<AdminOrderDto> { MapOrder(o) }
         ));
 

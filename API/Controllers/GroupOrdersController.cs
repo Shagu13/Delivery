@@ -1065,6 +1065,7 @@ public sealed class GroupOrdersController : BaseController
             CompanyServiceCapitalPrice:  go.CompanyServiceCapitalPrice,
             CompanyServiceCityPrice:     go.CompanyServiceCityPrice,
             CompanyServiceDistrictPrice: go.CompanyServiceDistrictPrice,
+            CustomerSpecialPrices:   go.CustomerSpecialPrices,
             Orders: go.Orders.Select(o => new AdminOrderResponse(
                 Id:                               o.Id,
                 TrackingNumber:                   o.TrackingNumber,

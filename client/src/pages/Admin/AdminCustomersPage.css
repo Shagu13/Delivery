@@ -1,0 +1,230 @@
+/* Admin Customers Page — dense desktop grid + a mobile card list below 780px.
+   Co-located per house convention (see client/CLAUDE.md §6). */
+
+/* ── Desktop table ── */
+.acp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.acp-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-bg-2);
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.acp-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background var(--transition);
+}
+
+.acp-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.acp-table tbody tr:hover {
+  background: var(--color-bg-3);
+}
+
+.acp-table td {
+  padding: 10px 14px;
+  vertical-align: middle;
+}
+
+.acp-table td:last-child {
+  text-align: right;
+}
+
+.acp-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-accent-dim);
+  border: 1.5px solid rgba(196, 127, 23, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.acp-business-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.acp-primary {
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.acp-secondary {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.acp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.acp-badge--active {
+  color: #059669;
+  background: #d1fae5;
+}
+
+.acp-badge--inactive {
+  color: var(--color-text-subtle);
+  background: var(--color-bg-3);
+}
+
+.acp-price-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.acp-price-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: var(--color-bg-3);
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+}
+
+.acp-price-pill--set {
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+}
+
+/* ── Mobile card list ── */
+.acp-cards {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acp-card {
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  animation: fade-up 0.3s ease both;
+}
+
+.acp-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.acp-card__id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.acp-card__name {
+  min-width: 0;
+}
+
+.acp-card__business {
+  font-weight: 700;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.92rem;
+}
+
+.acp-card__person {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acp-card__rows {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.acp-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.acp-card__row-label {
+  color: var(--color-text-subtle);
+  flex-shrink: 0;
+}
+
+.acp-card__row-value {
+  color: var(--color-text);
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acp-card__footer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@media (max-width: 780px) {
+  .acp-table-wrap {
+    display: none;
+  }
+
+  .acp-cards {
+    display: flex;
+  }
+}

@@ -325,6 +325,90 @@ public class GroupOrderOrderBuilderTests
         Assert.Equal(10m, built[0].CompanyServicePrice);
     }
 
+    // ── Per-district special price (customer exception on top of their tiers) ──
+
+    [Fact]
+    public async Task Special_price_beats_customer_negotiated_tier_and_district_default()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+        District tbilisi = ctx.Districts.First(d => d.DistrictName == "TbilisiCenter");
+        Customer customer = Cust(capital: 10m);
+        ctx.CustomerSpecialPrices.Add(SpecialPrice(customer.Id, tbilisi.Id, 3m));
+        ctx.SaveChanges();
+
+        List<Order> built = await Build(ctx, customer, Order("TbilisiCenter"));
+
+        Assert.Equal(3m, built[0].CompanyServicePrice);
+    }
+
+    [Fact]
+    public async Task Special_price_for_a_different_district_is_ignored()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+        District village = ctx.Districts.First(d => d.DistrictName == "Village");
+        Customer customer = Cust(capital: 10m);
+        // Special price set for Village, but this order delivers to the capital.
+        ctx.CustomerSpecialPrices.Add(SpecialPrice(customer.Id, village.Id, 3m));
+        ctx.SaveChanges();
+
+        List<Order> built = await Build(ctx, customer, Order("TbilisiCenter"));
+
+        Assert.Equal(10m, built[0].CompanyServicePrice);
+    }
+
+    [Fact]
+    public async Task Weight_tier_zone_price_beats_the_special_price()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+        District tbilisi = ctx.Districts.First(d => d.DistrictName == "TbilisiCenter");
+        WeightPriceTier tier = Tier(capital: 7m);
+        ctx.WeightPriceTiers.Add(tier);
+        Customer customer = Cust(capital: 10m);
+        ctx.CustomerSpecialPrices.Add(SpecialPrice(customer.Id, tbilisi.Id, 3m));
+        ctx.SaveChanges();
+
+        List<Order> built = await Build(ctx, customer, Order("TbilisiCenter", tier: tier.Id));
+
+        Assert.Equal(7m, built[0].CompanyServicePrice);
+    }
+
+    [Fact]
+    public async Task Explicit_override_beats_the_special_price()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+        District tbilisi = ctx.Districts.First(d => d.DistrictName == "TbilisiCenter");
+        Customer customer = Cust(capital: 10m);
+        ctx.CustomerSpecialPrices.Add(SpecialPrice(customer.Id, tbilisi.Id, 3m));
+        ctx.SaveChanges();
+
+        List<Order> built = await Build(ctx, customer, Order("TbilisiCenter", explicitPrice: 99m));
+
+        Assert.Equal(99m, built[0].CompanyServicePrice);
+    }
+
+    [Fact]
+    public async Task Special_price_follows_the_delivery_zone_not_a_swapped_pickup()
+    {
+        using AppDbContext ctx = NewContext();
+        SeedDistricts(ctx);
+        District tbilisi = ctx.Districts.First(d => d.DistrictName == "TbilisiCenter");
+        Customer customer = Cust();   // no negotiated tiers at all
+        ctx.CustomerSpecialPrices.Add(SpecialPrice(customer.Id, tbilisi.Id, 3m));
+        ctx.SaveChanges();
+
+        // Pickup is a non-capital city, delivery is the capital — the default price would
+        // swap to the pickup zone, but the special price is keyed off the delivery district
+        // and must still apply.
+        List<Order> built = await Build(
+            ctx, customer, Order("TbilisiCenter"), pickupDistrict: "RustaviCenter");
+
+        Assert.Equal(3m, built[0].CompanyServicePrice);
+    }
+
     // ── Returns price off their own pickup district (never swapped) ────────────
 
     [Fact]

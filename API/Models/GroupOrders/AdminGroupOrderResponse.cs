@@ -1,3 +1,5 @@
+using Application.Customers.DTOs;
+
 namespace API.Models.GroupOrders;
 
 /// <summary>HTTP response for GET /api/grouporders — admin list view.</summary>
@@ -30,6 +32,8 @@ public sealed record AdminGroupOrderResponse(
     decimal? CompanyServiceCapitalPrice,
     decimal? CompanyServiceCityPrice,
     decimal? CompanyServiceDistrictPrice,
+    // Per-district price exceptions on top of the tiers above (see AdminGroupOrderDto).
+    IReadOnlyList<CustomerSpecialPriceDto> CustomerSpecialPrices,
     IReadOnlyList<AdminOrderResponse> Orders,
     // True for a synthetic "batch" wrapping a single standalone order (GroupOrderId ==
     // null) — the Id is the order's own id, not a real GroupOrder id.

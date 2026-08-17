@@ -9,6 +9,8 @@ using Application.Customers.Commands.SetTenant;
 using Application.Customers.Commands.UpdateCustomer;
 using Application.Customers.DTOs;
 using Application.Customers.Queries;
+using Application.Customers.SpecialPrices.Commands;
+using Application.Customers.SpecialPrices.Queries;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -162,6 +164,37 @@ public sealed class CustomersController : BaseController
         return NoContent();
     }
 
+    // ── GET /api/customers/{id}/special-prices  (Admin/Operator) ──────────────
+    /// <summary>Per-district price exceptions on top of the capital/city/district tiers.</summary>
+    [HttpGet("{id:guid}/special-prices")]
+    [Authorize(Roles = "Admin,Operator")]
+    public async Task<IActionResult> GetSpecialPrices(Guid id, CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCustomerSpecialPricesQuery(id), ct);
+        return Ok(result);
+    }
+
+    // ── PUT /api/customers/{id}/special-prices  (Admin/Operator — upsert one district) ──
+    [HttpPut("{id:guid}/special-prices")]
+    [Authorize(Roles = "Admin,Operator")]
+    public async Task<IActionResult> SetSpecialPrice(
+        Guid id, [FromBody] SetSpecialPriceRequest request, CancellationToken ct)
+    {
+        await Sender.Send(new SetCustomerSpecialPriceCommand(id, request.DistrictId, request.Price), ct);
+        var result = await Sender.Send(new GetCustomerSpecialPricesQuery(id), ct);
+        return Ok(result);
+    }
+
+    // ── DELETE /api/customers/{id}/special-prices/{specialPriceId}  (Admin/Operator) ──
+    [HttpDelete("{id:guid}/special-prices/{specialPriceId:guid}")]
+    [Authorize(Roles = "Admin,Operator")]
+    public async Task<IActionResult> DeleteSpecialPrice(Guid id, Guid specialPriceId, CancellationToken ct)
+    {
+        await Sender.Send(new DeleteCustomerSpecialPriceCommand(id, specialPriceId), ct);
+        var result = await Sender.Send(new GetCustomerSpecialPricesQuery(id), ct);
+        return Ok(result);
+    }
+
     // ── PUT /api/customers/{id}  (Admin/Operator — any; TenantAdmin — own tenant's customer) ──
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin,Operator,TenantAdmin")]
@@ -253,10 +286,12 @@ public sealed class CustomersController : BaseController
             isCompanyServicePriceIncludedInPrice, tenantId, registrationHost));
 }
 
-// ── Request model ─────────────────────────────────────────────────────────────
+// ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetCompanyPriceRequest(
     decimal? CapitalPrice,
     decimal? CityPrice,
     decimal? DistrictPrice,
     bool     IsCompanyServicePriceIncludedInPrice = false
 );
+
+public sealed record SetSpecialPriceRequest(Guid DistrictId, decimal Price);

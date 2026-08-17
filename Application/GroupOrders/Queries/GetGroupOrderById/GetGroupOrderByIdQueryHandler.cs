@@ -21,7 +21,7 @@ public sealed class GetGroupOrderByIdQueryHandler : IRequestHandler<GetGroupOrde
         var groupOrder = await _context.GroupOrders
             .Include(go => go.Orders)
             .Include(go => go.Courier)
-            .Include(go => go.Customer)
+            .Include(go => go.Customer).ThenInclude(c => c!.SpecialPrices).ThenInclude(s => s.District).ThenInclude(d => d.City)
             .AsNoTracking()
             .FirstOrDefaultAsync(go => go.Id == request.Id, cancellationToken);
 
@@ -31,7 +31,7 @@ public sealed class GetGroupOrderByIdQueryHandler : IRequestHandler<GetGroupOrde
             return GroupOrderMapping.MapGroupOrder(groupOrder, cityGeo, districtGeo);
 
         var standalone = await _context.Orders
-            .Include(o => o.Customer)
+            .Include(o => o.Customer).ThenInclude(c => c!.SpecialPrices).ThenInclude(s => s.District).ThenInclude(d => d.City)
             .Include(o => o.Courier)
             .AsNoTracking()
             .FirstOrDefaultAsync(o => o.Id == request.Id && o.GroupOrderId == null, cancellationToken);

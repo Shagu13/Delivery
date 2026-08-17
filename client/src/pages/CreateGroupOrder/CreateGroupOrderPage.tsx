@@ -196,7 +196,7 @@ export function CreateGroupOrderPage() {
     useEffect(() => () => { if (addedTimerRef.current) clearTimeout(addedTimerRef.current); }, []);
     const [globalError,  setGlobalError]  = useState<string | null>(null);
     const [result,       setResult]       = useState<CreateGroupOrderResponse | null>(null);
-    const [customerPricing, setCustomerPricing] = useState<Pick<Customer, 'companyServiceCapitalPrice' | 'companyServiceCityPrice' | 'companyServiceDistrictPrice'> | null>(null);
+    const [customerPricing, setCustomerPricing] = useState<Pick<Customer, 'companyServiceCapitalPrice' | 'companyServiceCityPrice' | 'companyServiceDistrictPrice' | 'specialPrices'> | null>(null);
     const [serviceIncludedForced, setServiceIncludedForced] = useState(false);
     const [senderAddress, setSenderAddress] = useState<{ city: string; district: string; address: string } | null>(null);
 
@@ -263,6 +263,7 @@ export function CreateGroupOrderPage() {
                     companyServiceCapitalPrice:  profile.companyServiceCapitalPrice,
                     companyServiceCityPrice:     profile.companyServiceCityPrice,
                     companyServiceDistrictPrice: profile.companyServiceDistrictPrice,
+                    specialPrices:               profile.specialPrices,
                 });
                 setServiceIncludedForced(profile.isCompanyServicePriceIncludedInPrice);
                 setSenderAddress({ city: profile.city, district: profile.district, address: profile.address });
@@ -415,7 +416,9 @@ export function CreateGroupOrderPage() {
                     }
                 }
                 if (fee === 0 && customerPricing) {
-                    if (customerZone?.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
+                    const special = customerZone && customerPricing.specialPrices?.find(s => s.districtId === customerZone.id);
+                    if (special) fee = special.price;
+                    else if (customerZone?.isCapitalTerritory && (customerPricing.companyServiceCapitalPrice ?? 0) > 0)
                         fee = customerPricing.companyServiceCapitalPrice!;
                     else if (customerZone?.isCityTerritory && (customerPricing.companyServiceCityPrice ?? 0) > 0)
                         fee = customerPricing.companyServiceCityPrice!;

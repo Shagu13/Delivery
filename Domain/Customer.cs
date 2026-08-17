@@ -67,4 +67,10 @@ public class Customer
     public required string ApplicationUserId { get; set; }
     public ApplicationUser ApplicationUser   { get; set; } = null!;
 
+    // ── Per-district negotiated price exceptions ─────────────────────────────
+    /// <summary>
+    /// Sparse per-district price overrides on top of the capital/city/district tiers above
+    /// (e.g. a special rate for Rustavi specifically). See <see cref="CustomerSpecialPrice"/>.
+    /// </summary>
+    public ICollection<CustomerSpecialPrice> SpecialPrices { get; set; } = new List<CustomerSpecialPrice>();
 }

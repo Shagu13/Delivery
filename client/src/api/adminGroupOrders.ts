@@ -1,4 +1,5 @@
 import type { PagedResult } from '../types/paging';
+import type { CustomerSpecialPrice } from './customers';
 
 const BASE = '/api/grouporders';
 
@@ -93,6 +94,8 @@ export interface AdminGroupOrder {
     companyServiceCapitalPrice: number | null;
     companyServiceCityPrice: number | null;
     companyServiceDistrictPrice: number | null;
+    /** Per-district price exceptions on top of the tiers above (empty when none). */
+    customerSpecialPrices: CustomerSpecialPrice[];
     orders: AdminOrder[];
     /** True for a synthetic single-order "batch" wrapping a standalone order
      *  (GroupOrderId == null). Rendered like a batch but with a Group action. */

@@ -275,7 +275,7 @@ public sealed class GetAllGroupOrdersQueryHandler
             : await _context.GroupOrders
                 .Include(go => go.Orders)
                 .Include(go => go.Courier)
-                .Include(go => go.Customer)
+                .Include(go => go.Customer).ThenInclude(c => c!.SpecialPrices).ThenInclude(s => s.District).ThenInclude(d => d.City)
                 .AsNoTracking()
                 .Where(go => pageGoIds.Contains(go.Id))
                 .ToListAsync(cancellationToken);
@@ -283,7 +283,7 @@ public sealed class GetAllGroupOrdersQueryHandler
         var standalone = pageSoIds.Count == 0
             ? new List<Order>()
             : await _context.Orders
-                .Include(o => o.Customer)
+                .Include(o => o.Customer).ThenInclude(c => c!.SpecialPrices).ThenInclude(s => s.District).ThenInclude(d => d.City)
                 .Include(o => o.Courier)
                 .AsNoTracking()
                 .Where(o => pageSoIds.Contains(o.Id))

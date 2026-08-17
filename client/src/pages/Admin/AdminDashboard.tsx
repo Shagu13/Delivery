@@ -1295,6 +1295,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
         capital:  go.companyServiceCapitalPrice,
         city:     go.companyServiceCityPrice,
         district: go.companyServiceDistrictPrice,
+        specialPrices: go.customerSpecialPrices,
       },
     });
   };

@@ -148,6 +148,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         capital:  go.companyServiceCapitalPrice,
         city:     go.companyServiceCityPrice,
         district: go.companyServiceDistrictPrice,
+        specialPrices: go.customerSpecialPrices,
       },
     });
   };

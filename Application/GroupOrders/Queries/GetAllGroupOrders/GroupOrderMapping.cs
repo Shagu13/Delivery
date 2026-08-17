@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Customers.DTOs;
 using Application.GroupOrders.DTOs;
 using Domain;
 using Domain.Enums;
@@ -36,6 +37,12 @@ internal static class GroupOrderMapping
     }
 
     private sealed record GeoLookupCacheEntry(Dictionary<string, string?> CityGeo, Dictionary<string, string?> DistrictGeo);
+
+    private static IReadOnlyList<CustomerSpecialPriceDto> MapSpecialPrices(Customer? c) =>
+        c?.SpecialPrices.Select(s => new CustomerSpecialPriceDto(
+            s.Id, s.DistrictId, s.District.DistrictName, s.District.DistrictNameGeo, s.District.City.CityName, s.Price)
+        ).ToList()
+        ?? new List<CustomerSpecialPriceDto>();
 
     public static AdminOrderDto MapOrder(Order o, IReadOnlyDictionary<string, string?> cityGeo, IReadOnlyDictionary<string, string?> districtGeo) => new(
         Id:                               o.Id,
@@ -99,6 +106,7 @@ internal static class GroupOrderMapping
         CompanyServiceCapitalPrice:  go.Customer?.CompanyServiceCapitalPrice,
         CompanyServiceCityPrice:     go.Customer?.CompanyServiceCityPrice,
         CompanyServiceDistrictPrice: go.Customer?.CompanyServiceDistrictPrice,
+        CustomerSpecialPrices: MapSpecialPrices(go.Customer),
         Orders: go.Orders.OrderBy(o => o.CreatedAt).Select(o => MapOrder(o, cityGeo, districtGeo)).ToList()
     );
 
@@ -145,6 +153,7 @@ internal static class GroupOrderMapping
             CompanyServiceCapitalPrice:  c?.CompanyServiceCapitalPrice,
             CompanyServiceCityPrice:     c?.CompanyServiceCityPrice,
             CompanyServiceDistrictPrice: c?.CompanyServiceDistrictPrice,
+            CustomerSpecialPrices:   MapSpecialPrices(c),
             Orders:                  new List<AdminOrderDto> { MapOrder(o, cityGeo, districtGeo) },
             IsStandalone:            true);
     }

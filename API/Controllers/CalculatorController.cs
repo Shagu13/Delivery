@@ -24,7 +24,9 @@ public sealed class CalculatorController : ControllerBase
     /// price "swaps" to the pickup location instead of the destination — e.g. Rustavi → Tbilisi
     /// is priced at Rustavi's rate. Between two non-capital locations there is no swap: the
     /// destination's own zone and default price apply. A customer's negotiated rates are never
-    /// swapped either — they always follow the destination's zone (capital/city/district).
+    /// swapped either — they always follow the destination's zone (capital/city/district), and
+    /// a per-district special price (if the customer has one for the destination) wins over
+    /// that zone tier.
     /// </summary>
     [HttpGet]
     [AllowAnonymous]
@@ -72,7 +74,16 @@ public sealed class CalculatorController : ControllerBase
 
             if (customer is not null)
             {
-                if (customerZone.IsCapitalTerritory && customer.CompanyServiceCapitalPrice is > 0)
+                var special = await _context.CustomerSpecialPrices
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.CustomerId == customerId && s.DistrictId == customerZone.Id, ct);
+
+                if (special is not null)
+                {
+                    price = special.Price;
+                    tier  = "special";
+                }
+                else if (customerZone.IsCapitalTerritory && customer.CompanyServiceCapitalPrice is > 0)
                 {
                     price = customer.CompanyServiceCapitalPrice!.Value;
                     tier  = "capital";
