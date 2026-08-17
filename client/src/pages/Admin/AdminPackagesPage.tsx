@@ -17,244 +17,35 @@ import { createPortal } from 'react-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
-import { getStatusMeta } from '../../utils/statusMeta';
-import { recipientDisplayName } from '../../utils/recipientName';
 import { georgianToday, georgianDateKeyOf, toDateKey } from '../../utils/georgianTime';
 import { resolveDateWindow } from '../../utils/dateWindow';
-import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { LocationMultiPicker } from '../../components/ui/LocationMultiPicker';
 import { DebouncedSearchBox } from '../../components/ui/DebouncedSearchBox';
 import {
-  fetchGroupOrders, fetchGroupOrderLocations, fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup,
-  mergeGroupOrders, moveOrderToGroup, groupAndAcceptStandalone, groupAndWarehouseStandalone,
+  fetchGroupOrders, fetchGroupOrderLocations, fetchPickupDay,
+  groupAndAcceptStandalone, groupAndWarehouseStandalone,
 } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/adminGroupOrders';
 import { fetchCouriers } from '../../api/couriers';
-import {
-  setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders,
-  adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations,
-} from '../../api/orders';
-import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
-import { OrderRowActionsMenu } from './OrderRowActionsMenu';
+import { fetchOrderLocations } from '../../api/orders';
+import { AdminGroupOrderActions } from './AdminGroupOrderActions';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
 import type { AdminOrderItem } from './AdminOrdersPage';
-
-// ── Constants copied from the Pick-Up page (AdminDashboard.tsx) ───────────────
-
-// The backend now matches search as a prefix (StartsWith) per field — fast because it's
-// index-backed, but a 1-character prefix is too broad to be a useful filter and would still
-// fire a real query on every keystroke.
-const MIN_SEARCH_CHARS = 2;
-
-const ACTIVE_ORDER_STATUSES_ONLY = new Set([
-  'DeliveredToRecipient', 'CancelledBySender', 'CancelledByAdmin',
-  'OrderNotAccepted', 'ReturnedToSender', 'ExchangeCompleted',
-]);
-
-const PICKUP_BUCKET: Record<string, number> = {
-  Pending: 0, AcceptedGroupOrder: 0,
-  CourierAssignedToPickUp: 1, CourierDeliveringToWarehouse: 1,
-};
-const pickupBucket = (groupStatus: string) => PICKUP_BUCKET[groupStatus] ?? 2;
-
-const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAssignedToPickUp']);
-
-const PAGE_SIZE = 30;
-
-const customerGroupKey = (go: AdminGroupOrder) =>
-  `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
-
-const STATUS_PILLS = [
-  { value: '',                                label: 'pillAll' },
-  { value: 'Pending',                         label: 'pillPending' },
-  { value: 'AcceptedGroupOrder',              label: 'pillAccepted' },
-  { value: 'CourierAssignedToPickUp',         label: 'pillCourierPickup' },
-  { value: 'CourierDeliveringToWarehouse',    label: 'pillToWarehouse' },
-  { value: 'DeliveredToWarehouse',            label: 'pillAtWarehouse' },
-  { value: 'AdminAcceptedOrderInWareHouse',   label: 'pillWarehouseAccepted' },
-  { value: 'OrderIsOnItsWayToRecipientsCity', label: 'pillSentToCity' },
-  { value: 'CourierAssignedToDeliver',        label: 'pillCourierDelivery' },
-  { value: 'CourierDeliveringTheOrderToRecipient', label: 'pillCourierReceived' },
-] as const;
-
-const STATUS_CLASS_MAP: Record<string, string> = {
-  Pending: 'pending', AcceptedGroupOrder: 'accepted', AcceptedOrder: 'accepted',
-  CourierAssignedToPickUp: 'assigned',
-  CourierDeliveringToWarehouse: 'delivering', DeliveredToWarehouse: 'warehouse',
-  AdminAcceptedOrderInWareHouse: 'warehouse', OrderIsOnItsWayToRecipientsCity: 'onway',
-  CourierAssignedToDeliver: 'assigned', CourierDeliveringTheOrderToRecipient: 'delivering',
-  OrderIsBeingDeliveredToRecipient: 'delivering', DeliveredToRecipient: 'delivered',
-  CancelledBySender: 'cancelled', CancelledByAdmin: 'cancelled', OrderNotAccepted: 'declined',
-};
-
-// ── Delivery-side helpers (copied from AdminOrdersPage.tsx) ───────────────────
-
-const LAST_MILE_STATUSES = [
-  'AdminAcceptedOrderInWareHouse', 'OrderIsOnItsWayToRecipientsCity',
-  'CourierAssignedToDeliver', 'CourierDeliveringTheOrderToRecipient', 'DeliveryPostponed',
-];
-
-function isAssignable(o: AdminOrderItem): boolean {
-  return o.status === 'AdminAcceptedOrderInWareHouse'
-      || o.status === 'OrderIsOnItsWayToRecipientsCity'
-      || o.status === 'CourierAssignedToDeliver'
-      || o.status === 'CourierDeliveringTheOrderToRecipient'
-      || o.status === 'DeliveryPostponed'
-      || (o.orderType === 'Return' && (o.status === 'Pending' || o.status === 'CourierAssignedToPickUp'));
-}
-
-function isDeliverable(o: AdminOrderItem): boolean {
-  return o.orderType !== 'Return' && LAST_MILE_STATUSES.includes(o.status);
-}
-
-function recipientAmountDue(o: { productPaymentStatus: string; amountToCollectForPackage: number | null; whoPaysForCompanyService: string; companyServicePrice: number }): number {
-  const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-  const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
-  return cod + fee;
-}
-
-// A Return order is picked up from `returnPickup*` (entered explicitly when the return
-// was created) — not the "recipient" fields, which for Return orders hold the business's
-// own address (where the item is ultimately returned to), not where the courier actually
-// goes to collect it. No geo variant exists for return-pickup fields (plain text entry),
-// unlike recipient city/district. Structural type so it works for both AdminOrderItem and
-// AdminOrder (the pickup-customer-grid modals use the latter).
-interface PickupLocationFields {
-  orderType: string;
-  recipientCity: string;
-  recipientCityGeo?: string;
-  recipientDistrict: string;
-  recipientDistrictGeo?: string;
-  recipientAddress: string;
-  returnPickupCity?: string | null;
-  returnPickupDistrict?: string | null;
-  returnPickupAddress?: string | null;
-}
-function pickupCityDisplay(o: PickupLocationFields, lang: string): string {
-  if (o.orderType === 'Return' && o.returnPickupCity) return o.returnPickupCity;
-  return lang === 'ka' && o.recipientCityGeo ? o.recipientCityGeo : o.recipientCity;
-}
-function pickupDistrictDisplay(o: PickupLocationFields, lang: string): string {
-  if (o.orderType === 'Return' && o.returnPickupCity) return o.returnPickupDistrict ?? '';
-  return lang === 'ka' && o.recipientDistrictGeo ? o.recipientDistrictGeo : o.recipientDistrict;
-}
-function pickupAddressDisplay(o: PickupLocationFields): string {
-  return o.orderType === 'Return' && o.returnPickupCity ? (o.returnPickupAddress ?? '') : o.recipientAddress;
-}
-
-function buildAdminLabel(o: AdminOrderItem): ParcelLabelData {
-  const due = recipientAmountDue(o);
-  const city     = o.orderType === 'Return' && o.returnPickupCity ? o.returnPickupCity     : (o.recipientCityGeo     || o.recipientCity);
-  const district = o.orderType === 'Return' && o.returnPickupCity ? (o.returnPickupDistrict ?? '') : (o.recipientDistrictGeo || o.recipientDistrict);
-  const address  = pickupAddressDisplay(o);
-  return {
-    storeName:        o.senderBusinessName,
-    recipientName:    recipientDisplayName(o.recipientName, 'უცნობი'),
-    recipientPhone:   o.recipientPhone,
-    recipientAddress: [city, district, address].filter(Boolean).join(', '),
-    amountText:       due > 0.005 ? `₾${due.toFixed(2)}` : 'გადახდილია',
-    description:      o.description ?? undefined,
-    trackingNumber:   o.trackingNumber,
-  };
-}
-
-function fmtDateTime(iso: string, lang: string): string {
-  return new Intl.DateTimeFormat(lang === 'ka' ? 'ka-GE' : 'en-GB', {
-    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-  }).format(new Date(iso));
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-}
-
-// Map a group order's package + its parent into the AdminOrderItem shape the delivery
-// modals/actions expect. `courierFullName` is resolved from the couriers roster.
-function toOrderItem(o: AdminOrder, go: AdminGroupOrder, courierName: string | null): AdminOrderItem {
-  return {
-    id: o.id,
-    trackingNumber: o.trackingNumber,
-    senderBusinessName: go.senderBusinessName,
-    senderFirstName: go.senderFirstName,
-    senderLastName: go.senderLastName,
-    senderPhone: go.senderPhone,
-    alternativeSenderPhone: go.alternativeSenderPhone ?? null,
-    groupOrderId: go.id,
-    pickUpCity: go.pickUpCity,
-    pickUpDistrict: go.pickUpDistrict,
-    pickUpAddress: go.pickUpAddress,
-    recipientName: o.recipientName,
-    recipientPhone: o.recipientPhone,
-    recipientCity: o.recipientCity,
-    recipientCityGeo: o.recipientCityGeo,
-    recipientDistrict: o.recipientDistrict,
-    recipientDistrictGeo: o.recipientDistrictGeo,
-    recipientAddress: o.recipientAddress,
-    description: o.description,
-    isFragile: o.isFragile,
-    orderType: o.orderType,
-    status: o.status,
-    productPaymentStatus: o.productPaymentStatus,
-    whoPaysForCompanyService: o.whoPaysForCompanyService,
-    companyServicePrice: o.companyServicePrice,
-    isCompanyServicePriceIncluded: o.isCompanyServicePriceIncluded,
-    courierSalary: o.courierSalary,
-    companyRevenue: o.companyRevenue,
-    amountToCollectForPackage: o.amountToCollectForPackage,
-    returnPickupCity: o.returnPickupCity ?? null,
-    returnPickupDistrict: o.returnPickupDistrict ?? null,
-    returnPickupAddress: o.returnPickupAddress ?? null,
-    courierId: o.courierId,
-    courierFullName: o.courierId ? courierName : null,
-    createdAt: o.createdAt,
-    deliveredAt: o.deliveredAt,
-    postponeReason: null,
-    postponeComment: null,
-  };
-}
-
-// ── Status badge (copied) ─────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: string }) {
-  const { lang } = useLanguage();
-  const meta = getStatusMeta(status, lang);
-  return (
-    <span
-      className={`status-badge status-badge--${STATUS_CLASS_MAP[status] ?? 'pending'}`}
-      title={meta.description}
-    >
-      {meta.short}
-    </span>
-  );
-}
-
-// Distinguishes Send/Return/Exchange on a package row — Return orders are otherwise visually
-// identical to a normal Send (same table, same status pill), which confused admins into
-// treating them as ordinary deliveries.
-function OrderTypeBadge({ orderType }: { orderType: string }) {
-  const { t } = useLanguage();
-  const style = orderType === 'Return'
-    ? { background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }
-    : orderType === 'Exchange'
-    ? { background: 'rgba(59,130,246,0.1)', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.25)' }
-    : { background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)', border: '1px solid var(--color-border)' };
-  const label = orderType === 'Return' ? t.aopOrderTypeReturn : orderType === 'Exchange' ? t.aopOrderTypeExchange : t.aopOrderTypeSend;
-  return (
-    <span style={{
-      display: 'inline-block', fontSize: '0.62rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100,
-      letterSpacing: '0.03em', textTransform: 'uppercase', whiteSpace: 'nowrap', ...style,
-    }}>
-      {label}
-    </span>
-  );
-}
+import {
+  MIN_SEARCH_CHARS, ACTIVE_ORDER_STATUSES_ONLY, MERGEABLE_STATUSES, PAGE_SIZE, customerGroupKey,
+  STATUS_PILLS, pickupBucket, formatDate, toOrderItem,
+} from './AdminPackages/shared';
+import { StatusBadge } from './AdminPackages/Badges';
+import { MergeModal } from './AdminPackages/MergeModal';
+import { GroupingModal } from './AdminPackages/GroupingModal';
+import { PackageRow, PackageTableHead } from './AdminPackages/PackageRow';
+import { BulkFieldModal } from './AdminPackages/BulkFieldModal';
+import { usePackageSelection } from './AdminPackages/usePackageSelection';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
@@ -315,37 +106,12 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   const [ungroupedCustomerFilter, setUngroupedCustomerFilter] = useState<string>('');
 
   // ── Delivery state (mirrors AdminOrdersPage) ────────────────────────────────
-  const [selected,      setSelected]      = useState<Set<string>>(new Set());
+  // Selection + bulk assign/price/salary/deliver state lives in usePackageSelection below.
   const [showTracking,  setShowTracking]  = useState(false);
   const [showPrices,    setShowPrices]    = useState(false);
-  const [exporting,     setExporting]     = useState(false);
   const [viewingOrder,  setViewingOrder]  = useState<AdminOrderItem | null>(null);
   const [filterCourier, setFilterCourier] = useState<string>('');   // delivery courierId; '' = all
   const [filterUnpriced, setFilterUnpriced] = useState(false);
-
-  type BulkMode = 'assign' | 'prices' | 'deliver';
-  const [bulkMode,      setBulkMode]      = useState<BulkMode>('assign');
-  const [bulkCourierId, setBulkCourierId] = useState('');
-  const [bulkAssigning, setBulkAssigning] = useState(false);
-  const [bulkDelivering,setBulkDelivering]= useState(false);
-  const [showBulkModal, setShowBulkModal] = useState(false);
-  const [bulkPrice,     setBulkPrice]     = useState('');
-  const [bulkSalary,    setBulkSalary]    = useState('');
-  const [bulkBusy,      setBulkBusy]      = useState(false);
-  const [showSalaryWarning, setShowSalaryWarning] = useState(false);
-  const [showSalaryModal,   setShowSalaryModal]   = useState(false);
-  const [salaryDrafts,      setSalaryDrafts]      = useState<Record<string, string>>({});
-  const [salaryChecked,     setSalaryChecked]     = useState<Set<string>>(new Set());
-  const [salarySaving,      setSalarySaving]      = useState(false);
-  const [showPriceWarning,  setShowPriceWarning]  = useState(false);
-  const [showPriceModal,    setShowPriceModal]    = useState(false);
-  const [priceDrafts,       setPriceDrafts]       = useState<Record<string, string>>({});
-  const [priceChecked,      setPriceChecked]      = useState<Set<string>>(new Set());
-  const [priceSaving,       setPriceSaving]       = useState(false);
-  // After a price/salary save inside the assign/deliver gating, the original action is
-  // resumed automatically (see the effect below) so the admin doesn't have to re-click
-  // "Assign"/"Mark delivered" once the missing financials are filled in.
-  const [resumeAction,      setResumeAction]      = useState<null | 'assign' | 'deliver'>(null);
 
   const showPricesEff = canManage && showPrices;
   // Revenue column additionally requires canSeeRevenue (hidden from operators).
@@ -404,18 +170,46 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     excludeCompleted: true,
   };
 
+  // Mirrors the main list's filters/date window, but with a generous pageSize instead of
+  // paginating — a batch count within one browsing window is realistically small. Feeds
+  // mergeableByCustomer/batchesFor/multiBatchCustomers/ungroupedCustomers, which need every
+  // batch for a day (not just whatever fits on the current 30-item page) to detect same-day
+  // merge candidates and unattached orders correctly.
+  const windowScopedQuery = useQuery({
+    queryKey: ['admin', 'packagesTest', 'windowScoped', pkgFilters, pkgDate, pkgDateTo] as const,
+    queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page: 1, pageSize: 500 }),
+    enabled: !!token,
+    placeholderData: keepPreviousData,
+  });
+  const windowScopedOrders = windowScopedQuery.data?.items ?? [];
+  const windowScopedTotal  = windowScopedQuery.data?.totalCount ?? 0;
+
+  // The window above already holds every matching row in the near-universal case (its 500-row
+  // cap is already assumed "realistically small" per the comment above), so the current page
+  // can be sliced from it in memory instead of firing a second, identically-filtered request
+  // against the same (expensive, free-text-search-scanning) backend query. mainQuery only needs
+  // to hit the network for the rare filter that genuinely returns more than 500 matches.
+  const needsServerPage = windowScopedTotal > 500;
+
   const listQueryKey = ['admin', 'packagesTest', 'list', pkgFilters, pkgDate, pkgDateTo, page] as const;
 
   const mainQuery = useQuery({
     queryKey: listQueryKey,
     queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page, pageSize: PAGE_SIZE }),
-    enabled: !!token,
+    enabled: !!token && needsServerPage,
     placeholderData: keepPreviousData,
   });
-  const groupOrders = mainQuery.data?.items ?? [];
-  const totalPages  = mainQuery.data?.totalPages ?? 1;
-  const loading     = mainQuery.isPending;
-  const error       = mainQuery.isError ? (mainQuery.error instanceof Error ? mainQuery.error.message : t.goLoadingOrders) : null;
+  const groupOrders = needsServerPage
+    ? (mainQuery.data?.items ?? [])
+    : windowScopedOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = needsServerPage
+    ? (mainQuery.data?.totalPages ?? 1)
+    : Math.max(1, Math.ceil(windowScopedTotal / PAGE_SIZE));
+  const loading = needsServerPage ? mainQuery.isPending : windowScopedQuery.isPending;
+  const activeListQuery = needsServerPage ? mainQuery : windowScopedQuery;
+  const error = activeListQuery.isError
+    ? (activeListQuery.error instanceof Error ? activeListQuery.error.message : t.goLoadingOrders)
+    : null;
 
   const summaryQuery = useQuery({
     queryKey: ['admin', 'pickup', 'summary', effectiveDayKey] as const,
@@ -424,23 +218,15 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   });
   const daySummary = summaryQuery.data ?? [];
 
-  // Mirrors the main list's filters/date window, but with a generous pageSize instead of
-  // paginating — a batch count within one browsing window is realistically small. Feeds
-  // mergeableByCustomer/batchesFor/multiBatchCustomers/ungroupedCustomers, which need every
-  // batch for a day (not just whatever fits on the current 30-item page) to detect same-day
-  // merge candidates and unattached orders correctly.
-  const windowScopedQuery = useQuery({
-    queryKey: ['admin', 'packagesTest', 'windowScoped', pkgFilters, pkgDate, pkgDateTo] as const,
-    queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page: 1, pageSize: 500 }).then(r => r.items),
-    enabled: !!token,
-    placeholderData: keepPreviousData,
-  });
-  const windowScopedOrders = windowScopedQuery.data ?? [];
-
-  // Reload with the current filters/page — used by realtime pings and after any mutation
-  // that doesn't itself change a filter (assign courier, save price/salary, move/merge/group…).
+  // Reload with the current filters/page — used by realtime pings and after any mutation that
+  // doesn't itself change a filter (assign courier, save price/salary, move/merge/group…).
+  // Refetches whichever query is actually backing the visible page right now (see
+  // needsServerPage above), since that's what a single-row edit needs refreshed to show up.
   // Returns the refetch promise so callers that need the fresh data before proceeding can await it.
-  const reload = useCallback(() => mainQuery.refetch(), [mainQuery]);
+  const reload = useCallback(
+    () => (needsServerPage ? mainQuery.refetch() : windowScopedQuery.refetch()),
+    [needsServerPage, mainQuery, windowScopedQuery],
+  );
   const loadSummary = useCallback(() => summaryQuery.refetch(), [summaryQuery]);
   const loadWindowScoped = useCallback(() => windowScopedQuery.refetch(), [windowScopedQuery]);
 
@@ -459,30 +245,21 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     q.isFetching || Date.now() - q.dataUpdatedAt < SELF_ECHO_MS;
 
   useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
-    if (!isQueryFresh(mainQuery)) void reload();
-    if (!isQueryFresh(summaryQuery)) void loadSummary();
     if (!isQueryFresh(windowScopedQuery)) void loadWindowScoped();
+    if (needsServerPage && !isQueryFresh(mainQuery)) void mainQuery.refetch();
+    if (!isQueryFresh(summaryQuery)) void loadSummary();
   });
 
-  // After a delivery mutation: silently reload and clear the selection.
-  const reloadAfterAction = useCallback(() => {
-    void reload();
-    void loadSummary();
+  // Refetch everything a mutation elsewhere in the batch/group-order flow could have changed.
+  // loadWindowScoped() alone covers the visible page in the common case (see needsServerPage);
+  // mainQuery is only refetched too when it's genuinely the page's data source right now.
+  // Shared by every pickup-side action (move/merge/group/accept/warehouse-accept) so they don't
+  // each hand-roll the same triplet of refetches.
+  const reloadAll = useCallback(() => {
     void loadWindowScoped();
-    setSelected(new Set());
-  }, [reload, loadSummary, loadWindowScoped]);
-
-  // Esc leaves deliver mode (mirrors AdminOrdersPage).
-  useEffect(() => {
-    if (bulkMode !== 'deliver') return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (showBulkModal || showPriceModal || showSalaryModal || showPriceWarning || showSalaryWarning) return;
-      setBulkMode('assign'); setSelected(new Set()); setBulkCourierId('');
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [bulkMode, showBulkModal, showPriceModal, showSalaryModal, showPriceWarning, showSalaryWarning]);
+    if (needsServerPage) void mainQuery.refetch();
+    void loadSummary();
+  }, [loadWindowScoped, needsServerPage, mainQuery, loadSummary]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -708,434 +485,26 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     }).filter(c => c.rows.length > 0).sort((a, b) => a.earliest - b.earliest);
   }, [visibleOrdersFor]);
 
-  // ── Selection / bulk pool ───────────────────────────────────────────────────
-  // Flat list of every package currently shown, as AdminOrderItem. Drives selection,
-  // select-all and the bulk-action pool. Built from displayList so it follows filters.
-  const visibleItems = useMemo(() => {
-    const out: AdminOrderItem[] = [];
-    for (const go of displayList) {
-      for (const o of visibleOrdersFor(go)) {
-        out.push(toOrderItem(o, go, o.courierId ? (courierNameById.get(o.courierId) ?? null) : null));
-      }
-    }
-    return out;
-  }, [displayList, visibleOrdersFor, courierNameById]);
-
-  const itemById = useMemo(() => {
-    const m = new Map<string, AdminOrderItem>();
-    visibleItems.forEach(it => m.set(it.id, it));
-    return m;
-  }, [visibleItems]);
-
-  const selectableOrders = useMemo(() =>
-    bulkMode === 'assign'  ? visibleItems.filter(isAssignable)  :
-    bulkMode === 'deliver' ? visibleItems.filter(isDeliverable) :
-    visibleItems,
-  [visibleItems, bulkMode]);
-
-  const allSelected  = selectableOrders.length > 0 && selectableOrders.every(o => selected.has(o.id));
-  const someSelected = selected.size > 0;
-  const toggleAll    = () => setSelected(allSelected ? new Set() : new Set(selectableOrders.map(o => o.id)));
-  const toggleOne    = (id: string) => setSelected(prev => {
-    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  const {
+    selected, setSelected,
+    exporting,
+    bulkMode, setBulkMode,
+    bulkCourierId, setBulkCourierId, bulkAssigning, bulkDelivering,
+    showBulkModal, setShowBulkModal, bulkPrice, setBulkPrice, bulkSalary, setBulkSalary, bulkBusy,
+    showSalaryWarning, setShowSalaryWarning, showSalaryModal, setShowSalaryModal,
+    salaryDrafts, setSalaryDrafts, salaryChecked, setSalaryChecked, salarySaving,
+    showPriceWarning, setShowPriceWarning, showPriceModal, setShowPriceModal,
+    priceDrafts, setPriceDrafts, priceChecked, setPriceChecked, priceSaving,
+    visibleItems, selectableOrders, allSelected, someSelected, toggleAll, toggleOne,
+    rowSelectable, groupSelectableIds, toggleGroupAll, actionPool,
+    missingSalaryOrders, missingPriceOrders, missingCourierOrders,
+    handleExport, handlePrintLabels, handleBulkApply, cancelBulk,
+    handleBulkAssign, handleBulkDeliver, handleSalarySave, handlePriceSave,
+  } = usePackageSelection({
+    displayList, visibleOrdersFor, courierNameById, couriers, token: token ?? '',
+    filterCities, filterDistricts, debouncedSearch, filterCourier, filterUnpriced,
+    selectedDate, rangeEnd, showToast, reload, reloadAll,
   });
-
-  const rowSelectable = (o: AdminOrderItem) =>
-    bulkMode === 'assign' ? isAssignable(o) : bulkMode === 'deliver' ? isDeliverable(o) : true;
-
-  // Per-batch select-all: the ids of just this expanded group order's currently-selectable
-  // packages (respecting the active bulk mode + location/delivery filters). Toggling scopes
-  // selection to exactly this batch instead of every visible package.
-  const groupSelectableIds = (go: AdminGroupOrder) =>
-    visibleOrdersFor(go).filter(o => rowSelectable(toOrderItem(o, go, null))).map(o => o.id);
-
-  const toggleGroupAll = (go: AdminGroupOrder) => {
-    const ids = groupSelectableIds(go);
-    if (ids.length === 0) return;
-    setSelected(prev => {
-      const allIn = ids.every(id => prev.has(id));
-      const next = new Set(prev);
-      ids.forEach(id => (allIn ? next.delete(id) : next.add(id)));
-      return next;
-    });
-  };
-
-  const actionPool = useMemo(() => {
-    const picked = [...selected].map(id => itemById.get(id)).filter((o): o is AdminOrderItem => !!o);
-    if (bulkMode === 'assign')  return picked.filter(isAssignable);
-    if (bulkMode === 'deliver') return picked.filter(isDeliverable);
-    return picked;
-  }, [selected, itemById, bulkMode]);
-
-  // Only warn when no applicable courier default rate covers the order — mirrors the backend
-  // auto-fill (a Tbilisi/Rustavi courier's DefaultSalary is applied on assign/deliver) and the
-  // Delivery page's gate. Assigning targets the chosen bulkCourierId; delivering keeps an
-  // existing assignee and only falls back to bulkCourierId for orders still missing one.
-  const missingSalaryOrders  = useMemo(() => {
-    const bulkCourierDefault = couriers.find(c => c.courierId === bulkCourierId)?.defaultSalary ?? null;
-    return actionPool.filter(o => {
-      if (o.courierSalary != null) return false;
-      const ownerDefault = bulkMode === 'assign'
-        ? bulkCourierDefault
-        : o.courierId
-          ? (couriers.find(c => c.courierId === o.courierId)?.defaultSalary ?? null)
-          : bulkCourierDefault;
-      return ownerDefault == null;
-    });
-  }, [actionPool, couriers, bulkCourierId, bulkMode]);
-  const missingPriceOrders   = useMemo(() => actionPool.filter(o => !o.companyServicePrice), [actionPool]);
-  const missingCourierOrders = useMemo(() => actionPool.filter(o => !o.courierId), [actionPool]);
-
-  // ── Export / labels ─────────────────────────────────────────────────────────
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      await exportOrdersExcel(token ?? '', {
-        city:      filterCities.length === 1 ? filterCities[0] : undefined,
-        district:  filterDistricts.length === 1 ? filterDistricts[0] : undefined,
-        search:    debouncedSearch || undefined,
-        courierId: filterCourier || undefined,
-        unpriced:  filterUnpriced || undefined,
-        activeOnly: selected.size === 0,
-        date:      selectedDate ? toDateKey(selectedDate) : undefined,
-        dateTo:    rangeEnd ? toDateKey(rangeEnd) : undefined,
-        ids:       selected.size > 0 ? [...selected] : undefined,
-      });
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : t.aopBulkFailed, 'err');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handlePrintLabels = () => {
-    const labels = [...selected].map(id => itemById.get(id)).filter((o): o is AdminOrderItem => !!o).map(buildAdminLabel);
-    void printParcelLabels(labels);
-  };
-
-  // ── Bulk set prices/salary (Prices mode quick row) ──────────────────────────
-  const handleBulkApply = async () => {
-    const price  = bulkPrice  ? parseFloat(bulkPrice)  : null;
-    const salary = bulkSalary ? parseFloat(bulkSalary) : null;
-    if ((price !== null && (isNaN(price) || price < 0)) || (salary !== null && (isNaN(salary) || salary < 0))) return;
-    if (price === null && salary === null) return;
-    if (selected.size === 0) return;
-    setBulkBusy(true);
-    try {
-      const ids = [...selected];
-      await Promise.all(ids.flatMap(id => [
-        ...(price  !== null ? [setCompanyServicePrice(token ?? '', id, price)] : []),
-        ...(salary !== null ? [setCourierSalary(token ?? '', id, salary)] : []),
-      ]));
-      const parts = [
-        price  !== null ? `${t.aopBulkSvcLabel} ₾${price.toFixed(2)}`  : '',
-        salary !== null ? `${t.aopBulkSalLabel} ₾${salary.toFixed(2)}` : '',
-      ].filter(Boolean).join(' + ');
-      showToast(t.aopBulkApplied(parts, ids.length));
-      setShowBulkModal(false); setBulkPrice(''); setBulkSalary('');
-      reloadAfterAction();
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : t.aopBulkFailed, 'err');
-    } finally {
-      setBulkBusy(false);
-    }
-  };
-  const cancelBulk = () => { setShowBulkModal(false); setBulkPrice(''); setBulkSalary(''); };
-
-  // ── Assign courier ──────────────────────────────────────────────────────────
-  const handleBulkAssign = async () => {
-    if (!bulkCourierId || selected.size === 0) return;
-    if (missingPriceOrders.length > 0) {
-      const drafts: Record<string, string> = {}; const checked = new Set<string>();
-      missingPriceOrders.forEach(o => { drafts[o.id] = ''; checked.add(o.id); });
-      setPriceDrafts(drafts); setPriceChecked(checked); setShowPriceWarning(true); return;
-    }
-    if (missingSalaryOrders.length > 0) {
-      const drafts: Record<string, string> = {}; const checked = new Set<string>();
-      missingSalaryOrders.forEach(o => { drafts[o.id] = ''; checked.add(o.id); });
-      setSalaryDrafts(drafts); setSalaryChecked(checked); setShowSalaryWarning(true); return;
-    }
-    await doAssign();
-  };
-
-  const doAssign = async () => {
-    setBulkAssigning(true);
-    const ids = [...selected].filter(id => { const o = itemById.get(id); return !!o && isAssignable(o); });
-    let ok = 0, fail = 0;
-    try {
-      const result = await bulkAssignCourierToOrders(token ?? '', ids, bulkCourierId);
-      ok = result.succeeded.length;
-      fail = result.failed.length;
-    } catch {
-      fail = ids.length;
-    }
-    setBulkAssigning(false); setBulkCourierId('');
-    reloadAfterAction();
-    showToast(fail === 0 ? t.aopAssignedToast(ok) : t.aopAssignedPartial(ok, fail), fail > 0 ? 'err' : 'ok');
-  };
-
-  // ── Mark delivered ──────────────────────────────────────────────────────────
-  const handleBulkDeliver = async () => {
-    if (actionPool.length === 0) { showToast(t.aopNoDeliverable, 'err'); return; }
-    if (missingPriceOrders.length > 0) {
-      const drafts: Record<string, string> = {}; const checked = new Set<string>();
-      missingPriceOrders.forEach(o => { drafts[o.id] = ''; checked.add(o.id); });
-      setPriceDrafts(drafts); setPriceChecked(checked); setShowPriceWarning(true); return;
-    }
-    if (missingSalaryOrders.length > 0) {
-      const drafts: Record<string, string> = {}; const checked = new Set<string>();
-      missingSalaryOrders.forEach(o => { drafts[o.id] = ''; checked.add(o.id); });
-      setSalaryDrafts(drafts); setSalaryChecked(checked); setShowSalaryWarning(true); return;
-    }
-    if (missingCourierOrders.length > 0 && !bulkCourierId) { showToast(t.aopChooseCourierFirst, 'err'); return; }
-    await doDeliver();
-  };
-
-  const doDeliver = async () => {
-    setBulkDelivering(true);
-    const targets = [...selected].map(id => itemById.get(id)).filter((o): o is AdminOrderItem => !!o && isDeliverable(o));
-    let ok = 0, fail = 0;
-    await Promise.all(targets.map(async o => {
-      try {
-        await adminMarkOrderDelivered(token ?? '', o.id, !o.courierId && bulkCourierId ? { courierId: bulkCourierId } : undefined);
-        ok++;
-      } catch { fail++; }
-    }));
-    setBulkDelivering(false); setBulkCourierId('');
-    reloadAfterAction();
-    showToast(fail === 0 ? t.aopDeliveredToast(ok) : t.aopDeliveredPartial(ok, fail), fail > 0 ? 'err' : 'ok');
-  };
-
-  const handleSalarySave = async () => {
-    const toSave = [...salaryChecked].filter(id => { const v = parseFloat(salaryDrafts[id] ?? ''); return !isNaN(v) && v >= 0; });
-    if (toSave.length === 0) { setShowSalaryModal(false); return; }
-    setSalarySaving(true);
-    let saved = false;
-    // Await the reload so the resume below re-checks gating against fresh orders.
-    try { await Promise.all(toSave.map(id => setCourierSalary(token ?? '', id, parseFloat(salaryDrafts[id])))); await reload(); saved = true; }
-    catch { /* best-effort */ }
-    setSalarySaving(false); setShowSalaryModal(false);
-    showToast(t.aopSalarySetToast(toSave.length));
-    // Resume the action that opened this modal — it commits when nothing is missing or
-    // re-prompts otherwise, so the admin never has to click "Assign" a second time.
-    if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
-  };
-
-  const handlePriceSave = async () => {
-    const toSave = [...priceChecked].filter(id => { const v = parseFloat(priceDrafts[id] ?? ''); return !isNaN(v) && v >= 0; });
-    if (toSave.length === 0) { setShowPriceModal(false); return; }
-    setPriceSaving(true);
-    let saved = false;
-    try { await Promise.all(toSave.map(id => setCompanyServicePrice(token ?? '', id, parseFloat(priceDrafts[id])))); await reload(); saved = true; }
-    catch { /* best-effort */ }
-    setPriceSaving(false); setShowPriceModal(false);
-    showToast(t.aopPriceSetToast(toSave.length));
-    // Resume the original action — advances to the salary step (or commits) without a click.
-    if (saved) setResumeAction(bulkMode === 'deliver' ? 'deliver' : 'assign');
-  };
-
-  // Resume the assign/deliver action after a price/salary save, once no gating dialog is
-  // open. Re-running the entry handler re-evaluates the gating against the freshly loaded
-  // orders: it commits when nothing is missing, or re-prompts for whatever is still
-  // missing (e.g. salary right after prices) — so no second "Assign" click is needed.
-  useEffect(() => {
-    if (!resumeAction) return;
-    if (showSalaryWarning || showSalaryModal || showPriceWarning || showPriceModal) return;
-    const action = resumeAction;
-    setResumeAction(null);
-    if (action === 'deliver') void handleBulkDeliver();
-    else void handleBulkAssign();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeAction, showSalaryWarning, showSalaryModal, showPriceWarning, showPriceModal]);
-
-  // ── Render: one package row (shared by accordion + flat view) ───────────────
-  const renderOrderRow = (o: AdminOrder, go: AdminGroupOrder, moveDestinations: AdminGroupOrder[], warehouseSelectable = false, showStore = false) => {
-    const selectable = canManage && rowSelectable(toOrderItem(o, go, null));
-    const isChecked = selected.has(o.id);
-    const courierName = o.courierId ? (courierNameById.get(o.courierId) ?? null) : null;
-    const menuItem = toOrderItem(o, go, courierName);
-    return (
-      <tr key={o.id} className={isChecked ? 'pkg-row--selected' : ''}>
-        {canManage && (
-          <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
-            <input type="checkbox" className="aop-checkbox" checked={isChecked} disabled={!selectable}
-              onChange={() => selectable && toggleOne(o.id)} />
-          </td>
-        )}
-        {showTracking && (
-          <td>
-            <span className="tn-badge">{o.trackingNumber}</span>
-            {warehouseSelectable && canManage && o.status === 'DeliveredToWarehouse' && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: '0.7rem', color: 'var(--color-text-subtle)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                <input type="checkbox" style={{ cursor: 'pointer' }}
-                  checked={!absentPkgs.has(o.id)}
-                  onChange={() => togglePkgPresent(o.id)} />
-                {t.goWarehousePresent}
-              </label>
-            )}
-          </td>
-        )}
-        {showStore && (
-          <td>
-            <div style={{ fontWeight: 600 }}>{go.senderBusinessName || '—'}</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{go.senderFirstName} {go.senderLastName}</div>
-          </td>
-        )}
-        <td>
-          <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
-          <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{o.recipientPhone}</div>
-        </td>
-        <td>
-          <div>{pickupCityDisplay(o, lang)}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupDistrictDisplay(o, lang)}</div>
-        </td>
-        <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 180 }}>{pickupAddressDisplay(o)}</td>
-        <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>{o.description ?? <span style={{ opacity: 0.4 }}>—</span>}</td>
-        <td>
-          <StatusBadge status={o.status} />
-          <div style={{ marginTop: 4 }}>
-            <OrderTypeBadge orderType={o.orderType} />
-          </div>
-          {/* Delivery-courier / assignment indicator (from the Delivery page). */}
-          <div className="aop-courier-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={courierName ?? t.vomUnassigned}>
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-              <path d="M3 8.5l3.5 3.5L13 5" stroke={o.courierId ? '#10b981' : '#ef4444'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span style={o.courierId ? undefined : { color: '#ef4444' }}>{courierName ?? t.vomUnassigned}</span>
-          </div>
-          {o.deliveredAt && (
-            <div style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
-              {t.aopDeliveredAt} · {fmtDateTime(o.deliveredAt, lang)}
-            </div>
-          )}
-        </td>
-        <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-          {(() => {
-            // What the courier actually collects from the recipient: the product COD
-            // (only when unpaid) plus the company service fee (only when the recipient
-            // pays it). Shown stacked — COD, + fee, = total — when both parts apply.
-            const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-            const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
-            const total = cod + fee;
-            if (total <= 0) return <span style={{ opacity: 0.4 }}>—</span>;
-            // Only break the figure apart when both a product COD and a recipient-paid
-            // fee are collected; a single component is just shown as its own amount.
-            // Operators (no canManage) must not see the service fee — they get the total only.
-            if (!canManage || !(cod > 0 && fee > 0)) return <span>₾{total.toFixed(2)}</span>;
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3, alignItems: 'flex-start' }}>
-                <span>{t.goCodLbl} ₾{cod.toFixed(2)}</span>
-                <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--color-text-subtle)' }}>{t.goFeeLbl} ₾{fee.toFixed(2)}</span>
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, borderTop: '1px solid var(--color-border)', paddingTop: 1, marginTop: 1 }}>{t.goTotalLbl} ₾{total.toFixed(2)}</span>
-              </div>
-            );
-          })()}
-        </td>
-        {showPricesEff && (
-          <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-            {!o.companyServicePrice ? <span className="aop-missing">{t.aopNotSet}</span> : <span className="aop-price">₾{o.companyServicePrice.toFixed(2)}</span>}
-          </td>
-        )}
-        {showPricesEff && (
-          <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-            {o.courierSalary == null ? <span className="aop-missing">{t.aopNotSet}</span> : <span className="aop-price">₾{o.courierSalary.toFixed(2)}</span>}
-          </td>
-        )}
-        {showRevenueEff && (
-          <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-            {o.companyRevenue != null ? <span className="aop-price">₾{o.companyRevenue.toFixed(2)}</span> : <span style={{ opacity: 0.4 }}>—</span>}
-          </td>
-        )}
-        <td>
-          {o.productPaymentStatus === 'Paid' ? (
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981' }}>{t.goPaid}</span>
-          ) : (() => {
-            const courierDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
-            const sub = o.productPaymentStatus === 'NotPaid' && courierDue ? t.goSubParcelAndFee : courierDue ? t.goSubFeeOnly : t.goSubParcelOnly;
-            return (
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ef4444' }}>{t.goUnpaid}</span>
-                <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#ef4444', opacity: 0.8 }}>{sub}</span>
-              </span>
-            );
-          })()}
-        </td>
-        <td>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <OrderRowActionsMenu
-              order={menuItem}
-              couriers={couriers}
-              token={token ?? ''}
-              canManage={canManage}
-              canAssign={isAssignable(menuItem)}
-              canDeliver={isDeliverable(menuItem)}
-              onView={() => setViewingOrder(menuItem)}
-              onEdit={() => openEditOrder(o, go)}
-              onLabel={() => void printParcelLabels([buildAdminLabel(menuItem)])}
-              onChanged={() => reload()}
-              onError={msg => showToast(msg, 'err')}
-            />
-            {/* Edit + Label now live in the kebab menu above; this keeps the pickup-only
-                actions (send-to-city, cancel). */}
-            <AdminOrderRowActions order={o} storeName={go.senderBusinessName} couriers={couriers} token={token ?? ''}
-              onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
-              onRefresh={() => reload()}
-              canManage={canManage}
-              showLabel={false} />
-            {canGroup && moveDestinations.length > 0 && (
-              <MoveOrderControl orderId={o.id} destinations={moveDestinations} token={token ?? ''}
-                onMoved={() => { void reload(); void loadSummary(); void loadWindowScoped(); showToast(t.pickupMovedToast); }}
-                onError={msg => showToast(msg, 'err')} />
-            )}
-          </div>
-        </td>
-      </tr>
-    );
-  };
-
-  // Shared <thead> for the package tables. `showStore` adds a Sender/store column —
-  // used in the flat (recipient + location) single-order view where the batch's sender
-  // isn't otherwise visible.
-  // `selectAllGo === 'global'` is used by the flat (Recipient + city/district) view, which
-  // spans many customer batches at once — there's no single group to scope a checkbox to,
-  // so it drives the page-wide select-all instead of the per-batch one.
-  const packageHead = (showStore = false, selectAllGo?: AdminGroupOrder | 'global') => (
-    <thead>
-      <tr>
-        {canManage && (
-          <th style={{ width: 36 }}>
-            {selectAllGo === 'global' ? (
-              <input type="checkbox" className="aop-checkbox" checked={allSelected} disabled={selectableOrders.length === 0}
-                ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                onChange={toggleAll} />
-            ) : selectAllGo && (() => {
-              const ids = groupSelectableIds(selectAllGo);
-              const allIn  = ids.length > 0 && ids.every(id => selected.has(id));
-              const someIn = ids.some(id => selected.has(id));
-              return (
-                <input type="checkbox" className="aop-checkbox" checked={allIn} disabled={ids.length === 0}
-                  ref={el => { if (el) el.indeterminate = someIn && !allIn; }}
-                  onChange={() => toggleGroupAll(selectAllGo)} />
-              );
-            })()}
-          </th>
-        )}
-        {showTracking && <th>{t.goThTracking}</th>}
-        {showStore && <th>{t.goSender}</th>}
-        <th>{t.goThRecipient}</th>
-        <th>{t.goThCityDistrict}</th>
-        <th>{t.goThAddress}</th>
-        <th>{t.goThDescription}</th>
-        <th>{t.goThStatus}</th>
-        <th>{t.goThCollect}</th>
-        {showPricesEff && <th style={{ textAlign: 'right' }}>{t.aopThSvcPrice}</th>}
-        {showPricesEff && <th style={{ textAlign: 'right' }}>{t.aopThSalary}</th>}
-        {showRevenueEff && <th style={{ textAlign: 'right' }}>{t.aopThRevenue}</th>}
-        <th>{t.goThPaid}</th>
-        <th>{t.goThActions}</th>
-      </tr>
-    </thead>
-  );
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -1443,8 +812,17 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           return (
             <div style={{ overflowX: 'auto' }}>
               <table className="go-orders-table">
-                {packageHead(true, 'global')}
-                <tbody>{flatRows.map(({ o, go }) => renderOrderRow(o, go, [], false, true))}</tbody>
+                <PackageTableHead showStore selectAllGo="global" canManage={canManage} allSelected={allSelected}
+                  someSelected={someSelected} hasSelectableOrders={selectableOrders.length > 0} toggleAll={toggleAll}
+                  groupSelectableIds={groupSelectableIds} selected={selected} toggleGroupAll={toggleGroupAll}
+                  showTracking={showTracking} showPricesEff={showPricesEff} showRevenueEff={showRevenueEff} />
+                <tbody>{flatRows.map(({ o, go }) => (
+                  <PackageRow key={o.id} o={o} go={go} moveDestinations={[]} showStore
+                    canManage={canManage} canGroup={canGroup} selected={selected} toggleOne={toggleOne} rowSelectable={rowSelectable}
+                    courierNameById={courierNameById} showTracking={showTracking} absentPkgs={absentPkgs} togglePkgPresent={togglePkgPresent}
+                    showPricesEff={showPricesEff} showRevenueEff={showRevenueEff} couriers={couriers} token={token ?? ''}
+                    setViewingOrder={setViewingOrder} openEditOrder={openEditOrder} reload={reload} reloadAll={reloadAll} showToast={showToast} />
+                ))}</tbody>
               </table>
             </div>
           );
@@ -1543,8 +921,17 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                             ) : (
                               <div style={{ overflowX: 'auto' }}>
                                 <table className="go-orders-table">
-                                  {packageHead(false, go)}
-                                  <tbody>{filteredOrders.map(o => renderOrderRow(o, go, moveDestinations, true))}</tbody>
+                                  <PackageTableHead selectAllGo={go} canManage={canManage} allSelected={allSelected}
+                                    someSelected={someSelected} hasSelectableOrders={selectableOrders.length > 0} toggleAll={toggleAll}
+                                    groupSelectableIds={groupSelectableIds} selected={selected} toggleGroupAll={toggleGroupAll}
+                                    showTracking={showTracking} showPricesEff={showPricesEff} showRevenueEff={showRevenueEff} />
+                                  <tbody>{filteredOrders.map(o => (
+                                    <PackageRow key={o.id} o={o} go={go} moveDestinations={moveDestinations} warehouseSelectable
+                                      canManage={canManage} canGroup={canGroup} selected={selected} toggleOne={toggleOne} rowSelectable={rowSelectable}
+                                      courierNameById={courierNameById} showTracking={showTracking} absentPkgs={absentPkgs} togglePkgPresent={togglePkgPresent}
+                                      showPricesEff={showPricesEff} showRevenueEff={showRevenueEff} couriers={couriers} token={token ?? ''}
+                                      setViewingOrder={setViewingOrder} openEditOrder={openEditOrder} reload={reload} reloadAll={reloadAll} showToast={showToast} />
+                                  ))}</tbody>
                                 </table>
                               </div>
                             )}
@@ -1583,143 +970,18 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
       {showPriceWarning && <PriceWarningModal orderCount={missingPriceOrders.length} onCancel={() => setShowPriceWarning(false)} onFillPrices={() => { setShowPriceWarning(false); setShowPriceModal(true); }} />}
 
       {/* Salary modal */}
-      {showSalaryModal && createPortal((() => {
-        const allChecked = missingSalaryOrders.length > 0 && missingSalaryOrders.every(o => salaryChecked.has(o.id));
-        return (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 740, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>{t.aopSetSalary}</div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.aopMissingSalaryCount(missingSalaryOrders.length)}</div>
-                </div>
-                <button onClick={() => setShowSalaryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg></button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', marginBottom: 12, background: 'var(--color-accent-dim)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>{salaryChecked.size > 0 ? t.aopApplyToSel(salaryChecked.size) : t.aopApplyToAll}</span>
-                <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'var(--color-bg-2)' }}>
-                  <span style={{ padding: '0 6px 0 10px', fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>₾</span>
-                  <input type="number" min="0" step="0.01" placeholder="0.00" id="bulk-salary-input-pkg2" style={{ flex: 1, minWidth: 0, padding: '6px 8px 6px 2px', border: 'none', outline: 'none', background: 'transparent', color: 'var(--color-text)', fontSize: '0.88rem' }} />
-                </div>
-                <button onClick={() => { const inp = document.getElementById('bulk-salary-input-pkg2') as HTMLInputElement; const val = inp?.value; if (!val) return; const targets = salaryChecked.size > 0 ? [...salaryChecked] : missingSalaryOrders.map(o => o.id); setSalaryDrafts(prev => { const next = { ...prev }; targets.forEach(id => { next[id] = val; }); return next; }); setSalaryChecked(prev => { const next = new Set(prev); targets.forEach(id => next.add(id)); return next; }); inp.value = ''; }} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0, background: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{t.aopApplyValue}</button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--color-border)' }}>
-                <input type="checkbox" style={{ cursor: 'pointer' }} checked={allChecked} onChange={e => setSalaryChecked(e.target.checked ? new Set(missingSalaryOrders.map(o => o.id)) : new Set())} />
-                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopSelectAllN(missingSalaryOrders.length)}</span>
-              </div>
-              <div style={{ overflowY: 'auto', flex: 1 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
-                  <thead><tr style={{ background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
-                    <th style={{ width: 28, padding: '6px 4px' }}></th>
-                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThTracking}</th>
-                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopColAddress}</th>
-                    <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSvcPrice}</th>
-                    <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSalary}</th>
-                    {canSeeRevenue && <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThRevenue}</th>}
-                  </tr></thead>
-                  <tbody>
-                    {missingSalaryOrders.map(o => {
-                      const salary = parseFloat(salaryDrafts[o.id] ?? '');
-                      const revenue = !isNaN(salary) ? o.companyServicePrice - salary : null;
-                      const isChecked = salaryChecked.has(o.id);
-                      return (
-                        <tr key={o.id} style={{ borderBottom: '1px solid var(--color-border)', background: isChecked ? 'var(--color-accent-dim)' : 'var(--color-bg-2)' }}>
-                          <td style={{ padding: '6px 4px', textAlign: 'center' }}><input type="checkbox" style={{ cursor: 'pointer' }} checked={isChecked} onChange={() => setSalaryChecked(prev => { const next = new Set(prev); isChecked ? next.delete(o.id) : next.add(o.id); return next; })} /></td>
-                          <td style={{ padding: '6px 8px' }}>
-                            <span className="tn-badge">{o.trackingNumber}</span>
-                            {o.senderBusinessName && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>{o.senderBusinessName}</div>}
-                          </td>
-                          <td style={{ padding: '6px 8px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{pickupCityDisplay(o, lang)}, {pickupDistrictDisplay(o, lang)}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupAddressDisplay(o)}</div>
-                          </td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--color-text)' }}>₾{o.companyServicePrice.toFixed(2)}</td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>₾</span>
-                              <input type="number" min="0" step="0.01" placeholder="0.00" value={salaryDrafts[o.id] ?? ''} onChange={e => { setSalaryDrafts(prev => ({ ...prev, [o.id]: e.target.value })); if (e.target.value) setSalaryChecked(prev => { const n = new Set(prev); n.add(o.id); return n; }); }} style={{ width: 72, textAlign: 'right', padding: '3px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', fontSize: '0.83rem' }} />
-                            </div>
-                          </td>
-                          {canSeeRevenue && <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{revenue !== null ? <span style={{ color: revenue >= 0 ? '#10b981' : '#ef4444' }}>₾{revenue.toFixed(2)}</span> : <span style={{ color: 'var(--color-text-subtle)' }}>—</span>}</td>}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
-                <button onClick={() => setShowSalaryModal(false)} disabled={salarySaving} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>{t.close}</button>
-                <button onClick={handleSalarySave} disabled={salarySaving || salaryChecked.size === 0} style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (salarySaving || salaryChecked.size === 0) ? 0.6 : 1 }}>{salarySaving ? t.aopSaving : t.aopSaveWithCount(salaryChecked.size)}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })(), document.body)}
+      {showSalaryModal && (
+        <BulkFieldModal field="salary" orders={missingSalaryOrders} drafts={salaryDrafts} setDrafts={setSalaryDrafts}
+          checked={salaryChecked} setChecked={setSalaryChecked} saving={salarySaving} canSeeRevenue={canSeeRevenue}
+          onSave={handleSalarySave} onClose={() => setShowSalaryModal(false)} />
+      )}
 
       {/* Price modal */}
-      {showPriceModal && createPortal((() => {
-        const allChecked = missingPriceOrders.length > 0 && missingPriceOrders.every(o => priceChecked.has(o.id));
-        return (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <div style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '24px 28px', width: '100%', maxWidth: 640, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 16px 48px rgba(0,0,0,0.28)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--color-text)' }}>{t.aopSetPrice}</div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.aopMissingPriceCount(missingPriceOrders.length)}</div>
-                </div>
-                <button onClick={() => setShowPriceModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', padding: 4 }}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg></button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', marginBottom: 12, background: 'var(--color-accent-dim)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap', flexShrink: 0 }}>{priceChecked.size > 0 ? t.aopApplyToSel(priceChecked.size) : t.aopApplyToAll}</span>
-                <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'var(--color-bg-2)' }}>
-                  <span style={{ padding: '0 6px 0 10px', fontSize: '0.85rem', color: 'var(--color-text-subtle)', flexShrink: 0 }}>₾</span>
-                  <input type="number" min="0" step="0.01" placeholder="0.00" id="bulk-price-input-pkg2" style={{ flex: 1, minWidth: 0, padding: '6px 8px 6px 2px', border: 'none', outline: 'none', background: 'transparent', color: 'var(--color-text)', fontSize: '0.88rem' }} />
-                </div>
-                <button onClick={() => { const inp = document.getElementById('bulk-price-input-pkg2') as HTMLInputElement; const val = inp?.value; if (!val) return; const targets = priceChecked.size > 0 ? [...priceChecked] : missingPriceOrders.map(o => o.id); setPriceDrafts(prev => { const next = { ...prev }; targets.forEach(id => { next[id] = val; }); return next; }); setPriceChecked(prev => { const next = new Set(prev); targets.forEach(id => next.add(id)); return next; }); inp.value = ''; }} style={{ padding: '6px 16px', borderRadius: 6, border: 'none', flexShrink: 0, background: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>{t.aopApplyValue}</button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--color-border)' }}>
-                <input type="checkbox" style={{ cursor: 'pointer' }} checked={allChecked} onChange={e => setPriceChecked(e.target.checked ? new Set(missingPriceOrders.map(o => o.id)) : new Set())} />
-                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopSelectAllN(missingPriceOrders.length)}</span>
-              </div>
-              <div style={{ overflowY: 'auto', flex: 1 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
-                  <thead><tr style={{ background: 'var(--color-bg-3)', borderBottom: '1px solid var(--color-border)' }}>
-                    <th style={{ width: 28, padding: '6px 4px' }}></th>
-                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThTracking}</th>
-                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopColAddress}</th>
-                    <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-text-subtle)', fontWeight: 600 }}>{t.aopThSvcPrice}</th>
-                  </tr></thead>
-                  <tbody>
-                    {missingPriceOrders.map(o => {
-                      const isChecked = priceChecked.has(o.id);
-                      return (
-                        <tr key={o.id} style={{ borderBottom: '1px solid var(--color-border)', background: isChecked ? 'var(--color-accent-dim)' : 'var(--color-bg-2)' }}>
-                          <td style={{ padding: '6px 4px', textAlign: 'center' }}><input type="checkbox" style={{ cursor: 'pointer' }} checked={isChecked} onChange={() => setPriceChecked(prev => { const next = new Set(prev); isChecked ? next.delete(o.id) : next.add(o.id); return next; })} /></td>
-                          <td style={{ padding: '6px 8px' }}><span className="tn-badge">{o.trackingNumber}</span></td>
-                          <td style={{ padding: '6px 8px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.8rem' }}>{pickupCityDisplay(o, lang)}, {pickupDistrictDisplay(o, lang)}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupAddressDisplay(o)}</div>
-                          </td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>₾</span>
-                              <input type="number" min="0" step="0.01" placeholder="0.00" value={priceDrafts[o.id] ?? ''} onChange={e => { setPriceDrafts(prev => ({ ...prev, [o.id]: e.target.value })); if (e.target.value) setPriceChecked(prev => { const n = new Set(prev); n.add(o.id); return n; }); }} style={{ width: 72, textAlign: 'right', padding: '3px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', fontSize: '0.83rem' }} />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
-                <button onClick={() => setShowPriceModal(false)} disabled={priceSaving} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-text)', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>{t.close}</button>
-                <button onClick={handlePriceSave} disabled={priceSaving || priceChecked.size === 0} style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: 'var(--color-accent)', color: '#fff', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: (priceSaving || priceChecked.size === 0) ? 0.6 : 1 }}>{priceSaving ? t.aopSaving : t.aopSaveWithCount(priceChecked.size)}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })(), document.body)}
+      {showPriceModal && (
+        <BulkFieldModal field="price" orders={missingPriceOrders} drafts={priceDrafts} setDrafts={setPriceDrafts}
+          checked={priceChecked} setChecked={setPriceChecked} saving={priceSaving} canSeeRevenue={canSeeRevenue}
+          onSave={handlePriceSave} onClose={() => setShowPriceModal(false)} />
+      )}
 
       {/* Edit modal (package edit) */}
       <EditOrderModal order={editing?.item ?? null} open={!!editing} onClose={() => setEditing(null)}
@@ -1733,14 +995,14 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
       {groupingCustomer && (
         <GroupingModal customer={groupingCustomer} date={groupingDate} batches={batchesFor(groupingCustomer.customerId, toDateKey(groupingDate))} token={token ?? ''}
           onClose={() => setGroupingCustomer(null)}
-          onGrouped={n => { setGroupingCustomer(null); showToast(t.pickupGroupedToast(n)); void reload(); void loadSummary(); void loadWindowScoped(); }} />
+          onGrouped={n => { setGroupingCustomer(null); showToast(t.pickupGroupedToast(n)); reloadAll(); }} />
       )}
 
       {/* Merge modal */}
       {mergingCustomer && (
         <MergeModal customerName={mergingCustomer.name} batches={mergingCustomer.batches} token={token ?? ''}
           onClose={() => setMergingCustomer(null)}
-          onMerged={() => { setMergingCustomer(null); showToast(t.pickupMergedToast); void reload(); void loadSummary(); void loadWindowScoped(); }} />
+          onMerged={() => { setMergingCustomer(null); showToast(t.pickupMergedToast); reloadAll(); }} />
       )}
 
       {/* Accept standalone */}
@@ -1774,7 +1036,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                     setAcceptBusy(true);
                     try {
                       await groupAndAcceptStandalone(token ?? '', acceptStandalone.id, acceptTargetId || undefined);
-                      setAcceptStandalone(null); showToast(t.pickupStandaloneAcceptedToast); void reload(); void loadSummary(); void loadWindowScoped();
+                      setAcceptStandalone(null); showToast(t.pickupStandaloneAcceptedToast); reloadAll();
                     } catch (e) { showToast(e instanceof Error ? e.message : t.goActionFailed, 'err'); }
                     finally { setAcceptBusy(false); }
                   }}>{acceptBusy ? t.pickupStandaloneAccepting : t.pickupStandaloneAcceptConfirm}</button>
@@ -1828,7 +1090,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                     setWhBusy(true);
                     try {
                       await groupAndWarehouseStandalone(token ?? '', whStandalone.id, { targetGroupOrderId: whTargetId || undefined, courierId: whCourierId || undefined });
-                      setWhStandalone(null); showToast(t.pickupStandaloneWhToast); void reload(); void loadSummary(); void loadWindowScoped();
+                      setWhStandalone(null); showToast(t.pickupStandaloneWhToast); reloadAll();
                     } catch (e) { showToast(e instanceof Error ? e.message : t.goActionFailed, 'err'); }
                     finally { setWhBusy(false); }
                   }}>{whBusy ? t.pickupStandaloneAccepting : t.goForceWarehouse}</button>
@@ -1890,184 +1152,5 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
         }
       `}</style>
     </div>
-  );
-}
-
-// ── Merge modal (copied from AdminDashboard.tsx) ──────────────────────────────
-function MergeModal({ customerName, batches, token, onClose, onMerged }: {
-  customerName: string; batches: AdminGroupOrder[]; token: string; onClose: () => void; onMerged: () => void;
-}) {
-  const { t, lang } = useLanguage();
-  const locCity = (en: string, geo?: string | null) => (lang === 'ka' && geo ? geo : en);
-  const [targetId,  setTargetId]  = useState(batches[0]?.id ?? '');
-  const [sourceIds, setSourceIds] = useState<Set<string>>(() => new Set(batches.slice(1).map(b => b.id)));
-  const [busy, setBusy]   = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const chooseTarget = (id: string) => { setTargetId(id); setSourceIds(prev => { const next = new Set(prev); next.delete(id); return next; }); };
-  const toggleSource = (id: string) => { if (id === targetId) return; setSourceIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; }); };
-  const selectedSources = [...sourceIds].filter(id => id !== targetId);
-
-  const handleMerge = async () => {
-    if (!targetId || selectedSources.length === 0) return;
-    setBusy(true); setError(null);
-    try { await mergeGroupOrders(token, targetId, selectedSources); onMerged(); }
-    catch (e) { setError(e instanceof Error ? e.message : t.pickupMergeError); }
-    finally { setBusy(false); }
-  };
-
-  return createPortal(
-    <div className="pickup-modal__overlay" onClick={() => { if (!busy) onClose(); }}>
-      <div className="pickup-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="pickup-modal__header">
-          <div>
-            <h3 className="pickup-modal__title">{t.pickupMergeBtn} — {customerName}</h3>
-            <p className="pickup-modal__subtitle">{t.pickupMergeModalSubtitle}</p>
-          </div>
-          <button className="pickup-modal__close" onClick={onClose} disabled={busy} aria-label={t.close}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg></button>
-        </div>
-        <div className="pickup-modal__body">
-          <table className="go-orders-table" style={{ minWidth: 0 }}>
-            <thead><tr>
-              <th style={{ width: 48, textAlign: 'center' }}>{t.pickupMergeKeep}</th>
-              <th style={{ width: 60, textAlign: 'center' }}>{t.pickupMergeInto}</th>
-              <th>{t.goColPackages}</th><th>{t.goColStatus}</th><th>{t.cgoPickupLocation}</th><th>{t.goColDate}</th>
-            </tr></thead>
-            <tbody>
-              {batches.map(b => (
-                <tr key={b.id}>
-                  <td style={{ textAlign: 'center' }}><input type="radio" name="merge-target-pkg" checked={targetId === b.id} onChange={() => chooseTarget(b.id)} /></td>
-                  <td style={{ textAlign: 'center' }}><input type="checkbox" disabled={targetId === b.id} checked={targetId !== b.id && sourceIds.has(b.id)} onChange={() => toggleSource(b.id)} /></td>
-                  <td>{t.goPkgs(b.numberOfPackages)}</td>
-                  <td><StatusBadge status={b.status} /></td>
-                  <td>{locCity(b.pickUpCity, b.pickUpCityGeo)}{b.pickUpAddress ? `, ${b.pickUpAddress}` : ''}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{formatDate(b.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {error && <div className="pickup-modal__error">{error}</div>}
-        </div>
-        <div className="pickup-modal__footer">
-          <button className="go-action-btn go-action-btn--ghost" onClick={onClose} disabled={busy}>{t.cancel}</button>
-          <button className="go-action-btn go-action-btn--city" onClick={handleMerge} disabled={busy || selectedSources.length === 0}>{busy ? t.pickupMerging : t.pickupMergeBtn}</button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-// ── Move-order control (copied) ───────────────────────────────────────────────
-function MoveOrderControl({ orderId, destinations, token, onMoved, onError }: {
-  orderId: string; destinations: AdminGroupOrder[]; token: string; onMoved: () => void; onError: (msg: string) => void;
-}) {
-  const { t } = useLanguage();
-  const [busy, setBusy] = useState(false);
-  const handle = async (targetId: string) => {
-    if (!targetId) return;
-    setBusy(true);
-    try { await moveOrderToGroup(token, orderId, targetId); onMoved(); }
-    catch (e) { onError(e instanceof Error ? e.message : t.pickupMoveError); }
-    finally { setBusy(false); }
-  };
-  return (
-    <select className="go-select go-select--inline" style={{ minWidth: 120 }} value="" disabled={busy} onChange={e => void handle(e.target.value)} title={t.pickupMoveTo}>
-      <option value="">{busy ? t.pickupMoving : t.pickupMoveTo}</option>
-      {destinations.map(b => <option key={b.id} value={b.id}>{new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {b.numberOfPackages}</option>)}
-    </select>
-  );
-}
-
-// ── Grouping modal (copied) ───────────────────────────────────────────────────
-function GroupingModal({ customer, date, batches, token, onClose, onGrouped }: {
-  customer: PickupDayCustomer; date: Date; batches: AdminGroupOrder[]; token: string; onClose: () => void; onGrouped: (count: number) => void;
-}) {
-  const { t, lang } = useLanguage();
-  const [orders, setOrders]     = useState<AdminOrder[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy]         = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [targetBatchId, setTargetBatchId] = useState(batches[0]?.id ?? '');
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetchCustomerUnattached(token, customer.customerId, toDateKey(date))
-      .then(data => { if (!cancelled) { setOrders(data); setSelected(new Set(data.map(o => o.id))); } })
-      .catch(() => { if (!cancelled) setError(t.pickupGroupError); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [token, customer.customerId, date, t.pickupGroupError]);
-
-  const toggle = (id: string) => setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const allSelected = orders.length > 0 && selected.size === orders.length;
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(orders.map(o => o.id)));
-
-  const handleGroup = async () => {
-    if (selected.size === 0) return;
-    setBusy(true); setError(null);
-    try { await attachOrdersToGroup(token, customer.customerId, toDateKey(date), [...selected], targetBatchId || undefined); onGrouped(selected.size); }
-    catch (e) { setError(e instanceof Error ? e.message : t.pickupGroupError); }
-    finally { setBusy(false); }
-  };
-
-  return createPortal(
-    <div className="pickup-modal__overlay" onClick={() => { if (!busy) onClose(); }}>
-      <div className="pickup-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="pickup-modal__header">
-          <div>
-            <h3 className="pickup-modal__title">{t.pickupModalTitle(customer.businessName)}</h3>
-            <p className="pickup-modal__subtitle">{t.pickupModalSubtitle}</p>
-          </div>
-          <button className="pickup-modal__close" onClick={onClose} disabled={busy} aria-label={t.close}><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg></button>
-        </div>
-        <div className="pickup-modal__body">
-          {loading ? (
-            <div className="go-loading"><div className="go-spinner" /></div>
-          ) : orders.length === 0 ? (
-            <div className="pickup-summary__empty" style={{ padding: 24 }}>{t.pickupModalEmpty}</div>
-          ) : (
-            <>
-              {batches.length > 0 && (
-                <label className="pickup-modal__target">
-                  <span>{t.pickupGroupTarget}</span>
-                  <select className="go-select" value={targetBatchId} onChange={e => setTargetBatchId(e.target.value)}>
-                    {batches.map(b => <option key={b.id} value={b.id}>{new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {t.goPkgs(b.numberOfPackages)}</option>)}
-                    <option value="">{t.pickupGroupNewBatch}</option>
-                  </select>
-                </label>
-              )}
-              <label className="pickup-modal__selectall">
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} />
-                {t.pickupSelectAll}
-                <span className="pickup-modal__selcount">{t.pickupModalSelected(selected.size)}</span>
-              </label>
-              <table className="go-orders-table" style={{ minWidth: 0 }}>
-                <thead><tr><th style={{ width: 34 }} /><th>{t.goThTracking}</th><th>{t.goThRecipient}</th><th>{t.goThCityDistrict}</th><th>{t.goThCollect}</th></tr></thead>
-                <tbody>
-                  {orders.map(o => (
-                    <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => toggle(o.id)}>
-                      <td><input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} onClick={e => e.stopPropagation()} /></td>
-                      <td><span className="tn-badge">{o.trackingNumber}</span></td>
-                      <td>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</td>
-                      <td>{pickupCityDisplay(o, lang)}, {pickupDistrictDisplay(o, lang)}</td>
-                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-          {error && <div className="pickup-modal__error">{error}</div>}
-        </div>
-        <div className="pickup-modal__footer">
-          <button className="go-action-btn go-action-btn--ghost" onClick={onClose} disabled={busy}>{t.cancel}</button>
-          <button className="go-action-btn go-action-btn--assign" onClick={handleGroup} disabled={busy || selected.size === 0}>{busy ? t.pickupModalGrouping : t.pickupModalGroup}</button>
-        </div>
-      </div>
-    </div>,
-    document.body,
   );
 }
