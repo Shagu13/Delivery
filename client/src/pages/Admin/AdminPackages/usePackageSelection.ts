@@ -5,13 +5,13 @@
 // fill-in modal → resume the original action), not because any of it is reused elsewhere.
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useLanguage } from '../../../contexts/useLanguage';
-import { toDateKey } from '../../../utils/georgianTime';
 import { printParcelLabels } from '../../../utils/printLabel';
 import type { AdminGroupOrder, AdminOrder } from '../../../api/adminGroupOrders';
+import { exportGroupOrdersExcel } from '../../../api/adminGroupOrders';
 import type { Courier } from '../../../api/couriers';
 import {
   setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders,
-  adminMarkOrderDelivered, exportOrdersExcel,
+  adminMarkOrderDelivered,
 } from '../../../api/orders';
 import type { AdminOrderItem } from '../AdminOrdersPage';
 import { isAssignable, isDeliverable, toOrderItem, buildAdminLabel } from './shared';
@@ -21,7 +21,8 @@ export type BulkMode = 'assign' | 'prices' | 'deliver';
 export function usePackageSelection({
   displayList, visibleOrdersFor, courierNameById, couriers, token,
   filterCities, filterDistricts, debouncedSearch, filterCourier, filterUnpriced,
-  selectedDate, rangeEnd, showToast, reload, reloadAll,
+  filterParty, filterStatus, pkgDate, pkgDateTo, exportCustomerId,
+  showToast, reload, reloadAll,
 }: {
   displayList: AdminGroupOrder[];
   visibleOrdersFor: (go: AdminGroupOrder) => AdminOrder[];
@@ -33,8 +34,15 @@ export function usePackageSelection({
   debouncedSearch: string;
   filterCourier: string;
   filterUnpriced: boolean;
-  selectedDate: Date | null;
-  rangeEnd: Date | null;
+  /** "sender" (pickup side) or "recipient" — mirrors the page's city/district scope. */
+  filterParty: 'sender' | 'recipient';
+  filterStatus: string;
+  /** Already-resolved date window (see dateWindow.ts) — the exact bound the visible list uses. */
+  pkgDate?: string;
+  pkgDateTo?: string;
+  /** Owning customer, when the admin has one picked via the sender-side customer dropdown
+   *  (grouped mode) or the ungrouped-tab customer dropdown. */
+  exportCustomerId?: string;
   showToast: (msg: string, type?: 'ok' | 'err') => void;
   reload: () => void;
   // Refetches the list/summary data a delivery mutation could have changed. This hook adds
@@ -42,7 +50,7 @@ export function usePackageSelection({
   // to this hook's own state, not something the caller's reload plumbing needs to know about.
   reloadAll: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
@@ -168,19 +176,26 @@ export function usePackageSelection({
   const missingCourierOrders = useMemo(() => actionPool.filter(o => !o.courierId), [actionPool]);
 
   // ── Export / labels ─────────────────────────────────────────────────────────
+  // Mirrors the exact filters currently applied to the Packages page's own list (see
+  // pkgFilters in AdminPackagesPage.tsx) so the download always matches what's on screen —
+  // ticking specific rows narrows to just those instead.
   const handleExport = async () => {
     setExporting(true);
     try {
-      await exportOrdersExcel(token, {
-        city:      filterCities.length === 1 ? filterCities[0] : undefined,
-        district:  filterDistricts.length === 1 ? filterDistricts[0] : undefined,
+      await exportGroupOrdersExcel(token, {
         search:    debouncedSearch || undefined,
+        cities:    filterCities.length > 0 ? filterCities : undefined,
+        districts: filterDistricts.length > 0 ? filterDistricts : undefined,
+        party:     filterParty,
+        status:    filterStatus || undefined,
         courierId: filterCourier || undefined,
         unpriced:  filterUnpriced || undefined,
-        activeOnly: selected.size === 0,
-        date:      selectedDate ? toDateKey(selectedDate) : undefined,
-        dateTo:    rangeEnd ? toDateKey(rangeEnd) : undefined,
+        excludeCompleted: true,
+        customerId: exportCustomerId || undefined,
+        date:      pkgDate,
+        dateTo:    pkgDateTo,
         ids:       selected.size > 0 ? [...selected] : undefined,
+        lang,
       });
     } catch (e) {
       showToast(e instanceof Error ? e.message : t.aopBulkFailed, 'err');

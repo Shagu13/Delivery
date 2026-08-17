@@ -505,7 +505,9 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   } = usePackageSelection({
     displayList, visibleOrdersFor, courierNameById, couriers, token: token ?? '',
     filterCities, filterDistricts, debouncedSearch, filterCourier, filterUnpriced,
-    selectedDate, rangeEnd, showToast, reload, reloadAll,
+    filterParty, filterStatus, pkgDate, pkgDateTo,
+    exportCustomerId: pickupMode === 'ungrouped' ? ungroupedCustomerFilter : customerFilter,
+    showToast, reload, reloadAll,
   });
 
   // ── Render ──────────────────────────────────────────────────────────────────

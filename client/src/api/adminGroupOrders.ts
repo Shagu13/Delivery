@@ -153,6 +153,44 @@ export async function fetchGroupOrders(token: string, params: FetchGroupOrdersPa
     return res.json();
 }
 
+/** Admin: download an Excel of packages matching the given filters, or just the selected
+ *  `ids`. Mirrors the Packages page's filters server-side; triggers a browser file save. */
+export async function exportGroupOrdersExcel(
+    token: string,
+    params: FetchGroupOrdersParams & { ids?: string[]; lang?: 'ka' | 'en' } = {},
+): Promise<void> {
+    const qs = new URLSearchParams();
+    if (params.search)                        qs.set('search', params.search);
+    if (params.date)                          qs.set('date', params.date);
+    if (params.dateTo)                        qs.set('dateTo', params.dateTo);
+    if (params.cities && params.cities.length > 0)       qs.set('city', params.cities.join(','));
+    if (params.districts && params.districts.length > 0) qs.set('district', params.districts.join(','));
+    if (params.party)                         qs.set('party', params.party);
+    if (params.status)                        qs.set('status', params.status);
+    if (params.courierId)                     qs.set('courierId', params.courierId);
+    if (params.unpriced)                      qs.set('unpriced', 'true');
+    if (params.excludeCompleted)              qs.set('excludeCompleted', 'true');
+    if (params.customerId)                    qs.set('customerId', params.customerId);
+    if (params.ids && params.ids.length)      qs.set('ids', params.ids.join(','));
+    if (params.lang)                          qs.set('lang', params.lang);
+
+    const res = await fetch(`${BASE}/export?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.title ?? `Export failed (${res.status})`);
+    }
+    const blob        = await res.blob();
+    const url         = URL.createObjectURL(blob);
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match       = /filename[^;=\n]*=(['"]?)([^;"'\n]*)\1/.exec(disposition);
+    const filename    = match?.[2]?.trim() || 'packages.xlsx';
+    const anchor      = document.createElement('a');
+    anchor.href       = url;
+    anchor.download   = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+}
+
 /** A distinct pickup city + district pair that appears in GroupOrders (sender/pickup side). */
 export interface GroupOrderLocation {
     city: string;

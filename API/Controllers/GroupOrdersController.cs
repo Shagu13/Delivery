@@ -262,6 +262,94 @@ public sealed class GroupOrdersController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/grouporders/export  (Admin/Operator — Excel of the Packages page's current
+    //    filters, or a selected subset of packages) ─────────────────────────────────────
+    [HttpGet("export")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportExcel(
+        [FromQuery] string?   search,
+        [FromQuery] DateTime? date             = null,
+        [FromQuery] DateTime? dateTo           = null,
+        [FromQuery] string?   city             = null,
+        [FromQuery] string?   district         = null,
+        [FromQuery] string    party            = "sender",
+        [FromQuery] string?   status           = null,
+        [FromQuery] Guid?     courierId        = null,
+        [FromQuery] bool      unpriced         = false,
+        [FromQuery] bool      excludeCompleted = false,
+        [FromQuery] Guid?     customerId       = null,
+        [FromQuery] string?   ids              = null,   // comma-separated order ids → export just those
+        [FromQuery] string    lang             = "ka",
+        CancellationToken ct = default)
+    {
+        // Reuse the list query (unpaged) so the export honors the exact same filters as
+        // the Packages page; then narrow to the selected order ids when provided.
+        var result = await Sender.Send(new GetAllGroupOrdersQuery(
+            search, date, dateTo, city, district, party, status, courierId, unpriced,
+            excludeCompleted, Page: 1, PageSize: int.MaxValue, CustomerId: customerId), ct);
+
+        HashSet<Guid>? idSet = null;
+        if (!string.IsNullOrWhiteSpace(ids))
+        {
+            idSet = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                       .Select(s => Guid.TryParse(s, out var g) ? g : (Guid?)null)
+                       .Where(g => g.HasValue).Select(g => g!.Value)
+                       .ToHashSet();
+        }
+
+        var rows = result.Items
+            .SelectMany(go =>
+            {
+                var senderName = string.IsNullOrWhiteSpace(go.SenderBusinessName)
+                    ? $"{go.SenderFirstName} {go.SenderLastName}".Trim()
+                    : go.SenderBusinessName;
+                return go.Orders
+                    .Where(o => idSet == null || idSet.Contains(o.Id))
+                    .Select(o => (Sender: senderName, Order: o));
+            })
+            .OrderBy(r => r.Order.CreatedAt)
+            .ToList();
+
+        var isGeo = lang == "ka";
+
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add(isGeo ? "ამანათები" : "Packages");
+
+        string[] headers = isGeo
+            ? new[] { "თარიღი", "გამგზავნი", "რეგიონი", "მისამართი", "მიმღები", "აღწერა/კომენტარი", "საკონტაქტო", "ასაღები თანხა", "საკურიერო" }
+            : new[] { "Date", "Sender", "Region", "Address", "Recipient", "Description/Comment", "Phone", "COD", "Service Fee" };
+
+        for (int c = 0; c < headers.Length; c++)
+            ws.Cell(1, c + 1).Value = headers[c];
+        ws.Row(1).Style.Font.Bold = true;
+
+        var row = 2;
+        foreach (var (senderName, o) in rows)
+        {
+            ws.Cell(row, 1).Value = o.CreatedAt;
+            ws.Cell(row, 1).Style.DateFormat.Format = "yyyy-mm-dd HH:mm";
+            ws.Cell(row, 2).Value = senderName;
+            ws.Cell(row, 3).Value = isGeo ? (o.RecipientDistrictGeo ?? o.RecipientDistrict) : o.RecipientDistrict;
+            ws.Cell(row, 4).Value = o.RecipientAddress;
+            ws.Cell(row, 5).Value = o.RecipientName;
+            ws.Cell(row, 6).Value = o.Description ?? string.Empty;
+            ws.Cell(row, 7).Value = o.RecipientPhone;
+            if (o.AmountToCollectForPackage.HasValue) ws.Cell(row, 8).Value = o.AmountToCollectForPackage.Value;
+            ws.Cell(row, 9).Value = o.CompanyServicePrice;
+            row++;
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        var fileName = $"packages-{Domain.CustomTime.Now:yyyyMMdd-HHmm}.xlsx";
+        return File(ms.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName);
+    }
+
     // ── PUT /api/grouporders/attach  (Admin links unattached orders to a batch) ──
     [HttpPut("attach")]
     [Authorize(Roles = "Admin,Operator")]
