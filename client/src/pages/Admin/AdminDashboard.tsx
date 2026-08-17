@@ -114,20 +114,20 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'packages' | 'packagesTest' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch';
+type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch'];
 
 // Views an Operator (partial-admin role) may open. Operators now have full admin-level
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
 // stay hidden (stripped server-side + revenue columns hidden via canSeeRevenue below).
 // Still Admin-only: Finance, Operators management, Partner API, Weight Tiers, Tenants.
-const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'packages', 'packagesTest', 'couriers', 'customers', 'cities', 'schedule', 'history', 'returnExchange'];
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'history', 'returnExchange'];
 
 // Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
 // accept-only and Delivery is read-only (both via canManage=false); Finance renders the
 // dedicated tenant components, not the company-wide AdminFinancePage.
-const TENANT_VIEWS: readonly AdminView[] = ['orders', 'packages', 'packagesTest', 'customers', 'finance', 'homepage'];
+const TENANT_VIEWS: readonly AdminView[] = ['orders', 'delivery', 'packages', 'customers', 'finance', 'homepage'];
 
 export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
@@ -283,7 +283,7 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">{t.navPickUp}</span>
           </button>
           {/* Delivery page: Operators get a read-only view (see canManage on AdminOrdersPage). */}
-          <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')} title={t.navDelivery}>
+          <button className={`sidebar__link ${activeView === 'delivery' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('delivery')} title={t.navDelivery}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="1" y="4" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
               <path d="M5 4V3a3 3 0 016 0v1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -291,13 +291,13 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">{t.navDelivery}</span>
           </button>
-          {/* TEST: merged Pick-Up + Delivery into a single Packages list. */}
-          <button className={`sidebar__link ${activeView === 'packagesTest' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packagesTest')} title="ამანათები (Packages)">
+          {/* Packages page: merges Pick-Up + Delivery into a single last-mile list. */}
+          <button className={`sidebar__link ${activeView === 'packages' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('packages')} title={t.topbarPackages}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M2 5l6-3 6 3v6l-6 3-6-3V5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
               <path d="M2 5l6 3 6-3M8 8v6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="sidebar__link-text">ამანათები</span>
+            <span className="sidebar__link-text">{t.topbarPackages}</span>
           </button>
           {/* Couriers — Admin + Operator (full management). */}
           {!isTenant && (
@@ -513,8 +513,8 @@ export function AdminDashboard() {
           <span className="dashboard__topbar-title">
             {activeView === 'overview'  && t.topbarOverview}
             {activeView === 'orders'    && t.navPickUp}
-            {activeView === 'packages'  && t.navDelivery}
-            {activeView === 'packagesTest' && 'ამანათები'}
+            {activeView === 'delivery'  && t.navDelivery}
+            {activeView === 'packages' && t.topbarPackages}
             {activeView === 'couriers'  && t.topbarCouriers}
             {activeView === 'customers' && t.topbarCustomers}
             {activeView === 'cities' && t.topbarCities}
@@ -545,9 +545,9 @@ export function AdminDashboard() {
           {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} />}
           {activeView === 'operators' && !isOperator && !isTenant && <AdminOperatorsPage token={token ?? ''} />}
           {/* Delivery: read-only for tenant co-admins; operators manage fully but never see company revenue. */}
-          {activeView === 'packages'  && <AdminOrdersPage token={token ?? ''} canManage={!isTenant} canSeeRevenue={!isOperator} />}
-          {/* TEST: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
-          {activeView === 'packagesTest' && <AdminPackagesPage key={`pkg-${qParam}`} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
+          {activeView === 'delivery'  && <AdminOrdersPage token={token ?? ''} canManage={!isTenant} canSeeRevenue={!isOperator} />}
+          {/* Packages: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
+          {activeView === 'packages' && <AdminPackagesPage key={`pkg-${qParam}`} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
           {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} canSeeRevenue={!isOperator} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}

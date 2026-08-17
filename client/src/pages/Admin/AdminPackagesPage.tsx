@@ -1,16 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AdminPackagesPage — TEST page that UNITES the Pick-Up and Delivery pages into a
-// single list. The spine is the Pick-Up customer-grouped accordion (it already
-// lists every package through its whole lifecycle); the Delivery page's last-mile
-// capabilities (selection, financial columns, bulk assign / set-prices / mark-
-// delivered with the same price+salary gating, export, labels, courier + unpriced
-// filters) are fused onto the package rows.
+// AdminPackagesPage — the "Packages" admin page (sidebar view `packages`, ამანათები), which
+// UNITES the Pick-Up and Delivery pages into a single list. The spine is the Pick-Up
+// customer-grouped accordion (it already lists every package through its whole lifecycle);
+// the Delivery page's last-mile capabilities (selection, financial columns, bulk assign /
+// set-prices / mark-delivered with the same price+salary gating, export, labels, courier +
+// unpriced filters) are fused onto the package rows.
 //
-// This file is self-contained on purpose: the existing AdminOrders (Pick-Up) and
-// AdminOrdersPage (Delivery) components are left untouched so they remain working
-// recovery pages. Shared *leaf* components (AdminGroupOrderActions, AdminOrderRow-
-// Actions, EditOrderModal, ViewOrderModal, Salary/Price warning modals) are reused
-// by import; the small pickup-local helpers/modals are copied here verbatim.
+// The older AdminOrders (Pick-Up, sidebar view `orders`) and AdminOrdersPage (Delivery,
+// sidebar view `delivery`) components are left as their own pages so they remain working
+// recovery pages — this file duplicates rather than imports their page-level logic. Shared
+// *leaf* components (AdminGroupOrderActions, AdminOrderRowActions, EditOrderModal,
+// ViewOrderModal, Salary/Price warning modals) are reused by import; the small pickup-local
+// helpers/modals live in ./AdminPackages (see client/CLAUDE.md §3.2).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -176,7 +177,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // batch for a day (not just whatever fits on the current 30-item page) to detect same-day
   // merge candidates and unattached orders correctly.
   const windowScopedQuery = useQuery({
-    queryKey: ['admin', 'packagesTest', 'windowScoped', pkgFilters, pkgDate, pkgDateTo] as const,
+    queryKey: ['admin', 'packages', 'windowScoped', pkgFilters, pkgDate, pkgDateTo] as const,
     queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page: 1, pageSize: 500 }),
     enabled: !!token,
     placeholderData: keepPreviousData,
@@ -191,7 +192,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // to hit the network for the rare filter that genuinely returns more than 500 matches.
   const needsServerPage = windowScopedTotal > 500;
 
-  const listQueryKey = ['admin', 'packagesTest', 'list', pkgFilters, pkgDate, pkgDateTo, page] as const;
+  const listQueryKey = ['admin', 'packages', 'list', pkgFilters, pkgDate, pkgDateTo, page] as const;
 
   const mainQuery = useQuery({
     queryKey: listQueryKey,
@@ -275,7 +276,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // standalone-order-customer), recipient = each order's own recipient (shared with the
   // Delivery page). Scoped to the same resolved date window as the main list.
   const locationsQuery = useQuery({
-    queryKey: ['admin', 'packagesTest', 'locations', filterParty, pkgDate, pkgDateTo] as const,
+    queryKey: ['admin', 'packages', 'locations', filterParty, pkgDate, pkgDateTo] as const,
     queryFn: () => filterParty === 'recipient'
       ? fetchOrderLocations(token ?? '', pkgDate, pkgDateTo)
       : fetchGroupOrderLocations(token ?? '', pkgDate, pkgDateTo),

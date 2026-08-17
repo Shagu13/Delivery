@@ -468,7 +468,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     activeOnly: true,
   };
 
-  const listQueryKey = ['admin', 'packages', 'list', packagesFilters, pkgDate, pkgDateTo, page] as const;
+  const listQueryKey = ['admin', 'delivery', 'list', packagesFilters, pkgDate, pkgDateTo, page] as const;
 
   const mainQuery = useQuery({
     queryKey: listQueryKey,
@@ -483,7 +483,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const error   = mainQuery.isError ? (mainQuery.error instanceof Error ? mainQuery.error.message : t.aopFailedLoad) : null;
 
   const unpricedQuery = useQuery({
-    queryKey: ['admin', 'packages', 'unpricedCount', filterCourier?.courierId ?? null, pkgDate, pkgDateTo] as const,
+    queryKey: ['admin', 'delivery', 'unpricedCount', filterCourier?.courierId ?? null, pkgDate, pkgDateTo] as const,
     queryFn: () => fetchUnpricedCount(token, filterCourier?.courierId, pkgDate, pkgDateTo, true),
     enabled: !!token,
   });
@@ -548,7 +548,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   // all pages (the old approach derived them from the loaded page only, hiding districts
   // whose orders sat on another page, e.g. Tskneti). Scoped to the selected Georgian day.
   const locationsQuery = useQuery({
-    queryKey: ['admin', 'packages', 'locations', pkgDate, pkgDateTo] as const,
+    queryKey: ['admin', 'delivery', 'locations', pkgDate, pkgDateTo] as const,
     queryFn: () => fetchOrderLocations(token, pkgDate, pkgDateTo),
     enabled: !!token,
   });

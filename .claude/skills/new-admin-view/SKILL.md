@@ -28,8 +28,8 @@ Then add `'<newView>'` to whichever of these three `readonly AdminView[]` arrays
 
 - `ADMIN_VIEWS` — full Admin role
 - `OPERATOR_VIEWS` — Operator role (narrower — no finance/tenant/system views)
-- `TENANT_VIEWS` — white-label co-admin (narrowest — currently `orders`, `packages`,
-  `packagesTest`, `customers`, `finance`, `homepage`)
+- `TENANT_VIEWS` — white-label co-admin (narrowest — currently `orders`, `delivery`,
+  `packages`, `customers`, `finance`, `homepage`)
 
 A view only reachable by Admin goes in `ADMIN_VIEWS` alone. Decide deliberately — don't add to
 all three by default.

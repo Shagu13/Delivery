@@ -1,12 +1,12 @@
 ---
-description: Check and fix both admin last-mile package pages when working on search, grouping, bulk-assign, bulk-deliver, export, or pricing bugs in the Admin Packages/Delivery views. Use whenever a task touches AdminPackagesPage.tsx or AdminOrdersPage.tsx, or the sidebar views "packagesTest" (ამანათები) or "packages" (Delivery).
+description: Check and fix both admin last-mile package pages when working on search, grouping, bulk-assign, bulk-deliver, export, or pricing bugs in the Admin Packages/Delivery views. Use whenever a task touches AdminPackagesPage.tsx or AdminOrdersPage.tsx, or the sidebar views "packages" (ამანათები) or "delivery" (Delivery).
 allowed-tools: Read, Grep, Glob, Edit
 ---
 
 # Packages-page dual-fix reminder (Delivery)
 
-`client/src/pages/Admin/AdminPackagesPage.tsx` (sidebar view `packagesTest`, "ამანათები") and
-`client/src/pages/Admin/AdminOrdersPage.tsx` (sidebar view `packages`, "Delivery") are **two
+`client/src/pages/Admin/AdminPackagesPage.tsx` (sidebar view `packages`, "ამანათები") and
+`client/src/pages/Admin/AdminOrdersPage.tsx` (sidebar view `delivery`, "Delivery") are **two
 separate implementations of the same last-mile Order page**. Neither has been retired
 (`CLAUDE.md` roadmap phase 9, "Packages page consolidation" — still open). They started as one
 page and have been drifting apart ever since, so a bug reported against one almost always exists
@@ -17,9 +17,9 @@ touches either page as touching both, until told otherwise.
 
 ## 1. Identify which file you were pointed at
 
-- User says "Packages page" / ამანათები / mentions `packagesTest` → `AdminPackagesPage.tsx`
+- User says "Packages page" / ამანათები / mentions the `packages` view → `AdminPackagesPage.tsx`
   (this is the newer, actively-developed one — see memory `packages-page-identity`).
-- User says "Delivery page" / mentions `packages` (not `packagesTest`) → `AdminOrdersPage.tsx`.
+- User says "Delivery page" / mentions the `delivery` view → `AdminOrdersPage.tsx`.
 
 If genuinely unsure which one a screenshot or description refers to, ask, or check both anyway.
 

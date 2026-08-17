@@ -8,7 +8,7 @@ import { recipientDisplayName } from '../../utils/recipientName';
 import { Highlight } from '../../components/ui/Highlight';
 
 type Party = 'sender' | 'recipient';
-type DestView = 'packagesTest' | 'returnExchange' | 'history';
+type DestView = 'packages' | 'returnExchange' | 'history';
 interface Dest { view: DestView; label: string; }
 
 const PAGE_SIZE = 50;
@@ -167,8 +167,8 @@ export default function AdminOrderSearchPage({ token, onGoTo }: {
     const dests: Dest[] = [];
     if (isRE) dests.push({ view: 'returnExchange', label: t.navReturnExchange });
     if (terminal) dests.push({ view: 'history', label: t.topbarHistory });
-    if (!isRE && !terminal) dests.push({ view: 'packagesTest', label: t.osPackages });
-    if (dests.length === 0) dests.push({ view: 'packagesTest', label: t.osPackages });
+    if (!isRE && !terminal) dests.push({ view: 'packages', label: t.osPackages });
+    if (dests.length === 0) dests.push({ view: 'packages', label: t.osPackages });
     return dests;
   };
 

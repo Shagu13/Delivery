@@ -16,7 +16,7 @@ export function GroupingModal({ customer, date, batches, token, onClose, onGroup
   const dateKey = toDateKey(date);
 
   const unattachedQuery = useQuery({
-    queryKey: ['admin', 'packagesTest', 'customerUnattached', customer.customerId, dateKey] as const,
+    queryKey: ['admin', 'packages', 'customerUnattached', customer.customerId, dateKey] as const,
     queryFn: () => fetchCustomerUnattached(token, customer.customerId, dateKey),
   });
   const orders = unattachedQuery.data ?? [];

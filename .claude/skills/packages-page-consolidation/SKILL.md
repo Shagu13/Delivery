@@ -6,7 +6,7 @@ allowed-tools: Read, Grep, Glob, Edit, Bash
 # Packages page consolidation (Delivery)
 
 Root `CLAUDE.md` roadmap, phase 9, "in flight": `AdminPackagesPage.tsx` (sidebar view
-`packagesTest`, ამანათები) and `AdminOrdersPage.tsx` (sidebar view `packages`, "Delivery") are
+`packages`, ამანათები) and `AdminOrdersPage.tsx` (sidebar view `delivery`, "Delivery") are
 two implementations of the same last-mile Order page. The stated end state is that **one gets
 retired**. This skill is for doing that retirement itself — not for the day-to-day bug fixes
 covered by the `packages-page-dual-fix` skill, which stays relevant right up until this happens.
@@ -28,7 +28,7 @@ don't treat "consolidate the pages" as license to silently drop a page mid-task.
 
 ## 2. Confirm the direction with the user, don't assume it
 
-As of the current docs, `packagesTest` (`AdminPackagesPage.tsx`) is described as the *newer*
+As of the current docs, `packages` (`AdminPackagesPage.tsx`) is described as the *newer*
 last-mile page and is the only one with same-day batch grouping (`groupByDate` in the entry file;
 `MergeModal`/`GroupingModal` under its `AdminPackages/` folder — see `client/CLAUDE.md` §3.2).
 That's a signal it's the intended survivor, not a guarantee — re-verify by
@@ -52,8 +52,8 @@ Do not delete the losing page until this audit is complete and any gaps are port
 
 ## 4. Find every reference to the losing view before removing it
 
-Grep the losing view's string key (`'packages'` or `'packagesTest'`) and its sidebar/topbar
-translation keys (`t.navDelivery` / the ამანათები topbar literal) across `client/src/`. As of
+Grep the losing view's string key (`'delivery'` or `'packages'`) and its sidebar/topbar
+translation keys (`t.navDelivery` / `t.topbarPackages`) across `client/src/`. As of
 this writing both view keys are only referenced inside `AdminDashboard.tsx` itself — no other
 page deep-links into one specifically — but re-verify at consolidation time, since new code may
 have added links (e.g. from `AdminHistoryPage`, `AdminOrderSearchPage`, or a push-notification
