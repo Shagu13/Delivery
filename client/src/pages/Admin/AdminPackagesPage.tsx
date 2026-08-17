@@ -874,17 +874,21 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                                 <span className="go-cell__label">{t.goColStatus}</span>
                                 <StatusBadge status={go.status} />
                                 {go.isStandalone && <span style={{ marginTop: 3, fontSize: '0.62rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', borderRadius: 100, padding: '1px 7px', whiteSpace: 'nowrap' }}>{t.pickupStandaloneBadge}</span>}
+                                {/* Courier name folds into this cell (mirrors the Pick-Up page's
+                                    version of this same row) rather than getting its own — the
+                                    shared .go-details grid only has 6 tracks, and adding a 7th
+                                    conditional cell here wraps the row onto a second grid line,
+                                    dropping the Date cell underneath Sender. */}
+                                {go.courierId && (
+                                  <span style={{ marginTop: 3, fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 130 }}>
+                                    {go.courierFullName}
+                                  </span>
+                                )}
                               </div>
                               <div className="go-cell go-cell--center">
                                 <span className="go-cell__label">{t.goColPackages}</span>
                                 <span className="go-meta__pkgs">{t.goPkgs(go.numberOfPackages)}</span>
                               </div>
-                              {go.courierId && (
-                                <div className="go-cell go-cell--center">
-                                  <span className="go-cell__label">{t.vomLblCourier}</span>
-                                  <span className="go-cell__value">{go.courierFullName || '—'}</span>
-                                </div>
-                              )}
                               <div className="go-cell go-cell--center">
                                 <span className="go-cell__label">{t.goColDate}</span>
                                 <span className="go-cell__sub go-cell__sub--muted">{formatDate(go.createdAt)}</span>
