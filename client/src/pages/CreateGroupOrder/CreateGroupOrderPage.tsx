@@ -856,19 +856,18 @@ export function CreateGroupOrderPage() {
                         </div>
                     )}
 
-                    {packages.length < 100 && (
-                        <button type="button" className="btn btn--add-package" onClick={addPackage} aria-label={t.cgoAddPackage}>
-                            <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                            </svg>
-                        </button>
-                    )}
-
                     <div className="form-footer">
-                        <div className="form-footer__summary">
-                            <span className="form-footer__count">{t.cgoFooterCount(packages.length)}</span>
-                            <span className="form-footer__hint">{appendMode ? t.cgoFooterHint : t.cgoCheckCartHint}</span>
-                        </div>
+                        {packages.length < 100 && (
+                            <div className="form-footer__summary">
+                                <button type="button" className="btn btn--add-package" onClick={addPackage}>
+                                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                                        <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
+                                    <span className="btn--add-package__label">{t.cgoAddPackage}</span>
+                                </button>
+                                <span className="form-footer__hint">{t.cgoAddPackageHint}</span>
+                            </div>
+                        )}
                         <button type="submit" className={`btn btn--primary${appendMode ? '' : ' btn--cart'}`} disabled={submitting || (appendMode && !appendBatch)}>
                             {submitting ? (
                                 <><span className="btn__spinner" />{appendMode ? t.cgoAppendSubmitting : t.cgoSubmitting}</>

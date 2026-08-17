@@ -689,16 +689,24 @@ export function AdminDashboard() {
         .go-list { display: flex; flex-direction: column; }
         .go-row { border-bottom: 1px solid var(--color-border); }
         .go-row:last-child { border-bottom: none; }
-        .go-row-header { display: flex; align-items: center; gap: 14px; padding: 14px 20px; cursor: pointer; transition: background var(--transition); user-select: none; }
+        /* flex-wrap: see .go-details-scroll below for why this matters even on desktop. */
+        .go-row-header { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px 20px; cursor: pointer; transition: background var(--transition); user-select: none; }
         .go-row-header:hover { background: var(--color-bg-3); }
         .go-chevron { color: var(--color-text-subtle); flex-shrink: 0; transition: transform 0.18s ease; }
         .go-chevron--open { transform: rotate(90deg); }
 
         /* Customer/sender details laid out as fixed, labeled columns so each field
            (store, phone, pickup location, status, packages, date) always sits in the
-           same place. The grid scrolls horizontally on its own when the row is too
-           narrow, keeping the chevron and action buttons fixed and always reachable. */
-        .go-details-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+           same place. flex-basis is 660px (not "auto") so the .go-row-header wrap above
+           sees this column's real preferred width and drops .go-actions to its own line
+           once a batch's action buttons (e.g. AcceptedGroupOrder: assign courier + set
+           date + revert + force-warehouse + cancel) would otherwise out-width it — without
+           an explicit basis the browser never wraps and instead shrinks this via
+           min-width:0 down to a near-zero-width scrollbar, hiding sender/phone/status.
+           On very narrow screens, once wrapped onto its own line, it can still be less
+           than 660px and scrolls internally — the chevron and action buttons stay fixed
+           and reachable either way. */
+        .go-details-scroll { flex: 1 1 660px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
         .go-details {
           display: grid;
           grid-template-columns:
@@ -833,10 +841,9 @@ export function AdminDashboard() {
           /* Tables keep a readable width and scroll inside their .table-scroll wrapper
              instead of crushing columns to fit the phone width. */
           .courier-table { min-width: 620px; }
-          /* Tighter horizontal padding so rows/toolbars use the narrow width well.
-             Allow wrapping so action buttons drop to their own line instead of
-             overflowing/clipping. */
-          .go-row-header { gap: 10px; padding: 12px 14px; flex-wrap: wrap; }
+          /* Tighter horizontal padding so rows/toolbars use the narrow width well
+             (flex-wrap is already on .go-row-header at every width, see above). */
+          .go-row-header { gap: 10px; padding: 12px 14px; }
           .go-toolbar, .go-status-bar { padding: 10px 14px; }
           .pickup-daynav, .pickup-daynav-wrap, .pickup-controls, .pickup-summary { padding-left: 14px; padding-right: 14px; }
           .go-note { padding-left: 14px; padding-right: 14px; }

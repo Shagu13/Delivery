@@ -736,7 +736,8 @@ const en = {
   cgoImporting:             'Importing…',
   cgoImported:              (n: number): string => `${n} package${n !== 1 ? 's' : ''} imported`,
   cgoClearReset:            'Clear & reset',
-  cgoAddPackage:            'Add Package',
+  cgoAddPackage:            'Add package',
+  cgoAddPackageHint:        'add another order',
   // Sidebar
   cgoSidebarCount:          (n: number): string => `${n} package${n !== 1 ? 's' : ''}`,
   cgoEmptyPackage:          'Empty package',
@@ -802,8 +803,6 @@ const en = {
   cgoOrderLabel:            (n: number): string => `Order ${n}`,
   // Footer
   cgoFooterCount:           (n: number): string => `${n} package${n !== 1 ? 's' : ''}`,
-  cgoFooterHint:            'Ready to submit',
-  cgoCheckCartHint:         'Check cart to finish order',
   cgoSubmit:                'Save',
   cgoSubmitting:            'Placing Order…',
   cgoGlobalError:           'An unexpected error occurred. Please try again.',
@@ -1818,7 +1817,7 @@ const en = {
     ofinNextMonth:       'Next month',
 
     // ── Cart (customer) ───────────────────────────────────────────────────────
-    cgoAddToCart:        'Add to cart',
+    cgoAddToCart:        'Complete and add to cart',
     cartTitle:           'Cart',
     cartHeaderTitle:     'Your cart',
     cartNavLabel:        'Cart',
@@ -2714,6 +2713,7 @@ const ka: typeof en = {
   cgoImported:              (n: number): string => `${n} ამანათი შემოტანილია`,
   cgoClearReset:            'გასუფთავება და განახლება',
   cgoAddPackage:            'ამანათის დამატება',
+  cgoAddPackageHint:        'თუ ამატებთ კიდევ ამანათებს',
   // Sidebar
   cgoSidebarCount:          (n: number): string => `${n} ამანათი`,
   cgoEmptyPackage:          'ცარიელი ამანათი',
@@ -2779,8 +2779,6 @@ const ka: typeof en = {
   cgoOrderLabel:            (n: number): string => `შეკვეთა ${n}`,
   // Footer
   cgoFooterCount:           (n: number): string => `${n} ამანათი`,
-  cgoFooterHint:            'გაგზავნისთვის მზადაა',
-  cgoCheckCartHint:         'შეკვეთის განსათავსებლად გადადით კალათაში',
   cgoSubmit:                'შენახვა',
   cgoSubmitting:            'შეკვეთა განთავსდება…',
   cgoGlobalError:           'დაფიქსირდა მოულოდნელი შეცდომა. გთხოვთ სცადოთ ხელახლა.',
@@ -3792,7 +3790,7 @@ const ka: typeof en = {
     ofinNextMonth:       'შემდეგი თვე',
 
     // ── Cart (customer) ───────────────────────────────────────────────────────
-    cgoAddToCart:        'კალათაში დამატება',
+    cgoAddToCart:        'დასრულება და კალათში დამატება',
     cartTitle:           'კალათა',
     cartHeaderTitle:     'თქვენი კალათა',
     cartNavLabel:        'კალათა',
