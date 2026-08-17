@@ -328,7 +328,7 @@ public sealed class GroupOrdersController : BaseController
         foreach (var (senderName, o) in rows)
         {
             ws.Cell(row, 1).Value = o.CreatedAt;
-            ws.Cell(row, 1).Style.DateFormat.Format = "yyyy-mm-dd HH:mm";
+            ws.Cell(row, 1).Style.DateFormat.Format = "dd.mm";
             ws.Cell(row, 2).Value = senderName;
             ws.Cell(row, 3).Value = isGeo ? (o.RecipientDistrictGeo ?? o.RecipientDistrict) : o.RecipientDistrict;
             ws.Cell(row, 4).Value = o.RecipientAddress;

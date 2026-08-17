@@ -133,11 +133,11 @@ public sealed class OrdersController : BaseController
             if (o.CompanyRevenue.HasValue) ws.Cell(row, 15).Value = o.CompanyRevenue.Value;
             ws.Cell(row, 16).Value = o.CourierFullName ?? string.Empty;
             ws.Cell(row, 17).Value = o.CreatedAt;
-            ws.Cell(row, 17).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+            ws.Cell(row, 17).Style.DateFormat.Format = "dd.mm";
             if (o.DeliveredAt.HasValue)
             {
                 ws.Cell(row, 18).Value = o.DeliveredAt.Value;
-                ws.Cell(row, 18).Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+                ws.Cell(row, 18).Style.DateFormat.Format = "dd.mm";
             }
             row++;
         }
