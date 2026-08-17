@@ -290,6 +290,45 @@ namespace Persistence.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("Domain.CustomerSecondaryAddress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("District")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("CustomerSecondaryAddresses");
+                });
+
             modelBuilder.Entity("Domain.CustomerSpecialPrice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1416,6 +1455,17 @@ namespace Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Domain.CustomerSecondaryAddress", b =>
+                {
+                    b.HasOne("Domain.Customer", "Customer")
+                        .WithMany("SecondaryAddresses")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("Domain.CustomerSpecialPrice", b =>
                 {
                     b.HasOne("Domain.Customer", "Customer")
@@ -1686,6 +1736,8 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Customer", b =>
                 {
+                    b.Navigation("SecondaryAddresses");
+
                     b.Navigation("SpecialPrices");
                 });
 

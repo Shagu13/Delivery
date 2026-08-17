@@ -26,5 +26,8 @@ public sealed record CustomerResponseDto(
     /// <summary>When true, this customer's package prices are all-in; the per-order checkbox is forced on and hidden.</summary>
     bool     IsCompanyServicePriceIncludedInPrice,
     /// <summary>Per-district price exceptions on top of the tiers above (e.g. a special Rustavi rate).</summary>
-    IReadOnlyList<CustomerSpecialPriceLite> SpecialPrices
+    IReadOnlyList<CustomerSpecialPriceLite> SpecialPrices,
+    /// <summary>Saved pickup addresses beyond the main one above (City/District/Address), capped
+    /// at 5 — offered as a pickup-location choice when creating a GroupOrder.</summary>
+    IReadOnlyList<CustomerSecondaryAddressDto> SecondaryAddresses
 );

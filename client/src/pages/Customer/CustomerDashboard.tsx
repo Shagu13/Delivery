@@ -12,9 +12,10 @@ import {
   getMyProfile, getMyOrders,
   updateMyProfile, changePassword,
   cancelMyOrder,
+  addMySecondaryAddress, updateMySecondaryAddress, deleteMySecondaryAddress,
   CustomerApiError,
 } from '../../api/customers';
-import type { Customer, CustomerGroupOrder, CustomerOrder } from '../../api/customers';
+import type { Customer, CustomerGroupOrder, CustomerOrder, CustomerSecondaryAddress } from '../../api/customers';
 import { NON_BILLABLE_CANCEL_REASONS } from '../../api/orders';
 import { CustomerEditOrderModal } from './CustomerEditOrderModal';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -482,11 +483,18 @@ export function CustomerDashboard() {
               {view === 'schedule'    && <CityScheduleBoard />}
               {view === 'calculator'  && token && <PriceCalculatorCard token={token} />}
               {view === 'profile'   && profile && token && (
-                <EditProfileView
-                  profile={profile}
-                  token={token}
-                  onSaved={updated => setProfile(updated)}
-                />
+                <>
+                  <EditProfileView
+                    profile={profile}
+                    token={token}
+                    onSaved={updated => setProfile(updated)}
+                  />
+                  <SecondaryAddressesView
+                    addresses={profile.secondaryAddresses ?? []}
+                    token={token}
+                    onChanged={addresses => setProfile(p => p ? { ...p, secondaryAddresses: addresses } : p)}
+                  />
+                </>
               )}
               {view === 'password'  && token && (
                 <ChangePasswordView token={token} />
@@ -1172,6 +1180,136 @@ function EditProfileView({
             {saving ? t.custSaving : t.custSaveChanges}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Saved pickup addresses (secondary addresses, capped at 5) ──────────────────
+
+function SecondaryAddressesView({ addresses, token, onChanged }: {
+  addresses: CustomerSecondaryAddress[];
+  token: string;
+  onChanged: (addresses: CustomerSecondaryAddress[]) => void;
+}) {
+  const { t } = useLanguage();
+  const [showForm, setShowForm]   = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ label: '', city: '', district: '', address: '' });
+  const [errors, setErrors]     = useState<Partial<Record<keyof typeof form, string>>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const atLimit = addresses.length >= 5;
+
+  const resetForm = () => { setForm({ label: '', city: '', district: '', address: '' }); setErrors({}); setApiError(null); };
+  const openAdd = () => { setEditingId(null); resetForm(); setShowForm(true); };
+  const openEdit = (a: CustomerSecondaryAddress) => {
+    setEditingId(a.id);
+    setForm({ label: a.label, city: a.city, district: a.district, address: a.address });
+    setErrors({}); setApiError(null);
+    setShowForm(true);
+  };
+  const closeForm = () => { setShowForm(false); setEditingId(null); resetForm(); };
+
+  const validate = (): boolean => {
+    const e: typeof errors = {};
+    if (!form.label.trim())    e.label    = t.custRequired;
+    if (!form.city.trim())     e.city     = t.custRequired;
+    if (!form.district.trim()) e.district = t.custRequired;
+    if (!form.address.trim())  e.address  = t.custRequired;
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const data = { label: form.label.trim(), city: form.city, district: form.district, address: form.address.trim() };
+      const updated = editingId
+        ? await updateMySecondaryAddress(editingId, data, token)
+        : await addMySecondaryAddress(data, token);
+      onChanged(updated);
+      closeForm();
+    } catch (err) {
+      setApiError(err instanceof CustomerApiError ? err.message : t.custSaveFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm(t.custAddrDeleteConfirm)) return;
+    setDeletingId(id);
+    setApiError(null);
+    try {
+      const updated = await deleteMySecondaryAddress(id, token);
+      onChanged(updated);
+    } catch (err) {
+      setApiError(err instanceof CustomerApiError ? err.message : t.custSaveFailed);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="content-card" style={{ maxWidth: 640, marginTop: 20 }}>
+      <div className="content-card__header">
+        <span className="content-card__title">{t.custAddrTitle}</span>
+        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>{addresses.length}/5</span>
+      </div>
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {apiError && <div className="register-form__error" role="alert">{apiError}</div>}
+
+        {addresses.length === 0 && !showForm && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', margin: 0 }}>{t.custAddrEmpty}</p>
+        )}
+
+        {addresses.map(a => (
+          <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '10px 14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>{a.label}</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>{a.city}, {a.district}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>{a.address}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button className="btn-ghost" onClick={() => openEdit(a)} disabled={saving || deletingId === a.id}>{t.edit}</button>
+              <button className="btn-ghost" onClick={() => handleDelete(a.id)} disabled={saving || deletingId === a.id}>
+                {deletingId === a.id ? t.custSaving : t.custAddrDelete}
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {!showForm && (
+          <button className="btn-primary" onClick={openAdd} disabled={atLimit} style={{ alignSelf: 'flex-start' }}>
+            {t.custAddrAddBtn}
+          </button>
+        )}
+        {atLimit && !showForm && (
+          <p style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', margin: 0 }}>{t.custAddrLimitReached}</p>
+        )}
+
+        {showForm && (
+          <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 4 }}>
+            <FormField label={t.custAddrLabel} value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} error={errors.label} placeholder={t.custAddrLabelPh} />
+            <CityDistrictPicker
+              cityValue={form.city}
+              districtValue={form.district}
+              onCityChange={cityName => setForm(f => ({ ...f, city: cityName, district: '' }))}
+              onDistrictChange={districtName => setForm(f => ({ ...f, district: districtName }))}
+              cityError={errors.city}
+              districtError={errors.district}
+            />
+            <FormField label={t.streetAddress} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} error={errors.address} placeholder={t.phStreetAddress} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button className="btn-primary" onClick={handleSave} disabled={saving}>{saving ? t.custSaving : t.custAddrSave}</button>
+              <button className="btn-ghost" onClick={closeForm} disabled={saving}>{t.cancel}</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

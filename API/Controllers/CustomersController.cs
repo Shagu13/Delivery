@@ -9,6 +9,8 @@ using Application.Customers.Commands.SetTenant;
 using Application.Customers.Commands.UpdateCustomer;
 using Application.Customers.DTOs;
 using Application.Customers.Queries;
+using Application.Customers.SecondaryAddresses.Commands;
+using Application.Customers.SecondaryAddresses.Queries;
 using Application.Customers.SpecialPrices.Commands;
 using Application.Customers.SpecialPrices.Queries;
 using Microsoft.AspNetCore.Authorization;
@@ -117,6 +119,52 @@ public sealed class CustomersController : BaseController
             appUserId, request.CurrentPassword, request.NewPassword), ct);
 
         return NoContent();
+    }
+
+    // ── GET /api/customers/me/addresses  (saved pickup addresses beyond the main one) ──
+    [HttpGet("me/addresses")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> GetMyAddresses(CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCustomerSecondaryAddressesQuery(GetCustomerIdFromToken()), ct);
+        return Ok(result);
+    }
+
+    // ── POST /api/customers/me/addresses  (capped at 5 — see AddCustomerSecondaryAddressCommand) ──
+    [HttpPost("me/addresses")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> AddMyAddress(
+        [FromBody] SecondaryAddressRequest request, CancellationToken ct)
+    {
+        var customerId = GetCustomerIdFromToken();
+        await Sender.Send(new AddCustomerSecondaryAddressCommand(
+            customerId, request.Label, request.City, request.District, request.Address), ct);
+        var result = await Sender.Send(new GetCustomerSecondaryAddressesQuery(customerId), ct);
+        return Ok(result);
+    }
+
+    // ── PUT /api/customers/me/addresses/{addressId} ────────────────────────────
+    [HttpPut("me/addresses/{addressId:guid}")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> UpdateMyAddress(
+        Guid addressId, [FromBody] SecondaryAddressRequest request, CancellationToken ct)
+    {
+        var customerId = GetCustomerIdFromToken();
+        await Sender.Send(new UpdateCustomerSecondaryAddressCommand(
+            customerId, addressId, request.Label, request.City, request.District, request.Address), ct);
+        var result = await Sender.Send(new GetCustomerSecondaryAddressesQuery(customerId), ct);
+        return Ok(result);
+    }
+
+    // ── DELETE /api/customers/me/addresses/{addressId} ─────────────────────────
+    [HttpDelete("me/addresses/{addressId:guid}")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> DeleteMyAddress(Guid addressId, CancellationToken ct)
+    {
+        var customerId = GetCustomerIdFromToken();
+        await Sender.Send(new DeleteCustomerSecondaryAddressCommand(customerId, addressId), ct);
+        var result = await Sender.Send(new GetCustomerSecondaryAddressesQuery(customerId), ct);
+        return Ok(result);
     }
 
     // ── GET /api/customers  (Admin/Operator — all; TenantAdmin — own tenant) ──────────
@@ -295,3 +343,5 @@ public sealed record SetCompanyPriceRequest(
 );
 
 public sealed record SetSpecialPriceRequest(Guid DistrictId, decimal Price);
+
+public sealed record SecondaryAddressRequest(string Label, string City, string District, string Address);

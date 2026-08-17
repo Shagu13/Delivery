@@ -73,4 +73,8 @@ public class Customer
     /// (e.g. a special rate for Rustavi specifically). See <see cref="CustomerSpecialPrice"/>.
     /// </summary>
     public ICollection<CustomerSpecialPrice> SpecialPrices { get; set; } = new List<CustomerSpecialPrice>();
+
+    // ── Saved pickup addresses beyond the main one above ─────────────────────
+    /// <summary>Capped at 5 — see <see cref="CustomerSecondaryAddress"/>.</summary>
+    public ICollection<CustomerSecondaryAddress> SecondaryAddresses { get; set; } = new List<CustomerSecondaryAddress>();
 }

@@ -31,6 +31,12 @@ interface SenderSectionProps {
   onUseOtherAddressChange?: (checked: boolean) => void;
   /** Called when the user clicks "Use a different pickup address" button. */
   onOpenPickupModal?: () => void;
+  /** The customer's main address plus their saved secondary addresses (capped at 5),
+   *  offered as a quick pickup-location picker. First entry is always the main address. */
+  addressOptions?: { id: string; label: string; city: string; district: string; address: string }[];
+  /** id of the currently-selected saved option ('' when a one-off custom address is in use). */
+  selectedAddressId?: string;
+  onSelectAddress?: (id: string) => void;
 }
 
 export function SenderSection({
@@ -41,6 +47,9 @@ export function SenderSection({
   useOtherAddress = false,
   onUseOtherAddressChange,
   onOpenPickupModal,
+  addressOptions,
+  selectedAddressId,
+  onSelectAddress,
 }: SenderSectionProps) {
   const { t } = useLanguage();
   const [showAltPhone, setShowAltPhone] = useState(!!data.alternativeSenderPhone);
@@ -139,6 +148,24 @@ export function SenderSection({
         {/* Pickup Location */}
         <fieldset className="fieldset">
           <legend className="fieldset__legend">{t.cgoPickupLocation}</legend>
+
+          {prefilled && addressOptions && addressOptions.length > 1 && onSelectAddress && (
+            <div className="form-field" style={{ marginBottom: 12 }}>
+              <label className="form-field__label">{t.cgoAddrPickerLabel}</label>
+              <select
+                className="form-field__input"
+                value={selectedAddressId ?? ''}
+                onChange={e => onSelectAddress(e.target.value)}
+              >
+                {!selectedAddressId && <option value="" disabled>{t.cgoAddrCustomOption}</option>}
+                {addressOptions.map(opt => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label} — {opt.city}, {opt.district}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {prefilled && onOpenPickupModal && (
             <div className="other-address-row">

@@ -51,6 +51,22 @@ export interface CustomerSpecialPrice {
   price: number;
 }
 
+/** One of a customer's saved pickup addresses beyond their main one. Capped at 5. */
+export interface CustomerSecondaryAddress {
+  id: string;
+  label: string;
+  city: string;
+  district: string;
+  address: string;
+}
+
+export interface SecondaryAddressInput {
+  label: string;
+  city: string;
+  district: string;
+  address: string;
+}
+
 export interface Customer {
   id: string;
   firstName: string; lastName: string; idNumber: string | null;
@@ -66,6 +82,9 @@ export interface Customer {
    *  Present on /customers/me and /customers/{id}; absent on the paginated admin list (fetch
    *  via getCustomerSpecialPrices when the admin opens the special-prices management modal). */
   specialPrices?: CustomerSpecialPriceLite[];
+  /** Saved pickup addresses beyond the main one above (city/district/address), capped at 5.
+   *  Present on /customers/me and /customers/{id}; absent on the paginated admin list. */
+  secondaryAddresses?: CustomerSecondaryAddress[];
 }
 
 export interface AdminCustomer extends Customer {
@@ -321,6 +340,46 @@ export async function deleteCustomerSpecialPrice(
   id: string, specialPriceId: string, token: string,
 ): Promise<CustomerSpecialPrice[]> {
   return handle(await fetch(`/api/customers/${id}/special-prices/${specialPriceId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
+// ── Saved pickup addresses (self-service, capped at 5) ─────────────────────────
+
+export async function getMySecondaryAddresses(token: string): Promise<CustomerSecondaryAddress[]> {
+  return handle(await fetch('/api/customers/me/addresses', {
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
+/** Adds a saved pickup address (rejected with a 409 past the 5-address cap). Returns the fresh list. */
+export async function addMySecondaryAddress(
+  data: SecondaryAddressInput, token: string,
+): Promise<CustomerSecondaryAddress[]> {
+  return handle(await fetch('/api/customers/me/addresses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
+}
+
+/** Edits a saved pickup address. Returns the fresh list. */
+export async function updateMySecondaryAddress(
+  addressId: string, data: SecondaryAddressInput, token: string,
+): Promise<CustomerSecondaryAddress[]> {
+  return handle(await fetch(`/api/customers/me/addresses/${addressId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
+}
+
+/** Removes a saved pickup address. Returns the fresh list. */
+export async function deleteMySecondaryAddress(
+  addressId: string, token: string,
+): Promise<CustomerSecondaryAddress[]> {
+  return handle(await fetch(`/api/customers/me/addresses/${addressId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   }));

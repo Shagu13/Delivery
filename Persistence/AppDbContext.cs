@@ -13,6 +13,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<Courier>          Couriers          => Set<Courier>();
     public DbSet<Customer>         Customers         => Set<Customer>();
     public DbSet<CustomerSpecialPrice> CustomerSpecialPrices => Set<CustomerSpecialPrice>();
+    public DbSet<CustomerSecondaryAddress> CustomerSecondaryAddresses => Set<CustomerSecondaryAddress>();
     public DbSet<Tenant>           Tenants           => Set<Tenant>();
     public DbSet<TenantSettlement> TenantSettlements => Set<TenantSettlement>();
     public DbSet<Warehouse>        Warehouses        => Set<Warehouse>();
@@ -121,6 +122,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasOne(s => s.District).WithMany()
              .HasForeignKey(s => s.DistrictId).OnDelete(DeleteBehavior.Cascade);
             e.Property(s => s.Price).HasColumnType("decimal(18,2)");
+        });
+
+        // ── CustomerSecondaryAddress (extra saved pickup addresses, capped at 5 in the
+        //    AddCustomerSecondaryAddressCommand handler — not a DB constraint) ─────
+        modelBuilder.Entity<CustomerSecondaryAddress>(e =>
+        {
+            e.HasKey(a => a.Id);
+            e.HasIndex(a => a.CustomerId);
+            e.HasOne(a => a.Customer).WithMany(c => c.SecondaryAddresses)
+             .HasForeignKey(a => a.CustomerId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(a => a.Label).HasMaxLength(60).IsRequired();
+            e.Property(a => a.City).HasMaxLength(100).IsRequired();
+            e.Property(a => a.District).HasMaxLength(100).IsRequired();
+            e.Property(a => a.Address).HasMaxLength(250).IsRequired();
         });
 
         // ── Tenant (white-label brand) ────────────────────────────────────────

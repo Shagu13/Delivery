@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { addOrdersToBatch, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
 import { getMyProfile, getMyOrders } from '../../api/customers';
-import type { Customer, CustomerGroupOrder } from '../../api/customers';
+import type { Customer, CustomerGroupOrder, CustomerSecondaryAddress } from '../../api/customers';
 import { useCart } from '../../contexts/useCart';
 import { fetchCities, fetchDistricts, fetchAllDistrictsFlat } from '../../api/cities';
 import type { City, District } from '../../api/cities';
@@ -40,6 +40,10 @@ interface SenderFormData {
     pickUpAddress:      string;
     note:               string;
 }
+
+// Synthetic id for the customer's registered (main) address in the saved-address picker —
+// never collides with a real CustomerSecondaryAddress guid.
+const MAIN_ADDRESS_ID = 'main';
 
 const EMPTY_SENDER: SenderFormData = {
     senderFirstName:    '',
@@ -208,6 +212,26 @@ export function CreateGroupOrderPage() {
     const [prefilled,       setPrefilled]       = useState(false);
     const [pickupModalOpen, setPickupModalOpen] = useState(false);
 
+    // ── Saved pickup addresses (main + up to 5 secondary) ──────────────────────
+    const [secondaryAddresses, setSecondaryAddresses] = useState<CustomerSecondaryAddress[]>([]);
+    const [selectedAddressId,  setSelectedAddressId]  = useState(MAIN_ADDRESS_ID);
+    const addressOptions = [
+        { id: MAIN_ADDRESS_ID, label: t.cgoAddrMainOption, city: sender.registeredCity, district: sender.registeredDistrict, address: sender.registeredAddress },
+        ...secondaryAddresses.map(a => ({ id: a.id, label: a.label, city: a.city, district: a.district, address: a.address })),
+    ];
+    const handleSelectAddress = (id: string) => {
+        const opt = addressOptions.find(o => o.id === id);
+        if (!opt) return;
+        setSelectedAddressId(id);
+        setUseOtherAddr(false);
+        setSender(prev => ({ ...prev, pickUpCity: opt.city, pickUpDistrict: opt.district, pickUpAddress: opt.address }));
+        setErrors(prev => {
+            const n = { ...prev };
+            delete n.pickUpCity; delete n.pickUpDistrict; delete n.pickUpAddress;
+            return n;
+        });
+    };
+
     // ── Weight price tiers ─────────────────────────────────────────────────────
     const [weightTiers, setWeightTiers] = useState<WeightPriceTier[]>([]);
     useEffect(() => { fetchWeightPriceTiers().then(setWeightTiers).catch(() => {}); }, []);
@@ -267,6 +291,8 @@ export function CreateGroupOrderPage() {
                 });
                 setServiceIncludedForced(profile.isCompanyServicePriceIncludedInPrice);
                 setSenderAddress({ city: profile.city, district: profile.district, address: profile.address });
+                setSecondaryAddresses(profile.secondaryAddresses ?? []);
+                setSelectedAddressId(MAIN_ADDRESS_ID);
                 setPrefilled(true);
             } catch { /* ignore */ }
         })();
@@ -311,6 +337,7 @@ export function CreateGroupOrderPage() {
                 pickUpDistrict: prev.registeredDistrict,
                 pickUpAddress:  prev.registeredAddress,
             }));
+            setSelectedAddressId(MAIN_ADDRESS_ID);
         }
     };
 
@@ -560,10 +587,12 @@ export function CreateGroupOrderPage() {
                     pickUpAddress:      profile.address,
                     note:               '',
                 });
+                setSecondaryAddresses(profile.secondaryAddresses ?? []);
             }).catch(() => setSender(EMPTY_SENDER));
         } else {
             setSender(EMPTY_SENDER);
         }
+        setSelectedAddressId(MAIN_ADDRESS_ID);
         setUseOtherAddr(false);
         setPackages([{ ...EMPTY_PACKAGE }]);
         setErrors({});
@@ -717,6 +746,9 @@ export function CreateGroupOrderPage() {
                                 useOtherAddress={useOtherAddr}
                                 onUseOtherAddressChange={handleUseOtherAddrChange}
                                 onOpenPickupModal={() => setPickupModalOpen(true)}
+                                addressOptions={addressOptions}
+                                selectedAddressId={selectedAddressId}
+                                onSelectAddress={handleSelectAddress}
                             />
 
                             <PickupAddressModal
@@ -725,6 +757,8 @@ export function CreateGroupOrderPage() {
                                 onSave={addr => {
                                     setSender(prev => ({ ...prev, pickUpCity: addr.city, pickUpDistrict: addr.district, pickUpAddress: addr.address }));
                                     setUseOtherAddr(true);
+                                    // No saved option matches a hand-typed one-off address anymore.
+                                    setSelectedAddressId('');
                                     setPickupModalOpen(false);
                                 }}
                                 onClose={() => setPickupModalOpen(false)}
