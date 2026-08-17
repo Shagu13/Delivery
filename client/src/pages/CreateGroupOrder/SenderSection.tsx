@@ -150,20 +150,34 @@ export function SenderSection({
           <legend className="fieldset__legend">{t.cgoPickupLocation}</legend>
 
           {prefilled && addressOptions && addressOptions.length > 1 && onSelectAddress && (
-            <div className="form-field" style={{ marginBottom: 12 }}>
-              <label className="form-field__label">{t.cgoAddrPickerLabel}</label>
-              <select
-                className="form-field__input"
-                value={selectedAddressId ?? ''}
-                onChange={e => onSelectAddress(e.target.value)}
-              >
-                {!selectedAddressId && <option value="" disabled>{t.cgoAddrCustomOption}</option>}
-                {addressOptions.map(opt => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label} — {opt.city}, {opt.district}
-                  </option>
-                ))}
-              </select>
+            <div className="addr-picker">
+              <span className="form-field__label">{t.cgoAddrPickerLabel}</span>
+              <div className="addr-tick-row">
+                {addressOptions.map(opt => {
+                  const active = selectedAddressId === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={`addr-tick-btn${active ? ' addr-tick-btn--active' : ''}`}
+                      onClick={() => onSelectAddress(opt.id)}
+                      aria-pressed={active}
+                    >
+                      <span className="addr-tick-circle">
+                        {active && (
+                          <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 8.5l3.5 3.5L13 4" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="addr-tick-btn__text">
+                        <span className="addr-tick-btn__label">{opt.label}</span>
+                        <span className="addr-tick-btn__sub">{opt.city}, {opt.district}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

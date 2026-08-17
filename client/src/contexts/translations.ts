@@ -721,7 +721,6 @@ const en = {
   // Saved-address picker (main + secondary addresses)
   cgoAddrPickerLabel:       'Pickup address',
   cgoAddrMainOption:        'Main address',
-  cgoAddrCustomOption:      'Custom address',
   cgoStreetAddress:         'Street Address',
   cgoStreetPlaceholder:     'e.g. 12 Rustaveli Avenue, Apt 4',
   cgoNoteCourier:           'Note for Courier',
@@ -2699,7 +2698,6 @@ const ka: typeof en = {
   // Saved-address picker (main + secondary addresses)
   cgoAddrPickerLabel:       'გატანის მისამართი',
   cgoAddrMainOption:        'ძირითადი მისამართი',
-  cgoAddrCustomOption:      'სხვა მისამართი',
   cgoStreetAddress:         'ქუჩის მისამართი',
   cgoStreetPlaceholder:     'მაგ. რუსთაველის გამზ. 12, ბინა 4',
   cgoNoteCourier:           'შენიშვნა კურიერისთვის',

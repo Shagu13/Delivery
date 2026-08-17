@@ -781,6 +781,78 @@ body {
     padding: 6px 12px;
 }
 
+/* ── Saved-address tick picker (main + secondary addresses) ─────────────────── */
+.addr-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.addr-tick-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.addr-tick-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--color-bg-2);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 9px 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: var(--font-body);
+    transition: border-color var(--transition), background var(--transition);
+}
+
+    .addr-tick-btn:hover {
+        border-color: var(--color-text-subtle);
+    }
+
+    .addr-tick-btn--active {
+        border-color: var(--color-accent);
+        background: var(--color-accent-dim);
+    }
+
+.addr-tick-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--color-border);
+    color: #fff;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+    .addr-tick-btn--active .addr-tick-circle {
+        background: var(--color-accent);
+        border-color: var(--color-accent);
+    }
+
+.addr-tick-btn__text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.addr-tick-btn__label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.addr-tick-btn__sub {
+    font-size: 0.74rem;
+    color: var(--color-text-subtle);
+}
+
 /* ── Pickup Address Modal ────────────────────────────────────────────────────── */
 .pickup-modal-backdrop {
     position: fixed;
