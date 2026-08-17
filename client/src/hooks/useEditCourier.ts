@@ -3,6 +3,8 @@ import { updateCourier, CourierApiError } from '../api/couriers';
 import type { Courier } from '../api/couriers';
 
 export interface EditCourierForm {
+    firstName:     string;
+    lastName:      string;
     username:      string;
     newPassword:   string;
     phoneNumber:   string;
@@ -24,6 +26,8 @@ export const isDefaultSalaryEligibleCourier = (courier: Courier | null) =>
 
 function initialForm(courier: Courier | null): EditCourierForm {
     return {
+        firstName:     courier?.firstName   ?? '',
+        lastName:      courier?.lastName    ?? '',
         username:      courier?.username    ?? '',
         newPassword:   '',
         phoneNumber:   courier?.phoneNumber ?? '',
@@ -35,7 +39,7 @@ function initialForm(courier: Courier | null): EditCourierForm {
 export function useEditCourier(
     courier: Courier | null,
     token: string,
-    onUpdated: (courierId: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => void,
+    onUpdated: (courierId: string, newFirstName: string, newLastName: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => void,
 ) {
     // Key the entire form state off the courier's ID so React re-initializes
     // whenever a different courier is selected — no useEffect needed.
@@ -55,6 +59,12 @@ export function useEditCourier(
 
     const validate = (): FieldErrors => {
         const e: FieldErrors = {};
+        if (!form.firstName.trim()) {
+            e.firstName = 'First name is required.';
+        }
+        if (!form.lastName.trim()) {
+            e.lastName = 'Last name is required.';
+        }
         if (!form.username.trim()) {
             e.username = 'Username is required.';
         } else if (!/^[a-zA-Z0-9_.-]+$/.test(form.username.trim())) {
@@ -97,6 +107,8 @@ export function useEditCourier(
             await updateCourier(
                 courier.courierId,
                 {
+                    firstName:   form.firstName.trim(),
+                    lastName:    form.lastName.trim(),
                     username:    form.username.trim(),
                     newPassword: form.newPassword || undefined,
                     phoneNumber: form.phoneNumber.trim(),
@@ -106,7 +118,7 @@ export function useEditCourier(
                 token,
             );
             setSuccess(true);
-            onUpdated(courier.courierId, form.username.trim(), form.phoneNumber.trim(), form.idNumber.trim(), defaultSalary);
+            onUpdated(courier.courierId, form.firstName.trim(), form.lastName.trim(), form.username.trim(), form.phoneNumber.trim(), form.idNumber.trim(), defaultSalary);
         } catch (err) {
             if (err instanceof CourierApiError && err.errors) {
                 const mapped: FieldErrors = {};

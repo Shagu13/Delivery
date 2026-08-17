@@ -95,6 +95,8 @@ public sealed class CouriersController : BaseController
             .Select(c => new
             {
                 courierId = c.Id,
+                firstName = c.FirstName,
+                lastName = c.LastName,
                 fullName = $"{c.FirstName} {c.LastName}",
                 username = c.ApplicationUser.UserName,
                 assignedCity = c.AssignedCity,
@@ -125,7 +127,7 @@ public sealed class CouriersController : BaseController
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCourierRequest request, CancellationToken ct)
     {
         var newPassword = string.IsNullOrWhiteSpace(request.NewPassword) ? null : request.NewPassword;
-        await Sender.Send(new UpdateCourierCommand(id, request.Username, newPassword, request.PhoneNumber, request.IdNumber, request.DefaultSalary), ct);
+        await Sender.Send(new UpdateCourierCommand(id, request.FirstName, request.LastName, request.Username, newPassword, request.PhoneNumber, request.IdNumber, request.DefaultSalary), ct);
         return NoContent();
     }
 

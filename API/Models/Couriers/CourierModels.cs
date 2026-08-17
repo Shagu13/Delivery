@@ -22,6 +22,8 @@ public sealed record CreateCourierResponse(
 
 /// <summary>HTTP request body for PUT /api/couriers/{id} (admin only).</summary>
 public sealed record UpdateCourierRequest(
+    string   FirstName,
+    string   LastName,
     string   Username,
     string?  NewPassword,
     string   PhoneNumber,

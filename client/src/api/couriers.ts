@@ -20,6 +20,8 @@ export interface CreateCourierResponse {
 /// Full courier record as returned by GET /api/couriers
 export interface Courier {
     courierId: string;
+    firstName: string;
+    lastName: string;
     fullName: string;
     username: string;
     assignedCity: string;
@@ -157,6 +159,8 @@ export async function fetchAssignedPickupsForDay(
 }
 
 export interface UpdateCourierRequest {
+    firstName: string;
+    lastName: string;
     username: string;
     newPassword?: string;
     phoneNumber: string;

@@ -208,10 +208,10 @@ export function AdminDashboard() {
     goTo('couriers');
   };
 
-  const handleCourierUpdated = (courierId: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => {
+  const handleCourierUpdated = (courierId: string, newFirstName: string, newLastName: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => {
     setCouriers(prev => prev.map(c =>
       c.courierId === courierId
-        ? { ...c, username: newUsername, phoneNumber: newPhone, idNumber: newIdNumber, defaultSalary: newDefaultSalary }
+        ? { ...c, firstName: newFirstName, lastName: newLastName, fullName: `${newFirstName} ${newLastName}`, username: newUsername, phoneNumber: newPhone, idNumber: newIdNumber, defaultSalary: newDefaultSalary }
         : c
     ));
     setEditCourier(null);
@@ -593,7 +593,7 @@ export function AdminDashboard() {
         courier={editCourier}
         token={token ?? ''}
         onClose={() => setEditCourier(null)}
-        onUpdated={(id, username, phone, idNumber, defaultSalary) => { handleCourierUpdated(id, username, phone, idNumber, defaultSalary); }}
+        onUpdated={(id, firstName, lastName, username, phone, idNumber, defaultSalary) => { handleCourierUpdated(id, firstName, lastName, username, phone, idNumber, defaultSalary); }}
       />
 
       {toast && (

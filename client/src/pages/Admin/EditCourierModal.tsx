@@ -7,7 +7,7 @@ interface Props {
     courier: Courier | null;
     token: string;
     onClose: () => void;
-    onUpdated: (courierId: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => void;
+    onUpdated: (courierId: string, newFirstName: string, newLastName: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => void;
 }
 
 export function EditCourierModal({ open, courier, token, onClose, onUpdated }: Props) {
@@ -164,6 +164,68 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                         textTransform: 'uppercase', color: 'var(--color-text-subtle)',
                         margin: '4px 0 0',
                     }}>
+                        Name
+                    </p>
+
+                    {/* First / Last Name */}
+                    <div style={{ display: 'flex', gap: 12 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+                            <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                                First Name <span style={{ color: 'var(--color-accent)' }}>*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={form.firstName}
+                                onChange={e => handleChange('firstName', e.target.value)}
+                                placeholder="e.g. George"
+                                maxLength={100}
+                                autoComplete="off"
+                                autoFocus
+                                style={{
+                                    background: 'var(--color-bg)', border: `1px solid ${errors.firstName ? 'var(--color-error)' : 'var(--color-border)'}`,
+                                    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
+                                    fontSize: '0.875rem', padding: '9px 12px', outline: 'none',
+                                    transition: 'border-color 0.15s',
+                                }}
+                                onFocus={e => { if (!errors.firstName) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                                onBlur={e => { if (!errors.firstName) e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                            />
+                            {errors.firstName && (
+                                <span style={{ fontSize: '0.78rem', color: 'var(--color-error)' }}>{errors.firstName}</span>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+                            <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>
+                                Last Name <span style={{ color: 'var(--color-accent)' }}>*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={form.lastName}
+                                onChange={e => handleChange('lastName', e.target.value)}
+                                placeholder="e.g. Doe"
+                                maxLength={100}
+                                autoComplete="off"
+                                style={{
+                                    background: 'var(--color-bg)', border: `1px solid ${errors.lastName ? 'var(--color-error)' : 'var(--color-border)'}`,
+                                    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
+                                    fontSize: '0.875rem', padding: '9px 12px', outline: 'none',
+                                    transition: 'border-color 0.15s',
+                                }}
+                                onFocus={e => { if (!errors.lastName) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                                onBlur={e => { if (!errors.lastName) e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+                            />
+                            {errors.lastName && (
+                                <span style={{ fontSize: '0.78rem', color: 'var(--color-error)' }}>{errors.lastName}</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Section label */}
+                    <p style={{
+                        fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em',
+                        textTransform: 'uppercase', color: 'var(--color-text-subtle)',
+                        margin: '4px 0 0',
+                    }}>
                         Contact Info
                     </p>
 
@@ -270,7 +332,6 @@ export function EditCourierModal({ open, courier, token, onClose, onUpdated }: P
                             placeholder="e.g. courier_giorgi"
                             maxLength={50}
                             autoComplete="off"
-                            autoFocus
                             style={{
                                 background: 'var(--color-bg)', border: `1px solid ${errors.username ? 'var(--color-error)' : 'var(--color-border)'}`,
                                 borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',

@@ -10,6 +10,8 @@ namespace Application.Couriers.Commands.UpdateCourier;
 
 public sealed record UpdateCourierCommand(
     Guid     CourierId,
+    string   FirstName,
+    string   LastName,
     string   Username,
     string?  NewPassword,
     string   PhoneNumber,
@@ -62,7 +64,9 @@ public sealed class UpdateCourierCommandHandler : IRequestHandler<UpdateCourierC
             }
         }
 
-        // Update phone number and ID number on the Courier entity
+        // Update name, phone number, and ID number on the Courier entity
+        courier.FirstName   = request.FirstName.Trim();
+        courier.LastName    = request.LastName.Trim();
         courier.PhoneNumber = request.PhoneNumber.Trim();
         courier.IdNumber    = request.IdNumber.Trim();
 
