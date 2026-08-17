@@ -117,6 +117,7 @@ function wrapReturnAsGroupOrder(r: ReturnExchangeOrder): AdminGroupOrder {
     companyServiceCapitalPrice: null,
     companyServiceCityPrice: null,
     companyServiceDistrictPrice: null,
+    customerSpecialPrices: [],
     orders: [{
       id: r.id,
       trackingNumber: r.trackingNumber,
