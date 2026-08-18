@@ -670,10 +670,13 @@ export function AdminDashboard() {
         .go-seg__btn:not(:last-child) { border-right: 1px solid var(--color-border); }
         .go-seg__btn:hover:not(.go-seg__btn--active) { background: var(--color-bg-3); color: var(--color-text); }
         .go-seg__btn--active { background: var(--color-accent-dim); color: var(--color-accent); font-weight: 600; }
-        .go-select-wrap { position: relative; display: flex; align-items: center; }
+        .go-select-wrap { position: relative; display: flex; align-items: center; min-width: 0; max-width: 100%; }
         .go-select-icon { position: absolute; left: 10px; color: var(--color-text-subtle); pointer-events: none; flex-shrink: 0; }
         .go-select-chevron { position: absolute; right: 9px; color: var(--color-text-subtle); pointer-events: none; }
-        .go-select { appearance: none; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.825rem; padding: 8px 30px 8px 30px; cursor: pointer; min-width: 140px; transition: border-color var(--transition); outline: none; }
+        /* A native <select> with no explicit width sizes itself to its longest
+           <option> text (e.g. a long customer/business name) — without a cap it
+           pushes past the row and off the screen on mobile. Cap + truncate it. */
+        .go-select { appearance: none; background: var(--color-bg-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-size: 0.825rem; padding: 8px 30px 8px 30px; cursor: pointer; min-width: 140px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: border-color var(--transition); outline: none; }
         .go-select:focus { border-color: var(--color-accent); }
         .go-select:disabled { opacity: 0.45; cursor: not-allowed; }
         .go-clear-btn { display: flex; align-items: center; gap: 5px; background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-subtle); font-size: 0.78rem; padding: 7px 11px; cursor: pointer; transition: color var(--transition), border-color var(--transition); white-space: nowrap; }
