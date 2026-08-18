@@ -9,6 +9,7 @@ import {
     cancelGroupOrderByAdmin,
     setGroupOrderPickupDate,
     revertGroupOrderToPending,
+    exportGroupOrdersExcel,
 } from '../../api/adminGroupOrders';
 import { sendOrderToCity, cancelOrderByAdmin } from '../../api/orders';
 import { assignReturnCourier } from '../../api/returnExchange';
@@ -16,6 +17,7 @@ import type { Courier } from '../../api/couriers';
 import { useLanguage } from '../../contexts/useLanguage';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { georgianDateKeyOf } from '../../utils/georgianTime';
 
 // Print icon shared by the label buttons.
 const printIcon = (
@@ -112,10 +114,17 @@ interface Props {
     // undefined elsewhere, where the accept button keeps its all-or-nothing behaviour.
     warehousePresentIds?: string[];
     warehouseAbsentCount?: number;
+    // Show a per-batch "download this batch's packages" Excel button (Packages page only —
+    // the Pick-Up page doesn't pass this, so it never appears there). Uses the same
+    // /api/grouporders/export endpoint and column layout as the page-level export, just
+    // narrowed to this batch's order ids — no new data is exposed, same Admin/Operator
+    // authorization as the existing export button.
+    showDownload?: boolean;
 }
 
-export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh, canManage = true, canAssignCourier = canManage, warehousePresentIds, warehouseAbsentCount }: Props) {
+export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess, onError, onRefresh, canManage = true, canAssignCourier = canManage, warehousePresentIds, warehouseAbsentCount, showDownload = false }: Props) {
     const [busy, setBusy] = useState(false);
+    const [downloading, setDownloading] = useState(false);
     const [showCourierPicker, setShowCourierPicker] = useState(false);
     const [selectedCourierId, setSelectedCourierId] = useState('');
     const [showPickupDate, setShowPickupDate] = useState(false);
@@ -124,7 +133,7 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
     const [confirm, setConfirm] = useState<null | {
         title: string; message: string; confirmLabel: string; confirmTone: string; action: () => void;
     }>(null);
-    const { t } = useLanguage();
+    const { t, lang } = useLanguage();
 
     async function run(fn: () => Promise<void>, successMsg: string) {
         setBusy(true);
@@ -192,6 +201,23 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
         setPickupDateValue('');
     }
 
+    // Same endpoint/column layout as the page-level Export button, narrowed to this batch's
+    // order ids via the `ids` filter — no separate export path to drift out of sync with.
+    async function handleDownloadBatch() {
+        setDownloading(true);
+        try {
+            await exportGroupOrdersExcel(token, {
+                date: georgianDateKeyOf(groupOrder.createdAt),
+                ids:  groupOrder.orders.map(o => o.id),
+                lang,
+            });
+        } catch (e: unknown) {
+            onError(e instanceof Error ? e.message : t.goActionFailed);
+        } finally {
+            setDownloading(false);
+        }
+    }
+
     const { status } = groupOrder;
     const isCancelledOrDone =
         status === 'CancelledByAdmin' || status === 'CancelledBySender' ||
@@ -213,6 +239,24 @@ export function AdminGroupOrderActions({ groupOrder, couriers, token, onSuccess,
                 >
                     {printIcon}
                     {t.custPrintAllLabels}
+                </button>
+            )}
+
+            {/* Download this batch's packages as Excel — Packages page only (showDownload is
+                only passed there), same layout/columns as the page-level export. Available at
+                any stage, same as print labels above. */}
+            {showDownload && groupOrder.orders.length > 0 && (
+                <button
+                    type="button"
+                    className="go-action-btn go-action-btn--ghost"
+                    title={t.goDownloadBatchTitle}
+                    disabled={downloading}
+                    onClick={() => void handleDownloadBatch()}
+                >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 1v9M4.5 6.5L8 10l3.5-3.5M2.5 13.5h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    {downloading ? t.goDownloadingBatch : t.goDownloadBatchBtn}
                 </button>
             )}
 

@@ -914,6 +914,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                             <AdminGroupOrderActions groupOrder={go} couriers={couriers} token={token ?? ''}
                               onSuccess={msg => showToast(msg)} onError={msg => showToast(msg, 'err')}
                               onRefresh={() => reload()} canManage={canManage} canAssignCourier={canAssignCourier}
+                              showDownload={canManage}
                               warehousePresentIds={go.status === 'DeliveredToWarehouse'
                                 ? go.orders.filter(o => o.status === 'DeliveredToWarehouse' && !absentPkgs.has(o.id)).map(o => o.id)
                                 : undefined}
