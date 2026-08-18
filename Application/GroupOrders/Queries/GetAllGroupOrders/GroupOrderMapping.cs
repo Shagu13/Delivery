@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.Customers.DTOs;
+using Application.Finance;
 using Application.GroupOrders.DTOs;
 using Domain;
 using Domain.Enums;
@@ -76,7 +77,8 @@ internal static class GroupOrderMapping
         DeliveredAt:                      o.DeliveredAt,
         CancellationReason:               o.CancellationReason,
         CancellationComment:              o.CancellationComment,
-        CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt);
+        CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt,
+        ExpectedCourierCash:              OrderFinance.ExpectedCourierCash(o));
 
     public static AdminGroupOrderDto MapGroupOrder(GroupOrder go, IReadOnlyDictionary<string, string?> cityGeo, IReadOnlyDictionary<string, string?> districtGeo) => new(
         Id:                      go.Id,

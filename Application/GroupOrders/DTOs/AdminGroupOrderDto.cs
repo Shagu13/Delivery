@@ -92,5 +92,12 @@ public sealed record AdminOrderDto(
     CancellationReason? CancellationReason = null,
     string?             CancellationComment = null,
     /// <summary>When an admin marked this cancelled order as physically returned to the sender. Null otherwise.</summary>
-    DateTime?           CancelledReturnedToSenderAt = null
+    DateTime?           CancelledReturnedToSenderAt = null,
+    /// <summary>
+    /// Total cash the courier is expected to collect from the recipient — product COD plus,
+    /// when the recipient pays the company service fee, that fee too. See
+    /// <see cref="Application.Finance.OrderFinance.ExpectedCourierCash"/>. Used by the admin
+    /// Excel export's COD column; not surfaced through <c>AdminGroupOrderResponse</c>.
+    /// </summary>
+    decimal              ExpectedCourierCash = 0m
 );

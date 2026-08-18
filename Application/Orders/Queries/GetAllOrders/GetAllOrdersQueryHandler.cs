@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.Common.Models;
+using Application.Finance;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -208,7 +209,8 @@ public sealed class GetAllOrdersQueryHandler
                 CreatedAt:                o.CreatedAt,
                 DeliveredAt:              o.DeliveredAt,
                 PostponeReason:           o.PostponeReason == null ? null : o.PostponeReason.Value.ToString(),
-                PostponeComment:          o.PostponeComment
+                PostponeComment:          o.PostponeComment,
+                ExpectedCourierCash:      OrderFinance.ExpectedCourierCash(o)
             ))
             .ToList();
 

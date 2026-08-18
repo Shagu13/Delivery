@@ -127,7 +127,10 @@ public sealed class OrdersController : BaseController
             ws.Cell(row, 9).Value  = o.OrderType;
             ws.Cell(row, 10).Value = o.Status;
             ws.Cell(row, 11).Value = o.ProductPaymentStatus;
-            if (o.AmountToCollectForPackage.HasValue) ws.Cell(row, 12).Value = o.AmountToCollectForPackage.Value;
+            // COD column = product COD plus, when the recipient pays the company service fee at
+            // delivery, that fee too (OrderFinance.ExpectedCourierCash — the cash the courier
+            // actually collects). Sender-pays orders are unaffected: this equals the plain COD.
+            if (o.ExpectedCourierCash > 0m) ws.Cell(row, 12).Value = o.ExpectedCourierCash;
             ws.Cell(row, 13).Value = o.CompanyServicePrice;
             if (o.CourierSalary.HasValue)  ws.Cell(row, 14).Value = o.CourierSalary.Value;
             if (o.CompanyRevenue.HasValue) ws.Cell(row, 15).Value = o.CompanyRevenue.Value;

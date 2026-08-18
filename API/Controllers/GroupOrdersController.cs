@@ -335,7 +335,10 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(row, 5).Value = o.RecipientName;
             ws.Cell(row, 6).Value = o.Description ?? string.Empty;
             ws.Cell(row, 7).Value = o.RecipientPhone;
-            if (o.AmountToCollectForPackage.HasValue) ws.Cell(row, 8).Value = o.AmountToCollectForPackage.Value;
+            // COD column = product COD plus, when the recipient pays the company service fee at
+            // delivery, that fee too (OrderFinance.ExpectedCourierCash — the cash the courier
+            // actually collects). Sender-pays orders are unaffected: this equals the plain COD.
+            if (o.ExpectedCourierCash > 0m) ws.Cell(row, 8).Value = o.ExpectedCourierCash;
             ws.Cell(row, 9).Value = o.CompanyServicePrice;
             row++;
         }

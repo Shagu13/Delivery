@@ -51,5 +51,12 @@ public sealed record AdminOrderListDto(
     // Reason a delivery attempt failed (only set when Status == DeliveryPostponed)
     string?  PostponeReason,
     /// <summary>Free-text note captured when PostponeReason is "Other". Null otherwise.</summary>
-    string?  PostponeComment
+    string?  PostponeComment,
+    /// <summary>
+    /// Total cash the courier is expected to collect from the recipient — product COD plus,
+    /// when the recipient pays the company service fee, that fee too. See
+    /// <see cref="Application.Finance.OrderFinance.ExpectedCourierCash"/>. Used by the admin
+    /// Excel export's COD column.
+    /// </summary>
+    decimal  ExpectedCourierCash = 0m
 );

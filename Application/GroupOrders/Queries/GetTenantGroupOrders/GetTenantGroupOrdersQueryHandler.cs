@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.Customers.DTOs;
+using Application.Finance;
 using Application.GroupOrders.DTOs;
 using Domain;
 using MediatR;
@@ -79,7 +80,8 @@ public sealed class GetTenantGroupOrdersQueryHandler
             DeliveryDateTo:                   o.DeliveryDateTo,
             DeliveredAt:                      o.DeliveredAt,
             CancellationReason:               o.CancellationReason,
-            CancellationComment:              o.CancellationComment);
+            CancellationComment:              o.CancellationComment,
+            ExpectedCourierCash:              OrderFinance.ExpectedCourierCash(o));
 
         var groupCards = groupOrders.Select(go => new AdminGroupOrderDto(
             Id:                      go.Id,

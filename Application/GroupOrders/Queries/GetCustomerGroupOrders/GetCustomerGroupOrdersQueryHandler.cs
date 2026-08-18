@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.Customers.DTOs;
+using Application.Finance;
 using Application.GroupOrders.DTOs;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
 using Domain;
@@ -82,7 +83,8 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             DeliveredAt:                      o.DeliveredAt,
             CancellationReason:               o.CancellationReason,
             CancellationComment:              o.CancellationComment,
-            CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt);
+            CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt,
+            ExpectedCourierCash:              OrderFinance.ExpectedCourierCash(o));
 
         var groupCards = groupOrders.Select(go => new AdminGroupOrderDto(
             Id:                      go.Id,
