@@ -846,6 +846,11 @@ export function AdminDashboard() {
           .go-row-header { gap: 10px; padding: 12px 14px; }
           .go-toolbar, .go-status-bar { padding: 10px 14px; }
           .pickup-daynav, .pickup-daynav-wrap, .pickup-controls, .pickup-summary { padding-left: 14px; padding-right: 14px; }
+          /* The desktop nowrap override (so the day-nav sits on one line beside the
+             mode toggle) doesn't fit the arrows + two date inputs + jump button at
+             phone width — let it wrap again instead of spilling off the right edge. */
+          .pickup-daynav-wrap .pickup-daynav { flex-wrap: wrap; }
+          .pickup-daynav__label { flex-wrap: wrap; row-gap: 4px; }
           .go-note { padding-left: 14px; padding-right: 14px; }
           /* The day navigator's "mode" toggle shouldn't get shoved off-screen. */
           .pickup-modes { margin-left: 0; }
