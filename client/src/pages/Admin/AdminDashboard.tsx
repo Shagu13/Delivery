@@ -2947,9 +2947,18 @@ function AdminCouriers({
         </div>
       </div>
 
-      {/* Bulk reassign bar — appears once at least one order/batch is selected below */}
+      {/* Bulk reassign bar — appears once at least one order/batch is selected below.
+          Sticky so it stays reachable while scrolling a long courier list, mirroring
+          AdminPackagesPage's .aop-bulk-bar (position/top/z-index). */}
       {selected.size > 0 && (
-        <div className="content-card" style={{ marginBottom: 16 }}>
+        <div
+          className="content-card"
+          style={{
+            marginBottom: 16, position: 'sticky', top: 'var(--staff-nav-h, 64px)', zIndex: 20,
+            background: 'linear-gradient(var(--color-accent-dim), var(--color-accent-dim)), var(--color-bg)',
+            border: '1px solid rgba(196,127,23,0.25)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text)' }}>{t.goNSelected(selected.size)}</span>
             <select
