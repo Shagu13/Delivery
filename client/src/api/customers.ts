@@ -218,6 +218,7 @@ export interface UpdateMyOrderRequest {
   recipientPhone: string;
   recipientAddress: string;
   amountToCollectForPackage: number | null;
+  description: string | null;
 }
 
 /// Edit one of the customer's own packages (valid until it's assigned to a delivery courier)

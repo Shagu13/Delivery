@@ -8,12 +8,13 @@ import { EditCourierModal } from './EditCourierModal';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
 import { fetchGroupOrders,
     fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup, mergeGroupOrders, moveOrderToGroup,
-    groupAndAcceptStandalone, groupAndWarehouseStandalone } from '../../api/adminGroupOrders';
+    groupAndAcceptStandalone, groupAndWarehouseStandalone, bulkAssignCourierToGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/adminGroupOrders';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import type { AdminOrderItem } from './AdminOrdersPage';
 import { fetchCouriers, fetchAssignedForDay, fetchAssignedPickupsForDay, setCourierActiveStatus } from '../../api/couriers';
+import { bulkAssignCourierToOrders } from '../../api/orders';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import { recipientDisplayName } from '../../utils/recipientName';
 import AdminCustomersPage from './AdminCustomersPage';
@@ -2774,6 +2775,46 @@ function AdminCouriers({
   const reloadDeliveries = useCallback(() => {
     fetchAssignedForDay(dayKey, token).then(setDeliveries).catch(() => {});
   }, [dayKey, token]);
+  // Same, for the pickup leg — needed after a (bulk) pickup-courier reassignment.
+  const reloadPickups = useCallback(() => {
+    fetchAssignedPickupsForDay(dayKey, token).then(setPickups).catch(() => {});
+  }, [dayKey, token]);
+
+  // Cross-courier multi-select for bulk reassignment — a set of order ids (delivery mode)
+  // or group-order ids (pickup mode). Cleared whenever the underlying id-space changes.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  useEffect(() => { setSelected(new Set()); }, [mode, dayKey]);
+  const toggleSelected = useCallback((id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const [bulkCourierId, setBulkCourierId] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const runBulkReassign = async () => {
+    if (!bulkCourierId || selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const result = mode === 'pickup'
+        ? await bulkAssignCourierToGroupOrders(token, [...selected], bulkCourierId)
+        : await bulkAssignCourierToOrders(token, [...selected], bulkCourierId);
+      if (mode === 'pickup') reloadPickups(); else reloadDeliveries();
+      setSelected(new Set());
+      setBulkCourierId('');
+      // Individual items can fail validation (e.g. no longer in an assignable status)
+      // without the whole request throwing — surface that instead of staying silent.
+      if (result.failed.length > 0) {
+        setActionError(t.aopAssignedPartial(result.succeeded.length, result.failed.length));
+      }
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : t.goActionFailed);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const courierById = useMemo(() => new Map(couriers.map(c => [c.courierId, c])), [couriers]);
 
@@ -2906,6 +2947,35 @@ function AdminCouriers({
         </div>
       </div>
 
+      {/* Bulk reassign bar — appears once at least one order/batch is selected below */}
+      {selected.size > 0 && (
+        <div className="content-card" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text)' }}>{t.goNSelected(selected.size)}</span>
+            <select
+              value={bulkCourierId}
+              onChange={e => setBulkCourierId(e.target.value)}
+              style={{ padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg-2)', color: 'var(--color-text)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}
+            >
+              <option value="">{t.goChooseCourierOption}</option>
+              {couriers.filter(c => !c.isDeleted).map(c => (
+                <option key={c.courierId} value={c.courierId}>{c.fullName}</option>
+              ))}
+            </select>
+            <button
+              className="go-action-btn go-action-btn--assign"
+              disabled={!bulkCourierId || bulkBusy}
+              onClick={runBulkReassign}
+            >
+              {bulkBusy ? t.aopSaving : t.goReassignCourierBtn}
+            </button>
+            <button className="go-action-btn go-action-btn--ghost" onClick={() => setSelected(new Set())}>
+              {t.goClearSelection}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="content-card">
         <div className="content-card__header" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span className="content-card__title">{mode === 'pickup' ? t.crwTitlePickups : t.crwTitleDeliveries}</span>
@@ -2945,6 +3015,8 @@ function AdminCouriers({
                 key={r.courier.courierId}
                 courier={r.courier}
                 pickups={r.items as CourierDayPickup[]}
+                selected={selected}
+                onToggleSelected={toggleSelected}
               />
             ))}
           </div>
@@ -2960,6 +3032,8 @@ function AdminCouriers({
                 couriers={couriers}
                 onChanged={reloadDeliveries}
                 onError={setActionError}
+                selected={selected}
+                onToggleSelected={toggleSelected}
               />
             ))}
           </div>
@@ -3142,7 +3216,17 @@ function AllCouriersList({
 
 // ── Single expandable courier row ─────────────────────────────────────────────
 // One courier's pickups (group-order collections) for the selected day, read-only.
-function CourierPickupRow({ courier, pickups }: { courier: Courier; pickups: CourierDayPickup[]; }) {
+// A batch's pickup courier can only be (re)assigned while it's still awaiting pickup —
+// mirrors AssignCourierToGroupOrderCommandHandler's validStatuses.
+const PICKUP_ROW_REASSIGNABLE_STATUSES = ['AcceptedGroupOrder', 'CourierAssignedToPickUp'];
+function isPickupRowReassignable(p: CourierDayPickup): boolean {
+  return PICKUP_ROW_REASSIGNABLE_STATUSES.includes(p.status);
+}
+
+function CourierPickupRow({ courier, pickups, selected, onToggleSelected }: {
+  courier: Courier; pickups: CourierDayPickup[];
+  selected: Set<string>; onToggleSelected: (id: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useLanguage();
 
@@ -3189,13 +3273,14 @@ function CourierPickupRow({ courier, pickups }: { courier: Courier; pickups: Cou
         </div>
       </div>
 
-      {/* Pickups for the selected day (read-only) */}
+      {/* Pickups for the selected day — selectable for bulk courier reassignment above */}
       {expanded && (
         <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-3)', animation: 'expand-in 0.15s ease both' }}>
           <div style={{ overflowX: 'auto' }}>
             <table className="go-orders-table" style={{ minWidth: 640 }}>
               <thead>
                 <tr>
+                  <th style={{ width: 32 }} />
                   <th>{t.crwThSender}</th>
                   <th>{t.crwThPickupLocation}</th>
                   <th>{t.crwThAddress}</th>
@@ -3207,6 +3292,15 @@ function CourierPickupRow({ courier, pickups }: { courier: Courier; pickups: Cou
               <tbody>
                 {pickups.map(p => (
                   <tr key={p.id}>
+                    <td onClick={e => e.stopPropagation()}>
+                      {isPickupRowReassignable(p) && (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(p.id)}
+                          onChange={() => onToggleSelected(p.id)}
+                        />
+                      )}
+                    </td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{p.senderBusinessName}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontFamily: 'Courier New, monospace' }}>{p.senderPhone}</div>
@@ -3245,9 +3339,10 @@ function isCourierRowDeliverable(o: CourierOrder): boolean {
   return o.orderType !== 'Return' && COURIER_ROW_LAST_MILE_STATUSES.includes(o.status);
 }
 
-function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, onChanged, onError }: {
+function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, onChanged, onError, selected, onToggleSelected }: {
   courier: Courier; orders: CourierDayDelivery[]; canSeeRevenue?: boolean;
   token: string; couriers: Courier[]; onChanged: () => void; onError: (msg: string) => void;
+  selected: Set<string>; onToggleSelected: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useLanguage();
@@ -3320,6 +3415,7 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
             <table className="go-orders-table" style={{ minWidth: 700 }}>
               <thead>
                 <tr>
+                  <th style={{ width: 32 }} />
                   <th>{t.aopThTracking}</th>
                   <th>{t.crwThSender}</th>
                   <th>{t.crwThCityAddress}</th>
@@ -3336,6 +3432,15 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
                   const deliveredIso = o.deliveredAt ?? o.deliveredToWarehouseAt;
                   return (
                     <tr key={o.id}>
+                      <td onClick={e => e.stopPropagation()}>
+                        {isCourierRowDeliverable(o) && (
+                          <input
+                            type="checkbox"
+                            checked={selected.has(o.id)}
+                            onChange={() => onToggleSelected(o.id)}
+                          />
+                        )}
+                      </td>
                       <td><span className="tn-badge">{o.trackingNumber}</span></td>
                       <td>
                         <div style={{ fontWeight: 600 }}>{o.senderBusinessName || '—'}</div>
@@ -3367,7 +3472,7 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
                           couriers={couriers}
                           token={token}
                           canManage
-                          canAssign={false}
+                          canAssign={isCourierRowDeliverable(o)}
                           canDeliver={isCourierRowDeliverable(o)}
                           showView={false}
                           showEdit={false}

@@ -17,10 +17,11 @@ interface Props {
 export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }: Props) {
   const { lang, t } = useLanguage();
 
-  const [name,      setName]      = useState('');
-  const [phone,     setPhone]     = useState('');
-  const [address,   setAddress]   = useState('');
-  const [cod,       setCod]       = useState('');
+  const [name,        setName]        = useState('');
+  const [phone,       setPhone]       = useState('');
+  const [address,     setAddress]     = useState('');
+  const [cod,         setCod]         = useState('');
+  const [description, setDescription] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
@@ -39,6 +40,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
       ? (order.amountToCollectForPackage ?? 0) + fee
       : order.amountToCollectForPackage;
     setCod(shownCod != null ? String(shownCod) : '');
+    setDescription(order.description ?? '');
     setError(null);
     setErrors({});
   }, [order]);
@@ -92,6 +94,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
         recipientPhone:     phone.trim(),
         recipientAddress:   address.trim(),
         amountToCollectForPackage: isUnpaid && cod.trim() ? parseFloat(cod) : null,
+        description:        description.trim() || null,
       }, token);
       onSaved();
       onClose();
@@ -165,6 +168,15 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
               placeholder="0.00"
             />
           )}
+
+          <FormField
+            as="textarea"
+            label={`${t.cgoPackageDescription} ${t.cgoDescOptional}`}
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder={t.cgoDescPlaceholder}
+            maxLength={500}
+          />
         </div>
 
         <div className="ceo-footer">

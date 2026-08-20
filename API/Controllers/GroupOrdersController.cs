@@ -535,6 +535,21 @@ public sealed class GroupOrdersController : BaseController
         return NoContent();
     }
 
+    // ── POST /api/grouporders/bulk-assign-courier  (Admin/Operator) ──────────
+    // Pickup-leg mirror of OrdersController's bulk-assign-courier — one request for the
+    // whole selection instead of one per batch.
+    [HttpPost("bulk-assign-courier")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(BulkAssignCourierToGroupOrdersResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> BulkAssignCourier(
+        [FromBody] BulkAssignCourierToGroupOrdersRequest request,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(
+            new BulkAssignCourierToGroupOrdersCommand(request.GroupOrderIds, request.CourierId), ct);
+        return Ok(result);
+    }
+
     [HttpPut("{id:guid}/accept-in-warehouse")]
     [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -1197,6 +1212,9 @@ public sealed class GroupOrdersController : BaseController
 
 // ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetPickupDateRequest(DateTime PickupDate);
+
+/// <summary>Body for POST /api/grouporders/bulk-assign-courier.</summary>
+public sealed record BulkAssignCourierToGroupOrdersRequest(IReadOnlyList<Guid> GroupOrderIds, Guid CourierId);
 
 /// <summary>Body for PUT /api/grouporders/{id}/accept-in-warehouse — the packages that
 /// physically arrived. Omit (null) to accept the whole batch.</summary>

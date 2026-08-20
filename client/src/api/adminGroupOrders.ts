@@ -339,6 +339,28 @@ export const setGroupOrderPickupDate  = (token: string, id: string, pickupDate: 
 export const assignCourierToGroupOrder = (token: string, id: string, courierId: string) =>
     groupOrderAction(token, id, 'assign-courier', { courierId });
 
+export interface BulkAssignCourierResult {
+    succeeded: string[];
+    failed: { groupOrderId: string; error: string }[];
+}
+
+/** Pickup-leg mirror of orders.ts's bulkAssignCourierToOrders — (re)assigns many batches
+ *  to one pickup courier in a single request. */
+export async function bulkAssignCourierToGroupOrders(
+    token: string, groupOrderIds: string[], courierId: string,
+): Promise<BulkAssignCourierResult> {
+    const res = await fetch(`${BASE}/bulk-assign-courier`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupOrderIds, courierId }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Unknown error' }));
+        throw new Error(err.title ?? 'Request failed');
+    }
+    return res.json();
+}
+
 /** Group a standalone order (no batch) into a batch and accept it, in one step.
  *  `orderId` is the standalone Order's id. Pass `targetGroupOrderId` to merge into a
  *  specific existing batch; omit it to create a new batch. */

@@ -273,7 +273,8 @@ public sealed class OrdersController : BaseController
             RecipientName:             request.RecipientName,
             RecipientPhone:            request.RecipientPhone,
             RecipientAddress:          request.RecipientAddress,
-            AmountToCollectForPackage: request.AmountToCollectForPackage
+            AmountToCollectForPackage: request.AmountToCollectForPackage,
+            Description:               request.Description
         ), ct);
 
         return NoContent();
@@ -641,5 +642,6 @@ public sealed record CustomerUpdateOrderRequest(
     string   RecipientName,
     string   RecipientPhone,
     string   RecipientAddress,
-    decimal? AmountToCollectForPackage
+    decimal? AmountToCollectForPackage,
+    string?  Description
 );

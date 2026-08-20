@@ -33,6 +33,7 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
         order.RecipientName      = request.RecipientName.Trim();
         order.RecipientPhone     = request.RecipientPhone.Trim();
         order.RecipientAddress   = request.RecipientAddress.Trim();
+        order.Description        = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
 
         // COD only applies to unpaid parcels; ignore any value for already-paid products.
         if (order.ProductPaymentStatus != PaymentStatus.NotPaid)

@@ -13,5 +13,6 @@ public sealed record UpdateOrderByCustomerCommand(
     string   RecipientName,
     string   RecipientPhone,
     string   RecipientAddress,
-    decimal? AmountToCollectForPackage
+    decimal? AmountToCollectForPackage,
+    string?  Description
 ) : IRequest;
