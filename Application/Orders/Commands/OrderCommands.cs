@@ -92,12 +92,18 @@ public sealed record MarkSendReturnedToSenderCommand(Guid OrderId) : IRequest;
 public sealed record MarkCancelledReturnedToSenderCommand(Guid OrderId) : IRequest;
 
 /// <summary>
-/// Admin undoes a courier's mistaken terminal status and returns the order to the
-/// delivery flow (CourierAssignedToDeliver), keeping the assigned courier:
+/// Admin undoes a courier's mistaken terminal status and returns the order to the last-mile
+/// flow:
 ///  • <see cref="OrderStatusCorrection.UnCancel"/> — order was cancelled by mistake
-///    (e.g. courier cancelled instead of postponing).
+///    (e.g. courier cancelled instead of postponing). Goes to CourierAssignedToDeliver,
+///    keeping the assigned courier, only if the order already had one; a plain admin cancel
+///    (CancelOrderByAdminCommand with no Reason) is allowed before the order ever reached a
+///    delivery courier, so in that case this instead lands it at AdminAcceptedOrderInWareHouse,
+///    ready for a normal courier assignment.
 ///  • <see cref="OrderStatusCorrection.UnDeliver"/> — order was marked delivered by
 ///    mistake; the cash/payment recorded at delivery is cleared so settlement reconciles.
+///    Always goes to CourierAssignedToDeliver, keeping the assigned courier (a delivery can't
+///    complete without one).
 /// Send/Exchange only — Returns use a separate pickup flow.
 /// </summary>
 public sealed record AdminCorrectOrderStatusCommand(Guid OrderId, OrderStatusCorrection Correction) : IRequest;

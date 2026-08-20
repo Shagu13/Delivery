@@ -725,9 +725,12 @@ public sealed class MarkCancelledReturnedToSenderCommandHandler : IRequestHandle
 
 // ── AdminCorrectOrderStatus ───────────────────────────────────────────────────
 // Admin undoes a courier's mistaken terminal status: a cancel that should have been a
-// postpone (UnCancel), or a delivery that should not have happened (UnDeliver). Both
-// return the order to CourierAssignedToDeliver so the courier can re-attempt; UnDeliver
-// also clears the cash/payment the delivery recorded so settlement totals reconcile.
+// postpone (UnCancel), or a delivery that should not have happened (UnDeliver). Both return
+// the order to the last-mile flow so it can be (re-)delivered; UnDeliver also clears the
+// cash/payment the delivery recorded so settlement totals reconcile. UnCancel in particular
+// can be reached from a *plain* admin cancel (CancelOrderByAdminCommand with no Reason),
+// which is allowed at any pre-delivery stage — including before the order ever reached a
+// delivery courier — so it must not assume CourierId is already set.
 public sealed class AdminCorrectOrderStatusCommandHandler : IRequestHandler<AdminCorrectOrderStatusCommand>
 {
     private readonly IAppDbContext _context;
@@ -779,11 +782,17 @@ public sealed class AdminCorrectOrderStatusCommandHandler : IRequestHandler<Admi
                 break;
         }
 
-        // Common: clear any postpone state and return to the assigned-to-deliver step.
+        // Common: clear any postpone state and return to the last-mile flow. UnDeliver always
+        // has a courier (a delivery can't complete without one). UnCancel doesn't: a plain
+        // admin cancel is allowed before the order ever reached a delivery courier, so jumping
+        // straight to CourierAssignedToDeliver would leave it "assigned" with a null CourierId.
+        // Land it back at warehouse-accepted instead, ready for a normal courier assignment.
         order.PostponeReason = null;
         order.PostponeComment = null;
         order.PostponedAt    = null;
-        order.Status         = OrderStatus.CourierAssignedToDeliver;
+        order.Status         = order.CourierId is Guid
+            ? OrderStatus.CourierAssignedToDeliver
+            : OrderStatus.AdminAcceptedOrderInWareHouse;
 
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -808,10 +817,19 @@ file static class GroupOrderReopener
             .FirstOrDefaultAsync(g => g.Id == groupOrderId, ct);
         if (groupOrder is null) return;
 
-        // Only auto-closed batches need reopening; one package is back in the last-mile
-        // flow, so the batch is no longer fully terminal. Drop it back to the warehouse
-        // hand-off point where the per-order flow begins.
-        if (groupOrder.Status is OrderStatus.AllDelivered or OrderStatus.CancelledByAdmin)
+        // Only closed batches need reopening; one package is back in the last-mile flow, so
+        // the batch is no longer fully terminal. Drop it back to the warehouse hand-off point
+        // where the per-order flow begins. Covers every terminal GroupOrder status a batch can
+        // land on — not just the two GroupOrderCloser can produce (AllDelivered/CancelledByAdmin)
+        // — since UnCancel can also revive an order out of a batch that was declined wholesale
+        // via DeclineGroupOrderCommand (OrderNotAccepted) or cancelled by the sender via
+        // CancelGroupOrderCommand (CancelledBySender), neither of which ever gets touched again
+        // once set. Mirrors GetAllGroupOrdersQueryHandler's TerminalGroupOrderStatuses — the same
+        // set the Packages page uses to decide whether the batch shows at all.
+        if (groupOrder.Status is OrderStatus.AllDelivered
+                               or OrderStatus.CancelledByAdmin
+                               or OrderStatus.CancelledBySender
+                               or OrderStatus.OrderNotAccepted)
         {
             groupOrder.Status = OrderStatus.AdminAcceptedOrderInWareHouse;
             await context.SaveChangesAsync(ct);

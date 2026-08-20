@@ -24,18 +24,21 @@ export interface DateWindow {
 }
 
 /**
- * - Navigator touched → send exactly what's chosen (both undefined = Show All → whole DB).
- * - Not touched, but a search term or another filter is active → no date bound (reaches the whole DB).
- * - Not touched, no search/filters → rolling last-7-days window (inclusive of today).
+ * - A search term or another filter is active → no date bound (reaches the whole DB),
+ *   regardless of the navigator — a search should never be silently narrowed by a day/range
+ *   picked before the admin started typing.
+ * - Otherwise, navigator touched → send exactly what's chosen (both undefined = Show All → whole DB).
+ * - Otherwise, not touched → rolling last-7-days window (inclusive of today).
  */
 export function resolveDateWindow({ dateTouched, search, selectedDate, rangeEnd, otherFiltersActive = false }: DateWindowInput): DateWindow {
+    if (search.trim() || otherFiltersActive) return {};
+
     if (dateTouched) {
         return {
             date:   selectedDate ? toDateKey(selectedDate) : undefined,
             dateTo: rangeEnd     ? toDateKey(rangeEnd)      : undefined,
         };
     }
-    if (search.trim() || otherFiltersActive) return {};
 
     const to = georgianToday();
     const from = new Date(to);
