@@ -219,6 +219,8 @@ export interface UpdateMyOrderRequest {
   recipientAddress: string;
   amountToCollectForPackage: number | null;
   description: string | null;
+  /** Who pays the company service fee. Ignored (forced to Recipient) for unpaid/COD parcels. */
+  whoPaysForCompanyService: 'Sender' | 'Recipient';
 }
 
 /// Edit one of the customer's own packages (valid until it's assigned to a delivery courier)

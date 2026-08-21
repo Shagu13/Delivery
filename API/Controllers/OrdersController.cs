@@ -267,6 +267,9 @@ public sealed class OrdersController : BaseController
         if (!Guid.TryParse(customerIdClaim, out var customerId))
             return Forbid();
 
+        if (!Enum.TryParse<ServicePayer>(request.WhoPaysForCompanyService, out var payer))
+            return UnprocessableEntity("Invalid WhoPaysForCompanyService value.");
+
         await Sender.Send(new UpdateOrderByCustomerCommand(
             OrderId:                   id,
             CustomerId:                customerId,
@@ -274,7 +277,8 @@ public sealed class OrdersController : BaseController
             RecipientPhone:            request.RecipientPhone,
             RecipientAddress:          request.RecipientAddress,
             AmountToCollectForPackage: request.AmountToCollectForPackage,
-            Description:               request.Description
+            Description:               request.Description,
+            WhoPaysForCompanyService:  payer
         ), ct);
 
         return NoContent();
@@ -643,5 +647,6 @@ public sealed record CustomerUpdateOrderRequest(
     string   RecipientPhone,
     string   RecipientAddress,
     decimal? AmountToCollectForPackage,
-    string?  Description
+    string?  Description,
+    string   WhoPaysForCompanyService  // "Sender" | "Recipient"
 );

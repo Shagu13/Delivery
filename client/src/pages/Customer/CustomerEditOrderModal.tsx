@@ -22,6 +22,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
   const [address,     setAddress]     = useState('');
   const [cod,         setCod]         = useState('');
   const [description, setDescription] = useState('');
+  const [payer,       setPayer]       = useState<'Sender' | 'Recipient'>('Sender');
 
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
@@ -41,6 +42,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
       : order.amountToCollectForPackage;
     setCod(shownCod != null ? String(shownCod) : '');
     setDescription(order.description ?? '');
+    setPayer(order.whoPaysForCompanyService ?? 'Sender');
     setError(null);
     setErrors({});
   }, [order]);
@@ -95,6 +97,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
         recipientAddress:   address.trim(),
         amountToCollectForPackage: isUnpaid && cod.trim() ? parseFloat(cod) : null,
         description:        description.trim() || null,
+        whoPaysForCompanyService: isUnpaid ? 'Recipient' : payer,
       }, token);
       onSaved();
       onClose();
@@ -167,6 +170,18 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
               error={errors.amountToCollectForPackage}
               placeholder="0.00"
             />
+          )}
+
+          {/* Hidden for unpaid (COD) parcels — the recipient always pays the courier fee
+              at delivery, same rule as the create-order form. Only a choice when already paid. */}
+          {!isUnpaid && (
+            <div className="form-field">
+              <label className="form-field__label">{t.cgoWhoPays}</label>
+              <select className="form-field__input" value={payer} onChange={e => setPayer(e.target.value as 'Sender' | 'Recipient')}>
+                <option value="Sender">{t.cgoSender}</option>
+                <option value="Recipient">{t.cgoRecipientPayer}</option>
+              </select>
+            </div>
           )}
 
           <FormField

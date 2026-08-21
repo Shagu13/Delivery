@@ -35,6 +35,13 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
         order.RecipientAddress   = request.RecipientAddress.Trim();
         order.Description        = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
 
+        // COD (unpaid) parcels always bill the fee to the recipient at delivery — same rule
+        // as the create-order form (handlePaymentStatusChange) — so the choice only applies
+        // to already-paid parcels.
+        order.WhoPaysForCompanyService = order.ProductPaymentStatus == PaymentStatus.NotPaid
+            ? ServicePayer.Recipient
+            : request.WhoPaysForCompanyService;
+
         // COD only applies to unpaid parcels; ignore any value for already-paid products.
         if (order.ProductPaymentStatus != PaymentStatus.NotPaid)
         {

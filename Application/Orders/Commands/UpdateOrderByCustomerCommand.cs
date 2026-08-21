@@ -1,3 +1,4 @@
+using Domain.Enums;
 using MediatR;
 
 namespace Application.Orders.Commands;
@@ -8,11 +9,12 @@ namespace Application.Orders.Commands;
 /// window in which the customer can cancel). Standalone Return orders are out of scope.
 /// </summary>
 public sealed record UpdateOrderByCustomerCommand(
-    Guid     OrderId,
-    Guid     CustomerId,
-    string   RecipientName,
-    string   RecipientPhone,
-    string   RecipientAddress,
-    decimal? AmountToCollectForPackage,
-    string?  Description
+    Guid         OrderId,
+    Guid         CustomerId,
+    string       RecipientName,
+    string       RecipientPhone,
+    string       RecipientAddress,
+    decimal?     AmountToCollectForPackage,
+    string?      Description,
+    ServicePayer WhoPaysForCompanyService
 ) : IRequest;
