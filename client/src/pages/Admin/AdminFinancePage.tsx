@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useMemo, Fragment } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { formatGeorgianDateTime } from '../../utils/georgianTime';
@@ -1299,6 +1300,18 @@ export default function AdminFinancePage({ token }: { token: string }) {
     // Bumped after a payment so the company cash-position card reloads without a refresh.
     const [overviewRefresh, setOverviewRefresh] = useState(0);
     const [showOutstanding, setShowOutstanding] = useState(false);
+
+    // A delivery/payment made elsewhere (e.g. the Packages/Delivery page marking an order
+    // delivered) never touches this page's own `overviewRefresh` nonce, so without this the
+    // Overview and Payments queries just sit on whatever they last fetched. Mirror the
+    // adminOrdersChanged subscription every other admin page already uses: invalidate every
+    // Finance query so the currently-visible tab's data quietly refetches in the background
+    // (they all use `placeholderData`/cached data, so this never flashes a spinner) while
+    // inactive tabs simply refetch next time they're opened.
+    const queryClient = useQueryClient();
+    useOrdersChangedSignal(token, 'adminOrdersChanged', () => {
+        void queryClient.invalidateQueries({ queryKey: ['admin', 'finance'] });
+    });
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
