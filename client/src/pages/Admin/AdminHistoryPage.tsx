@@ -743,6 +743,9 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
                   <td>
                     <div style={{ fontWeight: 600 }}>{go.senderBusinessName || '—'}</div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{go.senderPhone}</div>
+                    {go.alternativeSenderPhone && (
+                      <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{go.alternativeSenderPhone}</div>
+                    )}
                   </td>
                   <td>
                     <div>{locCity(go.pickUpCity, go.pickUpCityGeo)}</div>
