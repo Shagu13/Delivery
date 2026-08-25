@@ -77,4 +77,8 @@ public class Customer
     // ── Saved pickup addresses beyond the main one above ─────────────────────
     /// <summary>Capped at 5 — see <see cref="CustomerSecondaryAddress"/>.</summary>
     public ICollection<CustomerSecondaryAddress> SecondaryAddresses { get; set; } = new List<CustomerSecondaryAddress>();
+
+    // ── Saved bank accounts for payout lookup ────────────────────────────────
+    /// <summary>Capped at 5 — see <see cref="CustomerBankAccount"/>.</summary>
+    public ICollection<CustomerBankAccount> BankAccounts { get; set; } = new List<CustomerBankAccount>();
 }

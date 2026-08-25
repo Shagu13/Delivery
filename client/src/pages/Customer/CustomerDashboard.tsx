@@ -13,9 +13,10 @@ import {
   updateMyProfile, changePassword,
   cancelMyOrder,
   addMySecondaryAddress, updateMySecondaryAddress, deleteMySecondaryAddress,
+  addMyBankAccount, updateMyBankAccount, deleteMyBankAccount, setDefaultMyBankAccount,
   CustomerApiError,
 } from '../../api/customers';
-import type { Customer, CustomerGroupOrder, CustomerOrder, CustomerSecondaryAddress } from '../../api/customers';
+import type { Customer, CustomerGroupOrder, CustomerOrder, CustomerSecondaryAddress, CustomerBankAccount } from '../../api/customers';
 import { NON_BILLABLE_CANCEL_REASONS } from '../../api/orders';
 import { CustomerEditOrderModal } from './CustomerEditOrderModal';
 import { getStatusMeta } from '../../utils/statusMeta';
@@ -493,6 +494,11 @@ export function CustomerDashboard() {
                     addresses={profile.secondaryAddresses ?? []}
                     token={token}
                     onChanged={addresses => setProfile(p => p ? { ...p, secondaryAddresses: addresses } : p)}
+                  />
+                  <BankAccountsView
+                    accounts={profile.bankAccounts ?? []}
+                    token={token}
+                    onChanged={accounts => setProfile(p => p ? { ...p, bankAccounts: accounts } : p)}
                   />
                 </>
               )}
@@ -1306,6 +1312,164 @@ function SecondaryAddressesView({ addresses, token, onChanged }: {
             <FormField label={t.streetAddress} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} error={errors.address} placeholder={t.phStreetAddress} />
             <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
               <button className="btn-primary" onClick={handleSave} disabled={saving}>{saving ? t.custSaving : t.custAddrSave}</button>
+              <button className="btn-ghost" onClick={closeForm} disabled={saving}>{t.cancel}</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Saved bank accounts (capped at 5) ───────────────────────────────────────────
+
+function BankAccountsView({ accounts, token, onChanged }: {
+  accounts: CustomerBankAccount[];
+  token: string;
+  onChanged: (accounts: CustomerBankAccount[]) => void;
+}) {
+  const { t } = useLanguage();
+  const [showForm, setShowForm]   = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ label: '', bankName: '', accountHolderName: '', accountNumber: '' });
+  const [errors, setErrors]     = useState<Partial<Record<keyof typeof form, string>>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
+
+  const atLimit = accounts.length >= 5;
+
+  const resetForm = () => { setForm({ label: '', bankName: '', accountHolderName: '', accountNumber: '' }); setErrors({}); setApiError(null); };
+  const openAdd = () => { setEditingId(null); resetForm(); setShowForm(true); };
+  const openEdit = (a: CustomerBankAccount) => {
+    setEditingId(a.id);
+    setForm({ label: a.label ?? '', bankName: a.bankName, accountHolderName: a.accountHolderName, accountNumber: a.accountNumber });
+    setErrors({}); setApiError(null);
+    setShowForm(true);
+  };
+  const closeForm = () => { setShowForm(false); setEditingId(null); resetForm(); };
+
+  const validate = (): boolean => {
+    const e: typeof errors = {};
+    if (!form.bankName.trim())          e.bankName          = t.custRequired;
+    if (!form.accountHolderName.trim()) e.accountHolderName = t.custRequired;
+    if (!form.accountNumber.trim())     e.accountNumber     = t.custRequired;
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      const data = {
+        label: form.label.trim() || undefined,
+        bankName: form.bankName.trim(),
+        accountHolderName: form.accountHolderName.trim(),
+        accountNumber: form.accountNumber.trim(),
+      };
+      const updated = editingId
+        ? await updateMyBankAccount(editingId, data, token)
+        : await addMyBankAccount(data, token);
+      onChanged(updated);
+      closeForm();
+    } catch (err) {
+      setApiError(err instanceof CustomerApiError ? err.message : t.custSaveFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm(t.custBankDeleteConfirm)) return;
+    setDeletingId(id);
+    setApiError(null);
+    try {
+      const updated = await deleteMyBankAccount(id, token);
+      onChanged(updated);
+    } catch (err) {
+      setApiError(err instanceof CustomerApiError ? err.message : t.custSaveFailed);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleSetDefault = async (id: string) => {
+    setSettingDefaultId(id);
+    setApiError(null);
+    try {
+      const updated = await setDefaultMyBankAccount(id, token);
+      onChanged(updated);
+    } catch (err) {
+      setApiError(err instanceof CustomerApiError ? err.message : t.custSaveFailed);
+    } finally {
+      setSettingDefaultId(null);
+    }
+  };
+
+  return (
+    <div className="content-card" style={{ maxWidth: 640, marginTop: 20 }}>
+      <div className="content-card__header">
+        <span className="content-card__title">{t.custBankTitle}</span>
+        <span style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>{accounts.length}/5</span>
+      </div>
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {apiError && <div className="register-form__error" role="alert">{apiError}</div>}
+
+        {accounts.length === 0 && !showForm && (
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-subtle)', margin: 0 }}>{t.custBankEmpty}</p>
+        )}
+
+        {accounts.map(a => (
+          <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '10px 14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {a.label || a.bankName}
+                {a.isDefault && (
+                  <span style={{
+                    display: 'inline-block', padding: '2px 8px', borderRadius: 100,
+                    fontSize: '0.66rem', fontWeight: 700,
+                    background: 'rgba(16,185,129,0.12)', color: '#059669',
+                  }}>
+                    {t.custBankDefaultBadge}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)' }}>{a.bankName} · {a.accountHolderName}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', fontFamily: 'monospace' }}>{a.accountNumber}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {!a.isDefault && (
+                <button className="btn-ghost" onClick={() => handleSetDefault(a.id)} disabled={saving || deletingId === a.id || settingDefaultId === a.id}>
+                  {settingDefaultId === a.id ? t.custSaving : t.custBankSetDefault}
+                </button>
+              )}
+              <button className="btn-ghost" onClick={() => openEdit(a)} disabled={saving || deletingId === a.id}>{t.edit}</button>
+              <button className="btn-ghost" onClick={() => handleDelete(a.id)} disabled={saving || deletingId === a.id}>
+                {deletingId === a.id ? t.custSaving : t.custAddrDelete}
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {!showForm && (
+          <button className="btn-primary" onClick={openAdd} disabled={atLimit} style={{ alignSelf: 'flex-start' }}>
+            {t.custBankAddBtn}
+          </button>
+        )}
+        {atLimit && !showForm && (
+          <p style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', margin: 0 }}>{t.custBankLimitReached}</p>
+        )}
+
+        {showForm && (
+          <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginTop: 4 }}>
+            <FormField label={t.custBankLabel} value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} error={errors.label} placeholder={t.custBankLabelPh} />
+            <FormField label={t.custBankName} value={form.bankName} onChange={e => setForm(f => ({ ...f, bankName: e.target.value }))} error={errors.bankName} placeholder={t.custBankNamePh} />
+            <FormField label={t.custBankHolderName} value={form.accountHolderName} onChange={e => setForm(f => ({ ...f, accountHolderName: e.target.value }))} error={errors.accountHolderName} />
+            <FormField label={t.custBankAccountNumber} value={form.accountNumber} onChange={e => setForm(f => ({ ...f, accountNumber: e.target.value }))} error={errors.accountNumber} placeholder={t.custBankAccountNumberPh} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button className="btn-primary" onClick={handleSave} disabled={saving}>{saving ? t.custSaving : t.custBankSave}</button>
               <button className="btn-ghost" onClick={closeForm} disabled={saving}>{t.cancel}</button>
             </div>
           </div>

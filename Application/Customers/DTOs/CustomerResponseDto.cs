@@ -29,5 +29,7 @@ public sealed record CustomerResponseDto(
     IReadOnlyList<CustomerSpecialPriceLite> SpecialPrices,
     /// <summary>Saved pickup addresses beyond the main one above (City/District/Address), capped
     /// at 5 — offered as a pickup-location choice when creating a GroupOrder.</summary>
-    IReadOnlyList<CustomerSecondaryAddressDto> SecondaryAddresses
+    IReadOnlyList<CustomerSecondaryAddressDto> SecondaryAddresses,
+    /// <summary>Saved bank accounts for payout lookup, capped at 5, default first.</summary>
+    IReadOnlyList<CustomerBankAccountDto> BankAccounts
 );

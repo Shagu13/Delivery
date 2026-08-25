@@ -9,6 +9,7 @@ public interface IAppDbContext
     DbSet<Customer>             Customers            { get; }
     DbSet<CustomerSpecialPrice> CustomerSpecialPrices { get; }
     DbSet<CustomerSecondaryAddress> CustomerSecondaryAddresses { get; }
+    DbSet<CustomerBankAccount>  CustomerBankAccounts { get; }
     DbSet<Tenant>               Tenants              { get; }
     DbSet<TenantSettlement>     TenantSettlements    { get; }
     DbSet<Warehouse>            Warehouses           { get; }

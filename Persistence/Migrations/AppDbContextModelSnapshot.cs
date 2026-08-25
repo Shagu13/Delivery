@@ -290,6 +290,47 @@ namespace Persistence.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("Domain.CustomerBankAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountHolderName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("CustomerBankAccounts");
+                });
+
             modelBuilder.Entity("Domain.CustomerSecondaryAddress", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1455,6 +1496,17 @@ namespace Persistence.Migrations
                     b.Navigation("Tenant");
                 });
 
+            modelBuilder.Entity("Domain.CustomerBankAccount", b =>
+                {
+                    b.HasOne("Domain.Customer", "Customer")
+                        .WithMany("BankAccounts")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("Domain.CustomerSecondaryAddress", b =>
                 {
                     b.HasOne("Domain.Customer", "Customer")
@@ -1736,6 +1788,8 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.Customer", b =>
                 {
+                    b.Navigation("BankAccounts");
+
                     b.Navigation("SecondaryAddresses");
 
                     b.Navigation("SpecialPrices");

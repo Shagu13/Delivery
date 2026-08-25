@@ -67,6 +67,23 @@ export interface SecondaryAddressInput {
   address: string;
 }
 
+/** One of a customer's saved bank accounts, for payout lookup. Capped at 5. */
+export interface CustomerBankAccount {
+  id: string;
+  label: string | null;
+  bankName: string;
+  accountHolderName: string;
+  accountNumber: string;
+  isDefault: boolean;
+}
+
+export interface BankAccountInput {
+  label?: string;
+  bankName: string;
+  accountHolderName: string;
+  accountNumber: string;
+}
+
 export interface Customer {
   id: string;
   firstName: string; lastName: string; idNumber: string | null;
@@ -85,6 +102,9 @@ export interface Customer {
   /** Saved pickup addresses beyond the main one above (city/district/address), capped at 5.
    *  Present on /customers/me and /customers/{id}; absent on the paginated admin list. */
   secondaryAddresses?: CustomerSecondaryAddress[];
+  /** Saved bank accounts for payout lookup, capped at 5, default first.
+   *  Present on /customers/me and /customers/{id}; absent on the paginated admin list. */
+  bankAccounts?: CustomerBankAccount[];
 }
 
 export interface AdminCustomer extends Customer {
@@ -338,6 +358,13 @@ export async function setCustomerSpecialPrice(
   }));
 }
 
+/** Admin/Operator read-only lookup of a customer's saved bank accounts, default first. */
+export async function getCustomerBankAccounts(id: string, token: string): Promise<CustomerBankAccount[]> {
+  return handle(await fetch(`/api/customers/${id}/bank-accounts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
 /** Admin removes one district price exception. Returns the fresh list. */
 export async function deleteCustomerSpecialPrice(
   id: string, specialPriceId: string, token: string,
@@ -383,6 +410,56 @@ export async function deleteMySecondaryAddress(
   addressId: string, token: string,
 ): Promise<CustomerSecondaryAddress[]> {
   return handle(await fetch(`/api/customers/me/addresses/${addressId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
+// ── Saved bank accounts (self-service, capped at 5) ─────────────────────────────
+
+export async function getMyBankAccounts(token: string): Promise<CustomerBankAccount[]> {
+  return handle(await fetch('/api/customers/me/bank-accounts', {
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
+/** Adds a saved bank account (rejected with a 409 past the 5-account cap). Returns the fresh list. */
+export async function addMyBankAccount(
+  data: BankAccountInput, token: string,
+): Promise<CustomerBankAccount[]> {
+  return handle(await fetch('/api/customers/me/bank-accounts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
+}
+
+/** Edits a saved bank account. Returns the fresh list. */
+export async function updateMyBankAccount(
+  accountId: string, data: BankAccountInput, token: string,
+): Promise<CustomerBankAccount[]> {
+  return handle(await fetch(`/api/customers/me/bank-accounts/${accountId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  }));
+}
+
+/** Marks a saved bank account as the default. Returns the fresh list. */
+export async function setDefaultMyBankAccount(
+  accountId: string, token: string,
+): Promise<CustomerBankAccount[]> {
+  return handle(await fetch(`/api/customers/me/bank-accounts/${accountId}/default`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
+/** Removes a saved bank account. Returns the fresh list. */
+export async function deleteMyBankAccount(
+  accountId: string, token: string,
+): Promise<CustomerBankAccount[]> {
+  return handle(await fetch(`/api/customers/me/bank-accounts/${accountId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   }));

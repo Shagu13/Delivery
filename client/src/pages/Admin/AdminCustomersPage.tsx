@@ -10,6 +10,7 @@ import { AdminSetPasswordModal } from './AdminSetPasswordModal';
 import { EditCustomerModal } from './EditCustomerModal';
 import { EditCompanyPriceModal } from './EditCompanyPriceModal';
 import { CustomerSpecialPricesModal } from './CustomerSpecialPricesModal';
+import { CustomerBankAccountsModal } from './CustomerBankAccountsModal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { RowActionsMenu, type RowActionItem } from '../../components/ui/RowActionsMenu';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -64,6 +65,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
   const [editCustomer, setEditCustomer] = useState<AdminCustomer | null>(null);
   const [priceCustomer, setPriceCustomer] = useState<AdminCustomer | null>(null);
   const [specialPricesCustomer, setSpecialPricesCustomer] = useState<AdminCustomer | null>(null);
+  const [bankAccountsCustomer, setBankAccountsCustomer]   = useState<AdminCustomer | null>(null);
   const [togglingId, setTogglingId]     = useState<string | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<AdminCustomer | null>(null);
   const [notice, setNotice]             = useState('');
@@ -118,6 +120,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
       items.push(
         { label: t.acupPricesBtn, onClick: () => setPriceCustomer(c) },
         { label: t.acupSpecialPricesBtn, onClick: () => setSpecialPricesCustomer(c) },
+        { label: t.acupBankAccountsBtn, onClick: () => setBankAccountsCustomer(c) },
         { label: t.acupSetPwd, onClick: () => setPwdCustomer(c) },
         {
           label: c.isActive ? t.acupDeactivate : t.acupActivate,
@@ -299,6 +302,11 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
       <CustomerSpecialPricesModal
         customer={specialPricesCustomer}
         onClose={() => setSpecialPricesCustomer(null)}
+      />
+
+      <CustomerBankAccountsModal
+        customer={bankAccountsCustomer}
+        onClose={() => setBankAccountsCustomer(null)}
       />
 
       <ConfirmDialog

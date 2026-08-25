@@ -1,5 +1,7 @@
 using API.Models.Customers;
 using Application.Common.Exceptions;
+using Application.Customers.BankAccounts.Commands;
+using Application.Customers.BankAccounts.Queries;
 using Application.Customers.Commands.AdminSetPassword;
 using Application.Customers.Commands.ChangePassword;
 using Application.Customers.Commands.CreateCustomer;
@@ -167,6 +169,63 @@ public sealed class CustomersController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/customers/me/bank-accounts  (saved bank accounts for payout lookup) ──
+    [HttpGet("me/bank-accounts")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> GetMyBankAccounts(CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCustomerBankAccountsQuery(GetCustomerIdFromToken()), ct);
+        return Ok(result);
+    }
+
+    // ── POST /api/customers/me/bank-accounts  (capped at 5 — see AddCustomerBankAccountCommand) ──
+    [HttpPost("me/bank-accounts")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> AddMyBankAccount(
+        [FromBody] BankAccountRequest request, CancellationToken ct)
+    {
+        var customerId = GetCustomerIdFromToken();
+        await Sender.Send(new AddCustomerBankAccountCommand(
+            customerId, request.Label, request.BankName, request.AccountHolderName, request.AccountNumber), ct);
+        var result = await Sender.Send(new GetCustomerBankAccountsQuery(customerId), ct);
+        return Ok(result);
+    }
+
+    // ── PUT /api/customers/me/bank-accounts/{accountId} ────────────────────────
+    [HttpPut("me/bank-accounts/{accountId:guid}")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> UpdateMyBankAccount(
+        Guid accountId, [FromBody] BankAccountRequest request, CancellationToken ct)
+    {
+        var customerId = GetCustomerIdFromToken();
+        await Sender.Send(new UpdateCustomerBankAccountCommand(
+            customerId, accountId, request.Label, request.BankName, request.AccountHolderName, request.AccountNumber), ct);
+        var result = await Sender.Send(new GetCustomerBankAccountsQuery(customerId), ct);
+        return Ok(result);
+    }
+
+    // ── PUT /api/customers/me/bank-accounts/{accountId}/default ────────────────
+    [HttpPut("me/bank-accounts/{accountId:guid}/default")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> SetDefaultMyBankAccount(Guid accountId, CancellationToken ct)
+    {
+        var customerId = GetCustomerIdFromToken();
+        await Sender.Send(new SetDefaultCustomerBankAccountCommand(customerId, accountId), ct);
+        var result = await Sender.Send(new GetCustomerBankAccountsQuery(customerId), ct);
+        return Ok(result);
+    }
+
+    // ── DELETE /api/customers/me/bank-accounts/{accountId} ─────────────────────
+    [HttpDelete("me/bank-accounts/{accountId:guid}")]
+    [Authorize(Roles = "Customer")]
+    public async Task<IActionResult> DeleteMyBankAccount(Guid accountId, CancellationToken ct)
+    {
+        var customerId = GetCustomerIdFromToken();
+        await Sender.Send(new DeleteCustomerBankAccountCommand(customerId, accountId), ct);
+        var result = await Sender.Send(new GetCustomerBankAccountsQuery(customerId), ct);
+        return Ok(result);
+    }
+
     // ── GET /api/customers  (Admin/Operator — all; TenantAdmin — own tenant) ──────────
     [HttpGet]
     [Authorize(Roles = "Admin,Operator,TenantAdmin")]
@@ -210,6 +269,17 @@ public sealed class CustomersController : BaseController
             request.DistrictPrice,
             request.IsCompanyServicePriceIncludedInPrice), ct);
         return NoContent();
+    }
+
+    // ── GET /api/customers/{id}/bank-accounts  (Admin/Operator — read-only lookup) ────
+    /// <summary>Saved bank accounts for payout lookup, default first. Admins cannot edit these
+    /// — only the customer manages their own accounts, via /me/bank-accounts.</summary>
+    [HttpGet("{id:guid}/bank-accounts")]
+    [Authorize(Roles = "Admin,Operator")]
+    public async Task<IActionResult> GetBankAccounts(Guid id, CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCustomerBankAccountsQuery(id), ct);
+        return Ok(result);
     }
 
     // ── GET /api/customers/{id}/special-prices  (Admin/Operator) ──────────────
@@ -345,3 +415,5 @@ public sealed record SetCompanyPriceRequest(
 public sealed record SetSpecialPriceRequest(Guid DistrictId, decimal Price);
 
 public sealed record SecondaryAddressRequest(string Label, string City, string District, string Address);
+
+public sealed record BankAccountRequest(string? Label, string BankName, string AccountHolderName, string AccountNumber);

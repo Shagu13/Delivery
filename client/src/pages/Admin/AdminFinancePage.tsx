@@ -8,6 +8,7 @@ import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { getCustomers, getCustomerById } from '../../api/customers';
 import type { AdminCustomer, Customer } from '../../api/customers';
+import { CustomerBankAccountsModal } from './CustomerBankAccountsModal';
 import {
     fetchCustomerOrderFinance,
     fetchAllCustomersOrderFinance,
@@ -586,6 +587,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     const [payFilter, setPayFilter] = useState<PayFilter>('all');
     const [toast, setToast] = useState<string | null>(null);
     const [exporting, setExporting] = useState(false);
+    const [showBankAccounts, setShowBankAccounts] = useState(false);
     // Payment-action errors (e.g. a failed settlement save) reported by CustomerSettleCard —
     // distinct from (but displayed alongside) a failed lines fetch below.
     const [actionError, setActionError] = useState<string | null>(null);
@@ -732,9 +734,14 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                                 style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)', width: 28, height: 28, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
                         )}
                         {customer && (
-                            <button onClick={handleExport} disabled={exporting} className="btn-ghost btn-ghost--sm">
-                                {exporting ? '…' : t.ofinExport}
-                            </button>
+                            <>
+                                <button onClick={() => setShowBankAccounts(true)} className="btn-ghost btn-ghost--sm">
+                                    {t.acupBankAccountsBtn}
+                                </button>
+                                <button onClick={handleExport} disabled={exporting} className="btn-ghost btn-ghost--sm">
+                                    {exporting ? '…' : t.ofinExport}
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -805,6 +812,13 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                     </svg>
                     {toast}
                 </div>
+            )}
+
+            {showBankAccounts && (
+                <CustomerBankAccountsModal
+                    customer={customer}
+                    onClose={() => setShowBankAccounts(false)}
+                />
             )}
         </div>
     );

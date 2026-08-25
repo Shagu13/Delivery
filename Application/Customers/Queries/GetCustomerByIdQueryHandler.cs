@@ -25,6 +25,7 @@ public sealed class GetCustomerByIdQueryHandler
             .Include(c => c.ApplicationUser)
             .Include(c => c.SpecialPrices)
             .Include(c => c.SecondaryAddresses)
+            .Include(c => c.BankAccounts)
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException(nameof(Customer), request.Id);
@@ -53,6 +54,7 @@ public sealed class GetCustomerByApplicationUserIdQueryHandler
             .Include(c => c.ApplicationUser)
             .Include(c => c.SpecialPrices)
             .Include(c => c.SecondaryAddresses)
+            .Include(c => c.BankAccounts)
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.ApplicationUserId, cancellationToken)
             ?? throw new NotFoundException(nameof(Customer), request.ApplicationUserId);
@@ -86,6 +88,11 @@ internal static class CustomerProjection
         c.SecondaryAddresses
             .OrderBy(a => a.CreatedAt)
             .Select(a => new CustomerSecondaryAddressDto(a.Id, a.Label, a.City, a.District, a.Address))
+            .ToList(),
+        c.BankAccounts
+            .OrderByDescending(a => a.IsDefault)
+            .ThenBy(a => a.CreatedAt)
+            .Select(a => new CustomerBankAccountDto(a.Id, a.Label, a.BankName, a.AccountHolderName, a.AccountNumber, a.IsDefault))
             .ToList()
     );
 }
