@@ -10,8 +10,66 @@ namespace API.Excel;
 /// </summary>
 internal static class FinanceExcelBuilder
 {
-    public static byte[] Build(IReadOnlyList<OrderFinanceLineDto> lines, string title)
+    // ── Georgian labels for the cell values the customer export localizes ──────────────
+    // Mirrors client/src/utils/statusMeta.ts's `ka` short labels, client/src/api/orders.ts's
+    // CANCELLATION_REASON_LABELS, and the order-type labels on the customer finance table.
+    // Duplicated here (not shared) because this is server-side .NET and that's TypeScript —
+    // keep both in sync if a status/reason label changes.
+    private static readonly Dictionary<string, string> StatusKa = new()
     {
+        ["Pending"]                              = "მოლოდინში",
+        ["AcceptedGroupOrder"]                   = "მიღებულია",
+        ["OrderNotAccepted"]                     = "არ მიღებულა",
+        ["CourierAssignedToPickUp"]              = "კურიერი დაინიშნა",
+        ["CourierDeliveringToWarehouse"]         = "საწყობისკენ",
+        ["DeliveredToWarehouse"]                 = "საწყობშია",
+        ["AdminAcceptedOrderInWareHouse"]        = "საწყობში",
+        ["CancelledBySender"]                    = "გაუქმდა (მომხმარებელმა)",
+        ["AcceptedOrder"]                        = "მიღებულია",
+        ["OrderIsOnItsWayToRecipientsCity"]      = "გზაშია",
+        ["CourierAssignedToDeliver"]             = "კურიერი დაინიშნა",
+        ["CourierDeliveringTheOrderToRecipient"] = "მიტანის პროცესში",
+        ["DeliveryPostponed"]                    = "გადადებულია",
+        ["DeliveredToRecipient"]                 = "ჩაბარდა",
+        ["CancelledByAdmin"]                     = "გაუქმდა (კომპანიამ)",
+        ["AllDelivered"]                         = "ჩაბარდა სრულად",
+        ["PickedUpFromRecipient"]                = "აღებულია",
+        ["DeliveredReturnOrderToWarehouse"]      = "საწყობშია",
+        ["ReturnedToSender"]                     = "დაბრუნდა",
+        ["ExchangeCompleted"]                    = "გაცვლა შედგა",
+    };
+
+    private static readonly Dictionary<string, string> OrderTypeKa = new()
+    {
+        ["Send"]     = "გაგზავნა",
+        ["Return"]   = "დაბრუნება",
+        ["Exchange"] = "გაცვლა",
+    };
+
+    private static readonly Dictionary<string, string> CancellationReasonKa = new()
+    {
+        ["DidNotLike"]           = "არ მოეწონა",
+        ["DidNotWant"]           = "აღარ სურდა",
+        ["WrongSize"]            = "არასწორი ზომა",
+        ["Other"]                = "სხვა",
+        ["WarehouseNotReceived"] = "საწყობში ვერ მივიდა",
+    };
+
+    private static readonly Dictionary<string, string> WhoPaysKa = new()
+    {
+        ["Sender"]    = "გამგზავნი",
+        ["Recipient"] = "მიმღები",
+    };
+
+    /// <param name="bankAccountLine">
+    /// When set (the invoice export), rendered as its own merged row right under the title —
+    /// e.g. "Bank Account: TBC Bank · Dilo LLC · GE29TB..." — so the reader knows where to pay
+    /// without opening a separate page. Null for the plain finance export.
+    /// </param>
+    public static byte[] Build(
+        IReadOnlyList<OrderFinanceLineDto> lines, string title, string lang = "en", string? bankAccountLine = null)
+    {
+        bool isGeo = lang == "ka";
         using XLWorkbook workbook = new();
         IXLWorksheet ws = workbook.Worksheets.Add("Finance");
 
@@ -27,19 +85,40 @@ internal static class FinanceExcelBuilder
         titleCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
         ws.Range(1, 1, 1, TotalCols).Merge();
 
-        // ── Column headers ───────────────────────────────────────────────────
+        // ── Bank account row (invoice export only) ──────────────────────────
         int row = 3;
+        if (bankAccountLine is not null)
+        {
+            IXLCell bankCell = ws.Cell(2, 1);
+            bankCell.Value = bankAccountLine;
+            bankCell.Style.Font.Bold = true;
+            bankCell.Style.Font.FontSize = 12;
+            bankCell.Style.Fill.BackgroundColor = XLColor.FromArgb(0xF3, 0xF4, 0xF6);
+            bankCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            ws.Range(2, 1, 2, TotalCols).Merge();
+            row = 4;
+        }
+
+        // ── Column headers ───────────────────────────────────────────────────
         // Mirrors the columns actually shown on the customer/admin finance tables (Recipient
         // split into City/District/Address for spreadsheet usability, plus Placed/Delivered
         // dates). Deliberately excludes CourierSalary — it's an internal figure never surfaced
         // on either finance page and must not leak into a customer's own export.
-        string[] headers =
-        [
-            "#", "Tracking #", "Recipient", "City", "District", "Address",
-            "Type", "Status", "Cancellation Reason",
-            "COD (₾)", "COD Paid", "Service Fee (₾)", "Who Pays Service", "Service Paid",
-            "Placed", "Delivered",
-        ];
+        string[] headers = isGeo
+            ?
+            [
+                "#", "თრექინგ #", "მიმღები", "ქალაქი", "რაიონი", "მისამართი",
+                "ტიპი", "სტატუსი", "გაუქმების მიზეზი",
+                "ასაღები თანხა (₾)", "ასაღები გადახდილია", "მომსახურების საფასური (₾)", "ვინ იხდის მომსახურებას", "მომსახურება გადახდილია",
+                "განთავსების თარიღი", "ჩაბარების თარიღი",
+            ]
+            :
+            [
+                "#", "Tracking #", "Recipient", "City", "District", "Address",
+                "Type", "Status", "Cancellation Reason",
+                "COD (₾)", "COD Paid", "Service Fee (₾)", "Who Pays Service", "Service Paid",
+                "Placed", "Delivered",
+            ];
 
         for (int i = 0; i < headers.Length; i++)
         {
@@ -63,21 +142,23 @@ internal static class FinanceExcelBuilder
             ws.Cell(row, 4).Value = line.RecipientCity;
             ws.Cell(row, 5).Value = line.RecipientDistrict;
             ws.Cell(row, 6).Value = line.RecipientAddress;
-            ws.Cell(row, 7).Value = line.OrderType;
-            ws.Cell(row, 8).Value = line.Status;
-            ws.Cell(row, 9).Value = line.CancellationReason ?? string.Empty;
+            ws.Cell(row, 7).Value = isGeo ? OrderTypeKa.GetValueOrDefault(line.OrderType, line.OrderType) : line.OrderType;
+            ws.Cell(row, 8).Value = isGeo ? StatusKa.GetValueOrDefault(line.Status, line.Status) : line.Status;
+            ws.Cell(row, 9).Value = line.CancellationReason is null
+                ? string.Empty
+                : isGeo ? CancellationReasonKa.GetValueOrDefault(line.CancellationReason, line.CancellationReason) : line.CancellationReason;
 
             if (line.CodAmount.HasValue)
             {
                 ws.Cell(row, 10).Value = line.CodAmount.Value;
                 ws.Cell(row, 10).Style.NumberFormat.Format = "#,##0.00";
             }
-            ws.Cell(row, 11).Value = line.IsCollectedCodPaidToCustomer ? "Yes" : "No";
+            ws.Cell(row, 11).Value = line.IsCollectedCodPaidToCustomer ? (isGeo ? "კი" : "Yes") : (isGeo ? "არა" : "No");
 
             ws.Cell(row, 12).Value = line.CompanyServicePrice;
             ws.Cell(row, 12).Style.NumberFormat.Format = "#,##0.00";
-            ws.Cell(row, 13).Value = line.WhoPaysForCompanyService;
-            ws.Cell(row, 14).Value = line.IsCompanyServicePaid ? "Yes" : "No";
+            ws.Cell(row, 13).Value = isGeo ? WhoPaysKa.GetValueOrDefault(line.WhoPaysForCompanyService, line.WhoPaysForCompanyService) : line.WhoPaysForCompanyService;
+            ws.Cell(row, 14).Value = line.IsCompanyServicePaid ? (isGeo ? "კი" : "Yes") : (isGeo ? "არა" : "No");
 
             ws.Cell(row, 15).Value = line.CreatedAt;
             ws.Cell(row, 16).Value = line.DeliveredAt ?? string.Empty;
@@ -86,7 +167,7 @@ internal static class FinanceExcelBuilder
 
         // ── Totals row ───────────────────────────────────────────────────────
         int lastDataRow = row - 1;
-        ws.Cell(row, 2).Value = "TOTAL";
+        ws.Cell(row, 2).Value = isGeo ? "სულ" : "TOTAL";
         ws.Cell(row, 2).Style.Font.Bold = true;
 
         if (lines.Count > 0)

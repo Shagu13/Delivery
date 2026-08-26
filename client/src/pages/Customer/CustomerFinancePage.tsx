@@ -4,7 +4,7 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
-import { fetchMyOrderFinance, fetchMyPaymentReceipts, downloadMyOrderFinanceExcel } from '../../api/orderFinance';
+import { fetchMyOrderFinance, fetchMyPaymentReceipts, downloadMyOrderFinanceExcel, downloadMyOrderFinanceInvoiceExcel } from '../../api/orderFinance';
 import type { OrderFinanceLine, PaymentReceipt } from '../../api/orderFinance';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
@@ -196,6 +196,7 @@ export function CustomerFinancePage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [exporting, setExporting] = useState(false);
+    const [invoiceExporting, setInvoiceExporting] = useState(false);
 
     const load = useCallback(() => {
         if (!token) return;
@@ -230,11 +231,31 @@ export function CustomerFinancePage() {
                 : {};
         const effDate = dateMode === 'range' ? undefined : (date || undefined);
         try {
-            await downloadMyOrderFinanceExcel(token, effDate, mode === 'payments', opts);
+            await downloadMyOrderFinanceExcel(token, effDate, mode === 'payments', { ...opts, lang });
         } catch {
             setError(t.ofinExportFail);
         } finally {
             setExporting(false);
+        }
+    };
+
+    // Downloads an invoice of the currently filtered sender-pays orders (same date filter as
+    // Export), with the company's bank account and a service-fee total.
+    const handleInvoiceExport = async () => {
+        if (!token) return;
+        setInvoiceExporting(true);
+        const opts = dateMode === 'range'
+            ? { from: from || undefined, to: to || undefined }
+            : dateMode === 'month'
+                ? { monthly: true }
+                : {};
+        const effDate = dateMode === 'range' ? undefined : (date || undefined);
+        try {
+            await downloadMyOrderFinanceInvoiceExcel(token, effDate, mode === 'payments', { ...opts, lang });
+        } catch {
+            setError(t.ofinInvoiceExportFail);
+        } finally {
+            setInvoiceExporting(false);
         }
     };
 
@@ -349,6 +370,11 @@ export function CustomerFinancePage() {
                 {mode !== 'receipts' && (
                     <button onClick={handleExport} disabled={exporting} className="btn-ghost btn-ghost--sm">
                         {exporting ? '…' : t.ofinExport}
+                    </button>
+                )}
+                {mode !== 'receipts' && (
+                    <button onClick={handleInvoiceExport} disabled={invoiceExporting} className="btn-ghost btn-ghost--sm">
+                        {invoiceExporting ? '…' : t.ofinInvoiceExport}
                     </button>
                 )}
             </div>

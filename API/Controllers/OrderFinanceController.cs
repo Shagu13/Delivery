@@ -1,4 +1,5 @@
 using API.Excel;
+using Application.CompanyBankAccounts.Queries;
 using Application.CustomerSettlements.Commands;
 using Application.CustomerSettlements.DTOs;
 using Application.CustomerSettlements.Queries;
@@ -42,13 +43,45 @@ public sealed class OrderFinanceController : BaseController
         [FromQuery] bool monthly,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
-        CancellationToken ct)
+        [FromQuery] string lang = "en",
+        CancellationToken ct = default)
     {
         var result = await Sender.Send(
             new GetMyOrderFinanceLinesQuery(CurrentUserId, date, paymentsMode, monthly, from, to), ct);
 
-        byte[] bytes = FinanceExcelBuilder.Build(result, "DILO FINANCE");
+        byte[] bytes = FinanceExcelBuilder.Build(result, "DILO FINANCE", lang);
         string filename = $"Dilo-Finance-{Domain.CustomTime.Now:yyyy-MM-dd}.xlsx";
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
+    }
+
+    // ── GET /api/orderfinance/my/invoice-export  (Customer) — sender-pays orders only,
+    //    with the company's default bank account and a service-fee total, as Excel ──
+    [HttpGet("my/invoice-export")]
+    [Authorize(Roles = "Customer")]
+    [Produces("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")]
+    public async Task<IActionResult> ExportMyInvoice(
+        [FromQuery] DateOnly? date,
+        [FromQuery] bool paymentsMode,
+        [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] string lang = "en",
+        CancellationToken ct = default)
+    {
+        var result = await Sender.Send(
+            new GetMyOrderFinanceLinesQuery(CurrentUserId, date, paymentsMode, monthly, from, to), ct);
+        var invoiceLines = result.Where(l => l.SenderOwesService).ToList();
+
+        var bankAccounts = await Sender.Send(new GetCompanyBankAccountsQuery(), ct);
+        var bank = bankAccounts.FirstOrDefault(a => a.IsDefault) ?? bankAccounts.FirstOrDefault();
+        string? bankLine = bank is null
+            ? null
+            : lang == "ka"
+                ? $"საბანკო ანგარიში: {bank.BankName} · {bank.AccountHolderName} · {bank.AccountNumber}"
+                : $"Bank Account: {bank.BankName} · {bank.AccountHolderName} · {bank.AccountNumber}";
+
+        byte[] bytes = FinanceExcelBuilder.Build(invoiceLines, lang == "ka" ? "დილო ინვოისი" : "DILO INVOICE", lang, bankLine);
+        string filename = $"Dilo-Invoice-{Domain.CustomTime.Now:yyyy-MM-dd}.xlsx";
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
     }
 

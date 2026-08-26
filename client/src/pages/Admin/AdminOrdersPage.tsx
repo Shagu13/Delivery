@@ -18,6 +18,7 @@ import { recipientDisplayName } from '../../utils/recipientName';
 import { resolveDateWindow } from '../../utils/dateWindow';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { DebouncedSearchBox } from '../../components/ui/DebouncedSearchBox';
+import { PhoneActions } from '../../components/ui/PhoneActions';
 import type { PagedResult } from '../../types/paging';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1082,7 +1083,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         </td>
         <td className="aop-td">
           <div className="aop-name">{recipientDisplayName(order.recipientName, t.recipientUnknown)}</div>
-          <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{order.recipientPhone}</div>
+          <PhoneActions phone={order.recipientPhone} />
           <div className="aop-addr">{pickupAddressDisplay(order)}</div>
         </td>
         <td className="aop-td">

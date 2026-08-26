@@ -1,0 +1,40 @@
+.phone-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.74rem;
+    color: var(--color-text-subtle);
+}
+
+.phone-actions__btns {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.phone-actions__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    color: #ffffff;
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: filter 0.15s, transform 0.15s;
+}
+
+    .phone-actions__btn:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+    }
+
+.phone-actions__btn--call {
+    background: #3b82f6;
+}
+
+.phone-actions__btn--wa {
+    background: #25d366;
+}

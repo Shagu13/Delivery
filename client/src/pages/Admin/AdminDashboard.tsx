@@ -28,6 +28,7 @@ import { getStatusMeta } from '../../utils/statusMeta';
 import '../../styles/dashboard.css';
 import { fetchSmsBalance } from '../../api/sms';
 import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
+import AdminBankAccountsPage from './AdminBankAccountsPage';
 import AdminPartnersPage from './AdminPartnersPage';
 import AdminTenantSettlementsPage from './AdminTenantSettlementsPage';
 import AdminTenantsPage from './AdminTenantsPage';
@@ -115,9 +116,9 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch';
+type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch'];
 
 // Views an Operator (partial-admin role) may open. Operators now have full admin-level
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
@@ -354,6 +355,18 @@ export function AdminDashboard() {
               </svg>
               <span className="sidebar__link-text">{t.sidebarWeightTiers}</span>
           </button>
+          <button
+            className={`sidebar__link ${activeView === 'bankAccounts' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('bankAccounts')}
+            title={t.sidebarBankAccounts}
+          >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M1.5 6.5L8 2l6.5 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  <rect x="2.5" y="6.5" width="11" height="7" rx="1" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M2 13.5h12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              <span className="sidebar__link-text">{t.sidebarBankAccounts}</span>
+          </button>
           {isSystemAdmin && (<>
           <button
             className={`sidebar__link ${activeView === 'partners' ? 'sidebar__link--active' : ''}`}
@@ -521,6 +534,7 @@ export function AdminDashboard() {
             {activeView === 'cities' && t.topbarCities}
             {activeView === 'schedule' && t.navSchedule}
             {activeView === 'weightTiers' && t.topbarWeightTiers}
+            {activeView === 'bankAccounts' && t.topbarBankAccounts}
             {activeView === 'partners' && 'Partner API'}
             {activeView === 'tenants' && 'Tenants'}
             {activeView === 'tenantSettlements' && 'Tenant Settlements'}
@@ -556,6 +570,9 @@ export function AdminDashboard() {
                   {activeView === 'schedule' && <AdminSchedulePage token={token ?? ''} />}
                   {activeView === 'weightTiers' && token && (
                       <AdminWeightPriceTiersPage token={token} />
+                  )}
+                  {activeView === 'bankAccounts' && !isOperator && !isTenant && token && (
+                      <AdminBankAccountsPage token={token} />
                   )}
           {activeView === 'partners' && isSystemAdmin && token && <AdminPartnersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}

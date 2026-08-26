@@ -96,6 +96,17 @@ public sealed class OrdersController : BaseController
                            .ToHashSet();
             rows = rows.Where(o => idSet.Contains(o.Id));
         }
+
+        // Cancelled orders never belong on a picking/delivery manifest, regardless of which
+        // rows were selected or which filters are active — exclude them unconditionally.
+        var cancelledStatuses = new[]
+        {
+            nameof(OrderStatus.CancelledByAdmin),
+            nameof(OrderStatus.CancelledBySender),
+            nameof(OrderStatus.OrderNotAccepted),
+        };
+        rows = rows.Where(o => !cancelledStatuses.Contains(o.Status));
+
         var list = rows.ToList();
 
         using var workbook = new XLWorkbook();

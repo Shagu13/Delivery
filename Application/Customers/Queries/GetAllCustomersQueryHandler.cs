@@ -39,6 +39,7 @@ public sealed class GetAllCustomersQueryHandler
                 c.LastName.ToLower().Contains(term)            ||
                 c.BusinessName.ToLower().Contains(term)        ||
                 c.City.ToLower().Contains(term)                ||
+                c.PhoneNumber.Contains(term)                   ||
                 c.ApplicationUser.Email!.ToLower().Contains(term));
         }
 

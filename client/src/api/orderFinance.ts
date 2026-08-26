@@ -140,7 +140,7 @@ export async function fetchMyOrderFinance(
 // ── Customer — download own orders as Excel, matching the same date filter ───────
 export async function downloadMyOrderFinanceExcel(
     token: string, date?: string, paymentsMode = false,
-    opts: { monthly?: boolean; from?: string; to?: string } = {},
+    opts: { monthly?: boolean; from?: string; to?: string; lang?: string } = {},
 ): Promise<void> {
     const params = new URLSearchParams();
     if (date) params.set('date', date);
@@ -148,8 +148,26 @@ export async function downloadMyOrderFinanceExcel(
     if (opts.monthly) params.set('monthly', 'true');
     if (opts.from) params.set('from', opts.from);
     if (opts.to) params.set('to', opts.to);
+    if (opts.lang) params.set('lang', opts.lang);
     const q = params.toString() ? `?${params}` : '';
     await downloadExcel(`/api/orderfinance/my/export${q}`, token, 'finance.xlsx');
+}
+
+// ── Customer — download an invoice of own sender-pays orders, with the company's default
+//    bank account and a service-fee total, matching the same date filter ────────────────
+export async function downloadMyOrderFinanceInvoiceExcel(
+    token: string, date?: string, paymentsMode = false,
+    opts: { monthly?: boolean; from?: string; to?: string; lang?: string } = {},
+): Promise<void> {
+    const params = new URLSearchParams();
+    if (date) params.set('date', date);
+    if (paymentsMode) params.set('paymentsMode', 'true');
+    if (opts.monthly) params.set('monthly', 'true');
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    if (opts.lang) params.set('lang', opts.lang);
+    const q = params.toString() ? `?${params}` : '';
+    await downloadExcel(`/api/orderfinance/my/invoice-export${q}`, token, 'invoice.xlsx');
 }
 
 // ── Admin — a customer's orders by delivery date ─────────────────────────────────

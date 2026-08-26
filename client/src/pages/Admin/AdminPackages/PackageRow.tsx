@@ -4,6 +4,7 @@
 import { useLanguage } from '../../../contexts/useLanguage';
 import { recipientDisplayName } from '../../../utils/recipientName';
 import { printParcelLabels } from '../../../utils/printLabel';
+import { PhoneActions } from '../../../components/ui/PhoneActions';
 import type { AdminGroupOrder, AdminOrder } from '../../../api/adminGroupOrders';
 import type { Courier } from '../../../api/couriers';
 import { AdminOrderRowActions } from '../AdminGroupOrderActions';
@@ -70,7 +71,7 @@ export function PackageRow({
       )}
       <td>
         <div style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</div>
-        <div style={{ fontFamily: 'Courier New, monospace', fontSize: '0.74rem', color: 'var(--color-text-subtle)' }}>{o.recipientPhone}</div>
+        <PhoneActions phone={o.recipientPhone} />
       </td>
       <td>
         <div>{pickupCityDisplay(o, lang)}</div>

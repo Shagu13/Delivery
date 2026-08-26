@@ -15,6 +15,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<CustomerSpecialPrice> CustomerSpecialPrices => Set<CustomerSpecialPrice>();
     public DbSet<CustomerSecondaryAddress> CustomerSecondaryAddresses => Set<CustomerSecondaryAddress>();
     public DbSet<CustomerBankAccount> CustomerBankAccounts => Set<CustomerBankAccount>();
+    public DbSet<CompanyBankAccount>  CompanyBankAccounts  => Set<CompanyBankAccount>();
     public DbSet<Tenant>           Tenants           => Set<Tenant>();
     public DbSet<TenantSettlement> TenantSettlements => Set<TenantSettlement>();
     public DbSet<Warehouse>        Warehouses        => Set<Warehouse>();
@@ -147,6 +148,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(a => a.CustomerId);
             e.HasOne(a => a.Customer).WithMany(c => c.BankAccounts)
              .HasForeignKey(a => a.CustomerId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(a => a.Label).HasMaxLength(60);
+            e.Property(a => a.BankName).HasMaxLength(100).IsRequired();
+            e.Property(a => a.AccountHolderName).HasMaxLength(150).IsRequired();
+            e.Property(a => a.AccountNumber).HasMaxLength(50).IsRequired();
+        });
+
+        // ── CompanyBankAccount (the company's own payout accounts, admin-managed) ──
+        modelBuilder.Entity<CompanyBankAccount>(e =>
+        {
+            e.HasKey(a => a.Id);
             e.Property(a => a.Label).HasMaxLength(60);
             e.Property(a => a.BankName).HasMaxLength(100).IsRequired();
             e.Property(a => a.AccountHolderName).HasMaxLength(150).IsRequired();

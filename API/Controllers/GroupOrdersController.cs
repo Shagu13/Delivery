@@ -298,6 +298,15 @@ public sealed class GroupOrdersController : BaseController
                        .ToHashSet();
         }
 
+        // Cancelled packages never belong on a picking/delivery manifest, regardless of which
+        // rows were selected or which filters are active — exclude them unconditionally.
+        var cancelledStatuses = new[]
+        {
+            OrderStatus.CancelledByAdmin,
+            OrderStatus.CancelledBySender,
+            OrderStatus.OrderNotAccepted,
+        };
+
         var rows = result.Items
             .SelectMany(go =>
             {
@@ -305,7 +314,7 @@ public sealed class GroupOrdersController : BaseController
                     ? $"{go.SenderFirstName} {go.SenderLastName}".Trim()
                     : go.SenderBusinessName;
                 return go.Orders
-                    .Where(o => idSet == null || idSet.Contains(o.Id))
+                    .Where(o => (idSet == null || idSet.Contains(o.Id)) && !cancelledStatuses.Contains(o.Status))
                     .Select(o => (Sender: senderName, Order: o));
             })
             .OrderBy(r => r.Order.CreatedAt)

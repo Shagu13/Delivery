@@ -258,6 +258,16 @@ body {
         transform: translateY(-1px);
     }
 
+/* Adding a package to an already-existing batch order — greened to distinguish it from
+   the same button when composing a brand-new batch. */
+.btn--add-package--append {
+    background: var(--color-success);
+}
+
+    .btn--add-package--append:hover {
+        box-shadow: 0 4px 14px var(--color-success-bg);
+    }
+
 .btn--ghost {
     background: transparent;
     border: 1.5px solid var(--color-border);

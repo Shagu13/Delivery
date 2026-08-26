@@ -19,6 +19,8 @@ const en = {
   or:                 'or',
   backToHome:         '← Back to home',
   createAccount:      'Create account',
+  phoneActionsCall:      'Call',
+  phoneActionsWhatsapp:  'Message on WhatsApp',
 
   // ── Field labels ──────────────────────────────────────────────────────────
   firstName:          'First name',
@@ -1177,6 +1179,23 @@ const en = {
   cbaEmpty:                  'This customer has no saved bank accounts yet.',
   cbaLoadFail:               'Failed to load bank accounts.',
 
+  // ── Admin Bank Accounts page (the company's own accounts) ────────────────
+  sidebarBankAccounts:       'Bank Accounts',
+  topbarBankAccounts:        'Bank Accounts',
+  abaDesc:                   'Manage the company\'s own bank accounts. The default account is shown on a customer\'s invoice export.',
+  abaAddBtn:                 'Add Account',
+  abaAddModalTitle:          'Add Bank Account',
+  abaEditModalTitle:         'Edit Bank Account',
+  abaSetDefault:             'Set as default',
+  abaDeleteModalTitle:       'Delete Bank Account',
+  abaDeleteMsg:              (name: string) => `Are you sure you want to delete "${name}"?`,
+  abaDeleting:               'Deleting…',
+  abaEmptyTitle:             'No bank accounts yet',
+  abaEmptyHint:              'Add the company\'s bank account so it can appear on customer invoices.',
+  abaErrRequired:            'This field is required.',
+  abaErrSave:                'Failed to save the bank account.',
+  abaErrDelete:              'Failed to delete the bank account.',
+
   // ── Admin Weight Price Tiers Page ─────────────────────────────────────────
   awptDesc:                  'Define weight ranges that senders choose from when creating orders. Set a price per delivery zone — capital, city, or district.',
   awptAddBtn:                'Add Tier',
@@ -1799,6 +1818,8 @@ const en = {
     ofinErrAction:       'Action failed.',
     ofinExport:          'Export to Excel',
     ofinExportFail:      'Export failed.',
+    ofinInvoiceExport:     'Invoice',
+    ofinInvoiceExportFail: 'Invoice export failed.',
     ofinSvcInvalid:      'Enter a valid service price.',
     ofinNotDelivered:    'Not delivered',
     ofinTabPlaced:       'Placed',
@@ -2020,6 +2041,8 @@ const ka: typeof en = {
   or:                 'ან',
   backToHome:         '← მთავარ გვერდზე',
   createAccount:      'ანგარიშის შექმნა',
+  phoneActionsCall:      'დარეკვა',
+  phoneActionsWhatsapp:  'WhatsApp შეტყობინება',
 
   // ── Field labels ──────────────────────────────────────────────────────────
   firstName:          'სახელი',
@@ -3177,6 +3200,23 @@ const ka: typeof en = {
   cbaEmpty:                  'ამ მომხმარებელს ჯერ არ აქვს შენახული საბანკო ანგარიში.',
   cbaLoadFail:               'საბანკო ანგარიშების ჩატვირთვა ვერ მოხერხდა.',
 
+  // ── Admin Bank Accounts page (the company's own accounts) ────────────────
+  sidebarBankAccounts:       'საბანკო ანგარიშები',
+  topbarBankAccounts:        'საბანკო ანგარიშები',
+  abaDesc:                   'მართეთ კომპანიის საკუთარი საბანკო ანგარიშები. ძირითადი ანგარიში გამოჩნდება მომხმარებლის ინვოისის ექსპორტში.',
+  abaAddBtn:                 'ანგარიშის დამატება',
+  abaAddModalTitle:          'საბანკო ანგარიშის დამატება',
+  abaEditModalTitle:         'საბანკო ანგარიშის რედაქტირება',
+  abaSetDefault:             'ძირითადად დაყენება',
+  abaDeleteModalTitle:       'საბანკო ანგარიშის წაშლა',
+  abaDeleteMsg:              (name: string) => `დარწმუნებული ხართ, რომ გსურთ "${name}"-ის წაშლა?`,
+  abaDeleting:               'იშლება…',
+  abaEmptyTitle:             'საბანკო ანგარიშები არ არის დამატებული',
+  abaEmptyHint:              'დაამატეთ კომპანიის საბანკო ანგარიში, რომ გამოჩნდეს მომხმარებლების ინვოისებზე.',
+  abaErrRequired:            'ეს ველი სავალდებულოა.',
+  abaErrSave:                'საბანკო ანგარიშის შენახვა ვერ მოხერხდა.',
+  abaErrDelete:              'საბანკო ანგარიშის წაშლა ვერ მოხერხდა.',
+
   // ── Admin Weight Price Tiers Page ─────────────────────────────────────────
   awptDesc:                  'განსაზღვრეთ წონის დიაპაზონები, რასაც გამგზავნები ირჩევენ შეკვეთისას. დააყენეთ ფასი მიწოდების ზონის მიხედვით — დედაქალაქი, ქალაქი ან რაიონი/სოფელი.',
   awptAddBtn:                'დამატება',
@@ -3796,6 +3836,8 @@ const ka: typeof en = {
     ofinErrAction:       'მოქმედება ვერ შესრულდა.',
     ofinExport:          'Excel-ში ექსპორტი',
     ofinExportFail:      'ექსპორტი ვერ მოხერხდა.',
+    ofinInvoiceExport:     'ინვოისი',
+    ofinInvoiceExportFail: 'ინვოისის ექსპორტი ვერ მოხერხდა.',
     ofinSvcInvalid:      'შეიყვანეთ სწორი მომსახურების ფასი.',
     ofinNotDelivered:    'არ არის მიტანილი',
     ofinTabPlaced:       'განთავსებული',
