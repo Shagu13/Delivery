@@ -17,6 +17,7 @@ import { PriceWarningModal } from './PriceWarningModal';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { Highlight } from '../../components/ui/Highlight';
+import { PhoneActions } from '../../components/ui/PhoneActions';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -317,9 +318,7 @@ function OrderRow({
             <td><TypeBadge type={order.orderType} /></td>
             <td>
                 <div style={{ fontWeight: 600, fontSize: '0.82rem' }}><Highlight text={order.senderName} term={highlight} /></div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', fontFamily: 'monospace' }}>
-                    <Highlight text={order.senderPhone} term={highlight} />
-                </div>
+                <PhoneActions phone={order.senderPhone} highlightTerm={highlight} />
             </td>
             <td>
                 <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>

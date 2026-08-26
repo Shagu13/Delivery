@@ -24,6 +24,7 @@ import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { LocationMultiPicker } from '../../components/ui/LocationMultiPicker';
 import { DebouncedSearchBox } from '../../components/ui/DebouncedSearchBox';
+import { PhoneActions } from '../../components/ui/PhoneActions';
 import {
   fetchGroupOrders, fetchGroupOrderLocations, fetchPickupDay,
   groupAndAcceptStandalone, groupAndWarehouseStandalone,
@@ -862,8 +863,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                               </div>
                               <div className="go-cell">
                                 <span className="go-cell__label">{t.goThPhone}</span>
-                                <span className="go-cell__value go-cell__value--mono">{go.senderPhone}</span>
-                                {go.alternativeSenderPhone && <span className="go-cell__sub go-cell__value--mono">{go.alternativeSenderPhone}</span>}
+                                <PhoneActions phone={go.senderPhone} />
+                                {go.alternativeSenderPhone && <PhoneActions phone={go.alternativeSenderPhone} />}
                               </div>
                               <div className="go-cell">
                                 <span className="go-cell__label">{t.cgoPickupLocation}</span>

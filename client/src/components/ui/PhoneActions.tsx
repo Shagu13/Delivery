@@ -1,5 +1,6 @@
 import { sanitizeGeorgianMobile } from './GeorgianPhoneField';
 import { useLanguage } from '../../contexts/useLanguage';
+import { Highlight } from './Highlight';
 import './PhoneActions.css';
 
 /**
@@ -8,14 +9,16 @@ import './PhoneActions.css';
  * both links prepend `995` — WhatsApp in particular needs the full international number to
  * resolve a chat, and a bare local number would silently fail to open one.
  */
-export function PhoneActions({ phone, className }: { phone: string; className?: string }) {
+export function PhoneActions({ phone, className, highlightTerm }: { phone: string; className?: string; highlightTerm?: string }) {
   const { t } = useLanguage();
   const local = sanitizeGeorgianMobile(phone);
   const intl = local ? `995${local}` : null;
 
   return (
     <span className={`phone-actions ${className ?? ''}`}>
-      <span className="phone-actions__num">{phone}</span>
+      <span className="phone-actions__num">
+        {highlightTerm ? <Highlight text={phone} term={highlightTerm} /> : phone}
+      </span>
       {intl && (
         <span className="phone-actions__btns" onClick={e => e.stopPropagation()}>
           <a

@@ -17,6 +17,7 @@ import { fetchCouriers, fetchAssignedForDay, fetchAssignedPickupsForDay, setCour
 import { bulkAssignCourierToOrders } from '../../api/orders';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { PhoneActions } from '../../components/ui/PhoneActions';
 import AdminCustomersPage from './AdminCustomersPage';
 import AdminCitiesPage from './AdminCitiesPage';
 import AdminSchedulePage from './AdminSchedulePage';
@@ -2015,9 +2016,9 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
                             </div>
                             <div className="go-cell">
                               <span className="go-cell__label">{t.goThPhone}</span>
-                              <span className="go-cell__value go-cell__value--mono">{go.senderPhone}</span>
+                              <PhoneActions phone={go.senderPhone} />
                               {go.alternativeSenderPhone && (
-                                <span className="go-cell__sub go-cell__value--mono">{go.alternativeSenderPhone}</span>
+                                <PhoneActions phone={go.alternativeSenderPhone} />
                               )}
                             </div>
                             <div className="go-cell">
@@ -3329,7 +3330,7 @@ function CourierPickupRow({ courier, pickups, selected, onToggleSelected }: {
                     </td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{p.senderBusinessName}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', fontFamily: 'Courier New, monospace' }}>{p.senderPhone}</div>
+                      <PhoneActions phone={p.senderPhone} />
                     </td>
                     <td>
                       <div>{p.pickUpCity}</div>

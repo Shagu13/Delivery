@@ -6,6 +6,7 @@ import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { Highlight } from '../../components/ui/Highlight';
+import { PhoneActions } from '../../components/ui/PhoneActions';
 
 type Party = 'sender' | 'recipient';
 type DestView = 'packages' | 'returnExchange' | 'history';
@@ -57,9 +58,7 @@ function ResultRow({
         <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>
           <Highlight text={go.senderBusinessName || '—'} term={party === 'sender' ? term : ''} />
         </div>
-        <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)', fontFamily: 'monospace' }}>
-          <Highlight text={go.senderPhone} term={party === 'sender' ? term : ''} />
-        </div>
+        <PhoneActions phone={go.senderPhone} highlightTerm={party === 'sender' ? term : ''} />
       </td>
       <td>
         <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>

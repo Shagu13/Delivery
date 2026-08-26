@@ -3,6 +3,7 @@ import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-quer
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { Highlight } from '../../components/ui/Highlight';
+import { PhoneActions } from '../../components/ui/PhoneActions';
 import { fetchGroupOrders } from '../../api/adminGroupOrders';
 import type { AdminGroupOrder, AdminOrder, OrderStatus } from '../../api/adminGroupOrders';
 import { fetchReturnExchangeOrders } from '../../api/returnExchange';
@@ -742,10 +743,8 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
                 <tr key={go.id}>
                   <td>
                     <div style={{ fontWeight: 600 }}>{go.senderBusinessName || '—'}</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{go.senderPhone}</div>
-                    {go.alternativeSenderPhone && (
-                      <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>{go.alternativeSenderPhone}</div>
-                    )}
+                    <PhoneActions phone={go.senderPhone} />
+                    {go.alternativeSenderPhone && <PhoneActions phone={go.alternativeSenderPhone} />}
                   </td>
                   <td>
                     <div>{locCity(go.pickUpCity, go.pickUpCityGeo)}</div>
