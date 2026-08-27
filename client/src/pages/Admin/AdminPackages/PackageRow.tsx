@@ -21,7 +21,7 @@ export function PackageRow({
   o, go, moveDestinations, warehouseSelectable = false, showStore = false,
   canManage, canGroup, selected, toggleOne, rowSelectable, courierNameById,
   showTracking, absentPkgs, togglePkgPresent, showPricesEff, showRevenueEff,
-  couriers, token, setViewingOrder, openEditOrder, reload, reloadAll, showToast,
+  couriers, token, setViewingOrder, openEditOrder, reload, reloadAll, showToast, patchOrder,
 }: {
   o: AdminOrder; go: AdminGroupOrder; moveDestinations: AdminGroupOrder[];
   warehouseSelectable?: boolean; showStore?: boolean;
@@ -36,6 +36,9 @@ export function PackageRow({
   openEditOrder: (o: AdminOrder, go: AdminGroupOrder) => void;
   reload: () => void; reloadAll: () => void;
   showToast: (msg: string, type?: 'ok' | 'err') => void;
+  /** Patches this order directly in the cached Packages list — see AdminPackagesPage's
+   *  patchPackageOrder. Used for the instant post-assign row update (onAssigned below). */
+  patchOrder: (orderId: string, patch: (o: AdminOrder) => AdminOrder) => void;
 }) {
   const { t, lang } = useLanguage();
   const selectable = canManage && rowSelectable(toOrderItem(o, go, null));
@@ -161,6 +164,20 @@ export function PackageRow({
             onEdit={() => openEditOrder(o, go)}
             onLabel={() => void printParcelLabels([buildAdminLabel(menuItem)])}
             onChanged={() => reload()}
+            onAssigned={(courierId, newStatus) => {
+              // Mirrors AdminOrdersPage's doAssign optimistic patch — instant row update
+              // instead of waiting on reload()'s full list refetch for a single-row assign.
+              const assignedCourier = couriers.find(c => c.courierId === courierId);
+              const defaultSalary = assignedCourier?.defaultSalary ?? null;
+              patchOrder(o.id, ord => ({
+                ...ord,
+                courierId,
+                status: newStatus as AdminOrder['status'],
+                ...(ord.orderType !== 'Return' && defaultSalary != null
+                  ? { courierSalary: defaultSalary, companyRevenue: ord.companyServicePrice - defaultSalary }
+                  : {}),
+              }));
+            }}
             onError={msg => showToast(msg, 'err')}
           />
           {/* Edit + Label now live in the kebab menu above; this keeps the pickup-only

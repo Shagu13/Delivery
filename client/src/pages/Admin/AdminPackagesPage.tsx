@@ -15,9 +15,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
+import type { PagedResult } from '../../types/paging';
 import { georgianToday, georgianDateKeyOf, toDateKey } from '../../utils/georgianTime';
 import { resolveDateWindow } from '../../utils/dateWindow';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
@@ -56,6 +57,7 @@ import { usePackageSelection } from './AdminPackages/usePackageSelection';
 export default function AdminPackagesPage({ canManage = true, canAssignCourier = canManage, canGroup = canManage, canSeeRevenue = true, initialSearch = '', initialParty = 'sender' }: { canManage?: boolean; canAssignCourier?: boolean; canGroup?: boolean; canSeeRevenue?: boolean; initialSearch?: string; initialParty?: 'sender' | 'recipient' }) {
   const { token } = useAuth();
   const { t, lang } = useLanguage();
+  const queryClient = useQueryClient();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
 
@@ -178,8 +180,9 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // mergeableByCustomer/batchesFor/multiBatchCustomers/ungroupedCustomers, which need every
   // batch for a day (not just whatever fits on the current 30-item page) to detect same-day
   // merge candidates and unattached orders correctly.
+  const windowScopedKey = ['admin', 'packages', 'windowScoped', pkgFilters, pkgDate, pkgDateTo] as const;
   const windowScopedQuery = useQuery({
-    queryKey: ['admin', 'packages', 'windowScoped', pkgFilters, pkgDate, pkgDateTo] as const,
+    queryKey: windowScopedKey,
     queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page: 1, pageSize: 500 }),
     enabled: !!token,
     placeholderData: keepPreviousData,
@@ -232,6 +235,34 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   );
   const loadSummary = useCallback(() => summaryQuery.refetch(), [summaryQuery]);
   const loadWindowScoped = useCallback(() => windowScopedQuery.refetch(), [windowScopedQuery]);
+
+  // Patches a single order's courier/status directly into both cached Packages list queries —
+  // mirrors AdminOrdersPage's patchOrders so a single-row (re)assign updates the row instantly
+  // instead of waiting on reload()'s full (expensive, up-to-500-row) list refetch. reload() still
+  // runs afterwards (see PackageRow's onChanged) to reconcile everything else in the background.
+  // Deps are stringified so the callback's identity is stable across renders where the filters
+  // haven't actually changed, even though listQueryKey/windowScopedKey are new array literals
+  // every render — kept out of the dependency array itself so the array only holds identifiers.
+  const listQueryKeyStr = JSON.stringify(listQueryKey);
+  const windowScopedKeyStr = JSON.stringify(windowScopedKey);
+  const patchPackageOrder = useCallback((orderId: string, patch: (o: AdminOrder) => AdminOrder) => {
+    const applyTo = (data: PagedResult<AdminGroupOrder> | undefined) => {
+      if (!data) return data;
+      let changed = false;
+      const items = data.items.map(go => {
+        const idx = go.orders.findIndex(o => o.id === orderId);
+        if (idx === -1) return go;
+        changed = true;
+        const orders = [...go.orders];
+        orders[idx] = patch(orders[idx]);
+        return { ...go, orders };
+      });
+      return changed ? { ...data, items } : data;
+    };
+    queryClient.setQueryData(listQueryKey, applyTo);
+    queryClient.setQueryData(windowScopedKey, applyTo);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient, listQueryKeyStr, windowScopedKeyStr]);
 
   // Reset to page 1 whenever a filter changes (queryKey reactivity handles the actual refetch).
   useEffect(() => {
@@ -826,7 +857,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                     canManage={canManage} canGroup={canGroup} selected={selected} toggleOne={toggleOne} rowSelectable={rowSelectable}
                     courierNameById={courierNameById} showTracking={showTracking} absentPkgs={absentPkgs} togglePkgPresent={togglePkgPresent}
                     showPricesEff={showPricesEff} showRevenueEff={showRevenueEff} couriers={couriers} token={token ?? ''}
-                    setViewingOrder={setViewingOrder} openEditOrder={openEditOrder} reload={reload} reloadAll={reloadAll} showToast={showToast} />
+                    setViewingOrder={setViewingOrder} openEditOrder={openEditOrder} reload={reload} reloadAll={reloadAll} showToast={showToast}
+                    patchOrder={patchPackageOrder} />
                 ))}</tbody>
               </table>
             </div>
@@ -940,7 +972,8 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                                       canManage={canManage} canGroup={canGroup} selected={selected} toggleOne={toggleOne} rowSelectable={rowSelectable}
                                       courierNameById={courierNameById} showTracking={showTracking} absentPkgs={absentPkgs} togglePkgPresent={togglePkgPresent}
                                       showPricesEff={showPricesEff} showRevenueEff={showRevenueEff} couriers={couriers} token={token ?? ''}
-                                      setViewingOrder={setViewingOrder} openEditOrder={openEditOrder} reload={reload} reloadAll={reloadAll} showToast={showToast} />
+                                      setViewingOrder={setViewingOrder} openEditOrder={openEditOrder} reload={reload} reloadAll={reloadAll} showToast={showToast}
+                                      patchOrder={patchPackageOrder} />
                                   ))}</tbody>
                                 </table>
                               </div>

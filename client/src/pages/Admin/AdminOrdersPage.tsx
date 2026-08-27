@@ -1177,6 +1177,21 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
             onEdit={() => setEditingOrder(order)}
             onLabel={() => void printParcelLabels([buildAdminLabel(order)])}
             onChanged={reload}
+            onAssigned={(courierId, newStatus) => {
+              // Mirrors doAssign's bulk optimistic patch below — instant row update instead of
+              // waiting on onChanged()'s reload for a single-row (re)assignment.
+              const assignedCourier = couriers.find(c => c.courierId === courierId);
+              const defaultSalary = assignedCourier?.defaultSalary ?? null;
+              patchOrders([order.id], o => ({
+                ...o,
+                courierId,
+                courierFullName: assignedCourier?.fullName ?? o.courierFullName,
+                status: newStatus,
+                ...(o.orderType !== 'Return' && defaultSalary != null
+                  ? { courierSalary: defaultSalary, companyRevenue: o.companyServicePrice - defaultSalary }
+                  : {}),
+              }), assignTab === 'pending' ? () => true : undefined);
+            }}
             onError={msg => showToast(msg, 'err')}
           />
         </td>

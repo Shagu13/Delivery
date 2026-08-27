@@ -16,6 +16,15 @@ export interface RowMenuOrder {
   courierSalary: number | null;
 }
 
+/** Return statuses that (re)assignment leaves untouched — mirrors
+ *  Application/Orders/Commands/ReturnAssignmentPolicy.cs's KeepsItsStatus. Anything else
+ *  moves to CourierAssignedToPickUp. Used only to predict the optimistic status for onAssigned;
+ *  the backend remains the source of truth. */
+const RETURN_KEEPS_STATUS = new Set([
+  'PickedUpFromRecipient', 'DeliveredReturnOrderToWarehouse', 'ReturnedToSender',
+  'CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted',
+]);
+
 interface Props {
   order: RowMenuOrder;
   couriers: Courier[];
@@ -31,6 +40,12 @@ interface Props {
   onLabel?: () => void;
   /** Refresh the list after an action mutates the order. */
   onChanged: () => void;
+  /** Called synchronously right after a successful courier (re)assignment, with the resulting
+   *  courierId + status — mirrors what the backend just computed (AssignCourierToOrderCommandHandler
+   *  / AssignCourierToReturnOrderCommandHandler) so the caller can patch its row instantly instead
+   *  of waiting on onChanged()'s (slower, full-list) reload. Optional: a caller that omits it just
+   *  falls back to the reload-based update. */
+  onAssigned?: (courierId: string, newStatus: string) => void;
   onError: (msg: string) => void;
   /** Hide the View item — for callers whose row lacks the full order shape View needs. Default true. */
   showView?: boolean;
@@ -47,7 +62,7 @@ type Panel = 'menu' | 'assign' | 'salary' | 'deliver' | 'returnToSender' | 'canc
  * against the button so the table's overflow never clips it.
  */
 export function OrderRowActionsMenu({
-  order, couriers, token, canManage, canAssign, canDeliver, onView, onEdit, onLabel, onChanged, onError,
+  order, couriers, token, canManage, canAssign, canDeliver, onView, onEdit, onLabel, onChanged, onAssigned, onError,
   showView = true, showEdit = true,
 }: Props) {
   const { t } = useLanguage();
@@ -124,9 +139,15 @@ export function OrderRowActionsMenu({
   };
 
   const isReturn = order.orderType === 'Return';
-  const assign = (courierId: string) => run(() =>
-    isReturn ? assignReturnCourier(token, order.id, courierId)
-             : assignCourierToOrder(token, order.id, courierId));
+  const assign = (courierId: string) => run(async () => {
+    if (isReturn) {
+      await assignReturnCourier(token, order.id, courierId);
+      onAssigned?.(courierId, RETURN_KEEPS_STATUS.has(order.status) ? order.status : 'CourierAssignedToPickUp');
+    } else {
+      await assignCourierToOrder(token, order.id, courierId);
+      onAssigned?.(courierId, 'CourierAssignedToDeliver');
+    }
+  });
   const saveSalary = () => {
     const v = parseFloat(salaryInput);
     if (isNaN(v) || v < 0) return;
