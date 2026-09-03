@@ -55,7 +55,9 @@ const emptyPkg = (): PkgRow => ({
   orderType: 'Send',
   recipientName: '', recipientPhone: '', recipientCity: '', recipientDistrict: '', recipientDistrictObj: null, recipientAddress: '',
   description: '', isFragile: false,
-  payStatus: 'NotPaid', payer: 'Sender',
+  // Unpaid product → the recipient pays the company service fee at delivery (mirrors the
+  // customer create-order flow); flipped to Sender when the product is marked Paid.
+  payStatus: 'NotPaid', payer: 'Recipient',
   codAmount: '', svcPrice: '', svcIncluded: false,
   returnCity: '', returnDistrict: '', returnAddress: '',
 });
@@ -242,10 +244,10 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
 
     const orders: WalkInPackageInput[] = pkgs.map(p => {
       const svc = parseFloat(p.svcPrice) || 0;
-      const codRaw = p.payStatus === 'NotPaid' && p.codAmount.trim() ? parseFloat(p.codAmount) : null;
-      // COD is entered product-only; re-bundle the fee when the price is all-in so the
-      // backend (which subtracts the fee for included orders) stores it correctly.
-      const cod = codRaw == null ? null : (p.svcIncluded ? codRaw + svc : codRaw);
+      // When "service included" is on, the admin enters the all-in price (product + fee);
+      // the backend subtracts the fee for included orders, so pass it straight through.
+      // Otherwise the field is the product-only COD. Either way it is not re-bundled here.
+      const cod = p.payStatus === 'NotPaid' && p.codAmount.trim() ? parseFloat(p.codAmount) : null;
       const isReturn = p.orderType === 'Return';
       return {
         orderType: p.orderType,
@@ -544,7 +546,13 @@ function PackageCard({
             key={tp.v}
             type="button"
             className={`ap-type-btn${row.orderType === tp.v ? ' ap-type-btn--active' : ''}`}
-            onClick={() => onChange({ orderType: tp.v })}
+            onClick={() => onChange(
+              // A Return parcel is not COD and the sender pays the pickup fee — force
+              // Paid + Sender and clear any collect amount (mirrors the customer flow).
+              tp.v === 'Return'
+                ? { orderType: tp.v, payStatus: 'Paid', payer: 'Sender', codAmount: '' }
+                : { orderType: tp.v },
+            )}
           >
             {tp.label}
           </button>
@@ -606,7 +614,15 @@ function PackageCard({
         <div>
           <label className="ap-mini-label">{t.eomPayStatus}</label>
           <select className="ap-input" value={row.payStatus}
-            onChange={e => onChange({ payStatus: e.target.value as PkgRow['payStatus'] })}>
+            onChange={e => {
+              const next = e.target.value as PkgRow['payStatus'];
+              // Unpaid product → the recipient pays the company service fee at delivery;
+              // Paid → the sender covers it and there is nothing left to collect. Mirrors
+              // the customer create-order flow's payment-status behaviour.
+              onChange(next === 'NotPaid'
+                ? { payStatus: next, payer: 'Recipient' }
+                : { payStatus: next, payer: 'Sender', codAmount: '' });
+            }}>
             <option value="NotPaid">{t.eomUnpaid}</option>
             <option value="Paid">{t.eomPaid}</option>
           </select>
@@ -622,10 +638,11 @@ function PackageCard({
 
         {row.payStatus === 'NotPaid' && (
           <div>
-            <label className="ap-mini-label">{t.eomCodAmount}</label>
+            <label className="ap-mini-label">{row.svcIncluded ? t.cgoPriceAllIn : t.eomCodAmount}</label>
             <input className={`ap-input${errors.codAmount ? ' ap-input--err' : ''}`} type="number" min="0" step="0.01"
               value={row.codAmount} onChange={e => onChange({ codAmount: e.target.value })} placeholder="0.00" />
             {errors.codAmount && <div className="ap-err">{errors.codAmount}</div>}
+            {row.svcIncluded && !errors.codAmount && <div className="ap-hint" style={{ margin: '4px 0 0' }}>{t.cgoPriceAllInHint}</div>}
           </div>
         )}
         <div>
