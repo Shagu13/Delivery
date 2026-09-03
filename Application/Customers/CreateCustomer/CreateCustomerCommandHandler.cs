@@ -28,20 +28,40 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
         // Phone is no longer unique — one owner may run several businesses on the same
         // number. Uniqueness now lives on email and business name instead.
 
+        // 0. Walk-in link: an admin may have registered this person at the office with no
+        //    account (Customer.ApplicationUserId == null) via the "Add Package" flow. When
+        //    the same person now signs up, attach this login to that existing row — matched
+        //    on phone + ID number — instead of creating a duplicate. The office-entered
+        //    details (name, business, address) are kept as-is.
+        Customer? walkIn = null;
+        if (!string.IsNullOrWhiteSpace(dto.IdNumber))
+        {
+            var idNum = dto.IdNumber.Trim();
+            walkIn = await _context.Customers.FirstOrDefaultAsync(
+                c => c.ApplicationUserId == null
+                  && c.PhoneNumber == dto.PhoneNumber
+                  && c.IdNumber == idNum,
+                cancellationToken);
+        }
+
         // 1. Business name must be unique. It isn't an Identity field, so check it
         //    explicitly and surface a clean, translatable error (keyed by a sentinel
-        //    code the client maps) rather than letting the unique index throw.
-        var businessNameExists = await _context.Customers
-            .AnyAsync(c => c.BusinessName == dto.BusinessName, cancellationToken);
-
-        if (businessNameExists)
+        //    code the client maps) rather than letting the unique index throw. Skipped on
+        //    the walk-in link path — that row already owns its business name.
+        if (walkIn is null)
         {
-            throw new ValidationException(new[]
+            var businessNameExists = await _context.Customers
+                .AnyAsync(c => c.BusinessName == dto.BusinessName, cancellationToken);
+
+            if (businessNameExists)
             {
-                new ValidationFailure(
-                    "DuplicateBusinessName",
-                    "This business name is already registered.")
-            });
+                throw new ValidationException(new[]
+                {
+                    new ValidationFailure(
+                        "DuplicateBusinessName",
+                        "This business name is already registered.")
+                });
+            }
         }
 
         // 2. Email uniqueness is enforced natively by Identity below (RequireUniqueEmail
@@ -79,6 +99,18 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
                     .Where(t => t.IsActive && t.Host.ToLower() == host)
                     .Select(t => (Guid?)t.Id)
                     .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        // Walk-in link path: attach the new login to the existing office-created row and
+        // keep its details. Only fill the tenant if the row had none and one was resolved.
+        if (walkIn is not null)
+        {
+            walkIn.ApplicationUserId = user.Id;
+            if (walkIn.TenantId is null && tenantId is not null)
+                walkIn.TenantId = tenantId;
+
+            await _context.SaveChangesAsync(cancellationToken);
+            return walkIn.Id;
         }
 
         // Create the domain Customer entity

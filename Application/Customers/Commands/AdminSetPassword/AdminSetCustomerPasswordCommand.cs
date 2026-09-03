@@ -57,6 +57,11 @@ public sealed class AdminSetCustomerPasswordCommandHandler
             .FirstOrDefaultAsync(c => c.Id == request.CustomerId, cancellationToken)
             ?? throw new NotFoundException("Customer", request.CustomerId);
 
+        if (customer.ApplicationUserId is null)
+            throw new ConflictException(
+                "This customer was registered at the office and has no login account yet. " +
+                "A password can be set once they register.");
+
         var user = await _userManager.FindByIdAsync(customer.ApplicationUserId)
             ?? throw new NotFoundException(nameof(ApplicationUser), customer.ApplicationUserId);
 

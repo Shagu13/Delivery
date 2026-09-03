@@ -22,7 +22,8 @@ export interface CustomerServicePricing {
 // wins first, then the customer-specific tier by territory (capital → city → generic
 // district), falling back to the district's own configured price. Returns null when
 // nothing is configured (leaves the field empty).
-function resolveServicePrice(d: District, cp?: CustomerServicePricing | null): number | null {
+// Exported so the "Add Package" modal shares this exact waterfall (see client/CLAUDE.md §7).
+export function resolveServicePrice(d: District, cp?: CustomerServicePricing | null): number | null {
     if (cp) {
         const special = cp.specialPrices?.find(s => s.districtId === d.id);
         if (special) return special.price;

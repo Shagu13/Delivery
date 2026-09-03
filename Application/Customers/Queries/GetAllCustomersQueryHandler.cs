@@ -40,7 +40,8 @@ public sealed class GetAllCustomersQueryHandler
                 c.BusinessName.ToLower().Contains(term)        ||
                 c.City.ToLower().Contains(term)                ||
                 c.PhoneNumber.Contains(term)                   ||
-                c.ApplicationUser.Email!.ToLower().Contains(term));
+                (c.IdNumber != null && c.IdNumber.ToLower().Contains(term)) ||
+                (c.ApplicationUser != null && c.ApplicationUser.Email!.ToLower().Contains(term)));
         }
 
         var total = await query.CountAsync(cancellationToken);
@@ -59,7 +60,8 @@ public sealed class GetAllCustomersQueryHandler
                 c.City,
                 c.District,
                 c.Address,
-                c.ApplicationUser.Email!,
+                c.ApplicationUser != null ? c.ApplicationUser.Email! : "",
+                c.ApplicationUserId != null,
                 c.IsActive,
                 c.CreatedAt,
                 c.CompanyServiceCapitalPrice,

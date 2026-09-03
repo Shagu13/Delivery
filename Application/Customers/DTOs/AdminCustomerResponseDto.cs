@@ -14,7 +14,10 @@ public sealed record AdminCustomerResponseDto(
     string   City,
     string   District,
     string   Address,
+    /// <summary>Login email. Empty string for a walk-in customer with no account yet.</summary>
     string   Email,
+    /// <summary>False for a walk-in customer an admin registered at the office who has no login yet.</summary>
+    bool     HasAccount,
     bool     IsActive,
     DateTime CreatedAt,
     // Admin-only pricing tiers

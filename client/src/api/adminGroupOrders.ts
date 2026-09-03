@@ -400,6 +400,80 @@ export async function groupAndWarehouseStandalone(
 export const markPickedUp = (token: string, id: string) => groupOrderAction(token, id, 'picked-up');
 export const markDeliveredToWarehouse = (token: string, id: string) => groupOrderAction(token, id, 'delivered-to-warehouse');
 
+// ── Admin "Add Package" — office walk-in customer ──────────────────────────────
+
+/** One package row in the Add Package modal. Maps to the backend OrderItemRequest. */
+export interface WalkInPackageInput {
+    orderType: OrderType;
+    recipientName: string;
+    recipientPhone: string;
+    recipientCity: string;
+    recipientDistrict: string;
+    recipientAddress: string;
+    description: string | null;
+    isFragile: boolean;
+    productPaymentStatus: PaymentStatus;
+    whoPaysForCompanyService: ServicePayer;
+    amountToCollectForPackage: number | null;
+    companyServicePrice: number;
+    isCompanyServicePriceIncluded: boolean;
+    /** Return orders only — where the courier collects the parcel. */
+    returnPickupCity: string | null;
+    returnPickupDistrict: string | null;
+    returnPickupAddress: string | null;
+}
+
+/** Typed details for a walk-in customer with no account. */
+export interface WalkInCustomerInput {
+    firstName: string;
+    lastName: string;
+    idNumber: string;
+    businessName: string;
+    phoneNumber: string;
+    city: string;
+    district: string;
+    address: string;
+}
+
+export interface CreateWalkInOrderRequest {
+    /** Set when the admin picked a suggested existing customer. */
+    existingCustomerId: string | null;
+    /** Set when the admin typed the details manually. Exactly one of the two is non-null. */
+    newCustomer: WalkInCustomerInput | null;
+    orders: WalkInPackageInput[];
+}
+
+export interface CreateWalkInOrderResult {
+    groupOrderId: string;
+    senderBusinessName: string;
+    orders: { orderId: string; trackingNumber: string; recipientName: string }[];
+}
+
+export class WalkInOrderError extends Error {
+    constructor(
+        public readonly status: number,
+        message: string,
+        public readonly errors?: Record<string, string[]>,
+    ) { super(message); this.name = 'WalkInOrderError'; }
+}
+
+/** Admin/Operator: register packages for an office walk-in customer (resolves or creates the
+ *  customer, then creates the packages straight into the warehouse-accepted state). */
+export async function createWalkInOrder(
+    token: string, data: CreateWalkInOrderRequest,
+): Promise<CreateWalkInOrderResult> {
+    const res = await fetch(`${BASE}/walk-in`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new WalkInOrderError(res.status, body?.title ?? `Request failed (${res.status})`, body?.errors);
+    }
+    return res.json();
+}
+
 
 export interface CourierPickupHistory {
     id: string;

@@ -64,8 +64,14 @@ public class Customer
     public Tenant? Tenant   { get; set; }
 
     // ── Identity link ────────────────────────────────────────────────────────
-    public required string ApplicationUserId { get; set; }
-    public ApplicationUser ApplicationUser   { get; set; } = null!;
+    /// <summary>
+    /// The backing login account. Null for a customer an admin registered at the office
+    /// (walk-in) who has no account yet — see the office "Add Package" flow. When such a
+    /// person later registers, the new login is linked to this same row (matched on
+    /// PhoneNumber + IdNumber) rather than creating a duplicate.
+    /// </summary>
+    public string?          ApplicationUserId { get; set; }
+    public ApplicationUser?  ApplicationUser   { get; set; }
 
     // ── Per-district negotiated price exceptions ─────────────────────────────
     /// <summary>

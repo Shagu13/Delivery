@@ -5,6 +5,7 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
+import { AddPackageModal } from './AddPackageModal';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
 import { fetchGroupOrders,
     fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup, mergeGroupOrders, moveOrderToGroup,
@@ -136,6 +137,7 @@ export function AdminDashboard() {
   const { user, signOut, token } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
 
   const tabParam    = searchParams.get('tab') ?? '';
@@ -186,6 +188,7 @@ export function AdminDashboard() {
   };
 
   const [showCreateCourier, setShowCreateCourier] = useState(false);
+  const [showAddPackage, setShowAddPackage] = useState(false);
   const [editCourier, setEditCourier] = useState<Courier | null>(null);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -546,14 +549,25 @@ export function AdminDashboard() {
             {activeView === 'operators' && t.topbarOperators}
             {activeView === 'orderSearch' && t.osTitle}
           </span>
-          {activeView === 'couriers' && (
-            <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              {t.addCourier}
-            </button>
-          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* Persistent office "Add Package" — Admin/Operator, from any view. */}
+            {!isTenant && (
+              <button className="btn-primary" onClick={() => setShowAddPackage(true)}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                {t.addPackage}
+              </button>
+            )}
+            {activeView === 'couriers' && (
+              <button className="btn-primary" onClick={() => setShowCreateCourier(true)}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                {t.addCourier}
+              </button>
+            )}
+          </div>
         </div>
         <main className="dashboard__content">
           {activeView === 'overview'  && <AdminOverview token={token ?? ''} isOperator={isOperator} />}
@@ -604,6 +618,19 @@ export function AdminDashboard() {
         open={showCreateCourier}
         onClose={() => setShowCreateCourier(false)}
         onCreated={handleCourierCreated}
+      />
+
+      <AddPackageModal
+        key={showAddPackage ? 'ap-open' : 'ap-closed'}
+        open={showAddPackage}
+        onClose={() => setShowAddPackage(false)}
+        onCreated={(result) => {
+          setShowAddPackage(false);
+          const n = result.orders.length;
+          setToast(`${t.apCreatedToast} (${n})`);
+          setTimeout(() => setToast(null), 4000);
+          void queryClient.invalidateQueries({ queryKey: ['admin'] });
+        }}
       />
 
       <EditCourierModal

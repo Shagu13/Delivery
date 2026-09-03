@@ -5,6 +5,7 @@ using Application.Common.Models;
 using Application.Courier.Queries;
 using Application.GroupOrders.Commands.AcceptGroupOrder;
 using Application.GroupOrders.Commands.AcceptGroupOrderInWarehouse;
+using Application.GroupOrders.Commands.AdminCreateWalkInOrder;
 using Application.GroupOrders.Commands.AssignCourierToGroupOrder;
 using Application.GroupOrders.Commands.CancelGroupOrder;
 using Application.GroupOrders.Commands.CancelGroupOrderByAdmin;
@@ -145,6 +146,46 @@ public sealed class GroupOrdersController : BaseController
                 CustomerId:   customerId,
                 Orders:       MapOrders(request.Orders)),
             ct);
+
+        var response = new CreateGroupOrderResponse(
+            GroupOrderId: result.GroupOrderId,
+            SenderBusinessName: result.SenderBusinessName,
+            Orders: result.Orders
+                .Select(o => new OrderTrackingResponse(o.OrderId, o.TrackingNumber, o.RecipientName))
+                .ToList()
+        );
+
+        return Ok(response);
+    }
+
+    // ── POST /api/grouporders/walk-in  (Admin/Operator — office "Add Package" for a
+    //    walk-in customer, with or without an account) ─────────────────────────────────
+    [HttpPost("walk-in")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(CreateGroupOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> CreateWalkInOrder(
+        [FromBody] AdminCreateWalkInOrderRequest request,
+        CancellationToken ct)
+    {
+        var command = new AdminCreateWalkInOrderCommand(
+            new AdminCreateWalkInOrderDto(
+                ExistingCustomerId: request.ExistingCustomerId,
+                NewCustomer: request.NewCustomer is null
+                    ? null
+                    : new WalkInCustomerDto(
+                        request.NewCustomer.FirstName,
+                        request.NewCustomer.LastName,
+                        request.NewCustomer.IdNumber,
+                        request.NewCustomer.BusinessName,
+                        request.NewCustomer.PhoneNumber,
+                        request.NewCustomer.City,
+                        request.NewCustomer.District,
+                        request.NewCustomer.Address),
+                Orders: MapOrders(request.Orders)));
+
+        var result = await Sender.Send(command, ct);
 
         var response = new CreateGroupOrderResponse(
             GroupOrderId: result.GroupOrderId,

@@ -115,6 +115,9 @@ export interface AdminCustomer extends Customer {
   tenantId: string | null;
   /** Display name of the owning tenant (null when root). */
   tenantDisplayName: string | null;
+  /** False for a walk-in customer an admin registered at the office who has no login yet.
+   *  Their `email` is an empty string until they register. */
+  hasAccount: boolean;
 }
 
 export type { PagedResult } from '../types/paging';

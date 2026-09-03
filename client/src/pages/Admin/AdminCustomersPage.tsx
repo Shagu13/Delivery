@@ -33,6 +33,18 @@ function initials(businessName: string): string {
     : (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
+/** Marks a walk-in customer an admin registered at the office who has no login yet. */
+function NoAccountTag({ label }: { label: string }) {
+  return (
+    <span style={{
+      display: 'inline-block', marginLeft: 6, fontSize: '0.6rem', fontWeight: 700,
+      textTransform: 'uppercase', letterSpacing: '0.04em', padding: '1px 6px', borderRadius: 100,
+      background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)',
+      border: '1px solid var(--color-border)', verticalAlign: 'middle',
+    }}>{label}</span>
+  );
+}
+
 function PricingPills({ c }: { c: AdminCustomer }) {
   const { t } = useLanguage();
   const pill = (set: boolean, label: string, value: number | null) => (
@@ -121,7 +133,10 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
         { label: t.acupPricesBtn, onClick: () => setPriceCustomer(c) },
         { label: t.acupSpecialPricesBtn, onClick: () => setSpecialPricesCustomer(c) },
         { label: t.acupBankAccountsBtn, onClick: () => setBankAccountsCustomer(c) },
-        { label: t.acupSetPwd, onClick: () => setPwdCustomer(c) },
+      );
+      // Walk-in customers registered at the office have no login yet — no password to set.
+      if (c.hasAccount) items.push({ label: t.acupSetPwd, onClick: () => setPwdCustomer(c) });
+      items.push(
         {
           label: c.isActive ? t.acupDeactivate : t.acupActivate,
           onClick: () => onToggleClick(c),
@@ -179,14 +194,17 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
                       <div className="acp-business-cell">
                         <div className="acp-avatar">{initials(c.businessName)}</div>
                         <div>
-                          <div className="acp-primary">{c.businessName}</div>
+                          <div className="acp-primary">
+                            {c.businessName}
+                            {!c.hasAccount && <NoAccountTag label={t.apNoAccountBadge} />}
+                          </div>
                           <div className="acp-secondary">{c.firstName} {c.lastName}</div>
                         </div>
                       </div>
                     </td>
                     <td>
                       <div className="acp-primary">{c.phoneNumber}</div>
-                      <div className="acp-secondary">{c.email}</div>
+                      <div className="acp-secondary">{c.email || '—'}</div>
                     </td>
                     <td>
                       <div className="acp-primary">{c.city}</div>
@@ -217,7 +235,10 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
                   <div className="acp-card__id">
                     <div className="acp-avatar">{initials(c.businessName)}</div>
                     <div className="acp-card__name">
-                      <div className="acp-card__business">{c.businessName}</div>
+                      <div className="acp-card__business">
+                        {c.businessName}
+                        {!c.hasAccount && <NoAccountTag label={t.apNoAccountBadge} />}
+                      </div>
                       <div className="acp-card__person">{c.firstName} {c.lastName}</div>
                     </div>
                   </div>
@@ -233,7 +254,7 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
                   </div>
                   <div className="acp-card__row">
                     <span className="acp-card__row-label">{t.emailAddress}</span>
-                    <span className="acp-card__row-value">{c.email}</span>
+                    <span className="acp-card__row-value">{c.email || '—'}</span>
                   </div>
                   <div className="acp-card__row">
                     <span className="acp-card__row-label">{t.city} / {t.district}</span>

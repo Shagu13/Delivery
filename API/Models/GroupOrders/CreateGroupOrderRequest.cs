@@ -22,6 +22,28 @@ public sealed record AddOrdersToGroupOrderRequest(
     IReadOnlyList<OrderItemRequest> Orders
 );
 
+/// <summary>
+/// Body for POST /api/grouporders/walk-in — the admin "Add Package" flow for an office
+/// walk-in customer. Supply <see cref="ExistingCustomerId"/> when the admin picked a
+/// suggested customer, otherwise <see cref="NewCustomer"/> with the typed details.
+/// </summary>
+public sealed record AdminCreateWalkInOrderRequest(
+    Guid? ExistingCustomerId,
+    WalkInCustomerRequest? NewCustomer,
+    IReadOnlyList<OrderItemRequest> Orders
+);
+
+public sealed record WalkInCustomerRequest(
+    string FirstName,
+    string LastName,
+    string IdNumber,
+    string BusinessName,
+    string PhoneNumber,
+    string City,
+    string District,
+    string Address
+);
+
 public sealed record OrderItemRequest(
     string RecipientName,
     string RecipientPhone,

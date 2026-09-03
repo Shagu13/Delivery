@@ -79,6 +79,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             // Phone is no longer unique — one owner may run several businesses on the same
             // number. Email (via Identity) and business name are the unique account keys.
             e.HasIndex(c => c.PhoneNumber);
+            // Looked up together with PhoneNumber when an admin registers a walk-in
+            // customer / links a later account (Add Package flow).
+            e.HasIndex(c => c.IdNumber);
             e.HasIndex(c => c.BusinessName).IsUnique();
             e.HasIndex(c => c.City);
             e.HasIndex(c => c.CreatedAt);

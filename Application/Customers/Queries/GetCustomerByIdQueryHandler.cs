@@ -77,7 +77,7 @@ internal static class CustomerProjection
         c.City,
         c.District,
         c.Address,
-        c.ApplicationUser.Email!,
+        c.ApplicationUser?.Email ?? "",
         c.IsActive,
         c.CreatedAt,
         c.CompanyServiceCapitalPrice,

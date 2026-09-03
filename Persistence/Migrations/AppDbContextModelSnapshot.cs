@@ -241,7 +241,6 @@ namespace Persistence.Migrations
                         .HasColumnType("nvarchar(250)");
 
                     b.Property<string>("ApplicationUserId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("BusinessName")
@@ -304,7 +303,8 @@ namespace Persistence.Migrations
                     b.HasIndex("Address");
 
                     b.HasIndex("ApplicationUserId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[ApplicationUserId] IS NOT NULL");
 
                     b.HasIndex("BusinessName")
                         .IsUnique();
@@ -316,6 +316,8 @@ namespace Persistence.Migrations
                     b.HasIndex("District");
 
                     b.HasIndex("FirstName");
+
+                    b.HasIndex("IdNumber");
 
                     b.HasIndex("LastName");
 
@@ -1519,8 +1521,7 @@ namespace Persistence.Migrations
                     b.HasOne("Domain.ApplicationUser", "ApplicationUser")
                         .WithOne()
                         .HasForeignKey("Domain.Customer", "ApplicationUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Domain.Tenant", "Tenant")
                         .WithMany("Customers")
