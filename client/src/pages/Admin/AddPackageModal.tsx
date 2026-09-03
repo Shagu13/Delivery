@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
-import { GeorgianPhoneField, sanitizeGeorgianMobile, isValidGeorgianMobile } from '../../components/ui/GeorgianPhoneField';
+import { GeorgianPhoneField, isValidGeorgianMobile } from '../../components/ui/GeorgianPhoneField';
 import { getCustomers, getCustomerById } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
 import type { District } from '../../api/cities';
