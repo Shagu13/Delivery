@@ -36,11 +36,12 @@ internal static class CustomerSettlementProjection
     /// admin-cancelled after reaching a delivery courier) — the sender still owes their fee.
     /// </summary>
     private static async Task<List<Order>> LoadActiveAsync(
-        IAppDbContext context, Guid customerId, CancellationToken ct) =>
+        IAppDbContext context, Guid customerId, bool excludeWalkIn, CancellationToken ct) =>
         await context.Orders
             .AsNoTracking()
             .Include(o => o.GroupOrder)
             .Where(o => (o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId)
+                     && (!excludeWalkIn || !o.IsWalkIn)
                      && (!CancelledStatuses.Contains(o.Status)
                          // Billable failed delivery (see OrderFinance.IsBillableFailedDelivery):
                          // an explicit (non-warehouse) CancellationReason was recorded when the
@@ -52,11 +53,16 @@ internal static class CustomerSettlementProjection
                              && o.CancellationReason != CancellationReason.DidNotWant)))
             .ToListAsync(ct);
 
-    /// <summary>The customer's per-batch invoice rows, newest first, optionally narrowed to a placement day.</summary>
+    /// <summary>
+    /// The customer's per-batch invoice rows, newest first, optionally narrowed to a placement day.
+    /// <paramref name="excludeWalkIn"/> drops staff-created walk-in office packages — set by the
+    /// customer-facing "my" read; the admin read keeps them so they can still be settled.
+    /// </summary>
     public static async Task<IReadOnlyList<CustomerSettlementDto>> ForCustomerAsync(
-        IAppDbContext context, Guid customerId, string businessName, DateOnly? date, CancellationToken ct)
+        IAppDbContext context, Guid customerId, string businessName, DateOnly? date,
+        CancellationToken ct, bool excludeWalkIn = false)
     {
-        var active = await LoadActiveAsync(context, customerId, ct);
+        var active = await LoadActiveAsync(context, customerId, excludeWalkIn, ct);
         var rows   = BuildRows(active, customerId, businessName);
 
         if (date is DateOnly d)

@@ -34,10 +34,11 @@ public sealed class GetMyCustomerStatisticsQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CustomerUserId, cancellationToken)
             ?? throw new NotFoundException("Customer", request.CustomerUserId);
 
-        // Every order the customer owns, via either ownership path (see CLAUDE.md).
+        // Every order the customer owns, via either ownership path (see CLAUDE.md), except
+        // staff-created walk-in office packages which never count toward a customer's own stats.
         var orders = await _context.Orders
             .AsNoTracking()
-            .Where(o => o.GroupOrder!.CustomerId == customer.Id || o.CustomerId == customer.Id)
+            .Where(o => (o.GroupOrder!.CustomerId == customer.Id || o.CustomerId == customer.Id) && !o.IsWalkIn)
             .Select(o => new
             {
                 o.Status,

@@ -31,6 +31,7 @@ public sealed class GetMyCustomerSettlementsQueryHandler
             ?? throw new NotFoundException("Customer", request.CustomerUserId);
 
         return await CustomerSettlementProjection.ForCustomerAsync(
-            _context, customer.Id, customer.BusinessName, request.Date, cancellationToken);
+            _context, customer.Id, customer.BusinessName, request.Date, cancellationToken,
+            excludeWalkIn: true);
     }
 }

@@ -46,6 +46,15 @@ public class GroupOrder
     /// </summary>
     public OrderStatus Status { get; set; } = OrderStatus.Pending;
 
+    /// <summary>
+    /// True when this batch was created by staff through the admin "+ Add Package"
+    /// walk-in flow rather than placed by the customer. The batch and its orders stay
+    /// fully real for admin, courier, and finance purposes — this flag only hides them
+    /// from the customer-facing portal so office packages never appear in a customer's
+    /// own history. Copied onto every child <see cref="Order.IsWalkIn"/>.
+    /// </summary>
+    public bool IsWalkIn { get; set; } = false;
+
     // ── Timestamps ───────────────────────────────────────────────────────────
     public DateTime  CreatedAt              { get; set; } = CustomTime.Now;
     public DateTime? AcceptedAt             { get; set; }

@@ -30,8 +30,12 @@ public sealed class GetMyPaymentReceiptsQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CustomerUserId, ct)
             ?? throw new NotFoundException("Customer", request.CustomerUserId);
 
+        // Skip receipts that only settle staff-created walk-in office packages — those are
+        // never part of the customer's own portal. Admins still see them via the admin read.
         var query = PaymentReceiptQueries.FilterByPaidAt(
-            PaymentReceiptQueries.Base(_context).Where(p => p.CustomerId == customer.Id),
+            PaymentReceiptQueries.Base(_context)
+                .Where(p => p.CustomerId == customer.Id)
+                .Where(p => p.Allocations.Any(a => a.Order == null || !a.Order.IsWalkIn)),
             request.Date, request.Monthly, request.From, request.To)
             .OrderByDescending(p => p.PaidAt);
 

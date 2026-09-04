@@ -73,10 +73,11 @@ public sealed class GetSettlementInvoiceDataQueryHandler
         bool     isReturn;
         DateTime createdAt;
 
+        // Walk-in office batches are not part of the customer's own portal — treat as not found.
         Domain.GroupOrder? group = await _context.GroupOrders
             .AsNoTracking()
             .Include(g => g.Orders)
-            .FirstOrDefaultAsync(g => g.Id == request.SettlementId && g.CustomerId == customer.Id, cancellationToken);
+            .FirstOrDefaultAsync(g => g.Id == request.SettlementId && g.CustomerId == customer.Id && !g.IsWalkIn, cancellationToken);
 
         if (group is not null)
         {
@@ -88,7 +89,7 @@ public sealed class GetSettlementInvoiceDataQueryHandler
         {
             Domain.Order order = await _context.Orders
                 .AsNoTracking()
-                .FirstOrDefaultAsync(o => o.Id == request.SettlementId && o.CustomerId == customer.Id, cancellationToken)
+                .FirstOrDefaultAsync(o => o.Id == request.SettlementId && o.CustomerId == customer.Id && !o.IsWalkIn, cancellationToken)
                 ?? throw new NotFoundException("Settlement", request.SettlementId);
 
             allOrders = [order];

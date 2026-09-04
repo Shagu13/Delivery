@@ -38,7 +38,10 @@ public sealed class GetMyOrderFinanceLinesQueryHandler
             .FirstOrDefaultAsync(c => c.ApplicationUserId == request.CustomerUserId, ct)
             ?? throw new NotFoundException("Customer", request.CustomerUserId);
 
-        var query = OrderFinanceQueries.ForCustomer(_context, customer.Id);
+        // Staff-created walk-in office packages never appear in the customer's own finance
+        // page; admins still see and settle them through GetCustomerOrderFinanceLinesQuery.
+        var query = OrderFinanceQueries.ForCustomer(_context, customer.Id)
+                                       .Where(o => !o.IsWalkIn);
 
         if (request.PaymentsMode)
             query = OrderFinanceQueries.FilterByCodPaidAt(query, request.Date, request.Monthly, request.From, request.To)

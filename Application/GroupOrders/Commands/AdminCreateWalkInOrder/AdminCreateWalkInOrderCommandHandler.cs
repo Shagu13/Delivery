@@ -44,13 +44,17 @@ public sealed class AdminCreateWalkInOrderCommandHandler
         {
             var nc     = dto.NewCustomer!;   // guaranteed by the validator
             var phone  = nc.PhoneNumber.Trim();
-            var idNum  = nc.IdNumber.Trim();
             var biz    = nc.BusinessName.Trim();
+            // ID number is optional for a walk-in — normalize a blank entry to null so it
+            // matches the Domain's "no ID" state and the registration-link check.
+            string? idNum = string.IsNullOrWhiteSpace(nc.IdNumber) ? null : nc.IdNumber.Trim();
 
-            // Manual entry: reuse an existing customer only on an exact phone + ID number
-            // + business name match; otherwise create a new account-less row.
+            // Manual entry: reuse an existing customer on an exact phone + business-name
+            // match, additionally requiring the ID number to match when one was entered.
+            // (BusinessName is globally unique, so phone + business is already a strong key.)
             customer = await _context.Customers.FirstOrDefaultAsync(
-                c => c.PhoneNumber == phone && c.IdNumber == idNum && c.BusinessName == biz,
+                c => c.PhoneNumber == phone && c.BusinessName == biz
+                  && (idNum == null || c.IdNumber == idNum),
                 cancellationToken);
 
             if (customer is null)
@@ -95,6 +99,9 @@ public sealed class AdminCreateWalkInOrderCommandHandler
 
         foreach (var order in built)
         {
+            // Staff-created office package — hidden from the customer's own portal.
+            order.IsWalkIn = true;
+
             if (order.OrderType == OrderType.Return)
             {
                 // Standalone Return — normal flow, a pickup courier is assigned afterwards.
@@ -129,6 +136,7 @@ public sealed class AdminCreateWalkInOrderCommandHandler
                 PickUpAddress          = customer.Address,
                 NumberOfPackages       = batchOrders.Count,
                 Status                 = OrderStatus.AdminAcceptedOrderInWareHouse,
+                IsWalkIn               = true,
                 // The batch skipped the pickup leg — stamp the timestamps as "now" so the
                 // pickup trace isn't blank on the admin/customer views.
                 CreatedAt              = now,

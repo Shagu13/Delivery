@@ -22,8 +22,10 @@ public sealed class GetCustomerGroupOrdersQueryHandler
         GetCustomerGroupOrdersQuery request,
         CancellationToken cancellationToken)
     {
+        // Walk-in batches created by staff at the office are never shown in the customer's
+        // own portal (see GroupOrder.IsWalkIn).
         var groupOrders = await _context.GroupOrders
-            .Where(g => g.CustomerId == request.CustomerId)
+            .Where(g => g.CustomerId == request.CustomerId && !g.IsWalkIn)
             .Include(g => g.Orders)
             .Include(g => g.Courier)
             .AsNoTracking()
@@ -35,7 +37,7 @@ public sealed class GetCustomerGroupOrdersQueryHandler
         // as its own dashboard card. (Exchange orders live inside their GroupOrder and
         // already come through above.)
         var standaloneReturns = await _context.Orders
-            .Where(o => o.CustomerId == request.CustomerId && o.GroupOrderId == null)
+            .Where(o => o.CustomerId == request.CustomerId && o.GroupOrderId == null && !o.IsWalkIn)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 

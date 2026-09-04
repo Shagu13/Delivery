@@ -862,6 +862,11 @@ public sealed class CancelOrderByCustomerCommandHandler : IRequestHandler<Cancel
         if (!ownsViaGroup && !ownsDirectly)
             throw new ForbiddenException("You can only cancel your own orders.");
 
+        // Staff-created walk-in office packages are not part of the customer's portal —
+        // they can't see them and can't act on them (see Order.IsWalkIn).
+        if (order.IsWalkIn)
+            throw new ForbiddenException("You can only cancel your own orders.");
+
         // Cancellable per-package up until the parcel is handed to a courier for
         // last-mile delivery (CourierAssignedToDeliver onward is locked).
         if (!CustomerOrderActionPolicy.EditableOrCancellable.Contains(order.Status))

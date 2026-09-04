@@ -181,6 +181,17 @@ public class Order
     /// </summary>
     public string? ExternalReference { get; set; }
 
+    /// <summary>
+    /// True when this order was created by staff through the admin "+ Add Package"
+    /// walk-in flow rather than placed by the customer. The order is still fully real
+    /// for admin, courier, and finance/settlement purposes — this flag only hides it
+    /// from the customer-facing portal (dashboard, statistics, "my" finance/settlement
+    /// reads) so office packages never appear in a customer's own history. Mirrored
+    /// from <see cref="GroupOrder.IsWalkIn"/> onto every child order, and set directly
+    /// on standalone walk-in Returns.
+    /// </summary>
+    public bool IsWalkIn { get; set; } = false;
+
     // ── Timestamps ───────────────────────────────────────────────────────────
     public DateTime  CreatedAt                { get; set; } = CustomTime.Now;
 

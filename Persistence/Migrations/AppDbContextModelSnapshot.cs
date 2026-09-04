@@ -549,6 +549,9 @@ namespace Persistence.Migrations
                     b.Property<DateTime?>("DeliveredToWarehouseAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsWalkIn")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Note")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -755,6 +758,9 @@ namespace Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsFragile")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsWalkIn")
                         .HasColumnType("bit");
 
                     b.Property<double?>("Latitude")

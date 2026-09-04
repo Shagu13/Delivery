@@ -197,15 +197,15 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
     // Customer
     if (!selected) {
       const ce: Partial<Record<keyof CustForm, string>> = {};
+      // LastName, IdNumber and Address are optional for a walk-in customer — see
+      // AdminCreateWalkInOrderCommandValidator. IdNumber left blank just means no
+      // auto-link/dedup on a later self-registration.
       if (!cust.firstName.trim())    ce.firstName    = t.errFirstNameRequired;
-      if (!cust.lastName.trim())     ce.lastName     = t.errLastNameRequired;
-      if (!cust.idNumber.trim())     ce.idNumber     = t.apErrIdNumberRequired;
       if (!cust.businessName.trim()) ce.businessName = t.errBusinessNameRequired;
       if (!cust.phoneNumber.trim())  ce.phoneNumber  = t.errPhoneRequired;
       else if (!isValidGeorgianMobile(cust.phoneNumber)) ce.phoneNumber = t.cgoErrInvalidPhone;
       if (!cust.city.trim())         ce.city         = t.errCityRequired;
       if (!cust.district.trim())     ce.district     = t.errDistrictRequired;
-      if (!cust.address.trim())      ce.address      = t.errAddressRequired;
       setCustErrors(ce);
       if (Object.keys(ce).length) ok = false;
     }
@@ -340,13 +340,13 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
               <p className="ap-hint">{t.apSearchHint}</p>
               <div className="ui-modal__row">
                 <FormField label={t.firstName} value={cust.firstName} onChange={setCF('firstName')} error={custErrors.firstName} />
-                <FormField label={t.lastName}  value={cust.lastName}  onChange={setCF('lastName')}  error={custErrors.lastName} />
+                <FormField label={`${t.lastName} ${t.cgoDescOptional}`} value={cust.lastName} onChange={setCF('lastName')} error={custErrors.lastName} />
               </div>
               <FormField label={t.businessName} value={cust.businessName} onChange={setCF('businessName')} error={custErrors.businessName} />
               <div className="ui-modal__row">
                 <div className="ap-suggest-wrap">
                   <FormField
-                    label={t.idNumber}
+                    label={t.custIdNumberOpt}
                     value={cust.idNumber}
                     onChange={setCF('idNumber')}
                     error={custErrors.idNumber}
@@ -391,7 +391,7 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
                 onDistrictChange={v => { setCust(f => ({ ...f, district: v })); setCustErrors(p => ({ ...p, district: undefined })); }}
                 cityError={custErrors.city} districtError={custErrors.district}
               />
-              <FormField label={t.streetAddress} value={cust.address} onChange={setCF('address')} error={custErrors.address} />
+              <FormField label={`${t.streetAddress} ${t.cgoDescOptional}`} value={cust.address} onChange={setCF('address')} error={custErrors.address} />
             </>
           )}
 

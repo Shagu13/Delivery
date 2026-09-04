@@ -19,13 +19,16 @@ public sealed class AdminCreateWalkInOrderCommandValidator
         When(x => x.Dto.NewCustomer is not null, () =>
         {
             RuleFor(x => x.Dto.NewCustomer!.FirstName).NotEmpty().MaximumLength(100);
-            RuleFor(x => x.Dto.NewCustomer!.LastName).NotEmpty().MaximumLength(100);
-            RuleFor(x => x.Dto.NewCustomer!.IdNumber).NotEmpty().MaximumLength(50);
             RuleFor(x => x.Dto.NewCustomer!.BusinessName).NotEmpty().MaximumLength(150);
             RuleFor(x => x.Dto.NewCustomer!.PhoneNumber).NotEmpty().MaximumLength(20);
             RuleFor(x => x.Dto.NewCustomer!.City).NotEmpty().MaximumLength(100);
             RuleFor(x => x.Dto.NewCustomer!.District).NotEmpty().MaximumLength(100);
-            RuleFor(x => x.Dto.NewCustomer!.Address).NotEmpty().MaximumLength(250);
+            // Optional for an office walk-in: LastName and Address are display-only here,
+            // and a blank IdNumber just means no dedup / no auto-link when the person
+            // later registers (see CreateCustomerCommandHandler).
+            RuleFor(x => x.Dto.NewCustomer!.LastName).MaximumLength(100);
+            RuleFor(x => x.Dto.NewCustomer!.IdNumber).MaximumLength(50);
+            RuleFor(x => x.Dto.NewCustomer!.Address).MaximumLength(250);
         });
 
         RuleFor(x => x.Dto.Orders)
