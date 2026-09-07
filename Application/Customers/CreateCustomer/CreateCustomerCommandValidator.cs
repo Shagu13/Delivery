@@ -21,6 +21,14 @@ public sealed class CreateCustomerCommandValidator : AbstractValidator<CreateCus
         RuleFor(x => x.Dto.District).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.Address).NotEmpty().MaximumLength(250);
 
+        // Optional map-pin coordinates
+        RuleFor(x => x.Dto.Latitude)
+            .InclusiveBetween(-90, 90)
+            .When(x => x.Dto.Latitude.HasValue);
+        RuleFor(x => x.Dto.Longitude)
+            .InclusiveBetween(-180, 180)
+            .When(x => x.Dto.Longitude.HasValue);
+
         // Login
         RuleFor(x => x.Dto.Email)
             .NotEmpty()

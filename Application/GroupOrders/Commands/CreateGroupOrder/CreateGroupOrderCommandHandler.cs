@@ -89,7 +89,7 @@ public sealed class CreateGroupOrderCommandHandler
             else
             {
                 isNewGroupOrder = true;
-                groupOrder = CreateNewBatch(dto);
+                groupOrder = CreateNewBatch(dto, customer);
 
                 foreach (var order in batchOrders)
                     groupOrder.Orders.Add(order);
@@ -129,8 +129,11 @@ public sealed class CreateGroupOrderCommandHandler
         );
     }
 
-    private GroupOrder CreateNewBatch(CreateGroupOrderDto dto)
+    private GroupOrder CreateNewBatch(CreateGroupOrderDto dto, Customer? customer)
     {
+        var (pickUpLat, pickUpLon) = PickupPin.ResolveForNewBatch(
+            customer, dto.PickUpCity, dto.PickUpDistrict, dto.PickUpAddress);
+
         var groupOrder = new GroupOrder
         {
             CustomerId         = dto.CustomerId,
@@ -145,6 +148,8 @@ public sealed class CreateGroupOrderCommandHandler
             PickUpCity         = dto.PickUpCity,
             PickUpDistrict     = dto.PickUpDistrict,
             PickUpAddress      = dto.PickUpAddress,
+            PickUpLatitude     = pickUpLat,
+            PickUpLongitude    = pickUpLon,
             Note               = dto.Note,
             NumberOfPackages   = 0,
         };

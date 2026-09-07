@@ -37,6 +37,20 @@ const en = {
   confirmPassword:    'Confirm password',
   username:           'Username',
 
+  // ── Address map pin picker ────────────────────────────────────────────────
+  mapPin:              'Set on map',
+  mapPinEdit:          'Move map pin',
+  mapPinSet:           'Location pinned on map',
+  mapPinHintCityFirst: 'Choose a city and district to enable the map',
+  mapPinModalTitle:    'Pin your address',
+  mapPinModalHint:     'Tap the map or drag the pin to your exact address. The street address fills in automatically.',
+  mapPinUse:           'Use this location',
+  mapPinLoading:       'Loading map…',
+  mapPinError:         'The map could not be loaded. You can still type the address.',
+  mapPinResolving:     'Reading address…',
+  mapPinNoAddress:     'No street address found for this point — type it manually.',
+  mapPinNoPoint:       'Drop a pin to choose a location.',
+
   // ── Placeholders ──────────────────────────────────────────────────────────
   phFirstName:        'e.g. George',
   phLastName:         'e.g. Doe',
@@ -2083,6 +2097,20 @@ const ka: typeof en = {
   password:           'პაროლი',
   confirmPassword:    'პაროლის დადასტურება',
   username:           'მომხმარებლის სახელი',
+
+  // ── Address map pin picker ────────────────────────────────────────────────
+  mapPin:              'რუკაზე მონიშვნა',
+  mapPinEdit:          'მონიშვნის გადატანა',
+  mapPinSet:           'მდებარეობა მონიშნულია რუკაზე',
+  mapPinHintCityFirst: 'რუკის ჩასართავად აირჩიეთ ქალაქი და უბანი',
+  mapPinModalTitle:    'მონიშნეთ თქვენი მისამართი',
+  mapPinModalHint:     'შეეხეთ რუკას ან გადაათრიეთ მონიშვნა ზუსტ მისამართზე. ქუჩის მისამართი შეივსება ავტომატურად.',
+  mapPinUse:           'ამ მდებარეობის გამოყენება',
+  mapPinLoading:       'რუკა იტვირთება…',
+  mapPinError:         'რუკის ჩატვირთვა ვერ მოხერხდა. მისამართის აკრეფა შეგიძლიათ ხელით.',
+  mapPinResolving:     'მისამართის ამოცნობა…',
+  mapPinNoAddress:     'ამ წერტილისთვის ქუჩის მისამართი ვერ მოიძებნა — აკრიფეთ ხელით.',
+  mapPinNoPoint:       'მდებარეობის ასარჩევად დასვით მონიშვნა.',
 
   // ── Placeholders ──────────────────────────────────────────────────────────
   phFirstName:        'მაგ. გიორგი',

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { FormField } from '../../components/ui/FormField';
+import { AddressMapField } from '../../components/ui/AddressMapField';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { adminUpdateCustomer, setCustomerTenant, CustomerApiError } from '../../api/customers';
 import type { AdminCustomer } from '../../api/customers';
@@ -12,7 +13,7 @@ import '../../components/ui/Modal.css';
 interface Props {
   customer: AdminCustomer | null;
   onClose: () => void;
-  onSaved: (patch: Pick<AdminCustomer, 'firstName' | 'lastName' | 'idNumber' | 'businessName' | 'phoneNumber' | 'city' | 'district' | 'address' | 'tenantId' | 'tenantDisplayName'>) => void;
+  onSaved: (patch: Pick<AdminCustomer, 'firstName' | 'lastName' | 'idNumber' | 'businessName' | 'phoneNumber' | 'city' | 'district' | 'address' | 'latitude' | 'longitude' | 'tenantId' | 'tenantDisplayName'>) => void;
 }
 
 interface FormState {
@@ -34,6 +35,7 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
   const [loading,  setLoading]  = useState(false);
   const [tenants,  setTenants]  = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState('');   // '' = root (dilo)
+  const [pin, setPin] = useState<{ lat: number; lon: number } | null>(null);
 
   useEffect(() => {
     if (!customer) return;
@@ -48,6 +50,9 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
       address:     customer.address,
     });
     setTenantId(customer.tenantId ?? '');
+    setPin(customer.latitude != null && customer.longitude != null
+      ? { lat: customer.latitude, lon: customer.longitude }
+      : null);
     setErrors({});
     setApiError(null);
   }, [customer]);
@@ -69,6 +74,7 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
     setForm(f => ({ ...f, [field]: value }));
     setErrors(e => ({ ...e, [field]: undefined }));
     setApiError(null);
+    setPin(null);   // pin no longer matches the new area
   };
 
   const validate = (): boolean => {
@@ -97,6 +103,8 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
         city:        form.city.trim(),
         district:    form.district.trim(),
         address:     form.address.trim(),
+        latitude:    pin?.lat ?? null,
+        longitude:   pin?.lon ?? null,
       };
       await adminUpdateCustomer(customer.id, payload, token);
       // Tenant assignment is a separate admin-only command; only call it if it changed.
@@ -159,7 +167,20 @@ export function EditCustomerModal({ customer, onClose, onSaved }: Props) {
             onCityChange={setDirect('city')} onDistrictChange={setDirect('district')}
             cityError={errors.city} districtError={errors.district}
           />
-          <FormField label={t.streetAddress} value={form.address} onChange={set('address')} error={errors.address} placeholder={t.phStreetAddress} />
+          <AddressMapField
+            label={t.streetAddress}
+            placeholder={t.phStreetAddress}
+            addressValue={form.address}
+            onAddressChange={v => { setForm(f => ({ ...f, address: v })); setErrors(e => ({ ...e, address: undefined })); setApiError(null); }}
+            addressError={errors.address}
+            city={form.city}
+            district={form.district}
+            lat={pin?.lat ?? null}
+            lon={pin?.lon ?? null}
+            onPinChange={(lat, lon) => setPin(lat != null && lon != null ? { lat, lon } : null)}
+            onCityChange={setDirect('city')}
+            onDistrictChange={setDirect('district')}
+          />
 
           {/* White-label tenant assignment — only shown when tenants exist. */}
           {tenants.length > 0 && (

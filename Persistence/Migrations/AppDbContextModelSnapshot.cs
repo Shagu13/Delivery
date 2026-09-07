@@ -290,6 +290,12 @@ namespace Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -573,6 +579,12 @@ namespace Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<double?>("PickUpLatitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("PickUpLongitude")
+                        .HasColumnType("float");
 
                     b.Property<DateTime?>("PickedUpAt")
                         .HasColumnType("datetime2");

@@ -7,6 +7,9 @@ export interface RegisterCustomerRequest {
   businessName: string; phoneNumber: string;
   city: string; district: string; address: string;
   email: string; password: string; confirmPassword: string;
+  /** Exact pickup coordinates from a map pin drop (optional). */
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface CreateCustomerRequest {
@@ -17,12 +20,16 @@ export interface CreateCustomerRequest {
   isCompanyServicePriceIncludedInPrice?: boolean;
   /** White-label tenant to assign the new customer to. Omit/null = root brand (dilo). */
   tenantId?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface UpdateCustomerRequest {
   firstName: string; lastName: string; idNumber?: string;
   businessName: string; phoneNumber: string;
   city: string; district: string; address: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface ChangePasswordRequest {
@@ -89,6 +96,9 @@ export interface Customer {
   firstName: string; lastName: string; idNumber: string | null;
   businessName: string; phoneNumber: string;
   city: string; district: string; address: string;
+  /** Exact pickup coordinates from a saved map pin (null when the address was only typed). */
+  latitude: number | null;
+  longitude: number | null;
   email: string; isActive: boolean; createdAt: string;
   companyServiceCapitalPrice:  number | null;
   companyServiceCityPrice:     number | null;

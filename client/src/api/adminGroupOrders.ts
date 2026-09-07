@@ -82,6 +82,10 @@ export interface AdminGroupOrder {
     pickUpDistrict: string;
     pickUpDistrictGeo?: string;
     pickUpAddress: string;
+    /** Exact pickup coordinates from the customer's saved map pin. Present on the courier
+     *  my-pickups feed; absent on the admin group-order lists. */
+    pickUpLatitude?: number | null;
+    pickUpLongitude?: number | null;
     note: string | null;
     numberOfPackages: number;
     whenPackagePickedUpDate: string | null;

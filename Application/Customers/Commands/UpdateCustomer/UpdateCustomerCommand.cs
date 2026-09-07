@@ -16,7 +16,10 @@ public sealed record UpdateCustomerDto(
     string  PhoneNumber,
     string  City,
     string  District,
-    string  Address
+    string  Address,
+    /// <summary>Exact pick-up coordinates from a map pin drop. Null clears any saved pin.</summary>
+    double? Latitude  = null,
+    double? Longitude = null
 );
 
 // ── Command ───────────────────────────────────────────────────────────────────
@@ -42,6 +45,12 @@ public sealed class UpdateCustomerCommandValidator : AbstractValidator<UpdateCus
         RuleFor(x => x.Dto.City).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.District).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Dto.Address).NotEmpty().MaximumLength(250);
+        RuleFor(x => x.Dto.Latitude)
+            .InclusiveBetween(-90, 90)
+            .When(x => x.Dto.Latitude.HasValue);
+        RuleFor(x => x.Dto.Longitude)
+            .InclusiveBetween(-180, 180)
+            .When(x => x.Dto.Longitude.HasValue);
     }
 }
 
@@ -72,6 +81,8 @@ public sealed class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustome
         customer.City         = dto.City;
         customer.District     = dto.District;
         customer.Address      = dto.Address;
+        customer.Latitude     = dto.Latitude;
+        customer.Longitude    = dto.Longitude;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

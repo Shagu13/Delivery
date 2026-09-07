@@ -137,7 +137,9 @@ export function CourierDashboard() {
             store: go.senderBusinessName || `${go.senderFirstName} ${go.senderLastName}`.trim(),
             address: go.pickUpAddress, city: go.pickUpCity, district: go.pickUpDistrict,
             type: go.orders[0]?.orderType ?? 'Send',
-            distanceKm: distTo(lookupGeocode(go.pickUpAddress, go.pickUpDistrict, go.pickUpCity)),
+            distanceKm: distTo(go.pickUpLatitude != null && go.pickUpLongitude != null
+                ? [go.pickUpLatitude, go.pickUpLongitude]
+                : lookupGeocode(go.pickUpAddress, go.pickUpDistrict, go.pickUpCity)),
         })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fireAlert]);

@@ -33,5 +33,9 @@ public sealed record CreateCustomerDto(
     /// null, the handler resolves it to an active tenant and stamps that — so a sign-up on
     /// livoexpress.ge auto-belongs to livo. Ignored when TenantId is supplied (admin path).
     /// </summary>
-    string? RegistrationHost = null
+    string? RegistrationHost = null,
+
+    /// <summary>Exact pick-up coordinates from a map pin drop. Null when the address was only typed.</summary>
+    double? Latitude  = null,
+    double? Longitude = null
 );

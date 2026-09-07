@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { FormField } from '../../components/ui/FormField';
+import { AddressMapField } from '../../components/ui/AddressMapField';
 import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { createCustomer, CustomerApiError } from '../../api/customers';
@@ -31,8 +32,9 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
   const [priceIncluded, setPriceIncluded] = useState(false);
   const [tenants,  setTenants]  = useState<Tenant[]>([]);
   const [tenantId, setTenantId] = useState('');   // '' = root (dilo)
+  const [pin, setPin] = useState<{ lat: number; lon: number } | null>(null);
 
-  useEffect(() => { if (open) { setForm(EMPTY); setErrors({}); setApiError(null); setPriceIncluded(false); setTenantId(''); } }, [open]);
+  useEffect(() => { if (open) { setForm(EMPTY); setErrors({}); setApiError(null); setPriceIncluded(false); setTenantId(''); setPin(null); } }, [open]);
 
   // Load tenants once the modal opens so the assignment dropdown is populated.
   useEffect(() => {
@@ -51,6 +53,7 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
     setForm(f => ({ ...f, [field]: value }));
     setErrors(e => ({ ...e, [field]: undefined }));
     setApiError(null);
+    setPin(null);
   };
 
   const validate = (): boolean => {
@@ -79,7 +82,7 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
     if (!validate() || !token) return;
     setLoading(true);
     try {
-      const result = await createCustomer({ ...form, idNumber: form.idNumber.trim() || undefined, isCompanyServicePriceIncludedInPrice: priceIncluded, tenantId: tenantId || null }, token);
+      const result = await createCustomer({ ...form, idNumber: form.idNumber.trim() || undefined, isCompanyServicePriceIncludedInPrice: priceIncluded, tenantId: tenantId || null, latitude: pin?.lat ?? null, longitude: pin?.lon ?? null }, token);
       setForm(EMPTY);
       onCreated(result);
     } catch (err) {
@@ -147,7 +150,20 @@ export function CreateCustomerModal({ open, onClose, onCreated }: Props) {
             onCityChange={setDirect('city')} onDistrictChange={setDirect('district')}
             cityError={errors.city} districtError={errors.district}
           />
-          <FormField label={t.streetAddress} value={form.address} onChange={set('address')} error={errors.address} placeholder={t.phStreetAddress} />
+          <AddressMapField
+            label={t.streetAddress}
+            placeholder={t.phStreetAddress}
+            addressValue={form.address}
+            onAddressChange={v => { setForm(f => ({ ...f, address: v })); setErrors(e => ({ ...e, address: undefined })); setApiError(null); }}
+            addressError={errors.address}
+            city={form.city}
+            district={form.district}
+            lat={pin?.lat ?? null}
+            lon={pin?.lon ?? null}
+            onPinChange={(lat, lon) => setPin(lat != null && lon != null ? { lat, lon } : null)}
+            onCityChange={setDirect('city')}
+            onDistrictChange={setDirect('district')}
+          />
 
           <div className="ui-modal__divider" />
 

@@ -16,6 +16,9 @@ public sealed record GroupOrderResponseDto(
     string PickUpCity,
     string PickUpDistrict,
     string PickUpAddress,
+    /// <summary>Exact pick-up coordinates from the customer's saved map pin. Null when unset.</summary>
+    double? PickUpLatitude,
+    double? PickUpLongitude,
     string? Note,
     int     NumberOfPackages,
     OrderStatus Status,

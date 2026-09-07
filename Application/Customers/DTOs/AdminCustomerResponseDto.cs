@@ -14,6 +14,9 @@ public sealed record AdminCustomerResponseDto(
     string   City,
     string   District,
     string   Address,
+    /// <summary>Exact pick-up coordinates from a saved map pin. Null when the address was only typed.</summary>
+    double?  Latitude,
+    double?  Longitude,
     /// <summary>Login email. Empty string for a walk-in customer with no account yet.</summary>
     string   Email,
     /// <summary>False for a walk-in customer an admin registered at the office who has no login yet.</summary>

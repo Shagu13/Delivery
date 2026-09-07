@@ -16,6 +16,9 @@ public sealed record CustomerResponseDto(
     string   City,
     string   District,
     string   Address,
+    /// <summary>Exact pick-up coordinates from a saved map pin. Null when the address was only typed.</summary>
+    double?  Latitude,
+    double?  Longitude,
     string   Email,
     bool     IsActive,
     DateTime CreatedAt,

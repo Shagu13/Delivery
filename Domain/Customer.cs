@@ -23,6 +23,15 @@ public class Customer
     public required string District { get; set; }       // → PickUpDistrict
     public required string Address  { get; set; }       // → PickUpAddress
 
+    /// <summary>
+    /// Exact coordinates of the pick-up address, captured when the customer (or an admin)
+    /// dropped a pin on the map during registration / profile editing. Null when the
+    /// address was only typed. Copied onto <see cref="GroupOrder.PickUpLatitude"/> when
+    /// the customer places an order, so the pickup courier gets an exact pin.
+    /// </summary>
+    public double? Latitude  { get; set; }
+    public double? Longitude { get; set; }
+
     // ── Pricing (admin-only) ─────────────────────────────────────────────────
     /// <summary>
     /// Negotiated per-package price for deliveries within Tbilisi (capital).

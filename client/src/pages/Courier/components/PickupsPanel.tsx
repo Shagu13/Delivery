@@ -298,6 +298,8 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                                 city={go.pickUpCity}
                                                 district={go.pickUpDistrict}
                                                 address={go.pickUpAddress}
+                                                lat={go.pickUpLatitude}
+                                                lon={go.pickUpLongitude}
                                             />
                                         </div>
                                         <div className="courier-card__row">
@@ -437,7 +439,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
             )}
 
             <RouteToolbar
-                stops={sortedPickups.filter(go => selectedIds.has(go.id)).map(go => ({ city: go.pickUpCity, district: go.pickUpDistrict, address: go.pickUpAddress }))}
+                stops={sortedPickups.filter(go => selectedIds.has(go.id)).map(go => ({ city: go.pickUpCity, district: go.pickUpDistrict, address: go.pickUpAddress, lat: go.pickUpLatitude, lon: go.pickUpLongitude }))}
                 onClear={() => setSelectedIds(new Set())}
                 geocodeCache={geocodeCache}
                 coords={coords}

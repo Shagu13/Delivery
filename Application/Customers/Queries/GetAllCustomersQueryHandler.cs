@@ -60,6 +60,8 @@ public sealed class GetAllCustomersQueryHandler
                 c.City,
                 c.District,
                 c.Address,
+                c.Latitude,
+                c.Longitude,
                 c.ApplicationUser != null ? c.ApplicationUser.Email! : "",
                 c.ApplicationUserId != null,
                 c.IsActive,

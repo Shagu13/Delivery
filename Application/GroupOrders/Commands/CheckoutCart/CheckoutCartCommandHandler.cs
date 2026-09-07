@@ -90,6 +90,8 @@ public sealed class CheckoutCartCommandHandler
             else
             {
                 isNewGroupOrder = true;
+                var (pickUpLat, pickUpLon) = PickupPin.ResolveForNewBatch(
+                    customer, dto.PickUpCity, dto.PickUpDistrict, dto.PickUpAddress);
                 groupOrder = new GroupOrder
                 {
                     CustomerId         = dto.CustomerId,
@@ -104,6 +106,8 @@ public sealed class CheckoutCartCommandHandler
                     PickUpCity         = dto.PickUpCity,
                     PickUpDistrict     = dto.PickUpDistrict,
                     PickUpAddress      = dto.PickUpAddress,
+                    PickUpLatitude     = pickUpLat,
+                    PickUpLongitude    = pickUpLon,
                     Note               = dto.Note,
                     NumberOfPackages   = batchOrders.Count,
                 };

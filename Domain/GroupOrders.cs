@@ -28,6 +28,15 @@ public class GroupOrder
     public required string PickUpDistrict { get; set; }
     public required string PickUpAddress  { get; set; }
 
+    /// <summary>
+    /// Exact coordinates of the pick-up address. Copied from <see cref="Customer.Latitude"/>
+    /// when a logged-in customer places the order and hasn't changed the pre-filled pickup
+    /// address. Null when the sender typed a different address or the customer has no saved pin.
+    /// Lets the pickup courier navigate to an exact spot instead of fuzzy-matching the text.
+    /// </summary>
+    public double? PickUpLatitude  { get; set; }
+    public double? PickUpLongitude { get; set; }
+
     // ── Assignment — set when admin assigns pickup courier ───────────────────
     public Guid?      CourierId   { get; set; }
     public Courier?   Courier     { get; set; }

@@ -134,6 +134,8 @@ public sealed class AdminCreateWalkInOrderCommandHandler
                 PickUpCity             = customer.City,
                 PickUpDistrict         = customer.District,
                 PickUpAddress          = customer.Address,
+                PickUpLatitude         = customer.Latitude,
+                PickUpLongitude        = customer.Longitude,
                 NumberOfPackages       = batchOrders.Count,
                 Status                 = OrderStatus.AdminAcceptedOrderInWareHouse,
                 IsWalkIn               = true,

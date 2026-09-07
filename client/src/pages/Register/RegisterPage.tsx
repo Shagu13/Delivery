@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { registerCustomer, CustomerApiError } from '../../api/customers';
 import { FormField } from '../../components/ui/FormField';
+import { AddressMapField } from '../../components/ui/AddressMapField';
 import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { firstPasswordError } from '../../utils/passwordRules';
@@ -35,6 +36,8 @@ export function RegisterPage() {
   const [errors,   setErrors]   = useState<Partial<Record<keyof FormState, string>>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading,  setLoading]  = useState(false);
+  // Exact pickup coordinates from the map pin (kept out of FormState — not a text field).
+  const [pin, setPin] = useState<{ lat: number; lon: number } | null>(null);
 
   const set = (field: keyof FormState) => (ev: React.ChangeEvent<HTMLInputElement>) => {
     setForm(f => ({ ...f, [field]: ev.target.value }));
@@ -54,6 +57,8 @@ export function RegisterPage() {
     setForm(f => ({ ...f, [field]: value }));
     setErrors(prev => ({ ...prev, [field]: undefined }));
     setApiError(null);
+    // A changed city/district invalidates any pin dropped for the old area.
+    setPin(null);
   };
 
   const validate = (): boolean => {
@@ -98,6 +103,7 @@ export function RegisterPage() {
         city: form.city.trim(), district: form.district.trim(),
         address: form.address.trim(), email: form.email.trim(),
         password: form.password, confirmPassword: form.confirmPassword,
+        latitude: pin?.lat ?? null, longitude: pin?.lon ?? null,
       });
       navigate('/login', { state: { registered: true } });
     } catch (err) {
@@ -205,12 +211,19 @@ export function RegisterPage() {
             cityError={errors.city}
             districtError={errors.district}
           />
-          <FormField
+          <AddressMapField
             label={t.streetAddress}
-            value={form.address}
-            onChange={set('address')}
-            error={errors.address}
             placeholder={t.phStreetAddress}
+            addressValue={form.address}
+            onAddressChange={v => { setForm(f => ({ ...f, address: v })); setErrors(prev => ({ ...prev, address: undefined })); setApiError(null); }}
+            addressError={errors.address}
+            city={form.city}
+            district={form.district}
+            lat={pin?.lat ?? null}
+            lon={pin?.lon ?? null}
+            onPinChange={(lat, lon) => setPin(lat != null && lon != null ? { lat, lon } : null)}
+            onCityChange={setDirect('city')}
+            onDistrictChange={setDirect('district')}
           />
 
           <div className="register-form__divider" />

@@ -1,0 +1,132 @@
+/* Co-located with MapPinPicker.tsx. Reuses the `ui-modal*` shell from Modal.css
+   (imported by the component) and adds only the map-specific pieces. */
+
+.ui-modal--map {
+    max-width: 640px;
+    width: 100%;
+    /* A definite height so the inner flex children (map fills, footer pins) can size. */
+    height: min(660px, calc(100dvh - 32px));
+}
+
+.map-pin__body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 20px 18px;
+    overflow: hidden;
+}
+
+.map-pin__hint {
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+}
+
+.map-pin__canvas {
+    flex: 1;
+    min-height: 200px;
+    position: relative;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.map-pin__map {
+    position: absolute;
+    inset: 0;
+    background: var(--color-bg-3);
+}
+
+.map-pin__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-2);
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
+    text-align: center;
+    padding: 16px;
+}
+
+.map-pin__overlay--error {
+    color: var(--color-error);
+}
+
+.map-pin__result {
+    flex-shrink: 0;
+    padding: 10px 12px;
+    background: var(--color-bg-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+}
+
+.map-pin__result-text {
+    font-size: 0.86rem;
+    line-height: 1.4;
+    color: var(--color-text);
+    word-break: break-word;
+}
+
+.map-pin__result-text--muted {
+    color: var(--color-text-subtle);
+}
+
+@media (max-width: 520px) {
+    .ui-modal--map {
+        height: calc(100dvh - 24px);
+        max-width: 100%;
+    }
+}
+
+/* ── The gated map button used by AddressMapField ─────────────────────────── */
+.address-map-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.address-map-field__btn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-2);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition), opacity var(--transition);
+}
+
+.address-map-field__btn:hover:not(:disabled) {
+    background: var(--color-bg-3);
+    border-color: var(--color-accent);
+}
+
+.address-map-field__btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.address-map-field__note {
+    font-size: 0.75rem;
+    color: var(--color-text-subtle);
+}
+
+.address-map-field__note--set {
+    color: var(--color-accent);
+}

@@ -40,7 +40,8 @@ public sealed class CustomersController : BaseController
             request.City, request.District, request.Address,
             request.Email, request.Password,
             // Self-registration: stamp the tenant from the host they signed up on (if any).
-            registrationHost: Request.Host.Host), ct);
+            registrationHost: Request.Host.Host,
+            latitude: request.Latitude, longitude: request.Longitude), ct);
 
         return CreatedAtAction(nameof(GetById), new { id = customerId },
             new CreateCustomerResponse(customerId, request.Email,
@@ -63,7 +64,8 @@ public sealed class CustomersController : BaseController
             request.City, request.District, request.Address,
             request.Email, request.Password,
             request.IsCompanyServicePriceIncludedInPrice,
-            tenantId), ct);
+            tenantId,
+            latitude: request.Latitude, longitude: request.Longitude), ct);
 
         return CreatedAtAction(nameof(GetById), new { id = customerId },
             new CreateCustomerResponse(customerId, request.Email,
@@ -96,7 +98,8 @@ public sealed class CustomersController : BaseController
             new UpdateCustomerDto(
                 request.FirstName, request.LastName, request.IdNumber,
                 request.BusinessName, request.PhoneNumber,
-                request.City, request.District, request.Address)
+                request.City, request.District, request.Address,
+                request.Latitude, request.Longitude)
         ), ct);
 
         return NoContent();
@@ -326,7 +329,8 @@ public sealed class CustomersController : BaseController
             new UpdateCustomerDto(
                 request.FirstName, request.LastName, request.IdNumber,
                 request.BusinessName, request.PhoneNumber,
-                request.City, request.District, request.Address),
+                request.City, request.District, request.Address,
+                request.Latitude, request.Longitude),
             // Tenant co-admin: guard that the customer is theirs.
             RequireTenantId: CurrentTenantId), ct);
         return NoContent();
@@ -398,10 +402,13 @@ public sealed class CustomersController : BaseController
         string email, string password,
         bool isCompanyServicePriceIncludedInPrice = false,
         Guid? tenantId = null,
-        string? registrationHost = null) =>
+        string? registrationHost = null,
+        double? latitude = null,
+        double? longitude = null) =>
         new(new CreateCustomerDto(firstName, lastName, idNumber,
             businessName, phoneNumber, city, district, address, email, password,
-            isCompanyServicePriceIncludedInPrice, tenantId, registrationHost));
+            isCompanyServicePriceIncludedInPrice, tenantId, registrationHost,
+            latitude, longitude));
 }
 
 // ── Request models ────────────────────────────────────────────────────────────

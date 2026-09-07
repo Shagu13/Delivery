@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/useAuth';
 import { useCart } from '../../contexts/useCart';
 import { useLanguage } from '../../contexts/useLanguage';
 import { FormField } from '../../components/ui/FormField';
+import { AddressMapField } from '../../components/ui/AddressMapField';
 import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
@@ -1086,6 +1087,11 @@ function EditProfileView({
     district:     profile.district,
     address:      profile.address,
   });
+  const [pin, setPin] = useState<{ lat: number; lon: number } | null>(
+    profile.latitude != null && profile.longitude != null
+      ? { lat: profile.latitude, lon: profile.longitude }
+      : null,
+  );
   const [errors,   setErrors]   = useState<Partial<Record<keyof ProfileForm, string>>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [saving,   setSaving]   = useState(false);
@@ -1116,7 +1122,7 @@ function EditProfileView({
     setSaving(true);
     try {
       await updateMyProfile(
-        { ...form, idNumber: form.idNumber.trim() || undefined },
+        { ...form, idNumber: form.idNumber.trim() || undefined, latitude: pin?.lat ?? null, longitude: pin?.lon ?? null },
         token,
       );
       // Re-fetch profile to get the latest data back
@@ -1129,7 +1135,7 @@ function EditProfileView({
     } finally {
       setSaving(false);
     }
-  }, [form, token, onSaved]);
+  }, [form, pin, token, onSaved]);
 
   return (
     <div className="content-card" style={{ maxWidth: 640 }}>
@@ -1174,12 +1180,25 @@ function EditProfileView({
         <CityDistrictPicker
           cityValue={form.city}
           districtValue={form.district}
-          onCityChange={cityName => { setForm(f => ({ ...f, city: cityName, district: '' })); setErrors(e => ({ ...e, city: undefined, district: undefined })); setApiError(null); setSaved(false); }}
-          onDistrictChange={districtName => { setForm(f => ({ ...f, district: districtName })); setErrors(e => ({ ...e, district: undefined })); setApiError(null); setSaved(false); }}
+          onCityChange={cityName => { setForm(f => ({ ...f, city: cityName, district: '' })); setErrors(e => ({ ...e, city: undefined, district: undefined })); setApiError(null); setSaved(false); setPin(null); }}
+          onDistrictChange={districtName => { setForm(f => ({ ...f, district: districtName })); setErrors(e => ({ ...e, district: undefined })); setApiError(null); setSaved(false); setPin(null); }}
           cityError={errors.city}
           districtError={errors.district}
         />
-        <FormField label={t.streetAddress} value={form.address} onChange={set('address')} error={errors.address} placeholder={t.phStreetAddress} />
+        <AddressMapField
+          label={t.streetAddress}
+          placeholder={t.phStreetAddress}
+          addressValue={form.address}
+          onAddressChange={v => { setForm(f => ({ ...f, address: v })); setErrors(e => ({ ...e, address: undefined })); setApiError(null); setSaved(false); }}
+          addressError={errors.address}
+          city={form.city}
+          district={form.district}
+          lat={pin?.lat ?? null}
+          lon={pin?.lon ?? null}
+          onPinChange={(lat, lon) => { setPin(lat != null && lon != null ? { lat, lon } : null); setSaved(false); }}
+          onCityChange={cityName => { setForm(f => ({ ...f, city: cityName, district: '' })); setErrors(e => ({ ...e, city: undefined, district: undefined })); setApiError(null); setSaved(false); }}
+          onDistrictChange={districtName => { setForm(f => ({ ...f, district: districtName })); setErrors(e => ({ ...e, district: undefined })); setApiError(null); setSaved(false); }}
+        />
 
         <div style={{ marginTop: 8 }}>
           <button className="btn-primary" onClick={handleSave} disabled={saving}>

@@ -14,7 +14,10 @@ public sealed record RegisterCustomerRequest(
     [Required][MaxLength(250)]  string  Address,
     [Required][EmailAddress][MaxLength(256)] string Email,
     [Required][MinLength(8)][MaxLength(100)] string Password,
-    [Required]                              string ConfirmPassword
+    [Required]                              string ConfirmPassword,
+    // Optional map-pin coordinates for the pickup address.
+    [Range(-90, 90)]   double? Latitude  = null,
+    [Range(-180, 180)] double? Longitude = null
 );
 
 // ── Admin-created ─────────────────────────────────────────────────────────────
@@ -30,7 +33,9 @@ public sealed record CreateCustomerRequest(
     [Required][EmailAddress][MaxLength(256)] string Email,
     [Required][MinLength(8)][MaxLength(100)] string Password,
     bool IsCompanyServicePriceIncludedInPrice = false,
-    Guid? TenantId = null
+    Guid? TenantId = null,
+    [Range(-90, 90)]   double? Latitude  = null,
+    [Range(-180, 180)] double? Longitude = null
 );
 
 // ── Profile update ────────────────────────────────────────────────────────────
@@ -42,7 +47,9 @@ public sealed record UpdateCustomerRequest(
     [Required][MaxLength(20)]   string  PhoneNumber,
     [Required][MaxLength(100)]  string  City,
     [Required][MaxLength(100)]  string  District,
-    [Required][MaxLength(250)]  string  Address
+    [Required][MaxLength(250)]  string  Address,
+    [Range(-90, 90)]   double? Latitude  = null,
+    [Range(-180, 180)] double? Longitude = null
 );
 
 // ── Change password ───────────────────────────────────────────────────────────

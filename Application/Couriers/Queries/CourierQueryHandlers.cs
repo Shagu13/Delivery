@@ -48,6 +48,8 @@ public sealed class GetCourierGroupOrdersQueryHandler
             PickUpCity:             go.PickUpCity,
             PickUpDistrict:         go.PickUpDistrict,
             PickUpAddress:          go.PickUpAddress,
+            PickUpLatitude:         go.PickUpLatitude,
+            PickUpLongitude:        go.PickUpLongitude,
             Note:                   go.Note,
             NumberOfPackages:       go.NumberOfPackages,
             Status:                 go.Status,

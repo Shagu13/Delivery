@@ -77,6 +77,8 @@ internal static class CustomerProjection
         c.City,
         c.District,
         c.Address,
+        c.Latitude,
+        c.Longitude,
         c.ApplicationUser?.Email ?? "",
         c.IsActive,
         c.CreatedAt,

@@ -124,6 +124,8 @@ public sealed class CreateCustomerCommandHandler : IRequestHandler<CreateCustome
             City              = dto.City,
             District          = dto.District,
             Address           = dto.Address,
+            Latitude          = dto.Latitude,
+            Longitude         = dto.Longitude,
             IsCompanyServicePriceIncludedInPrice = dto.IsCompanyServicePriceIncludedInPrice,
             ApplicationUserId = user.Id,
             // Null = root brand (dilo). From admin assignment or host-stamped self-registration.
