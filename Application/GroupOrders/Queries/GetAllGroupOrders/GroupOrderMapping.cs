@@ -109,7 +109,9 @@ internal static class GroupOrderMapping
         CompanyServiceCityPrice:     go.Customer?.CompanyServiceCityPrice,
         CompanyServiceDistrictPrice: go.Customer?.CompanyServiceDistrictPrice,
         CustomerSpecialPrices: MapSpecialPrices(go.Customer),
-        Orders: go.Orders.OrderBy(o => o.CreatedAt).Select(o => MapOrder(o, cityGeo, districtGeo)).ToList()
+        Orders: go.Orders.OrderBy(o => o.CreatedAt).Select(o => MapOrder(o, cityGeo, districtGeo)).ToList(),
+        PickUpLatitude:  go.PickUpLatitude,
+        PickUpLongitude: go.PickUpLongitude
     );
 
     // ── Standalone orders (GroupOrderId == null) as synthetic single-order batches ──
@@ -157,6 +159,10 @@ internal static class GroupOrderMapping
             CompanyServiceDistrictPrice: c?.CompanyServiceDistrictPrice,
             CustomerSpecialPrices:   MapSpecialPrices(c),
             Orders:                  new List<AdminOrderDto> { MapOrder(o, cityGeo, districtGeo) },
-            IsStandalone:            true);
+            IsStandalone:            true,
+            // Return: courier collects from the recipient/return-pickup point (Order coords);
+            // Send/Exchange standalone: pickup is the owning customer's saved pin.
+            PickUpLatitude:          isReturnWithPickup ? o.Latitude  : c?.Latitude,
+            PickUpLongitude:         isReturnWithPickup ? o.Longitude : c?.Longitude);
     }
 }

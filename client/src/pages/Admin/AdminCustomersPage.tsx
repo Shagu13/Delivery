@@ -13,6 +13,7 @@ import { CustomerSpecialPricesModal } from './CustomerSpecialPricesModal';
 import { CustomerBankAccountsModal } from './CustomerBankAccountsModal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { RowActionsMenu, type RowActionItem } from '../../components/ui/RowActionsMenu';
+import { ViewOnMapButton } from '../../components/ui/ViewOnMapButton';
 import { useLanguage } from '../../contexts/useLanguage';
 import './AdminCustomersPage.css';
 
@@ -209,6 +210,10 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
                     <td>
                       <div className="acp-primary">{c.city}</div>
                       <div className="acp-secondary">{c.district}</div>
+                      <div style={{ marginTop: 4 }}>
+                        <ViewOnMapButton city={c.city} district={c.district} address={c.address}
+                          lat={c.latitude} lon={c.longitude} />
+                      </div>
                     </td>
                     <td>
                       <span className={`acp-badge ${c.isActive ? 'acp-badge--active' : 'acp-badge--inactive'}`}>
@@ -258,7 +263,11 @@ export default function AdminCustomersPage({ token, canManage = true }: Props) {
                   </div>
                   <div className="acp-card__row">
                     <span className="acp-card__row-label">{t.city} / {t.district}</span>
-                    <span className="acp-card__row-value">{c.city}, {c.district}</span>
+                    <span className="acp-card__row-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                      <span>{c.city}, {c.district}</span>
+                      <ViewOnMapButton city={c.city} district={c.district} address={c.address}
+                        lat={c.latitude} lon={c.longitude} />
+                    </span>
                   </div>
                   {canManage && (
                     <div className="acp-card__row">

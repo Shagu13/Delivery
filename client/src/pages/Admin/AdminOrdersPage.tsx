@@ -19,6 +19,7 @@ import { resolveDateWindow } from '../../utils/dateWindow';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { DebouncedSearchBox } from '../../components/ui/DebouncedSearchBox';
 import { PhoneActions } from '../../components/ui/PhoneActions';
+import { ViewOnMapButton } from '../../components/ui/ViewOnMapButton';
 import type { PagedResult } from '../../types/paging';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -37,6 +38,9 @@ export interface AdminOrderItem {
   pickUpCity: string;
   pickUpDistrict: string;
   pickUpAddress: string;
+  /** Exact pickup coordinates (customer's saved map pin), for the admin "view on map" button. */
+  pickUpLatitude?: number | null;
+  pickUpLongitude?: number | null;
   recipientName: string;
   recipientPhone: string;
   recipientCity: string;
@@ -1080,6 +1084,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         <td className="aop-td">
           <div className="aop-sender-biz">{order.senderBusinessName}</div>
           <div className="aop-sender-name">{order.senderFirstName} {order.senderLastName}</div>
+          <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+            <ViewOnMapButton city={order.pickUpCity} district={order.pickUpDistrict} address={order.pickUpAddress}
+              lat={order.pickUpLatitude} lon={order.pickUpLongitude} compact />
+          </div>
         </td>
         <td className="aop-td">
           <div className="aop-name">{recipientDisplayName(order.recipientName, t.recipientUnknown)}</div>

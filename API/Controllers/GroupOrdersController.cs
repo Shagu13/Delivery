@@ -1256,7 +1256,9 @@ public sealed class GroupOrdersController : BaseController
                 CancellationComment:              o.CancellationComment,
                 CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt
             )).ToList(),
-            IsStandalone: go.IsStandalone
+            IsStandalone: go.IsStandalone,
+            PickUpLatitude: go.PickUpLatitude,
+            PickUpLongitude: go.PickUpLongitude
         );
 }
 

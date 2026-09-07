@@ -37,7 +37,10 @@ public sealed record AdminGroupOrderResponse(
     IReadOnlyList<AdminOrderResponse> Orders,
     // True for a synthetic "batch" wrapping a single standalone order (GroupOrderId ==
     // null) — the Id is the order's own id, not a real GroupOrder id.
-    bool IsStandalone = false
+    bool IsStandalone = false,
+    // Exact pick-up coordinates (customer's saved map pin) for the admin "view on map" button.
+    double? PickUpLatitude = null,
+    double? PickUpLongitude = null
 );
 
 /// <summary>One package row inside an AdminGroupOrderResponse.</summary>

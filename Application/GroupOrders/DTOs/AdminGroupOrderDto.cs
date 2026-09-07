@@ -47,7 +47,11 @@ public sealed record AdminGroupOrderDto(
     // True for a synthetic "batch" wrapping a single standalone order (GroupOrderId
     // == null). The Pick-Up page shows it like a batch but offers a Group action
     // instead of batch lifecycle actions; the Id is the order's own id.
-    bool IsStandalone = false
+    bool IsStandalone = false,
+    // Exact pick-up coordinates (customer's saved map pin), for the admin "view on map"
+    // button. Null when unset.
+    double? PickUpLatitude = null,
+    double? PickUpLongitude = null
 );
 
 /// <summary>Single package within a group order — admin view.</summary>

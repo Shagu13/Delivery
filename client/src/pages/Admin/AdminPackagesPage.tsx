@@ -26,6 +26,7 @@ import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { LocationMultiPicker } from '../../components/ui/LocationMultiPicker';
 import { DebouncedSearchBox } from '../../components/ui/DebouncedSearchBox';
 import { PhoneActions } from '../../components/ui/PhoneActions';
+import { ViewOnMapButton } from '../../components/ui/ViewOnMapButton';
 import {
   fetchGroupOrders, fetchGroupOrderLocations, fetchPickupDay,
   groupAndAcceptStandalone, groupAndWarehouseStandalone,
@@ -902,6 +903,10 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
                                 <span className="go-cell__label">{t.cgoPickupLocation}</span>
                                 <span className="go-cell__value">{locCity(go.pickUpCity, go.pickUpCityGeo)}, {locDistrict(go.pickUpDistrict, go.pickUpDistrictGeo)}</span>
                                 {go.pickUpAddress && <span className="go-cell__sub">{go.pickUpAddress}</span>}
+                                <span style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                                  <ViewOnMapButton city={go.pickUpCity} district={go.pickUpDistrict} address={go.pickUpAddress}
+                                    lat={go.pickUpLatitude} lon={go.pickUpLongitude} />
+                                </span>
                               </div>
                               <div className="go-cell go-cell--center">
                                 <span className="go-cell__label">{t.goColStatus}</span>

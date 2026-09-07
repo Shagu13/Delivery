@@ -51,6 +51,15 @@ const en = {
   mapPinNoAddress:     'No street address found for this point — type it manually.',
   mapPinNoPoint:       'Drop a pin to choose a location.',
 
+  // ── Admin "view on map" button ────────────────────────────────────────────
+  viewMapLabel:        'Map',
+  viewMapGoogle:       'Google Maps',
+  viewMapYandex:       'Yandex Maps',
+  viewMapHeadingPinned: 'Exact pinned location',
+  viewMapHeadingApprox: 'Address search (no pin)',
+  viewMapTitlePinned:  "Open the customer's exact pinned location",
+  viewMapTitleApprox:  'Open a map search for this address (no pin saved)',
+
   // ── Placeholders ──────────────────────────────────────────────────────────
   phFirstName:        'e.g. George',
   phLastName:         'e.g. Doe',
@@ -2111,6 +2120,15 @@ const ka: typeof en = {
   mapPinResolving:     'მისამართის ამოცნობა…',
   mapPinNoAddress:     'ამ წერტილისთვის ქუჩის მისამართი ვერ მოიძებნა — აკრიფეთ ხელით.',
   mapPinNoPoint:       'მდებარეობის ასარჩევად დასვით მონიშვნა.',
+
+  // ── Admin "view on map" button ────────────────────────────────────────────
+  viewMapLabel:        'რუკა',
+  viewMapGoogle:       'Google Maps',
+  viewMapYandex:       'Yandex Maps',
+  viewMapHeadingPinned: 'ზუსტი მონიშნული მდებარეობა',
+  viewMapHeadingApprox: 'მისამართის ძებნა (მონიშვნის გარეშე)',
+  viewMapTitlePinned:  'გახსენით მომხმარებლის ზუსტი მონიშნული მდებარეობა',
+  viewMapTitleApprox:  'გახსენით რუკის ძებნა ამ მისამართისთვის (მონიშვნა არ არის)',
 
   // ── Placeholders ──────────────────────────────────────────────────────────
   phFirstName:        'მაგ. გიორგი',

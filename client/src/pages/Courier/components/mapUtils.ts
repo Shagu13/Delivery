@@ -78,53 +78,14 @@ function yandexPoint(s: Stop, cache?: GeocodeCache): string {
     return routePoint(s, cache);
 }
 
-export function mapUrl(
-    city: string,
-    district: string,
-    address: string,
-    lat?: number | null,
-    lon?: number | null,
-) {
-    // Prefer exact coordinates (captured from the geocoded address pick): Google
-    // then drops a pin on the precise spot instead of fuzzy-matching the text —
-    // no more "did you mean…". Fall back to the text address when no pin exists.
-    if (lat != null && lon != null) {
-        return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
-    }
-    const q = encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
-    return `https://www.google.com/maps/search/?api=1&query=${q}`;
-}
-
-// Single-destination Yandex Maps link — drops a pin on the exact coordinates when
-// known (Yandex uses lon,lat order for ll/pt), else searches the text address.
-export function mapUrlYandex(
-    city: string,
-    district: string,
-    address: string,
-    lat?: number | null,
-    lon?: number | null,
-) {
-    if (lat != null && lon != null) {
-        return `https://yandex.com/maps/?ll=${lon},${lat}&z=17&pt=${lon},${lat}`;
-    }
-    const q = encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
-    return `https://yandex.com/maps/?mode=search&text=${q}`;
-}
-
-// Single-destination Yandex Navi link — builds a driving route from the courier's
-// current location (empty origin via the leading ~) to the address/coordinates.
-export function mapUrlYandexNavi(
-    city: string,
-    district: string,
-    address: string,
-    lat?: number | null,
-    lon?: number | null,
-) {
-    const dest = lat != null && lon != null
-        ? `${lat},${lon}`
-        : encodeURIComponent(`${address}, ${district}, ${city}, Georgia`);
-    return `https://yandex.com/navi/?rtext=~${dest}&rtt=auto`;
-}
+// Single-destination map links moved to a shared util so the admin "view on map"
+// buttons can reuse them. Re-exported here under their original names so this
+// module's existing consumers (AddressMapLink) don't change.
+export {
+    googleMapsUrl as mapUrl,
+    yandexMapsUrl as mapUrlYandex,
+    yandexNaviUrl as mapUrlYandexNavi,
+} from '../../../utils/mapLinks';
 
 export function buildGoogleRouteUrl(stops: Stop[], origin?: string, cache?: GeocodeCache) {
     const dest = routePoint(stops[stops.length - 1], cache);

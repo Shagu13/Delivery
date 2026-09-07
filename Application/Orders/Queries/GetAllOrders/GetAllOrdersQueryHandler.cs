@@ -182,6 +182,10 @@ public sealed class GetAllOrdersQueryHandler
                 PickUpCity:               o.GroupOrder?.PickUpCity     ?? o.Customer?.City     ?? string.Empty,
                 PickUpDistrict:           o.GroupOrder?.PickUpDistrict ?? o.Customer?.District ?? string.Empty,
                 PickUpAddress:            o.GroupOrder?.PickUpAddress  ?? o.Customer?.Address  ?? string.Empty,
+                // Batched orders carry the batch's stamped pin; standalone orders fall back
+                // to the owning customer's saved pin.
+                PickUpLatitude:           o.GroupOrder != null ? o.GroupOrder.PickUpLatitude  : o.Customer != null ? o.Customer.Latitude  : null,
+                PickUpLongitude:          o.GroupOrder != null ? o.GroupOrder.PickUpLongitude : o.Customer != null ? o.Customer.Longitude : null,
                 RecipientName:            o.RecipientName,
                 RecipientPhone:           o.RecipientPhone,
                 RecipientCity:            o.RecipientCity,

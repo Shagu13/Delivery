@@ -140,6 +140,8 @@ export function toOrderItem(o: AdminOrder, go: AdminGroupOrder, courierName: str
     pickUpCity: go.pickUpCity,
     pickUpDistrict: go.pickUpDistrict,
     pickUpAddress: go.pickUpAddress,
+    pickUpLatitude: go.pickUpLatitude,
+    pickUpLongitude: go.pickUpLongitude,
     recipientName: o.recipientName,
     recipientPhone: o.recipientPhone,
     recipientCity: o.recipientCity,

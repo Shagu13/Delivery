@@ -15,6 +15,10 @@ public sealed record AdminOrderListDto(
     string   PickUpCity,
     string   PickUpDistrict,
     string   PickUpAddress,
+    // Exact pick-up coordinates (customer's saved map pin), for the admin "view on map"
+    // button. Null when unset.
+    double?  PickUpLatitude,
+    double?  PickUpLongitude,
     // Recipient
     string   RecipientName,
     string   RecipientPhone,
