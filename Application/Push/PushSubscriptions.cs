@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Domain;
+using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +20,21 @@ public sealed record VapidKeysDto(string PublicKey, string PrivateKey);
 
 /// <summary>Generate a fresh VAPID keypair for one-time setup (admin).</summary>
 public sealed record GenerateVapidKeysQuery() : IRequest<VapidKeysDto>;
+
+// ── Validators ────────────────────────────────────────────────────────────────────
+public sealed class SavePushSubscriptionCommandValidator : AbstractValidator<SavePushSubscriptionCommand>
+{
+    public SavePushSubscriptionCommandValidator()
+    {
+        RuleFor(x => x.CourierId).NotEmpty();
+        RuleFor(x => x.Endpoint)
+            .NotEmpty()
+            .Must(e => Uri.TryCreate(e, UriKind.Absolute, out _))
+            .WithMessage("Endpoint must be an absolute URL.");
+        RuleFor(x => x.P256dh).NotEmpty();
+        RuleFor(x => x.Auth).NotEmpty();
+    }
+}
 
 // ── Handlers ──────────────────────────────────────────────────────────────────────
 public sealed class SavePushSubscriptionHandler : IRequestHandler<SavePushSubscriptionCommand>
