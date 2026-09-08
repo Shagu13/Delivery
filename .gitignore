@@ -363,10 +363,6 @@ MigrationBackup/
 FodyWeavers.xsd
 /CitiesToBecomeDistrictsQuery.sql
 /Domain/TestFiles
-/Domain/CLAUDE.md
-/client/CLAUDE.md
-/Infrastructure/CLAUDE.md
-/Persistence/CLAUDE.md
-/CLAUDE.md
-/Application/CLAUDE.md
-/API/CLAUDE.md
+
+# CLAUDE.md instruction files (root + one per project) are intentionally tracked —
+# they are shared onboarding docs, not personal notes. Do not re-add them here.
