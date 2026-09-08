@@ -192,6 +192,17 @@ public class Order
     /// </summary>
     public bool IsWalkIn { get; set; } = false;
 
+    // ── Soft delete ──────────────────────────────────────────────────────────
+    /// <summary>
+    /// Set when an admin deletes this package from the "Delete Package" page.
+    /// Null = active. A non-null value hides the order from every read in the system
+    /// (admin, courier, customer, finance, history, public tracking, Partner API) via a
+    /// global EF query filter. There is no restore path — the row is kept only so finance
+    /// and audit history are not corrupted. When the last non-deleted child of a
+    /// <see cref="GroupOrder"/> is deleted the parent batch is stamped too.
+    /// </summary>
+    public DateTime? DateDeleted { get; set; }
+
     // ── Timestamps ───────────────────────────────────────────────────────────
     public DateTime  CreatedAt                { get; set; } = CustomTime.Now;
 

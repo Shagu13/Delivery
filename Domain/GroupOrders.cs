@@ -64,6 +64,16 @@ public class GroupOrder
     /// </summary>
     public bool IsWalkIn { get; set; } = false;
 
+    // ── Soft delete ──────────────────────────────────────────────────────────
+    /// <summary>
+    /// Set when an admin deletes this batch (or when its last non-deleted child order is
+    /// deleted) from the "Delete Package" page. Null = active. A non-null value hides the
+    /// batch from every read in the system via a global EF query filter; deleting the batch
+    /// also stamps <see cref="Order.DateDeleted"/> on every child order. There is no restore
+    /// path — the row is kept only so finance and audit history are not corrupted.
+    /// </summary>
+    public DateTime? DateDeleted { get; set; }
+
     // ── Timestamps ───────────────────────────────────────────────────────────
     public DateTime  CreatedAt              { get; set; } = CustomTime.Now;
     public DateTime? AcceptedAt             { get; set; }

@@ -236,8 +236,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
         modelBuilder.Entity<GroupOrder>(e =>
         {
             e.HasKey(g => g.Id);
+            // Soft delete — a stamped batch is hidden from every read in the system.
+            // No restore path; the row survives only for finance/audit integrity.
+            e.HasQueryFilter(g => g.DateDeleted == null);
             e.HasIndex(g => g.Status);
             e.HasIndex(g => g.CreatedAt);
+            // Filtered index for the day-navigated / finance / history reads, which all
+            // now carry the implicit "DateDeleted IS NULL" from the query filter above.
+            e.HasIndex(g => g.CreatedAt)
+             .HasDatabaseName("IX_GroupOrders_CreatedAt_Active")
+             .HasFilter("[DateDeleted] IS NULL");
             e.HasIndex(g => g.CustomerId);
             e.HasIndex(g => new { g.PickUpCity, g.PickUpDistrict });
             // Admin search — StartsWith needs an index per searched field (see Order above).
@@ -272,8 +280,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
         modelBuilder.Entity<Order>(e =>
         {
             e.HasKey(o => o.Id);
+            // Soft delete — a stamped order is hidden from every read in the system
+            // (admin, courier, customer, finance, history, public tracking, Partner API).
+            // No restore path; the row survives only for finance/audit integrity.
+            e.HasQueryFilter(o => o.DateDeleted == null);
             e.HasIndex(o => o.Status);
             e.HasIndex(o => o.CreatedAt);
+            // Filtered index for the day-navigated / finance / history reads, which all
+            // now carry the implicit "DateDeleted IS NULL" from the query filter above.
+            e.HasIndex(o => o.CreatedAt)
+             .HasDatabaseName("IX_Orders_CreatedAt_Active")
+             .HasFilter("[DateDeleted] IS NULL");
             e.HasIndex(o => o.OrderType);
             e.HasIndex(o => new { o.RecipientCity, o.RecipientDistrict });
             e.HasIndex(o => o.GroupOrderId);

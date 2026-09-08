@@ -40,6 +40,7 @@ import AdminHistoryPage from './AdminHistoryPage';
 import AdminFinancePage from './AdminFinancePage';
 import AdminReturnExchangePage from './AdminReturnExchangePage';
 import AdminOrderSearchPage from './AdminOrderSearchPage';
+import AdminDeletePackagePage from './AdminDeletePackagePage';
 import AdminOperatorsPage from './AdminOperatorsPage';
 import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
@@ -118,9 +119,9 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch';
+type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch' | 'deletePackage';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch', 'deletePackage'];
 
 // Views an Operator (partial-admin role) may open. Operators now have full admin-level
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
@@ -455,6 +456,19 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">{t.osTitle}</span>
           </button>
           )}
+          {/* Delete Package — Admin only. Permanent (soft) delete of a package or batch. */}
+          {!isOperator && !isTenant && (
+          <button
+            className={`sidebar__link ${activeView === 'deletePackage' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('deletePackage')}
+            title={t.navDeletePackage}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9a1 1 0 001 .9h4.6a1 1 0 001-.9L13 4M6.5 7v4M9.5 7v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="sidebar__link-text">{t.navDeletePackage}</span>
+          </button>
+          )}
           {/* Finance — Admin + Tenant co-admin; company P&L stays hidden from operators. */}
           {!isOperator && (
           <button
@@ -548,6 +562,7 @@ export function AdminDashboard() {
             {activeView === 'homepage' && 'Homepage'}
             {activeView === 'operators' && t.topbarOperators}
             {activeView === 'orderSearch' && t.osTitle}
+            {activeView === 'deletePackage' && t.navDeletePackage}
           </span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
             {/* Persistent office "Add Package" — Admin/Operator, from any view. */}
@@ -595,6 +610,9 @@ export function AdminDashboard() {
           {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
           {activeView === 'orderSearch' && !isTenant && token && (
             <AdminOrderSearchPage token={token} onGoTo={goToOrder} />
+          )}
+          {activeView === 'deletePackage' && !isOperator && !isTenant && token && (
+            <AdminDeletePackagePage token={token} />
           )}
           {/* Finance: tenant co-admin sees the scoped tenant finance, never the company-wide P&L. */}
           {activeView === 'finance' && (isTenant ? <TenantFinanceView /> : <AdminFinancePage token={token ?? ''} />)}

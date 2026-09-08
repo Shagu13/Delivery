@@ -304,6 +304,50 @@ export async function fetchMyPickups(token: string): Promise<AdminGroupOrder[]> 
     return res.json();
 }
 
+// ── Soft delete (admin "Delete Package" page) ────────────────────────────────
+
+async function sendDelete(token: string, url: string): Promise<void> {
+    const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    // 404 = the row is already gone (stale search result / double click) — treat as done.
+    if (!res.ok && res.status !== 404) {
+        const err = await res.json().catch(() => ({ title: 'Delete failed' }));
+        throw new Error(err.title ?? 'Delete failed');
+    }
+}
+
+/** Soft-deletes a whole batch and every child package. Hidden from every view; irreversible. */
+export const softDeleteGroupOrder = (token: string, id: string) =>
+    sendDelete(token, `${BASE}/${id}`);
+
+/** Soft-deletes a single package. Hidden from every view; irreversible. If it was the last
+ *  live package in its batch the batch disappears too. */
+export const softDeleteOrder = (token: string, id: string) =>
+    sendDelete(token, `/api/orders/${id}`);
+
+export interface BulkSoftDeleteResult {
+    deletedOrders: number;
+    deletedBatches: number;
+    notFound: string[];
+}
+
+/** Soft-deletes many packages in one request (multi-select). Batches left with no live
+ *  package are hidden too. Unknown/already-gone ids come back in `notFound`. */
+export async function bulkSoftDeleteOrders(token: string, orderIds: string[]): Promise<BulkSoftDeleteResult> {
+    const res = await fetch('/api/orders/bulk-delete', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ title: 'Delete failed' }));
+        throw new Error(err.title ?? 'Delete failed');
+    }
+    return res.json();
+}
+
 // ── Shared action helper ──────────────────────────────────────────────────────
 
 async function groupOrderAction(

@@ -89,6 +89,16 @@ public sealed class RealtimeDashboardInterceptor : SaveChangesInterceptor
             AddCourier(member.OriginalValue);
             AddCourier(member.CurrentValue);
         }
+
+        // A soft delete (DateDeleted stamped) leaves CourierId untouched, so the branch
+        // above misses it — ping the still-assigned courier so the package drops off
+        // their app immediately.
+        if (entry.State == EntityState.Modified
+            && entry.Metadata.FindProperty("DateDeleted") is not null
+            && entry.Property("DateDeleted") is { IsModified: true, CurrentValue: not null })
+        {
+            AddCourier(member.CurrentValue);
+        }
     }
 
     private void AddCourier(object? value)

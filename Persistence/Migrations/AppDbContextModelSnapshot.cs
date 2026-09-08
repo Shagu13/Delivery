@@ -552,6 +552,9 @@ namespace Persistence.Migrations
                     b.Property<Guid?>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("DateDeleted")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("DeliveredToWarehouseAt")
                         .HasColumnType("datetime2");
 
@@ -631,7 +634,9 @@ namespace Persistence.Migrations
 
                     b.HasIndex("CourierId");
 
-                    b.HasIndex("CreatedAt");
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_GroupOrders_CreatedAt_Active")
+                        .HasFilter("[DateDeleted] IS NULL");
 
                     b.HasIndex("CustomerId");
 
@@ -730,6 +735,9 @@ namespace Persistence.Migrations
 
                     b.Property<Guid?>("CustomerId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DateDeleted")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("DeliveredAt")
                         .HasColumnType("datetime2");
@@ -886,7 +894,9 @@ namespace Persistence.Migrations
 
                     b.HasIndex("CourierId");
 
-                    b.HasIndex("CreatedAt");
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_Orders_CreatedAt_Active")
+                        .HasFilter("[DateDeleted] IS NULL");
 
                     b.HasIndex("CustomerId");
 

@@ -2,6 +2,7 @@ using API.Models.Orders;
 using Application.Common.Models;
 using Application.Courier.Queries;
 using Application.Orders.Commands;
+using Application.Orders.Commands.SoftDeletePackage;
 using Application.Orders.DTOs;
 using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
@@ -393,6 +394,34 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── DELETE /api/orders/{id}  (Admin) ────────────────────────────────────
+    // Soft delete from the "Delete Package" page. Hides the order everywhere via the
+    // global query filter; if it was the last live package in its batch the batch is
+    // hidden too. Irreversible — no restore endpoint.
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SoftDelete(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new SoftDeleteOrderCommand(id), ct);
+        return NoContent();
+    }
+
+    // ── POST /api/orders/bulk-delete  (Admin) ──────────────────────────────
+    // Multi-select soft delete from the "Delete Package" page. Ids that no longer
+    // resolve are returned in the result's NotFound list, not treated as failures.
+    [HttpPost("bulk-delete")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(BulkSoftDeleteResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> BulkSoftDelete(
+        [FromBody] BulkDeleteOrdersRequest request, CancellationToken ct)
+    {
+        BulkSoftDeleteResultDto result = await Sender.Send(
+            new BulkSoftDeleteOrdersCommand(request.OrderIds), ct);
+        return Ok(result);
+    }
+
     // ── PUT /api/orders/{id}/admin-postpone  (Admin/Operator) ────────────────
     [HttpPut("{id:guid}/admin-postpone")]
     [Authorize(Roles = "Admin,Operator")]
@@ -652,6 +681,8 @@ public sealed record UpdateOrderRequest(
 );
 
 public sealed record BulkAssignCourierRequest(IReadOnlyList<Guid> OrderIds, Guid CourierId);
+
+public sealed record BulkDeleteOrdersRequest(IReadOnlyList<Guid> OrderIds);
 
 public sealed record CustomerUpdateOrderRequest(
     string   RecipientName,

@@ -17,6 +17,7 @@ using Application.GroupOrders.Commands.GroupAndAcceptStandaloneOrder;
 using Application.GroupOrders.Commands.GroupAndWarehouseStandaloneOrder;
 using Application.GroupOrders.Commands.SetGroupOrderPickupDate;
 using Application.GroupOrders.DTOs;
+using Application.Orders.Commands.SoftDeletePackage;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
 using Application.GroupOrders.Queries.GetCustomerGroupOrders;
 using Application.GroupOrders.Queries.GetGroupOrderLocations;
@@ -634,6 +635,19 @@ public sealed class GroupOrdersController : BaseController
     public async Task<IActionResult> CancelByAdmin(Guid id, CancellationToken ct)
     {
         await Sender.Send(new CancelGroupOrderByAdminCommand(id), ct);
+        return NoContent();
+    }
+
+    // ── DELETE /api/grouporders/{id}  (Admin) ───────────────────────────────
+    // Soft delete from the "Delete Package" page — stamps the batch and every child
+    // order, hiding them everywhere via the global query filter. Irreversible.
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SoftDelete(Guid id, CancellationToken ct)
+    {
+        await Sender.Send(new SoftDeleteGroupOrderCommand(id), ct);
         return NoContent();
     }
 
