@@ -1459,7 +1459,18 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
 
   // Live refresh: when any order is placed/changed, refetch silently (keep current
   // filters/page, no spinner) so new customer orders appear without a manual refresh.
-  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => { void load(page); void loadSummary(); void loadWindowScoped(); });
+  // Skip a query the ping wants refetched when it's already fetching or was fetched moments
+  // ago - almost always an echo of this same admin's own action, not new data from someone
+  // else. Mirrors AdminPackagesPage's SELF_ECHO_MS guard so the two last-mile pages behave
+  // the same and a busy system doesn't refetch the (up-to-500-row) list on every ping.
+  const SELF_ECHO_MS = 4000;
+  const isQueryFresh = (q: { isFetching: boolean; dataUpdatedAt: number }) =>
+    q.isFetching || Date.now() - q.dataUpdatedAt < SELF_ECHO_MS;
+  useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
+    if (!isQueryFresh(mainQuery))         void load(page);
+    if (!isQueryFresh(summaryQuery))      void loadSummary();
+    if (!isQueryFresh(windowScopedQuery)) void loadWindowScoped();
+  });
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
