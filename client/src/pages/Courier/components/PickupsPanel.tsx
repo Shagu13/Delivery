@@ -264,6 +264,11 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                     <div className="courier-card__collapse-icon">📦</div>
                                     <div className="courier-card__collapse-info">
                                         <span className="courier-card__collapse-primary">{go.pickUpCity}, {go.pickUpDistrict},</span>
+                                        {go.senderBusinessName && (
+                                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-accent)' }}>
+                                                🏪 {go.senderBusinessName}
+                                            </span>
+                                        )}
                                         <span className="courier-card__collapse-secondary">{go.pickUpAddress}</span>
                                     </div>
                                     <div className="courier-card__collapse-right">

@@ -197,10 +197,12 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                             {isExpanded && (
                                 <>
                                     <div className="courier-card__body">
-                                        <div className="courier-card__row">
-                                            <span className="courier-card__label">{t.cdLabelSender}</span>
-                                            <span className="courier-card__value">{order.senderBusinessName}</span>
-                                        </div>
+                                        {order.senderBusinessName && (
+                                            <div className="courier-card__row">
+                                                <span className="courier-card__label">{t.cdLabelSender}</span>
+                                                <span className="courier-card__value">{order.senderBusinessName}</span>
+                                            </div>
+                                        )}
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelPhone}</span>
                                             <a href={`tel:${order.recipientPhone}`} className="courier-card__phone-link">
