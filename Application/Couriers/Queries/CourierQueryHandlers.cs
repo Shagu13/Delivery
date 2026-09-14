@@ -42,6 +42,7 @@ public sealed class GetCourierGroupOrdersQueryHandler
             Id:                     go.Id,
             SenderFirstName:        go.SenderFirstName,
             SenderLastName:         go.SenderLastName,
+            SenderBusinessName:     go.SenderBusinessName,
             SenderIdNumber:         go.SenderIdNumber ?? string.Empty,
             SenderPhone:            go.SenderPhone,
             AlternativeSenderPhone: go.AlternativeSenderPhone,

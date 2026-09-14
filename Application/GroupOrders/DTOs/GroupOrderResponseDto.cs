@@ -10,6 +10,7 @@ public sealed record GroupOrderResponseDto(
     Guid   Id,
     string SenderFirstName,
     string SenderLastName,
+    string SenderBusinessName,
     string SenderIdNumber,
     string SenderPhone,
     string? AlternativeSenderPhone,
