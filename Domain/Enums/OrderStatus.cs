@@ -31,10 +31,7 @@ public enum OrderStatus
     AcceptedGroupOrder                   = 1,
     OrderNotAccepted                     = 2,
     CourierAssignedToPickUp              = 3,
-    // 4 = CourierOnTheWayToPickUp — retired. The courier confirms pickup in one step
-    // from CourierAssignedToPickUp. Do not reuse 4: statuses persist as their *name*
-    // (HasConversion<string>), and leaving the slot empty keeps the numbering of
-    // everything below stable.
+
     CourierDeliveringToWarehouse         = 5,
     DeliveredToWarehouse                 = 6,
     AdminAcceptedOrderInWareHouse        = 7,
