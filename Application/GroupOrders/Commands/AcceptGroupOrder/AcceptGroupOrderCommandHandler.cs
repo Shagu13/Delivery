@@ -1,6 +1,7 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using Application.GroupOrders.Commands.GroupAndAcceptStandaloneOrder;
+using Application.GroupOrders.Commands.Shared;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -55,7 +56,7 @@ public sealed class AcceptGroupOrderCommandHandler : IRequestHandler<AcceptGroup
         // same guard).
         foreach (var order in groupOrder.Orders)
         {
-            if (IsTerminal(order.Status))
+            if (PickupFlowOrderMirror.TerminalBeforeWarehouse.Contains(order.Status))
                 continue;
 
             order.Status = OrderStatus.AcceptedOrder;
@@ -63,9 +64,4 @@ public sealed class AcceptGroupOrderCommandHandler : IRequestHandler<AcceptGroup
 
         await _context.SaveChangesAsync(cancellationToken);
     }
-
-    private static bool IsTerminal(OrderStatus status) =>
-        status is OrderStatus.CancelledBySender
-               or OrderStatus.CancelledByAdmin
-               or OrderStatus.OrderNotAccepted;
 }

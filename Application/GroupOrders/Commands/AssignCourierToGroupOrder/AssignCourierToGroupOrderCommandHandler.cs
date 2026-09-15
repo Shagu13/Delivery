@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.GroupOrders.Commands.Shared;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +47,11 @@ public sealed class AssignCourierToGroupOrderCommandHandler
 
         foreach (var order in groupOrder.Orders)
         {
+            // Skip a package the customer/admin already cancelled out of this batch —
+            // assigning a pickup courier must not resurrect it.
+            if (PickupFlowOrderMirror.TerminalBeforeWarehouse.Contains(order.Status))
+                continue;
+
             order.Status = OrderStatus.CourierAssignedToPickUp;
             // GroupOrder.CourierId tracks who picked up for warehouse;
             // Order.CourierId is reserved for last-mile delivery courier.

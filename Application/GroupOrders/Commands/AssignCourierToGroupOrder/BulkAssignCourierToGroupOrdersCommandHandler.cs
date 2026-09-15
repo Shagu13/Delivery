@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.GroupOrders.Commands.Shared;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -61,8 +62,11 @@ public sealed class BulkAssignCourierToGroupOrdersCommandHandler
 
             groupOrder.CourierId = courier.Id;
             groupOrder.Status    = OrderStatus.CourierAssignedToPickUp;
+            // Skip a package the customer/admin already cancelled out of this batch —
+            // assigning a pickup courier must not resurrect it.
             foreach (var order in groupOrder.Orders)
-                order.Status = OrderStatus.CourierAssignedToPickUp;
+                if (!PickupFlowOrderMirror.TerminalBeforeWarehouse.Contains(order.Status))
+                    order.Status = OrderStatus.CourierAssignedToPickUp;
 
             succeeded.Add(groupOrder.Id);
             toNotify.Add((courier.Id, groupOrder.SenderBusinessName, groupOrder.PickUpCity, groupOrder.PickUpDistrict));

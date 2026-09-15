@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.GroupOrders.Commands.Shared;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -51,7 +52,11 @@ public sealed class MarkPickedUpCommandHandler : IRequestHandler<MarkPickedUpCom
 
         go.Status      = OrderStatus.CourierDeliveringToWarehouse;
         go.PickedUpAt  = CustomTime.Now;
-        foreach (var o in go.Orders) o.Status = OrderStatus.CourierDeliveringToWarehouse;
+        // Skip a package the customer/admin already cancelled out of this batch —
+        // confirming pickup must not resurrect it.
+        foreach (var o in go.Orders)
+            if (!PickupFlowOrderMirror.TerminalBeforeWarehouse.Contains(o.Status))
+                o.Status = OrderStatus.CourierDeliveringToWarehouse;
 
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -74,7 +79,11 @@ public sealed class MarkDeliveredToWarehouseCommandHandler
 
         go.Status                  = OrderStatus.DeliveredToWarehouse;
         go.DeliveredToWarehouseAt  = CustomTime.Now;
-        foreach (var o in go.Orders) o.Status = OrderStatus.DeliveredToWarehouse;
+        // Skip a package the customer/admin already cancelled out of this batch —
+        // marking the batch delivered to warehouse must not resurrect it.
+        foreach (var o in go.Orders)
+            if (!PickupFlowOrderMirror.TerminalBeforeWarehouse.Contains(o.Status))
+                o.Status = OrderStatus.DeliveredToWarehouse;
 
         await _context.SaveChangesAsync(cancellationToken);
     }
