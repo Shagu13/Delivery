@@ -368,8 +368,8 @@ public sealed class GroupOrdersController : BaseController
         var ws = workbook.Worksheets.Add(isGeo ? "ამანათები" : "Packages");
 
         string[] headers = isGeo
-            ? new[] { "თარიღი", "გამგზავნი", "რეგიონი", "მისამართი", "მიმღები", "აღწერა/კომენტარი", "საკონტაქტო", "ასაღები თანხა", "საკურიერო" }
-            : new[] { "Date", "Sender", "Region", "Address", "Recipient", "Description/Comment", "Phone", "COD", "Service Fee" };
+            ? new[] { "თარიღი", "გამგზავნი", "ქალაქი", "მისამართი", "მიმღები", "აღწერა/კომენტარი", "საკონტაქტო", "ასაღები თანხა", "საკურიერო" }
+            : new[] { "Date", "Sender", "City", "Address", "Recipient", "Description/Comment", "Phone", "COD", "Service Fee" };
 
         for (int c = 0; c < headers.Length; c++)
             ws.Cell(1, c + 1).Value = headers[c];
@@ -381,7 +381,7 @@ public sealed class GroupOrdersController : BaseController
             ws.Cell(row, 1).Value = o.CreatedAt;
             ws.Cell(row, 1).Style.DateFormat.Format = "dd.mm";
             ws.Cell(row, 2).Value = senderName;
-            ws.Cell(row, 3).Value = isGeo ? (o.RecipientDistrictGeo ?? o.RecipientDistrict) : o.RecipientDistrict;
+            ws.Cell(row, 3).Value = isGeo ? (o.RecipientCityGeo ?? o.RecipientCity) : o.RecipientCity;
             ws.Cell(row, 4).Value = o.RecipientAddress;
             ws.Cell(row, 5).Value = o.RecipientName;
             ws.Cell(row, 6).Value = o.Description ?? string.Empty;

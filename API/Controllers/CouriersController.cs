@@ -4,6 +4,8 @@ using Application.Couriers.Commands.UpdateCourier;
 using Application.Couriers.Commands.SetCourierActiveStatus;
 using Application.Couriers.DTOs;
 using Application.Common.Interfaces;
+using Application.Finance;
+using ClosedXML.Excel;
 using Domain;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
@@ -18,19 +20,6 @@ namespace API.Controllers;
 // can't be loosened per-method (attributes combine with AND), so it lives per-action.
 public sealed class CouriersController : BaseController
 {
-    // An order is "closed" once it has left the courier's hands for good — it stops
-    // counting as something they currently hold on the day view.
-    private static readonly OrderStatus[] ClosedOrderStatuses =
-    [
-        OrderStatus.DeliveredToRecipient,
-        OrderStatus.ExchangeCompleted,
-        OrderStatus.DeliveredReturnOrderToWarehouse,
-        OrderStatus.ReturnedToSender,
-        OrderStatus.CancelledByAdmin,
-        OrderStatus.CancelledBySender,
-        OrderStatus.OrderNotAccepted,
-    ];
-
     // A batch the pickup courier will never collect — excluded from "still out on".
     private static readonly OrderStatus[] ClosedGroupOrderStatuses =
     [
@@ -182,19 +171,18 @@ public sealed class CouriersController : BaseController
 
     // ── GET /api/couriers/assigned?date=YYYY-MM-DD  (Admin) ───────────────────
     /// <summary>
-    /// Returns the orders that make up a courier's last-mile workload on the given
-    /// Georgian calendar day, each tagged with its courierId. The admin UI groups
-    /// the result by courier.
+    /// Returns the orders assigned to a courier on the given Georgian calendar day, each
+    /// tagged with its courierId. The admin UI groups the result by courier, and the
+    /// page's per-courier Excel export (<see cref="ExportAssignedForCourier"/>) filters
+    /// the same way so the two always agree.
     ///
-    /// Today  → everything the courier currently holds (assigned and not yet closed,
-    ///          no matter which day it was assigned on) plus what they closed today,
-    ///          so an order doesn't vanish from the list the moment it's delivered.
-    /// Past   → only what was actually completed that day, dated by
-    ///          DeliveredAt ?? DeliveredToWarehouseAt (Return orders finish at the
-    ///          warehouse and never get a DeliveredAt).
+    /// Filtered by <see cref="Order.AssignedToCourierAt"/> — when the admin last assigned
+    /// the order to its current courier — rather than by delivery/completion time, so a
+    /// reassignment moves the order onto its new assignment day instead of lingering under
+    /// the old one.
     ///
     /// `date` is a Georgian wall-clock day key — timestamps are stored as Georgian
-    /// wall-clock without an offset, so it compares directly against the columns.
+    /// wall-clock without an offset, so it compares directly against the column.
     /// </summary>
     [HttpGet("assigned")]
     [Authorize(Roles = "Admin,Operator")]
@@ -204,23 +192,12 @@ public sealed class CouriersController : BaseController
     {
         DateTime day    = date.Date;
         DateTime dayEnd = day.AddDays(1);
-        bool isToday    = day == CustomTime.Today;
-
-        IQueryable<Order> query = _context.Orders
-            .AsNoTracking()
-            .Where(o => o.CourierId != null);
-
-        // Half-open range rather than .Date == day: sargable, and a null completion
-        // timestamp simply falls outside it.
-        query = isToday
-            ? query.Where(o => !ClosedOrderStatuses.Contains(o.Status)
-                            || ((o.DeliveredAt ?? o.DeliveredToWarehouseAt) >= day
-                             && (o.DeliveredAt ?? o.DeliveredToWarehouseAt) <  dayEnd))
-            : query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt) >= day
-                            && (o.DeliveredAt ?? o.DeliveredToWarehouseAt) <  dayEnd);
 
         bool hideRevenue = User.IsInRole("Operator");
-        var orders = await query
+        var orders = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CourierId != null
+                     && o.AssignedToCourierAt >= day && o.AssignedToCourierAt < dayEnd)
             .OrderByDescending(o => o.AssignedToCourierAt)
             .Select(o => new
             {
@@ -251,6 +228,91 @@ public sealed class CouriersController : BaseController
             .ToListAsync(ct);
 
         return Ok(orders);
+    }
+
+    // ── GET /api/couriers/assigned/export  (Admin/Operator) ───────────────────
+    /// <summary>
+    /// Excel manifest of one courier's orders assigned on the given Georgian calendar
+    /// day — same day filter as <see cref="GetAssignedForDay"/> (by
+    /// <see cref="Order.AssignedToCourierAt"/>) and the same column layout as the Packages
+    /// page's export (<c>GroupOrdersController.ExportExcel</c>): Date, Sender, City,
+    /// Address, Recipient, Description, Phone, COD, Service Fee.
+    /// </summary>
+    [HttpGet("assigned/export")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportAssignedForCourier(
+        [FromQuery] DateTime date,
+        [FromQuery] Guid     courierId,
+        [FromQuery] string   lang = "ka",
+        CancellationToken ct = default)
+    {
+        DateTime day    = date.Date;
+        DateTime dayEnd = day.AddDays(1);
+
+        var orders = await _context.Orders
+            .AsNoTracking()
+            .Include(o => o.GroupOrder)!.ThenInclude(g => g!.Customer)
+            .Include(o => o.Customer)
+            .Where(o => o.CourierId == courierId
+                     && o.AssignedToCourierAt >= day && o.AssignedToCourierAt < dayEnd)
+            .OrderBy(o => o.CreatedAt)
+            .ToListAsync(ct);
+
+        var isGeo = lang == "ka";
+
+        // Small, rarely-changing table — a plain lookup here rather than the cached
+        // Application-layer geo dictionary (internal to that assembly).
+        var cityGeo = isGeo
+            ? (await _context.Cities.AsNoTracking().Where(c => c.DateDeleted == null).ToListAsync(ct))
+                .GroupBy(c => c.CityName).ToDictionary(g => g.Key, g => g.First().CityNameGeo)
+            : new Dictionary<string, string?>();
+
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add(isGeo ? "ამანათები" : "Packages");
+
+        string[] headers = isGeo
+            ? new[] { "თარიღი", "გამგზავნი", "ქალაქი", "მისამართი", "მიმღები", "აღწერა/კომენტარი", "საკონტაქტო", "ასაღები თანხა", "საკურიერო" }
+            : new[] { "Date", "Sender", "City", "Address", "Recipient", "Description/Comment", "Phone", "COD", "Service Fee" };
+
+        for (int c = 0; c < headers.Length; c++)
+            ws.Cell(1, c + 1).Value = headers[c];
+        ws.Row(1).Style.Font.Bold = true;
+
+        var row = 2;
+        foreach (var o in orders)
+        {
+            var customer = o.GroupOrder?.Customer ?? o.Customer;
+            var senderName = customer == null
+                ? string.Empty
+                : string.IsNullOrWhiteSpace(customer.BusinessName)
+                    ? $"{customer.FirstName} {customer.LastName}".Trim()
+                    : customer.BusinessName;
+
+            ws.Cell(row, 1).Value = o.CreatedAt;
+            ws.Cell(row, 1).Style.DateFormat.Format = "dd.mm";
+            ws.Cell(row, 2).Value = senderName;
+            ws.Cell(row, 3).Value = isGeo ? (cityGeo.GetValueOrDefault(o.RecipientCity) ?? o.RecipientCity) : o.RecipientCity;
+            ws.Cell(row, 4).Value = o.RecipientAddress;
+            ws.Cell(row, 5).Value = o.RecipientName;
+            ws.Cell(row, 6).Value = o.Description ?? string.Empty;
+            ws.Cell(row, 7).Value = o.RecipientPhone;
+            // Same COD convention as the Packages export: package COD plus, when the
+            // recipient pays the company service fee at delivery, that fee too.
+            var expectedCash = OrderFinance.ExpectedCourierCash(o);
+            if (expectedCash > 0m) ws.Cell(row, 8).Value = expectedCash;
+            ws.Cell(row, 9).Value = o.CompanyServicePrice;
+            row++;
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        var fileName = $"courier-{courierId}-{day:yyyyMMdd}.xlsx";
+        return File(ms.ToArray(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileName);
     }
 
     // ── GET /api/couriers/assigned-pickups?date=YYYY-MM-DD  (Admin) ───────────

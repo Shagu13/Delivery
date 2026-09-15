@@ -114,9 +114,8 @@ export interface CourierDayDelivery extends CourierOrder {
 }
 
 /// Fetches a day's last-mile workload per courier. `dayKey` is a Georgian calendar
-/// day ("YYYY-MM-DD"). For today the backend returns everything each courier
-/// currently holds plus what they closed today; for a past day, only what they
-/// completed that day.
+/// day ("YYYY-MM-DD"). Filtered by when the order was assigned to its courier
+/// (AssignedToCourierAt), not by delivery/completion time.
 export async function fetchAssignedForDay(
     dayKey: string,
     token: string,
@@ -127,6 +126,36 @@ export async function fetchAssignedForDay(
     });
     if (!res.ok) throw new Error('Failed to fetch assigned orders');
     return res.json();
+}
+
+/// Downloads an Excel manifest of one courier's orders assigned on `dayKey` (same day
+/// filter as `fetchAssignedForDay`). Same column layout as the Packages page's export
+/// (Date, Sender, City, Address, Recipient, Description, Phone, COD, Service Fee).
+/// Triggers a browser file save.
+export async function exportAssignedForCourierExcel(
+    dayKey: string,
+    courierId: string,
+    token: string,
+    lang: 'ka' | 'en' = 'ka',
+): Promise<void> {
+    const qs = new URLSearchParams({ date: dayKey, courierId, lang });
+    const res = await fetch(`/api/couriers/assigned/export?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.title ?? `Export failed (${res.status})`);
+    }
+    const blob        = await res.blob();
+    const url         = URL.createObjectURL(blob);
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match       = /filename[^;=\n]*=(['"]?)([^;"'\n]*)\1/.exec(disposition);
+    const filename    = match?.[2]?.trim() || 'courier-orders.xlsx';
+    const anchor      = document.createElement('a');
+    anchor.href       = url;
+    anchor.download   = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
 }
 
 /// A group-order pickup actually collected by a courier, tagged with the courier's id.

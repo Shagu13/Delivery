@@ -14,7 +14,7 @@ import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/a
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import type { AdminOrderItem } from './AdminOrdersPage';
-import { fetchCouriers, fetchAssignedForDay, fetchAssignedPickupsForDay, setCourierActiveStatus } from '../../api/couriers';
+import { fetchCouriers, fetchAssignedForDay, fetchAssignedPickupsForDay, setCourierActiveStatus, exportAssignedForCourierExcel } from '../../api/couriers';
 import { bulkAssignCourierToOrders } from '../../api/orders';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import { recipientDisplayName } from '../../utils/recipientName';
@@ -2800,7 +2800,7 @@ function AdminCouriers({
   onActiveChanged: (courierId: string, isActive: boolean) => void;
   canSeeRevenue?: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   // Free-text courier search (name / username / phone / assigned area) for this view.
   const [search, setSearch] = useState('');
   // Single global day for the whole list — defaults to today. Georgian, not browser-local:
@@ -2853,6 +2853,20 @@ function AdminCouriers({
   const reloadPickups = useCallback(() => {
     fetchAssignedPickupsForDay(dayKey, token).then(setPickups).catch(() => {});
   }, [dayKey, token]);
+
+  // Per-courier Excel download (delivery mode only) — the courier's orders assigned on
+  // the selected day, same filter and layout as the Packages page's export.
+  const [exportingCourierId, setExportingCourierId] = useState<string | null>(null);
+  const handleExportCourier = useCallback(async (courierId: string) => {
+    setExportingCourierId(courierId);
+    try {
+      await exportAssignedForCourierExcel(dayKey, courierId, token, lang);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : t.aopBulkFailed);
+    } finally {
+      setExportingCourierId(null);
+    }
+  }, [dayKey, token, lang, t]);
 
   // Cross-courier multi-select for bulk reassignment — a set of order ids (delivery mode)
   // or group-order ids (pickup mode). Cleared whenever the underlying id-space changes.
@@ -2992,9 +3006,9 @@ function AdminCouriers({
             ))}
           </div>
           <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-subtle)' }}>
-            {isToday
-              ? t.crwNavCurrentlyHeld
-              : mode === 'pickup' ? t.crwNavPickedUpOn : t.crwNavDeliveredOn}
+            {mode === 'pickup'
+              ? (isToday ? t.crwNavCurrentlyHeld : t.crwNavPickedUpOn)
+              : t.crwNavAssignedOn}
           </span>
           <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.85rem', lineHeight: 1 }} onClick={() => shiftDay(-1)} title="Previous day">‹</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 210, justifyContent: 'center' }}>
@@ -3016,7 +3030,7 @@ function AdminCouriers({
             {filteredRows.length} courier{filteredRows.length !== 1 ? 's' : ''} ·{' '}
             {mode === 'pickup'
               ? <>{totalAssigned} {t.crwModePickup.toLowerCase()} · {totalSingleOrders} {t.crwOrdersWord}</>
-              : <>{totalAssigned} {isToday ? 'assigned' : 'delivered'}</>}
+              : <>{totalAssigned} assigned</>}
           </span>
         </div>
       </div>
@@ -3117,6 +3131,8 @@ function AdminCouriers({
                 onError={setActionError}
                 selected={selected}
                 onToggleSelected={toggleSelected}
+                onExport={() => handleExportCourier(r.courier.courierId)}
+                exporting={exportingCourierId === r.courier.courierId}
               />
             ))}
           </div>
@@ -3422,10 +3438,11 @@ function isCourierRowDeliverable(o: CourierOrder): boolean {
   return o.orderType !== 'Return' && COURIER_ROW_LAST_MILE_STATUSES.includes(o.status);
 }
 
-function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, onChanged, onError, selected, onToggleSelected }: {
+function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, onChanged, onError, selected, onToggleSelected, onExport, exporting }: {
   courier: Courier; orders: CourierDayDelivery[]; canSeeRevenue?: boolean;
   token: string; couriers: Courier[]; onChanged: () => void; onError: (msg: string) => void;
   selected: Set<string>; onToggleSelected: (id: string) => void;
+  onExport: () => void; exporting: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useLanguage();
@@ -3488,6 +3505,15 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
           <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
             {courier.phoneNumber}
           </span>
+          <button
+            className="go-action-btn go-action-btn--ghost"
+            style={{ padding: '5px 11px', fontSize: '0.75rem', flexShrink: 0 }}
+            onClick={e => { e.stopPropagation(); if (!exporting) onExport(); }}
+            disabled={exporting || orders.length === 0}
+            title={t.crwDownloadBtnTitle}
+          >
+            {exporting ? t.crwDownloading : t.crwDownloadBtn}
+          </button>
         </div>
       </div>
 
