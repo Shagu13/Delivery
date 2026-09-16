@@ -18,16 +18,17 @@ public sealed class AdminCreateWalkInOrderCommandValidator
 
         When(x => x.Dto.NewCustomer is not null, () =>
         {
-            RuleFor(x => x.Dto.NewCustomer!.FirstName).NotEmpty().MaximumLength(100);
+            // Only BusinessName and PhoneNumber are collected in the "Add Package" UI —
+            // everything else (FirstName, LastName, IdNumber, City, District, Address) is
+            // optional and stored blank/null. A blank IdNumber just means no dedup / no
+            // auto-link when the person later registers (see CreateCustomerCommandHandler).
             RuleFor(x => x.Dto.NewCustomer!.BusinessName).NotEmpty().MaximumLength(150);
             RuleFor(x => x.Dto.NewCustomer!.PhoneNumber).NotEmpty().MaximumLength(20);
-            RuleFor(x => x.Dto.NewCustomer!.City).NotEmpty().MaximumLength(100);
-            RuleFor(x => x.Dto.NewCustomer!.District).NotEmpty().MaximumLength(100);
-            // Optional for an office walk-in: LastName and Address are display-only here,
-            // and a blank IdNumber just means no dedup / no auto-link when the person
-            // later registers (see CreateCustomerCommandHandler).
+            RuleFor(x => x.Dto.NewCustomer!.FirstName).MaximumLength(100);
             RuleFor(x => x.Dto.NewCustomer!.LastName).MaximumLength(100);
             RuleFor(x => x.Dto.NewCustomer!.IdNumber).MaximumLength(50);
+            RuleFor(x => x.Dto.NewCustomer!.City).MaximumLength(100);
+            RuleFor(x => x.Dto.NewCustomer!.District).MaximumLength(100);
             RuleFor(x => x.Dto.NewCustomer!.Address).MaximumLength(250);
         });
 

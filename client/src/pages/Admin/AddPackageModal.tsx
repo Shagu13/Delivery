@@ -21,13 +21,9 @@ interface Props {
 }
 
 interface CustForm {
-  firstName: string; lastName: string; idNumber: string; businessName: string;
-  phoneNumber: string; city: string; district: string; address: string;
+  businessName: string; phoneNumber: string;
 }
-const EMPTY_CUST: CustForm = {
-  firstName: '', lastName: '', idNumber: '', businessName: '',
-  phoneNumber: '', city: '', district: '', address: '',
-};
+const EMPTY_CUST: CustForm = { businessName: '', phoneNumber: '' };
 
 type OrderType = 'Send' | 'Return' | 'Exchange';
 
@@ -75,7 +71,7 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
   // Null → new customer / not loaded yet → the district's own default price is used.
   const [custPricing, setCustPricing] = useState<CustomerServicePricing | null>(null);
 
-  const [suggestFor, setSuggestFor] = useState<null | 'idNumber' | 'phoneNumber'>(null);
+  const [suggestFor, setSuggestFor] = useState<null | 'phoneNumber'>(null);
   const [results, setResults]       = useState<AdminCustomer[]>([]);
   const [searching, setSearching]   = useState(false);
 
@@ -129,11 +125,11 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
     }));
   }, [custPricing, open]);
 
-  // Debounced customer lookup while typing an ID number or phone (only when no
+  // Debounced customer lookup while typing a phone number (only when no
   // existing customer is locked in).
   useEffect(() => {
     if (!open || !token || selected || !suggestFor) { setResults([]); return; }
-    const term = (suggestFor === 'idNumber' ? cust.idNumber : cust.phoneNumber).trim();
+    const term = cust.phoneNumber.trim();
     if (term.length < 2) { setResults([]); return; }
     setSearching(true);
     const id = window.setTimeout(async () => {
@@ -147,7 +143,7 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
       }
     }, 250);
     return () => window.clearTimeout(id);
-  }, [open, token, selected, suggestFor, cust.idNumber, cust.phoneNumber]);
+  }, [open, token, selected, suggestFor, cust.phoneNumber]);
 
   useEffect(() => () => window.clearTimeout(blurTimer.current), []);
 
@@ -161,11 +157,7 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
 
   const pickCustomer = (c: AdminCustomer) => {
     setSelected(c);
-    setCust({
-      firstName: c.firstName, lastName: c.lastName, idNumber: c.idNumber ?? '',
-      businessName: c.businessName, phoneNumber: c.phoneNumber,
-      city: c.city, district: c.district, address: c.address,
-    });
+    setCust({ businessName: c.businessName, phoneNumber: c.phoneNumber });
     setResults([]); setSuggestFor(null); setCustErrors({});
   };
 
@@ -194,18 +186,14 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
   const validate = (): boolean => {
     let ok = true;
 
-    // Customer
+    // Customer — only BusinessName and PhoneNumber are collected for a walk-in
+    // customer; everything else (name, ID number, city/district, address) is optional
+    // and left blank — see AdminCreateWalkInOrderCommandValidator.
     if (!selected) {
       const ce: Partial<Record<keyof CustForm, string>> = {};
-      // LastName, IdNumber and Address are optional for a walk-in customer — see
-      // AdminCreateWalkInOrderCommandValidator. IdNumber left blank just means no
-      // auto-link/dedup on a later self-registration.
-      if (!cust.firstName.trim())    ce.firstName    = t.errFirstNameRequired;
       if (!cust.businessName.trim()) ce.businessName = t.errBusinessNameRequired;
       if (!cust.phoneNumber.trim())  ce.phoneNumber  = t.errPhoneRequired;
       else if (!isValidGeorgianMobile(cust.phoneNumber)) ce.phoneNumber = t.cgoErrInvalidPhone;
-      if (!cust.city.trim())         ce.city         = t.errCityRequired;
-      if (!cust.district.trim())     ce.district     = t.errDistrictRequired;
       setCustErrors(ce);
       if (Object.keys(ce).length) ok = false;
     }
@@ -273,10 +261,12 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
       const result = await createWalkInOrder(token, {
         existingCustomerId: selected ? selected.id : null,
         newCustomer: selected ? null : {
-          firstName: cust.firstName.trim(), lastName: cust.lastName.trim(),
-          idNumber: cust.idNumber.trim(), businessName: cust.businessName.trim(),
+          // Only BusinessName and PhoneNumber are collected in the UI — the rest is
+          // optional on the backend and left blank.
+          firstName: '', lastName: '',
+          idNumber: '', businessName: cust.businessName.trim(),
           phoneNumber: cust.phoneNumber.trim(),
-          city: cust.city.trim(), district: cust.district.trim(), address: cust.address.trim(),
+          city: '', district: '', address: '',
         },
         orders,
       });
@@ -338,60 +328,29 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
           ) : (
             <>
               <p className="ap-hint">{t.apSearchHint}</p>
-              <div className="ui-modal__row">
-                <FormField label={t.firstName} value={cust.firstName} onChange={setCF('firstName')} error={custErrors.firstName} />
-                <FormField label={`${t.lastName} ${t.cgoDescOptional}`} value={cust.lastName} onChange={setCF('lastName')} error={custErrors.lastName} />
-              </div>
               <FormField label={t.businessName} value={cust.businessName} onChange={setCF('businessName')} error={custErrors.businessName} />
-              <div className="ui-modal__row">
-                <div className="ap-suggest-wrap">
-                  <FormField
-                    label={t.custIdNumberOpt}
-                    value={cust.idNumber}
-                    onChange={setCF('idNumber')}
-                    error={custErrors.idNumber}
-                    onFocus={() => setSuggestFor('idNumber')}
-                    onBlur={() => { blurTimer.current = window.setTimeout(() => setSuggestFor(null), 150); }}
-                    autoComplete="off"
+              <div className="ap-suggest-wrap">
+                <GeorgianPhoneField
+                  label={t.phoneNumber}
+                  value={cust.phoneNumber}
+                  onValueChange={v => {
+                    setCust(f => ({ ...f, phoneNumber: v }));
+                    setCustErrors(p => ({ ...p, phoneNumber: undefined }));
+                    setApiError(null);
+                  }}
+                  error={custErrors.phoneNumber}
+                  invalidMessage={t.cgoErrInvalidPhone}
+                  onFocus={() => setSuggestFor('phoneNumber')}
+                  onBlur={() => { blurTimer.current = window.setTimeout(() => setSuggestFor(null), 150); }}
+                />
+                {suggestFor === 'phoneNumber' && (
+                  <CustomerSuggestList
+                    results={results} searching={searching} noResults={t.apNoResults}
+                    accLabel={t.apHasAccountBadge} noAccLabel={t.apNoAccountBadge}
+                    onPick={pickCustomer}
                   />
-                  {suggestFor === 'idNumber' && (
-                    <CustomerSuggestList
-                      results={results} searching={searching} noResults={t.apNoResults}
-                      accLabel={t.apHasAccountBadge} noAccLabel={t.apNoAccountBadge}
-                      onPick={pickCustomer}
-                    />
-                  )}
-                </div>
-                <div className="ap-suggest-wrap">
-                  <GeorgianPhoneField
-                    label={t.phoneNumber}
-                    value={cust.phoneNumber}
-                    onValueChange={v => {
-                      setCust(f => ({ ...f, phoneNumber: v }));
-                      setCustErrors(p => ({ ...p, phoneNumber: undefined }));
-                      setApiError(null);
-                    }}
-                    error={custErrors.phoneNumber}
-                    invalidMessage={t.cgoErrInvalidPhone}
-                    onFocus={() => setSuggestFor('phoneNumber')}
-                    onBlur={() => { blurTimer.current = window.setTimeout(() => setSuggestFor(null), 150); }}
-                  />
-                  {suggestFor === 'phoneNumber' && (
-                    <CustomerSuggestList
-                      results={results} searching={searching} noResults={t.apNoResults}
-                      accLabel={t.apHasAccountBadge} noAccLabel={t.apNoAccountBadge}
-                      onPick={pickCustomer}
-                    />
-                  )}
-                </div>
+                )}
               </div>
-              <CityDistrictPicker
-                cityValue={cust.city} districtValue={cust.district}
-                onCityChange={v => { setCust(f => ({ ...f, city: v, district: '' })); setCustErrors(p => ({ ...p, city: undefined, district: undefined })); }}
-                onDistrictChange={v => { setCust(f => ({ ...f, district: v })); setCustErrors(p => ({ ...p, district: undefined })); }}
-                cityError={custErrors.city} districtError={custErrors.district}
-              />
-              <FormField label={`${t.streetAddress} ${t.cgoDescOptional}`} value={cust.address} onChange={setCF('address')} error={custErrors.address} />
             </>
           )}
 
