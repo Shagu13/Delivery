@@ -157,6 +157,35 @@ export async function fetchGroupOrders(token: string, params: FetchGroupOrdersPa
     return res.json();
 }
 
+export interface AdminOverviewRecentItem {
+    id: string;
+    senderBusinessName: string;
+    senderFirstName: string;
+    senderLastName: string;
+    pickUpCity: string;
+    numberOfPackages: number;
+    status: string;
+    createdAt: string;
+}
+
+export interface AdminOverviewStats {
+    totalOrders: number;
+    pendingPickup: number;
+    inTransit: number;
+    recent: AdminOverviewRecentItem[];
+}
+
+/** Admin Overview tab: aggregate counts + the 8 most recently created batches. A dedicated
+ *  lightweight endpoint rather than `fetchGroupOrders(token, { pageSize: 1000 })` — that used
+ *  to pull up to 1000 fully-hydrated batches just to compute three counts and show 8 rows. */
+export async function fetchAdminOverviewStats(token: string): Promise<AdminOverviewStats> {
+    const res = await fetch(`${BASE}/overview-stats`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch overview stats');
+    return res.json();
+}
+
 /** Admin: download an Excel of packages matching the given filters, or just the selected
  *  `ids`. Mirrors the Packages page's filters server-side; triggers a browser file save. */
 export async function exportGroupOrdersExcel(

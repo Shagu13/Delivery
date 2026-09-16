@@ -276,6 +276,10 @@ public sealed class GetAllGroupOrdersQueryHandler
                 .Include(go => go.Orders)
                 .Include(go => go.Courier)
                 .Include(go => go.Customer).ThenInclude(c => c!.SpecialPrices).ThenInclude(s => s.District).ThenInclude(d => d.City)
+                // go.Orders and go.Customer.SpecialPrices are both collections — a single
+                // join (EF's SingleQuery default) would multiply rows across them. Split
+                // into one query per collection instead.
+                .AsSplitQuery()
                 .AsNoTracking()
                 .Where(go => pageGoIds.Contains(go.Id))
                 .ToListAsync(cancellationToken);

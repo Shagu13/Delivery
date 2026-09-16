@@ -18,6 +18,7 @@ using Application.GroupOrders.Commands.GroupAndWarehouseStandaloneOrder;
 using Application.GroupOrders.Commands.SetGroupOrderPickupDate;
 using Application.GroupOrders.DTOs;
 using Application.Orders.Commands.SoftDeletePackage;
+using Application.GroupOrders.Queries.GetAdminOverviewStats;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
 using Application.GroupOrders.Queries.GetCustomerGroupOrders;
 using Application.GroupOrders.Queries.GetGroupOrderLocations;
@@ -260,6 +261,16 @@ public sealed class GroupOrdersController : BaseController
         bool includeRevenue = !User.IsInRole("Operator");
         var items = result.Items.Select(go => MapToAdminResponse(go, includeRevenue)).ToList();
         return Ok(new PagedResult<AdminGroupOrderResponse>(items, result.TotalCount, result.Page, result.PageSize));
+    }
+
+    // ── GET /api/grouporders/overview-stats  (Admin Overview tab) ─────────────
+    [HttpGet("overview-stats")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(AdminOverviewStatsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOverviewStats(CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetAdminOverviewStatsQuery(), ct);
+        return Ok(result);
     }
 
     // ── GET /api/grouporders/pickup-locations  (Packages page City/District filter options,

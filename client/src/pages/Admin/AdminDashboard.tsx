@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -7,10 +7,10 @@ import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
 import { AddPackageModal } from './AddPackageModal';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
-import { fetchGroupOrders,
+import { fetchGroupOrders, fetchAdminOverviewStats,
     fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup, mergeGroupOrders, moveOrderToGroup,
     groupAndAcceptStandalone, groupAndWarehouseStandalone, bulkAssignCourierToGroupOrders } from '../../api/adminGroupOrders';
-import type { AdminGroupOrder, AdminOrder, PickupDayCustomer } from '../../api/adminGroupOrders';
+import type { AdminGroupOrder, AdminOrder, PickupDayCustomer, AdminOverviewStats } from '../../api/adminGroupOrders';
 import { EditOrderModal, type CustomerServicePricing } from './EditOrderModal';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
 import type { AdminOrderItem } from './AdminOrdersPage';
@@ -19,35 +19,42 @@ import { bulkAssignCourierToOrders } from '../../api/orders';
 import { AdminGroupOrderActions, AdminOrderRowActions } from './AdminGroupOrderActions';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { PhoneActions } from '../../components/ui/PhoneActions';
-import AdminCustomersPage from './AdminCustomersPage';
-import AdminCitiesPage from './AdminCitiesPage';
-import AdminSchedulePage from './AdminSchedulePage';
-import AdminOrdersPage from './AdminOrdersPage';
-import AdminPackagesPage from './AdminPackagesPage';
 import { useLanguage } from '../../contexts/useLanguage';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { getStatusMeta } from '../../utils/statusMeta';
 import '../../styles/dashboard.css';
 import { fetchSmsBalance } from '../../api/sms';
-import AdminWeightPriceTiersPage from './AdminWeightPriceTiersPage';
-import AdminBankAccountsPage from './AdminBankAccountsPage';
-import AdminPartnersPage from './AdminPartnersPage';
-import AdminTenantSettlementsPage from './AdminTenantSettlementsPage';
-import AdminTenantsPage from './AdminTenantsPage';
-import { TenantFinanceView } from '../Tenant/TenantFinanceView';
-import { TenantHomepageEditor } from '../Tenant/TenantHomepageEditor';
-import AdminHistoryPage from './AdminHistoryPage';
-import AdminFinancePage from './AdminFinancePage';
-import AdminReturnExchangePage from './AdminReturnExchangePage';
-import AdminOrderSearchPage from './AdminOrderSearchPage';
-import AdminDeletePackagePage from './AdminDeletePackagePage';
-import AdminOperatorsPage from './AdminOperatorsPage';
 import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 import { georgianToday, georgianDateKeyOf } from '../../utils/georgianTime';
 import { resolveDateWindow } from '../../utils/dateWindow';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
+
+// Every one of these is a whole separate admin sub-page (its own data fetching, its own
+// heavy dependencies) reachable from exactly one sidebar view. AdminDashboard itself is
+// the only lazy boundary above this (see App.tsx), so a static import here meant every one
+// of these downloaded on `/admin` load regardless of which view was actually open — lazy
+// here instead so each view's code only loads the first time that view is opened.
+const AdminCustomersPage         = lazy(() => import('./AdminCustomersPage'));
+const AdminCitiesPage            = lazy(() => import('./AdminCitiesPage'));
+const AdminSchedulePage          = lazy(() => import('./AdminSchedulePage'));
+const AdminOrdersPage            = lazy(() => import('./AdminOrdersPage'));
+const AdminPackagesPage          = lazy(() => import('./AdminPackagesPage'));
+const AdminWeightPriceTiersPage  = lazy(() => import('./AdminWeightPriceTiersPage'));
+const AdminBankAccountsPage      = lazy(() => import('./AdminBankAccountsPage'));
+const AdminPartnersPage          = lazy(() => import('./AdminPartnersPage'));
+const AdminTenantSettlementsPage = lazy(() => import('./AdminTenantSettlementsPage'));
+const AdminTenantsPage           = lazy(() => import('./AdminTenantsPage'));
+const AdminHistoryPage           = lazy(() => import('./AdminHistoryPage'));
+const AdminFinancePage           = lazy(() => import('./AdminFinancePage'));
+const AdminReturnExchangePage    = lazy(() => import('./AdminReturnExchangePage'));
+const AdminOrderSearchPage       = lazy(() => import('./AdminOrderSearchPage'));
+const AdminDeletePackagePage     = lazy(() => import('./AdminDeletePackagePage'));
+const AdminOperatorsPage         = lazy(() => import('./AdminOperatorsPage'));
+// Named exports, not default — lazy() needs a module whose default is the component.
+const TenantFinanceView    = lazy(() => import('../Tenant/TenantFinanceView').then(m => ({ default: m.TenantFinanceView })));
+const TenantHomepageEditor = lazy(() => import('../Tenant/TenantHomepageEditor').then(m => ({ default: m.TenantHomepageEditor })));
 
 // A Return order is picked up from `returnPickup*` (entered explicitly when the return was
 // created) — not the "recipient" fields, which for Return orders hold the business's own
@@ -191,7 +198,6 @@ export function AdminDashboard() {
   const [showCreateCourier, setShowCreateCourier] = useState(false);
   const [showAddPackage, setShowAddPackage] = useState(false);
   const [editCourier, setEditCourier] = useState<Courier | null>(null);
-  const [couriers, setCouriers] = useState<Courier[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // Mobile drawer (the desktop sidebar is hidden below 768px — see dashboard.css).
@@ -200,15 +206,21 @@ export function AdminDashboard() {
   // Live return/exchange badge count (SignalR) — shared with the staff nav.
   const { returnExchange: returnExchangeCount } = useAdminPendingCounts(token ?? null, !isOperator);
 
-  useEffect(() => {
-    if (!token) return;
-    fetchCouriers(token).then(setCouriers).catch(() => {});
-  }, [token]);
+  // Same ['admin', 'couriers'] cache every other admin page's own courier query reads from
+  // (AdminOverview, AdminOrders, AdminOrdersPage, AdminPackagesPage, AdminHistoryPage, …) —
+  // sharing the key means whichever page loads first warms the cache for the rest, instead
+  // of each issuing its own separate /api/couriers request.
+  const couriersQuery = useQuery({
+    queryKey: ['admin', 'couriers'] as const,
+    queryFn: () => fetchCouriers(token ?? ''),
+    enabled: !!token,
+  });
+  const couriers = couriersQuery.data ?? [];
 
   const handleSignOut = () => { signOut(); navigate('/login', { replace: true }); };
 
   const handleCourierCreated = (courier: CreateCourierResponse) => {
-    if (token) fetchCouriers(token).then(setCouriers).catch(() => {});
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'couriers'] });
     setShowCreateCourier(false);
     setToast(`Courier "${courier.fullName}" created successfully.`);
     setTimeout(() => setToast(null), 4000);
@@ -216,7 +228,7 @@ export function AdminDashboard() {
   };
 
   const handleCourierUpdated = (courierId: string, newFirstName: string, newLastName: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => {
-    setCouriers(prev => prev.map(c =>
+    queryClient.setQueryData(['admin', 'couriers'], (prev?: Courier[]) => (prev ?? []).map(c =>
       c.courierId === courierId
         ? { ...c, firstName: newFirstName, lastName: newLastName, fullName: `${newFirstName} ${newLastName}`, username: newUsername, phoneNumber: newPhone, idNumber: newIdNumber, defaultSalary: newDefaultSalary }
         : c
@@ -225,7 +237,9 @@ export function AdminDashboard() {
   };
 
   const handleCourierActiveChanged = (courierId: string, isActive: boolean) => {
-    setCouriers(prev => prev.map(c => c.courierId === courierId ? { ...c, isDeleted: !isActive, dateDeleted: isActive ? null : new Date().toISOString() } : c));
+    queryClient.setQueryData(['admin', 'couriers'], (prev?: Courier[]) => (prev ?? []).map(c =>
+      c.courierId === courierId ? { ...c, isDeleted: !isActive, dateDeleted: isActive ? null : new Date().toISOString() } : c
+    ));
   };
 
   const initials = user
@@ -585,6 +599,9 @@ export function AdminDashboard() {
           </div>
         </div>
         <main className="dashboard__content">
+          {/* AdminOverview/AdminOrders/AdminCouriers are declared in this same file, so they're
+              already part of this chunk — only the lazy() imports above need a Suspense boundary. */}
+          <Suspense fallback={<div className="go-loading"><div className="go-spinner" /></div>}>
           {activeView === 'overview'  && <AdminOverview token={token ?? ''} isOperator={isOperator} />}
           {/* Pick-Up: tenant co-admin is accept-only and can't assign couriers. Operators now manage fully. */}
           {activeView === 'orders'    && <AdminOrders key={statusParam} initialStatus={statusParam} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} />}
@@ -628,6 +645,7 @@ export function AdminDashboard() {
               initialParty={partyParam}
             />
           )}
+          </Suspense>
         </main>
       </div>
 
@@ -983,6 +1001,9 @@ const STATUS_CLASS_MAP: Record<string, string> = {
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
 
+// Couriers live in the shared ['admin', 'couriers'] cache (populated by AdminDashboard
+// itself, since the sidebar badge needs it regardless of view) — this key only covers the
+// two fetches that are actually Overview-specific.
 const ADMIN_OVERVIEW_QUERY_KEY = (isOperator: boolean) => ['admin', 'overview', isOperator] as const;
 
 function AdminOverview({ token, isOperator = false }: { token: string; isOperator?: boolean }) {
@@ -992,46 +1013,41 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
     const overviewQuery = useQuery({
         queryKey: ADMIN_OVERVIEW_QUERY_KEY(isOperator),
         queryFn: () => Promise.all([
-            fetchGroupOrders(token, { pageSize: 1000 }).then(r => r.items).catch(() => [] as AdminGroupOrder[]),
-            // Operators have no access to courier/SMS data — skip those fetches.
-            isOperator ? Promise.resolve([] as Courier[]) : fetchCouriers(token).catch(() => [] as Courier[]),
+            fetchAdminOverviewStats(token).catch(() => null as AdminOverviewStats | null),
             isOperator ? Promise.resolve(null as number | null) : fetchSmsBalance(token).catch(() => null as number | null),
-        ]).then(([groupOrders, couriers, smsBalance]) => ({ groupOrders, couriers, smsBalance })),
+        ]).then(([overviewStats, smsBalance]) => ({ overviewStats, smsBalance })),
         enabled: !!token,
     });
     const { data, isLoading: loading } = overviewQuery;
-    const groupOrders = data?.groupOrders ?? [];
-    const couriers = data?.couriers ?? [];
+    const overviewStats = data?.overviewStats ?? null;
     const smsBalance = data?.smsBalance ?? null;
+
+    // Shared with every other admin page's courier query — see AdminDashboard's own
+    // ['admin', 'couriers'] query for why this isn't fetched again here.
+    const couriersQuery = useQuery({
+        queryKey: ['admin', 'couriers'] as const,
+        queryFn: () => fetchCouriers(token),
+        enabled: !!token,
+    });
+    const couriers = couriersQuery.data ?? [];
 
     // Live refresh: when any order is placed/changed, silently revalidate this cached
     // data in the background instead of forcing a full reload/spinner. Skip a ping that
     // arrives while already fetching or moments after the last fetch — almost always an
     // echo of this same admin's own action, not new data from someone else. Mirrors
     // AdminOrders' (Pick-Up) SELF_ECHO_MS guard so a busy system doesn't re-pull this
-    // page's 1000-row group-order list + couriers + SMS balance on every single ping.
+    // page's stats + SMS balance on every single ping.
     const SELF_ECHO_MS = 4000;
     useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
         if (overviewQuery.isFetching || Date.now() - overviewQuery.dataUpdatedAt < SELF_ECHO_MS) return;
         void queryClient.invalidateQueries({ queryKey: ADMIN_OVERVIEW_QUERY_KEY(isOperator) });
     });
 
-    const totalOrders = groupOrders.reduce((sum, go) => sum + go.orders.length, 0);
-    const pendingPickup = groupOrders.filter(go =>
-        go.status === 'Pending' || go.status === 'AcceptedGroupOrder' ||
-        go.status === 'CourierAssignedToPickUp'
-    ).length;
-    const inTransit = groupOrders.reduce((sum, go) =>
-        sum + go.orders.filter(o =>
-            o.status === 'OrderIsOnItsWayToRecipientsCity' ||
-            o.status === 'CourierAssignedToDeliver' ||
-            o.status === 'CourierDeliveringTheOrderToRecipient'
-        ).length, 0);
+    const totalOrders = overviewStats?.totalOrders ?? 0;
+    const pendingPickup = overviewStats?.pendingPickup ?? 0;
+    const inTransit = overviewStats?.inTransit ?? 0;
     const activeCouriers = couriers.filter(c => !c.isDeleted).length;
-
-    const recent = [...groupOrders]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 8);
+    const recent = overviewStats?.recent ?? [];
 
     const smsBalanceDisplay = loading
         ? '…'
