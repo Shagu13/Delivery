@@ -54,7 +54,7 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     CourierDeliveringToWarehouse:    { short: 'საწყობისკენ',      description: 'კურიერს ამანათი საწყობში მიაქვს.' },
     DeliveredToWarehouse:            { short: 'საწყობშია',        description: 'კურიერმა ამანათი საწყობში მიიტანა.' },
     AdminAcceptedOrderInWareHouse:   { short: 'საწყობში',         description: 'ამანათი მზადაა გასაგზავნად.' },
-    CancelledBySender:               { short: 'გაუქმდა (მომხმარებელმა)', description: 'შეკვეთა გამგზავნმა გააუქმა.' },
+    CancelledBySender:               { short: 'გაუქმდა', description: 'შეკვეთა გამგზავნმა გააუქმა.' },
 
     // ── Order (last-mile) flow ────────────────────────────────────────────────
     AcceptedOrder:                          { short: 'მიღებულია',        description: 'კომპანიამ შეკვეთა მიიღო.' },
@@ -65,7 +65,7 @@ const STATUS_META_DATA: Record<LangKey, StatusMetaMap> = {
     DeliveredToRecipient:                   { short: 'ჩაბარდა',           description: 'ამანათი წარმატებით ჩაბარდა მიმღებს.' },
 
     // ── Admin override ────────────────────────────────────────────────────────
-    CancelledByAdmin:                { short: 'გაუქმდა (კომპანიამ)', description: 'კომპანიამ შეკვეთა გააუქმა.' },
+    CancelledByAdmin:                { short: 'გაუქმდა', description: 'კომპანიამ შეკვეთა გააუქმა.' },
     AllDelivered:                    { short: 'ჩაბარდა სრულად',  description: 'ამ ჯგუფის ყველა ამანათი ჩაბარდა ან გაუქმდა.' },
 
     // ── Return flow (standalone Return orders) ────────────────────────────────

@@ -3,8 +3,6 @@
 // user "Save as PDF" to download). Label text is Georgian by request, so senders /
 // couriers reading the physical sticker get a consistent local-language label.
 
-import { toString as qrToString } from 'qrcode';
-
 export interface ParcelLabelData {
     storeName: string;
     recipientName: string;
@@ -19,19 +17,13 @@ export interface ParcelLabelData {
 }
 
 // ── Brand assets (constant across every label) ──────────────────────────────────
-// DILO social links — canonical form (tracking query params dropped so the QR codes
-// are lower-density and easier to scan at the small printed size).
-const INSTAGRAM_URL = 'https://instagram.com/dilodeliverygeo';
-const FACEBOOK_URL  = 'https://www.facebook.com/share/1E7uXrB8Hp/';
-const LOGO_URL      = '/dilo_logo.png';
+const LOGO_URL = '/dilo_logo.png';
 
 interface BrandAssets {
-    logo:  string;   // data: URL (empty string if it failed to load)
-    igQr:  string;   // inline <svg> markup (empty string on failure)
-    fbQr:  string;
+    logo: string;   // data: URL (empty string if it failed to load)
 }
 
-// Generated once and reused — the logo and social QR codes never change.
+// Generated once and reused — the logo never changes.
 let brandAssetsPromise: Promise<BrandAssets> | null = null;
 
 async function fetchDataUrl(url: string): Promise<string> {
@@ -45,24 +37,11 @@ async function fetchDataUrl(url: string): Promise<string> {
     });
 }
 
-function qrSvg(text: string): Promise<string> {
-    // margin:2 keeps a small but scannable quiet zone; svg embeds inline (no image load).
-    // The browser build of qrcode always renders SVG from toString().
-    return qrToString(text, {
-        type: 'svg', margin: 2, errorCorrectionLevel: 'M',
-        color: { dark: '#111111', light: '#ffffff' },
-    });
-}
-
 function loadBrandAssets(): Promise<BrandAssets> {
     if (!brandAssetsPromise) {
         brandAssetsPromise = (async () => {
-            const [logo, igQr, fbQr] = await Promise.all([
-                fetchDataUrl(LOGO_URL).catch(() => ''),
-                qrSvg(INSTAGRAM_URL).catch(() => ''),
-                qrSvg(FACEBOOK_URL).catch(() => ''),
-            ]);
-            return { logo, igQr, fbQr };
+            const logo = await fetchDataUrl(LOGO_URL).catch(() => '');
+            return { logo };
         })();
     }
     return brandAssetsPromise;
@@ -87,16 +66,6 @@ function renderLogo(b: BrandAssets): string {
     return b.logo ? `<div class="brand-top"><img class="brand__logo" src="${b.logo}" alt="DILO" /></div>` : '';
 }
 
-// Social QR codes, side by side at the bottom of the label.
-function renderSocial(b: BrandAssets): string {
-    const qr = (svg: string, cap: string) =>
-        svg ? `<div class="qr">${svg}<div class="qr__cap">${cap}</div></div>` : '';
-    const ig = qr(b.igQr, 'Instagram');
-    const fb = qr(b.fbQr, 'Facebook');
-    if (!ig && !fb) return '';
-    return `<div class="brand">${ig}${fb}</div>`;
-}
-
 function renderLabel(d: ParcelLabelData, brand: BrandAssets): string {
     return `
     <div class="label">
@@ -110,13 +79,13 @@ function renderLabel(d: ParcelLabelData, brand: BrandAssets): string {
         <div class="rule"></div>
         <div class="pay"><span class="lbl">${L.toPay}:</span> <span class="amount">${esc(d.amountText)}</span></div>
         <div class="spacer"></div>
-        ${renderSocial(brand)}
         <div class="track">${L.tracking}: ${esc(d.trackingNumber)}</div>
+        <div class="spacer spacer--end"></div>
     </div>`;
 }
 
 // Selectable paper/label sizes (all fixed dimensions). `a6` is the default. Each size
-// has its own font/QR/logo scale (CSS below) so the full label fits within its bounds.
+// has its own font/logo scale (CSS below) so the full label fits within its bounds.
 interface SizeDef {
     id: string;
     label: string;   // shown in the on-screen size picker (Georgian)
@@ -190,95 +159,80 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .field { line-height: 1.4; margin-bottom: 1.5mm; word-break: break-word; overflow-wrap: anywhere; font-weight: 500; }
     .lbl { color: #000; font-weight: 500; }
     .track { font-weight: 500; }
-    .qr__cap { font-weight: 500; }
     .strong { font-weight: 700; }
     .pay { margin-top: 1mm; overflow-wrap: anywhere; }
     .amount { font-weight: 800; }
+    /* Two flex spacers split the leftover vertical space around .track so it sits
+       closer to .pay instead of being pinned to the very bottom edge. */
     .spacer { flex: 1; }
+    .spacer--end { flex-grow: 2; }
     /* Company logo header — centered above the store name. */
     .brand-top { display: flex; align-items: center; justify-content: center; margin-bottom: 3mm; }
-    /* Social QR codes, centered side by side at the bottom. */
-    .brand { display: flex; align-items: center; justify-content: center; gap: 6mm; margin-bottom: 3mm; }
     .brand__logo { width: auto; object-fit: contain; }
-    .qr { text-align: center; }
-    .qr svg { display: block; }
-    .qr__cap { color: #000; margin-top: 0.5mm; letter-spacing: 0.3px; }
     .track { letter-spacing: 0.5px; border-top: 1px solid #000; padding-top: 3mm; overflow-wrap: anywhere; }
 
     /* ── Size: A6 100×150mm (default) ── */
-    .size-a6 .label { width: 100mm; height: 150mm; padding: 8mm; }
+    .size-a6 .label { width: 100mm; height: 150mm; padding: 7mm 8mm; }
     .size-a6 .store { font-size: 19pt; }
     .size-a6 .field { font-size: 13pt; }
     .size-a6 .lbl { font-size: 10pt; }
     .size-a6 .pay { font-size: 14pt; }
     .size-a6 .amount { font-size: 20pt; }
-    .size-a6 .qr svg { width: 16mm; height: 16mm; }
-    .size-a6 .qr__cap { font-size: 7pt; }
     .size-a6 .track { font-size: 11pt; }
-    .size-a6 .brand__logo { height: 19mm; max-width: 52mm; }
+    .size-a6 .brand__logo { height: 16mm; max-width: 45mm; }
+    .size-a6 .rule { margin: 3mm 0; }
+    .size-a6 .brand-top { margin-bottom: 1.5mm; }
 
     /* ── Size: 100×74mm (half-A6 landscape height) ── */
-    .size-l100x74 .label { width: 100mm; height: 74mm; padding: 5mm; }
+    .size-l100x74 .label { width: 100mm; height: 74mm; padding: 4mm 5mm; }
     .size-l100x74 .store { font-size: 13pt; margin-bottom: 1mm; }
     .size-l100x74 .field { font-size: 9.5pt; margin-bottom: 1mm; }
     .size-l100x74 .lbl { font-size: 7.5pt; }
     .size-l100x74 .pay { font-size: 10pt; }
     .size-l100x74 .amount { font-size: 13pt; }
-    .size-l100x74 .qr svg { width: 11mm; height: 11mm; }
-    .size-l100x74 .qr__cap { font-size: 5.5pt; }
     .size-l100x74 .track { font-size: 8.5pt; padding-top: 1.5mm; }
-    .size-l100x74 .brand__logo { height: 12mm; max-width: 36mm; }
-    .size-l100x74 .rule { margin: 2mm 0; }
-    .size-l100x74 .brand { margin-bottom: 1.5mm; }
-    .size-l100x74 .brand-top { margin-bottom: 1.5mm; }
+    .size-l100x74 .brand__logo { height: 5mm; max-width: 25mm; }
+    .size-l100x74 .rule { margin: 1.5mm 0; }
+    .size-l100x74 .brand-top { margin-bottom: 0.5mm; }
 
     /* ── Size: 70×100mm ── */
-    .size-l70x100 .label { width: 70mm; height: 100mm; padding: 5mm; }
+    .size-l70x100 .label { width: 70mm; height: 100mm; padding: 4mm 5mm; }
     .size-l70x100 .store { font-size: 14pt; margin-bottom: 1.5mm; }
     .size-l70x100 .field { font-size: 10pt; }
     .size-l70x100 .lbl { font-size: 8pt; }
     .size-l70x100 .pay { font-size: 11pt; }
     .size-l70x100 .amount { font-size: 14pt; }
-    .size-l70x100 .qr svg { width: 11mm; height: 11mm; }
-    .size-l70x100 .qr__cap { font-size: 6pt; }
-    .size-l70x100 .track { font-size: 9pt; padding-top: 2mm; }
-    .size-l70x100 .brand__logo { height: 13mm; max-width: 24mm; }
-    .size-l70x100 .rule { margin: 2.5mm 0; }
-    .size-l70x100 .brand { gap: 5mm; margin-bottom: 2mm; }
-    .size-l70x100 .brand-top { margin-bottom: 2mm; }
+    .size-l70x100 .track { font-size: 9pt; padding-top: 1.5mm; }
+    .size-l70x100 .brand__logo { height: 10mm; max-width: 20mm; }
+    .size-l70x100 .rule { margin: 1.8mm 0; }
+    .size-l70x100 .brand-top { margin-bottom: 1mm; }
 
     /* ── Size: 58×40mm (small label sticker) — very compact ── */
-    .size-l58x40 .label { width: 58mm; height: 40mm; padding: 2.5mm; }
+    .size-l58x40 .label { width: 58mm; height: 40mm; padding: 2mm 2.5mm; }
     .size-l58x40 .store { font-size: 7.5pt; line-height: 1.05; margin-bottom: 0.5mm; }
     .size-l58x40 .field { font-size: 5.5pt; line-height: 1.15; margin-bottom: 0.3mm; }
     .size-l58x40 .lbl { font-size: 4.5pt; }
     .size-l58x40 .pay { font-size: 7pt; margin-top: 0.5mm; }
     .size-l58x40 .amount { font-size: 9pt; }
-    .size-l58x40 .qr svg { width: 7mm; height: 7mm; }
-    .size-l58x40 .qr__cap { font-size: 3.5pt; margin-top: 0.2mm; }
-    .size-l58x40 .track { font-size: 5pt; padding-top: 1mm; }
-    .size-l58x40 .brand__logo { height: 6mm; max-width: 24mm; }
+    .size-l58x40 .track { font-size: 5pt; padding-top: 0.8mm; }
+    .size-l58x40 .brand__logo { height: 5mm; max-width: 20mm; }
     /* Tiny type dithers worst — go heavier so strokes stay solid on paper. */
     .size-l58x40 .field, .size-l58x40 .lbl, .size-l58x40 .track { font-weight: 600; }
-    .size-l58x40 .rule { margin: 0.8mm 0; }
-    .size-l58x40 .brand { gap: 4mm; margin-bottom: 0.8mm; }
-    .size-l58x40 .brand-top { margin-bottom: 0.8mm; }
+    .size-l58x40 .rule { margin: 0.6mm 0; }
+    .size-l58x40 .brand-top { margin-bottom: 0.4mm; }
 
     /* ── Size: 40×58mm (small label sticker, portrait) — very compact ── */
-    .size-l40x58 .label { width: 40mm; height: 58mm; padding: 2.5mm; }
+    .size-l40x58 .label { width: 40mm; height: 58mm; padding: 2mm 2.5mm; }
     .size-l40x58 .store { font-size: 8pt; line-height: 1.1; margin-bottom: 0.8mm; }
     .size-l40x58 .field { font-size: 6pt; line-height: 1.2; margin-bottom: 0.5mm; }
     .size-l40x58 .lbl { font-size: 4.5pt; }
     .size-l40x58 .pay { font-size: 7.5pt; margin-top: 0.8mm; }
     .size-l40x58 .amount { font-size: 10pt; }
-    .size-l40x58 .qr svg { width: 8mm; height: 8mm; }
-    .size-l40x58 .qr__cap { font-size: 3.5pt; margin-top: 0.2mm; }
-    .size-l40x58 .track { font-size: 5.5pt; padding-top: 1.2mm; }
-    .size-l40x58 .brand__logo { height: 7mm; max-width: 30mm; }
+    .size-l40x58 .track { font-size: 5.5pt; padding-top: 1mm; }
+    .size-l40x58 .brand__logo { height: 6mm; max-width: 25mm; }
     .size-l40x58 .field, .size-l40x58 .lbl, .size-l40x58 .track { font-weight: 600; }
-    .size-l40x58 .rule { margin: 1.2mm 0; }
-    .size-l40x58 .brand { gap: 4mm; margin-bottom: 1.2mm; }
-    .size-l40x58 .brand-top { margin-bottom: 1.5mm; }
+    .size-l40x58 .rule { margin: 0.9mm 0; }
+    .size-l40x58 .brand-top { margin-bottom: 0.75mm; }
 </style>
 </head>
 <body class="size-${DEFAULT_SIZE}">
