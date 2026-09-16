@@ -989,7 +989,7 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
     const { t } = useLanguage();
     const queryClient = useQueryClient();
 
-    const { data, isLoading: loading } = useQuery({
+    const overviewQuery = useQuery({
         queryKey: ADMIN_OVERVIEW_QUERY_KEY(isOperator),
         queryFn: () => Promise.all([
             fetchGroupOrders(token, { pageSize: 1000 }).then(r => r.items).catch(() => [] as AdminGroupOrder[]),
@@ -999,13 +999,20 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
         ]).then(([groupOrders, couriers, smsBalance]) => ({ groupOrders, couriers, smsBalance })),
         enabled: !!token,
     });
+    const { data, isLoading: loading } = overviewQuery;
     const groupOrders = data?.groupOrders ?? [];
     const couriers = data?.couriers ?? [];
     const smsBalance = data?.smsBalance ?? null;
 
     // Live refresh: when any order is placed/changed, silently revalidate this cached
-    // data in the background instead of forcing a full reload/spinner.
+    // data in the background instead of forcing a full reload/spinner. Skip a ping that
+    // arrives while already fetching or moments after the last fetch — almost always an
+    // echo of this same admin's own action, not new data from someone else. Mirrors
+    // AdminOrders' (Pick-Up) SELF_ECHO_MS guard so a busy system doesn't re-pull this
+    // page's 1000-row group-order list + couriers + SMS balance on every single ping.
+    const SELF_ECHO_MS = 4000;
     useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
+        if (overviewQuery.isFetching || Date.now() - overviewQuery.dataUpdatedAt < SELF_ECHO_MS) return;
         void queryClient.invalidateQueries({ queryKey: ADMIN_OVERVIEW_QUERY_KEY(isOperator) });
     });
 
