@@ -250,6 +250,12 @@ public sealed class CouriersController : BaseController
         DateTime day    = date.Date;
         DateTime dayEnd = day.AddDays(1);
 
+        var courierName = await _context.Couriers
+            .AsNoTracking()
+            .Where(c => c.Id == courierId)
+            .Select(c => c.FirstName + " " + c.LastName)
+            .FirstOrDefaultAsync(ct);
+
         var orders = await _context.Orders
             .AsNoTracking()
             .Include(o => o.GroupOrder)!.ThenInclude(g => g!.Customer)
@@ -309,10 +315,23 @@ public sealed class CouriersController : BaseController
 
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
-        var fileName = $"courier-{courierId}-{day:yyyyMMdd}.xlsx";
+        // "dd.mm" rather than a literal "dd/mm" — '/' isn't a legal filename character.
+        var namePart = SanitizeForFileName(courierName) is { Length: > 0 } n ? n : courierId.ToString();
+        var fileName = $"{namePart}-{day:dd.MM}.xlsx";
         return File(ms.ToArray(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             fileName);
+    }
+
+    // Collapses a courier's display name into something safe to hand to the filesystem/
+    // Content-Disposition header — strips characters Windows/macOS forbid in filenames and
+    // trims the runs of spaces/dashes that leaves behind.
+    private static string SanitizeForFileName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+        var invalid = System.IO.Path.GetInvalidFileNameChars();
+        var cleaned = new string(name.Where(ch => !invalid.Contains(ch)).ToArray()).Trim();
+        return System.Text.RegularExpressions.Regex.Replace(cleaned, @"\s+", " ");
     }
 
     // ── GET /api/couriers/assigned-pickups?date=YYYY-MM-DD  (Admin) ───────────
