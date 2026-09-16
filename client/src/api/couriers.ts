@@ -149,8 +149,15 @@ export async function exportAssignedForCourierExcel(
     const blob        = await res.blob();
     const url         = URL.createObjectURL(blob);
     const disposition = res.headers.get('content-disposition') ?? '';
-    const match       = /filename[^;=\n]*=(['"]?)([^;"'\n]*)\1/.exec(disposition);
-    const filename    = match?.[2]?.trim() || 'courier-orders.xlsx';
+    // Non-ASCII (Georgian) names arrive as RFC 5987 `filename*=UTF-8''<percent-encoded>`,
+    // alongside an ASCII-safe `filename="___ ___"` fallback the server sends for older
+    // clients — that fallback appears first in the header, so it must be checked second
+    // here or the courier's real name never makes it into the saved file.
+    const starMatch = /filename\*=UTF-8''([^;\n]*)/i.exec(disposition);
+    const plainMatch = /filename=(['"]?)([^;"'\n]*)\1/i.exec(disposition);
+    const filename = starMatch
+        ? decodeURIComponent(starMatch[1].trim())
+        : plainMatch?.[2]?.trim() || 'courier-orders.xlsx';
     const anchor      = document.createElement('a');
     anchor.href       = url;
     anchor.download   = filename;
