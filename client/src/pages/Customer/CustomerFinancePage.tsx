@@ -8,12 +8,10 @@ import { fetchMyOrderFinance, fetchMyPaymentReceipts, downloadMyOrderFinanceExce
 import type { OrderFinanceLine, PaymentReceipt } from '../../api/orderFinance';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
+import { round2, isCancelledNonBillable, serviceOutstanding, codOutstanding } from '../../utils/orderFinanceOutstanding';
 import '../../styles/dashboard.css';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
-
-// Terminal cancelled statuses — listed for transparency with "—" amounts (no money owed).
-const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
 
 /** Format a Date as a local "YYYY-MM-DD" string (matches the date-input value). */
 const toDateStr = (d: Date) =>
@@ -82,12 +80,12 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
         : t.aopOrderTypeSend;
     const place = [locCity(line.recipientCity), locDistrict(line.recipientDistrict)].filter(Boolean).join(', ');
     // Cancelled (non-billable) orders are listed for transparency but owe/collect nothing → "—".
-    const isCancelledNonBillable = CANCELLED_STATUSES.has(line.status) && !line.isBillableFailedDelivery;
+    const cancelledNonBillable = isCancelledNonBillable(line);
     // A failed delivery or any cancelled order collected no COD, so nothing is owed back.
-    const cod = (line.isBillableFailedDelivery || isCancelledNonBillable) ? 0 : (line.codAmount ?? 0);
+    const cod = (line.isBillableFailedDelivery || cancelledNonBillable) ? 0 : (line.codAmount ?? 0);
     // Use the server's computed truth: a failed delivery shifts the fee to the sender even when
     // the order was originally recipient-pays. A non-billable cancellation owes nothing.
-    const isSenderPays = line.senderOwesService && !isCancelledNonBillable;
+    const isSenderPays = line.senderOwesService && !cancelledNonBillable;
     const servicePaid = line.companyServicePaymentStatus === 'Paid';
     // COD is only owed back to the customer when there is a package amount to collect.
     // Orders with no COD (codAmount null/0) have nothing to pay back → no paid/unpaid label.
@@ -126,7 +124,7 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
             </td>
             {/* COD — company owes customer. "—" for cancelled/failed (nothing collected). */}
             <td style={{ ...cell, textAlign: 'right' }}>
-                {(line.isBillableFailedDelivery || isCancelledNonBillable) ? (
+                {(line.isBillableFailedDelivery || cancelledNonBillable) ? (
                     <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
                 ) : (
                     <>
@@ -147,7 +145,7 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
             </td>
             {/* Service fee — "—" for a non-billable cancellation (nothing owed). */}
             <td style={{ ...cell, textAlign: 'right' }}>
-                {isCancelledNonBillable ? (
+                {cancelledNonBillable ? (
                     <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
                 ) : (
                     <>
@@ -287,27 +285,20 @@ export function CustomerFinancePage() {
         && (!address || (i.recipientAddress ?? '').toLowerCase().includes(address.trim().toLowerCase())));
     const hasLocationFilter = !!city || !!district || !!address.trim();
 
-    // Whether an order is a cancelled, non-billable line (listed for transparency, owes nothing).
-    const cancelledNonBillable = (i: OrderFinanceLine) =>
-        CANCELLED_STATUSES.has(i.status) && !i.isBillableFailedDelivery;
-
-    // Gross period totals (the reconciliation the customer sees, mirroring the admin Payments net):
-    //  · codGross     — COD the company collected for the customer's packages → the company owes it.
-    //  · serviceGross — sender-paid service fee the customer owes the company.
-    // Failed/cancelled-non-billable orders collected no COD; a non-billable cancellation owes no
-    // service either. These are GROSS figures for the period — deliberately not reduced by payments
-    // already made.
-    const codGross = filtered.reduce(
-        (s, i) => (i.isBillableFailedDelivery || cancelledNonBillable(i)) ? s : s + (i.codAmount ?? 0), 0);
-    const serviceGross = filtered.reduce(
-        (s, i) => (i.senderOwesService && !cancelledNonBillable(i)) ? s + i.companyServicePrice : s, 0);
+    // Remaining (outstanding) balances — mirrors the admin's per-customer "owed" figures:
+    //  · codRemaining     — COD the company still has to pay out for these orders.
+    //  · serviceRemaining — sender-paid service fee the customer still has to pay the company.
+    // Both are already net of whatever's been paid so far (see codOutstanding/serviceOutstanding);
+    // that already-paid portion is what the Balance card below breaks out separately.
+    const codRemaining = round2(filtered.reduce((s, i) => s + codOutstanding(i), 0));
+    const serviceRemaining = round2(filtered.reduce((s, i) => s + serviceOutstanding(i), 0));
 
     // Balance — cash that has actually changed hands so far: COD the company has already paid out
     // to the customer, minus the service fee the customer has already paid the company.
     const codPaid = filtered.reduce(
-        (s, i) => (i.isBillableFailedDelivery || cancelledNonBillable(i)) ? s : s + (i.codPaidToCustomerAmount ?? 0), 0);
+        (s, i) => (i.isBillableFailedDelivery || isCancelledNonBillable(i)) ? s : s + (i.codPaidToCustomerAmount ?? 0), 0);
     const servicePaid = filtered.reduce(
-        (s, i) => (i.senderOwesService && !cancelledNonBillable(i)) ? s + (i.servicePaidByCustomerAmount ?? 0) : s, 0);
+        (s, i) => (i.senderOwesService && !isCancelledNonBillable(i)) ? s + (i.servicePaidByCustomerAmount ?? 0) : s, 0);
     const codPaidNet = codPaid - servicePaid;
 
     // Receipts-mode totals: gross paid out per type, and the net cash handed to the customer
@@ -544,8 +535,8 @@ export function CustomerFinancePage() {
                             );
                         })()}
                         {[
-                            { label: t.ofinSumCodCollected, value: gel(codGross), color: '#059669' },
-                            { label: t.ofinSumYouOwe,       value: gel(serviceGross), color: '#dc2626' },
+                            { label: t.ofinSumCodCollected, value: gel(codRemaining), color: '#059669' },
+                            { label: t.ofinSumYouOwe,       value: gel(serviceRemaining), color: '#dc2626' },
                         ].map(({ label, value, color }) => (
                             <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '1.05rem', fontWeight: 800, color }}>{value}</div>

@@ -24,6 +24,7 @@ import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 import { OutstandingBalancesModal } from './OutstandingBalancesModal';
 import { MultiCityDistrictFilter } from '../../components/ui/MultiCityDistrictFilter';
 import type { CityDistrictOption } from '../../components/ui/MultiCityDistrictFilter';
+import { round2, CANCELLED_STATUSES, isCancelledNonBillable, serviceOutstanding, codOutstanding } from '../../utils/orderFinanceOutstanding';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -328,30 +329,12 @@ function SignedRow({ label, value, sign }: { label: string; value: number; sign:
 
 // ── Customer settlement — aggregate summary + COD payment with allocation ──────────
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+// round2 / CANCELLED_STATUSES / isCancelledNonBillable / serviceOutstanding / codOutstanding
+// now live in utils/orderFinanceOutstanding.ts, shared with CustomerFinancePage.tsx.
 
-// Outstanding per order for each flow — shared by the Payments status filter and the
-// settle card so both reason about "owed" identically.
-// Terminal cancelled statuses. A cancelled order that is NOT a billable failed delivery owes
-// nothing — it's listed only for transparency (shown with "—" amounts).
-const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySender', 'OrderNotAccepted']);
-const isCancelledNonBillable = (o: OrderFinanceLine) => CANCELLED_STATUSES.has(o.status) && !o.isBillableFailedDelivery;
 // No COD is owed/collected unless the order was actually delivered (excludes cancelled,
 // postponed and in-progress orders, plus failed deliveries) → those show "—".
 const hasNoCod = (o: OrderFinanceLine) => o.isBillableFailedDelivery || o.deliveredAt == null;
-
-// COD is only owed back once the company has collected it (i.e. on delivery); a
-// not-yet-delivered order (surfaced for advance service payment) contributes 0.
-// Use the server's computed truth (senderOwesService) so failed deliveries — whose fee shifts
-// to the sender even when originally recipient-pays — are counted as owed. A non-billable
-// cancellation owes nothing even if it was sender-pays.
-const serviceOutstanding = (o: OrderFinanceLine) => (o.senderOwesService && !isCancelledNonBillable(o))
-    ? round2(Math.max(0, o.companyServicePrice - (o.servicePaidByCustomerAmount ?? 0)))
-    : 0;
-// A failed delivery collected no COD, so nothing is owed back even though it is "dated".
-const codOutstanding = (o: OrderFinanceLine) => (o.deliveredAt && !o.isBillableFailedDelivery)
-    ? round2(Math.max(0, (o.codAmount ?? 0) - (o.codPaidToCustomerAmount ?? 0)))
-    : 0;
 
 // ── Payments status buckets ───────────────────────────────────────────────────────
 type PayFilter = 'all' | 'pending' | 'paid';
