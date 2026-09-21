@@ -30,9 +30,6 @@ interface Props {
   districtLookup?: Record<string, District>;
   /** When the customer's account forces all-in pricing, the per-package checkbox is hidden. */
   serviceIncludedForced?: boolean;
-  /** Returns are standalone orders and can never join a batch, so the type is hidden when
-   *  appending to one — the backend validator would reject the whole submission. */
-  allowReturn?: boolean;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
 }
@@ -114,7 +111,6 @@ interface DetailProps {
   pickupDistrictName?: string | null;
   districtLookup: Record<string, District>;
   serviceIncludedForced: boolean;
-  allowReturn: boolean;
   onChange: (index: number, field: keyof OrderItemRequest, value: string | boolean | number | null) => void;
   onRemove: (index: number) => void;
   onPrev: () => void;
@@ -126,7 +122,7 @@ interface DetailProps {
 
 function PackageDetail({
   index, pkg, errors, canRemove, customerPricing, weightTiers,
-  senderAddress, pickupDistrictName, districtLookup, serviceIncludedForced, allowReturn, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
+  senderAddress, pickupDistrictName, districtLookup, serviceIncludedForced, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
 }: DetailProps) {
   const { t } = useLanguage();
   const fe = (f: string) => errors[`orders[${index}].${f}`];
@@ -267,7 +263,6 @@ function PackageDetail({
           <div className="psl-section__label">{t.cgoOrderTypeLabel ?? 'Order type'}</div>
           <div className="psl-type-row">
             {(['Send', 'Return', 'Exchange'] as OrderType[])
-              .filter(tp => tp !== 'Return' || allowReturn)
               .map(tp => {
               const s = ORDER_TYPE_COLORS[tp];
               return (
@@ -516,7 +511,7 @@ function PackageDetail({
 
 // ── Main sidebar component ────────────────────────────────────────────────────
 
-export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, pickupDistrictName, districtLookup = {}, serviceIncludedForced = false, allowReturn = true, onChange, onRemove }: Props) {
+export function PackageSidebarLayout({ packages, errors, customerPricing, weightTiers = [], senderAddress, pickupDistrictName, districtLookup = {}, serviceIncludedForced = false, onChange, onRemove }: Props) {
   const { t } = useLanguage();
   const [activeIndex, setActiveIndex] = useState(0);
   const [listCollapsed, setListCollapsed] = useState(false);
@@ -663,7 +658,6 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
           pickupDistrictName={pickupDistrictName}
           districtLookup={districtLookup}
           serviceIncludedForced={serviceIncludedForced}
-          allowReturn={allowReturn}
           onChange={onChange}
           onRemove={handleRemove}
           onPrev={() => setActiveIndex(safeIndex - 1)}

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { addOrdersToBatch, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
+import { createGroupOrder, addOrdersToBatch, downloadExcelTemplate, parseGroupOrderExcel, ApiError } from '../../api/groupOrders';
 import { getMyProfile, getMyOrders } from '../../api/customers';
 import type { Customer, CustomerGroupOrder, CustomerSecondaryAddress } from '../../api/customers';
 import { useCart } from '../../contexts/useCart';
@@ -69,7 +69,7 @@ const EMPTY_PACKAGE: OrderItemRequest = {
     recipientAddress:             '',
     description:                  '',
     isFragile:                    false,
-    productPaymentStatus:         'NotPaid',
+    productPaymentStatus:         'Paid',
     whoPaysForCompanyService:     'Recipient',
     orderType:                    'Send',
     returnPickupAddress:          undefined,
@@ -544,17 +544,61 @@ export function CreateGroupOrderPage() {
         }
 
         // ── Append mode → straight into the existing open batch ───────────────
+        // Returns are standalone orders and can never join a batch (the backend
+        // validator rejects the whole request if one is mixed in), so they're
+        // split out and created through the normal create endpoint instead —
+        // which already knows how to carve standalone Returns out of a mixed
+        // submission (see CreateGroupOrderCommandHandler). Send/Exchange
+        // packages still go through the batch-append endpoint pinned to this
+        // exact batch.
+        const indexed     = ordersPayload.map((p, i) => ({ p, i }));
+        const returnItems = indexed.filter(x => x.p.orderType === 'Return');
+        const batchItems  = indexed.filter(x => x.p.orderType !== 'Return');
+
         setSubmitting(true);
+        let failedItems = indexed;
         try {
-            const response = await addOrdersToBatch(batchId!, ordersPayload, token!);
-            setResult(response);
+            const responses: CreateGroupOrderResponse[] = [];
+
+            if (batchItems.length > 0) {
+                failedItems = batchItems;
+                responses.push(await addOrdersToBatch(batchId!, batchItems.map(x => x.p), token!));
+            }
+            if (returnItems.length > 0) {
+                failedItems = returnItems;
+                responses.push(await createGroupOrder({
+                    senderFirstName:    sender.senderFirstName,
+                    senderLastName:     sender.senderLastName,
+                    senderIdNumber:     sender.senderIdNumber?.trim() || undefined,
+                    senderBusinessName: appendBatch?.senderBusinessName ?? sender.senderBusinessName,
+                    senderPhone:        appendBatch?.senderPhone || sender.senderPhone,
+                    alternativeSenderPhone: appendBatch?.alternativeSenderPhone || undefined,
+                    pickUpCity:         appendBatch!.pickUpCity,
+                    pickUpDistrict:     appendBatch!.pickUpDistrict,
+                    pickUpAddress:      appendBatch!.pickUpAddress ?? '',
+                    orders:             returnItems.map(x => x.p),
+                }, token!));
+            }
+
+            setResult({
+                groupOrderId:       batchId!,
+                senderBusinessName: appendBatch?.senderBusinessName ?? '',
+                orders:             responses.flatMap(r => r.orders),
+            });
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err) {
             if (err instanceof ApiError) {
                 if (err.errors) {
+                    // Error keys are indexed into whichever sub-array was in flight
+                    // when the request failed — remap back to the original package
+                    // index so the right editor lights up.
                     const mapped: ValidationErrors = {};
                     Object.entries(err.errors).forEach(([key, messages]) => {
-                        mapped[key.toLowerCase()] = (messages as string[])[0];
+                        const m = key.match(/orders\[(\d+)\](.*)/i);
+                        const remapped = m && failedItems[Number(m[1])]
+                            ? `orders[${failedItems[Number(m[1])].i}]${m[2]}`
+                            : key;
+                        mapped[remapped.toLowerCase()] = (messages as string[])[0];
                     });
                     setErrors(mapped);
                     scrollToTopError();
@@ -839,7 +883,6 @@ export function CreateGroupOrderPage() {
                                 pickupDistrictName={appendMode ? appendBatch?.pickUpDistrict : sender.pickUpDistrict}
                                 districtLookup={districtLookup}
                                 serviceIncludedForced={serviceIncludedForced}
-                                allowReturn={!appendMode}
                                 onChange={handlePackageChange}
                                 onRemove={removePackage}
                             />
