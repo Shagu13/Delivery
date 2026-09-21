@@ -317,6 +317,9 @@ export interface CourierOrderHistory {
     createdAt: string;
     deliveredAt: string | null;
     cancelledAt: string | null;
+    /** The sender's (not recipient's) business name and phone. */
+    shopName: string | null;
+    shopPhone: string | null;
 }
 
 export async function fetchMyDeliveryHistory(token: string): Promise<CourierOrderHistory[]> {

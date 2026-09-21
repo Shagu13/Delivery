@@ -122,6 +122,18 @@ function DeliveryHistoryTab({ token }: { token: string }) {
                     location={`${order.recipientCity}, ${order.recipientDistrict}`}
                     address={order.recipientAddress}
                     note={order.description}
+                    extraLine={
+                        (order.shopName || order.shopPhone) && (
+                            <div className="hist-card__line">
+                                <span>🏬</span>
+                                <span>
+                                    {order.shopName}
+                                    {order.shopName && order.shopPhone && ' · '}
+                                    {order.shopPhone}
+                                </span>
+                            </div>
+                        )
+                    }
                     dates={<>
                         <div className="hist-card__date">🗓 {t.cdHistCreated} {fmt(order.createdAt)}</div>
                         {closedAt && (

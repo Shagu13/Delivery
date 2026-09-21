@@ -38,8 +38,14 @@ public sealed class GetCourierDeliveryHistoryQueryHandler
         // one, and both are billable failed deliveries the courier earns salary for — so they
         // belong in their history. Orders cancelled at warehouse acceptance also carry a reason
         // but have no last-mile CourierId, so the courier filter already excludes them.
+        // GroupOrder (Send/Exchange) and Customer (standalone Return) are mutually
+        // exclusive per Order — see the ownership XOR on Order.CustomerId — so exactly
+        // one supplies the shop name/phone. Included eagerly for a single query, not a
+        // per-row lookup.
         var orders = await _context.Orders
             .AsNoTracking()
+            .Include(o => o.GroupOrder)
+            .Include(o => o.Customer)
             .Where(o => o.CourierId == courier.Id
                      && (terminalStatuses.Contains(o.Status) || o.CancellationReason != null))
             .OrderByDescending(o => o.DeliveredAt ?? o.CancelledAt ?? o.CreatedAt)
@@ -56,7 +62,9 @@ public sealed class GetCourierDeliveryHistoryQueryHandler
             Status:             o.Status,
             CreatedAt:          o.CreatedAt,
             DeliveredAt:        o.DeliveredAt,
-            CancelledAt:        o.CancelledAt
+            CancelledAt:        o.CancelledAt,
+            ShopName:           o.GroupOrder?.SenderBusinessName ?? o.Customer?.BusinessName,
+            ShopPhone:          o.GroupOrder?.SenderPhone        ?? o.Customer?.PhoneNumber
         )).ToList();
     }
 }
