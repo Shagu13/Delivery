@@ -29,10 +29,16 @@ export default function AdminRecipientsPage({ token }: { token: string }) {
 
   useEffect(() => { setPage(1); }, [debouncedSearch]);
 
+  // A single-character term is the most expensive case for the backend's Contains() scan
+  // (it matches almost every row) and the least useful to the admin, so it's skipped rather
+  // than sent — the previous page (or the unfiltered directory) stays on screen via
+  // keepPreviousData until there's enough of a term to actually narrow results.
+  const searchLongEnough = debouncedSearch.trim().length === 0 || debouncedSearch.trim().length >= 2;
+
   const query = useQuery({
     queryKey: ['admin', 'recipients', 'list', debouncedSearch, page] as const,
     queryFn: () => fetchRecipients(token, page, PAGE_SIZE, debouncedSearch),
-    enabled: !!token,
+    enabled: !!token && searchLongEnough,
     placeholderData: keepPreviousData,
   });
 

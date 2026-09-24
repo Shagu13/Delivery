@@ -46,11 +46,15 @@ public sealed class GetRecipientsDirectoryQueryHandler
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
-            var term = request.Search.Trim().ToLower();
+            // No .ToLower() — the database's default collation (SQL_Latin1_General_CP1_CI_AS)
+            // is already case-insensitive, and wrapping the column in .ToLower() forces SQL
+            // Server to evaluate LOWER() per row instead of scanning the RecipientName/Phone/
+            // Address indexes directly (Persistence/AppDbContext.cs ~L302-304).
+            var term = request.Search.Trim();
             filtered = filtered.Where(o =>
-                o.RecipientPhone.ToLower().Contains(term)  ||
-                o.RecipientName.ToLower().Contains(term)   ||
-                o.RecipientAddress.ToLower().Contains(term));
+                o.RecipientPhone.Contains(term)  ||
+                o.RecipientName.Contains(term)   ||
+                o.RecipientAddress.Contains(term));
         }
 
         var grouped = filtered
