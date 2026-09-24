@@ -107,6 +107,7 @@ public sealed class GetCourierPickupHistoryQueryHandler
             SenderFirstName:       go.SenderFirstName,
             SenderLastName:        go.SenderLastName,
             SenderBusinessName:    go.SenderBusinessName,
+            SenderPhone:           go.SenderPhone,
             PickUpCity:            go.PickUpCity,
             PickUpDistrict:        go.PickUpDistrict,
             PickUpAddress:         go.PickUpAddress,

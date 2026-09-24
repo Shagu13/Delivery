@@ -774,25 +774,6 @@
     gap: 10px;
 }
 
-.courier-card__phone-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--color-accent);
-    text-decoration: none;
-    padding: 3px 10px;
-    border-radius: 20px;
-    border: 1.5px solid var(--color-accent);
-    transition: background 0.15s, color 0.15s;
-}
-
-.courier-card__phone-link:active {
-    background: var(--color-accent);
-    color: #fff;
-}
-
 .courier-card__map-link {
     display: inline-flex;
     align-items: center;

@@ -7,6 +7,8 @@ public sealed record CourierOrderDto(
     Guid   Id,
     string TrackingNumber,
     string? SenderBusinessName,
+    /// <summary>The sender's (shop's) phone — sourced the same way as <see cref="SenderBusinessName"/>.</summary>
+    string? SenderPhone,
     string RecipientName,
     string RecipientPhone,
     string RecipientCity,

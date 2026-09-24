@@ -557,6 +557,7 @@ export interface CourierPickupHistory {
     senderFirstName: string;
     senderLastName: string;
     senderBusinessName: string;
+    senderPhone: string;
     pickUpCity: string;
     pickUpDistrict: string;
     pickUpAddress: string;

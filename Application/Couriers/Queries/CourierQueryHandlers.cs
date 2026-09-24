@@ -177,6 +177,7 @@ internal static class CourierOrderMapping
         // Send/Exchange carry the sender name on their GroupOrder; standalone Return orders
         // have no GroupOrder, so fall back to the owning customer's business name.
         SenderBusinessName:      o.GroupOrder?.SenderBusinessName ?? o.Customer?.BusinessName,
+        SenderPhone:             o.GroupOrder?.SenderPhone ?? o.Customer?.PhoneNumber,
         RecipientName:           o.RecipientName,
         RecipientPhone:          o.RecipientPhone,
         RecipientCity:           o.RecipientCity,

@@ -112,6 +112,8 @@ export interface CourierOrder {
     trackingNumber: string;
     orderType: 'Send' | 'Return' | 'Exchange';
     senderBusinessName: string | null;
+    /** The sender's (shop's) phone — sourced the same way as senderBusinessName. */
+    senderPhone: string | null;
     recipientName: string;
     recipientPhone: string;
     recipientCity: string;

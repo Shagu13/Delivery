@@ -6,6 +6,7 @@ import {
 import type { AdminGroupOrder } from '../../../api/adminGroupOrders';
 import { markReturnPickedUp, markReturnDeliveredWarehouse } from '../../../api/orders';
 import type { CourierOrder } from '../../../api/orders';
+import { PhoneActions } from '../../../components/ui/PhoneActions';
 import { SwipeButton } from './SwipeButton';
 import { AddressMapLink } from './AddressMapLink';
 import { useGeoSort, distanceToAddress } from './useGeoSort';
@@ -313,17 +314,13 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                         {go.senderPhone && (
                                             <div className="courier-card__row">
                                                 <span className="courier-card__label">{t.cdLabelPhone}</span>
-                                                <a href={`tel:${go.senderPhone}`} className="courier-card__phone-link">
-                                                    📞 {go.senderPhone}
-                                                </a>
+                                                <PhoneActions phone={go.senderPhone} />
                                             </div>
                                         )}
                                         {go.alternativeSenderPhone && (
                                             <div className="courier-card__row">
                                                 <span className="courier-card__label">{t.cdLabelAltPhone}</span>
-                                                <a href={`tel:${go.alternativeSenderPhone}`} className="courier-card__phone-link">
-                                                    📞 {go.alternativeSenderPhone}
-                                                </a>
+                                                <PhoneActions phone={go.alternativeSenderPhone} />
                                             </div>
                                         )}
                                         {go.whenPackagePickedUpDate && (
@@ -391,9 +388,7 @@ export function PickupsPanel({ pickups, loading, error, onRefresh, busyId, token
                                             <div className="courier-card__body">
                                                 <div className="courier-card__row">
                                                     <span className="courier-card__label">{t.cdLabelPhone}</span>
-                                                    <a href={`tel:${order.recipientPhone}`} className="courier-card__phone-link">
-                                                        📞 {order.recipientPhone}
-                                                    </a>
+                                                    <PhoneActions phone={order.recipientPhone} />
                                                 </div>
                                                 <div className="courier-card__row">
                                                     <span className="courier-card__label">{t.cdLabelLocation}</span>

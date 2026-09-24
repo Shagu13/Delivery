@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { PhoneActions } from '../../components/ui/PhoneActions';
 import { fetchMyDeliveryHistory } from '../../api/orders';
 import { fetchMyPickupHistory } from '../../api/adminGroupOrders';
 import type { CourierOrderHistory } from '../../api/orders';
@@ -129,7 +130,7 @@ function DeliveryHistoryTab({ token }: { token: string }) {
                                 <span>
                                     {order.shopName}
                                     {order.shopName && order.shopPhone && ' · '}
-                                    {order.shopPhone}
+                                    {order.shopPhone && <PhoneActions phone={order.shopPhone} />}
                                 </span>
                             </div>
                         )
@@ -190,10 +191,18 @@ function PickupHistoryTab({ token }: { token: string }) {
                     address={go.pickUpAddress}
                     note={go.note}
                     extraLine={
-                        <div className="hist-card__line">
-                            <span>📦</span>
-                            <span style={{ fontWeight: 600 }}>{t.cdLabelPackageCount(go.numberOfPackages)}</span>
-                        </div>
+                        <>
+                            {go.senderPhone && (
+                                <div className="hist-card__line">
+                                    <span>📞</span>
+                                    <PhoneActions phone={go.senderPhone} />
+                                </div>
+                            )}
+                            <div className="hist-card__line">
+                                <span>📦</span>
+                                <span style={{ fontWeight: 600 }}>{t.cdLabelPackageCount(go.numberOfPackages)}</span>
+                            </div>
+                        </>
                     }
                     dates={<>
                         <div className="hist-card__date">🗓 {t.cdHistCreated} {fmt(go.createdAt)}</div>
