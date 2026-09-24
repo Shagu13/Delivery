@@ -26,7 +26,7 @@
 API/
 ├── Program.cs                     # composition root: Serilog, CORS, layers, auth, SignalR, Swagger, pipeline
 ├── Auth/ApiKeyAuthenticationHandler.cs
-├── Controllers/                   # 26 controllers, all : BaseController
+├── Controllers/                   # 27 controllers, all : BaseController
 ├── Models/                        # request/response shapes, grouped by area
 ├── Middleware/ExceptionHandlingMiddleware.cs
 ├── Realtime/

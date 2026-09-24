@@ -53,7 +53,7 @@ client/src/
 ├── pages/
 │   ├── Home/ Faq/ Contact/ Login/ Register/ ForgotPassword/ ResetPassword/   # public
 │   ├── CreateGroupOrder/  Cart/                                              # customer order flow
-│   ├── Admin/            # ~39 files — 17 sidebar views. AdminDashboard.tsx is ~3,600 lines
+│   ├── Admin/            # ~41 files — 21 sidebar views. AdminDashboard.tsx is ~3,600 lines
 │   │                     #   (day selectors, batch grouping, courier bar) — a candidate for the
 │   │                     #   same page-local split AdminPackages/ got (§3.2); don't grow it further.
 │   │   └── AdminPackages/  #   AdminPackagesPage.tsx (packages)'s own hook + extracted
@@ -141,7 +141,7 @@ treat its current location as already-shared.
 | `/customer/*` | `Customer` | |
 | `/tenant/*` | `TenantAdmin` | minimal dashboard; the co-admin's real workspace is `/admin` |
 
-`AdminDashboard` gates its sidebar by role: `ADMIN_VIEWS` (17) / `OPERATOR_VIEWS` (9) /
+`AdminDashboard` gates its sidebar by role: `ADMIN_VIEWS` (21) / `OPERATOR_VIEWS` (12) /
 `TENANT_VIEWS` (6), and `systemadmin` additionally unlocks `tenants`, `partners`,
 `tenantSettlements`. **Guarding in the UI is not enough** — the backend attribute is the real
 boundary; keep them in step.

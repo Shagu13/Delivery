@@ -50,6 +50,7 @@ const AdminHistoryPage           = lazy(() => import('./AdminHistoryPage'));
 const AdminFinancePage           = lazy(() => import('./AdminFinancePage'));
 const AdminReturnExchangePage    = lazy(() => import('./AdminReturnExchangePage'));
 const AdminOrderSearchPage       = lazy(() => import('./AdminOrderSearchPage'));
+const AdminRecipientsPage        = lazy(() => import('./AdminRecipientsPage'));
 const AdminDeletePackagePage     = lazy(() => import('./AdminDeletePackagePage'));
 const AdminOperatorsPage         = lazy(() => import('./AdminOperatorsPage'));
 // Named exports, not default — lazy() needs a module whose default is the component.
@@ -126,15 +127,15 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch' | 'deletePackage';
+type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch' | 'recipients' | 'deletePackage';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch', 'deletePackage'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch', 'recipients', 'deletePackage'];
 
 // Views an Operator (partial-admin role) may open. Operators now have full admin-level
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
 // stay hidden (stripped server-side + revenue columns hidden via canSeeRevenue below).
 // Still Admin-only: Finance, Operators management, Partner API, Weight Tiers, Tenants.
-const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'history', 'returnExchange', 'orderSearch'];
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'history', 'returnExchange', 'orderSearch', 'recipients'];
 
 // Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
 // accept-only and Delivery is read-only (both via canManage=false); Finance renders the
@@ -470,6 +471,21 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">{t.osTitle}</span>
           </button>
           )}
+          {/* Recipients directory — Admin + Operator (search every past recipient, company-wide). */}
+          {!isTenant && (
+          <button
+            className={`sidebar__link ${activeView === 'recipients' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('recipients')}
+            title={t.navRecipients}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="6" cy="5.5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M11.5 3.5c1 .3 1.7 1.1 1.7 2.2 0 1.1-.7 1.9-1.7 2.2M12.5 9.7c1.3.4 2 1.5 2 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+            <span className="sidebar__link-text">{t.navRecipients}</span>
+          </button>
+          )}
           {/* Delete Package — Admin only. Permanent (soft) delete of a package or batch. */}
           {!isOperator && !isTenant && (
           <button
@@ -576,6 +592,7 @@ export function AdminDashboard() {
             {activeView === 'homepage' && 'Homepage'}
             {activeView === 'operators' && t.topbarOperators}
             {activeView === 'orderSearch' && t.osTitle}
+            {activeView === 'recipients' && t.navRecipients}
             {activeView === 'deletePackage' && t.navDeletePackage}
           </span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -627,6 +644,9 @@ export function AdminDashboard() {
           {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
           {activeView === 'orderSearch' && !isTenant && token && (
             <AdminOrderSearchPage token={token} onGoTo={goToOrder} />
+          )}
+          {activeView === 'recipients' && !isTenant && token && (
+            <AdminRecipientsPage token={token} />
           )}
           {activeView === 'deletePackage' && !isOperator && !isTenant && token && (
             <AdminDeletePackagePage token={token} />
