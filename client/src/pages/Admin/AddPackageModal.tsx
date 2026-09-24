@@ -12,6 +12,7 @@ import {
   createWalkInOrder, WalkInOrderError,
   type WalkInPackageInput, type CreateWalkInOrderResult,
 } from '../../api/adminGroupOrders';
+import { searchRecipientSuggestions, type RecipientSuggestion } from '../../api/orders';
 import '../../components/ui/Modal.css';
 
 interface Props {
@@ -366,6 +367,7 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
               errors={pkgErrors[i] ?? {}}
               canRemove={pkgs.length > 1}
               customerPricing={custPricing}
+              customerId={selected?.id ?? null}
               onChange={patch => setPkg(i, patch)}
               onRemove={() => removePkg(i)}
             />
@@ -468,21 +470,96 @@ function CustomerSuggestList({
   );
 }
 
+// ── Recipient suggestions dropdown ────────────────────────────────────────────
+
+function RecipientSuggestList({
+  results, searching, noResults, onPick,
+}: {
+  results: RecipientSuggestion[]; searching: boolean; noResults: string;
+  onPick: (s: RecipientSuggestion) => void;
+}) {
+  if (!searching && results.length === 0) return null;
+  return (
+    <div className="ap-suggest">
+      {results.length === 0 && searching && <div className="ap-suggest__empty">…</div>}
+      {results.length === 0 && !searching && <div className="ap-suggest__empty">{noResults}</div>}
+      {results.map((s, i) => (
+        <button
+          key={i}
+          type="button"
+          className="ap-suggest__item"
+          // mousedown fires before the field's blur, so the pick isn't lost
+          onMouseDown={e => { e.preventDefault(); onPick(s); }}
+        >
+          <span className="ap-suggest__name">{s.recipientName || s.recipientPhone}</span>
+          <span className="ap-suggest__meta">
+            {s.recipientPhone} · {s.recipientCity}, {s.recipientDistrict}, {s.recipientAddress}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── One package row ──────────────────────────────────────────────────────────
 
 function PackageCard({
-  index, row, errors, canRemove, customerPricing, onChange, onRemove,
+  index, row, errors, canRemove, customerPricing, customerId, onChange, onRemove,
 }: {
   index: number;
   row: PkgRow;
   errors: PkgErrors;
   canRemove: boolean;
   customerPricing: CustomerServicePricing | null;
+  /** The locked-in customer's id — recipient suggestions are scoped to their own order
+   *  history only. Null (new customer, nothing selected yet) disables the lookup. */
+  customerId: string | null;
   onChange: (patch: Partial<PkgRow>) => void;
   onRemove: () => void;
 }) {
   const { t } = useLanguage();
+  const { token } = useAuth();
   const isReturn = row.orderType === 'Return';
+
+  const [recipSuggestOpen, setRecipSuggestOpen] = useState(false);
+  const [recipResults, setRecipResults]         = useState<RecipientSuggestion[]>([]);
+  const [recipSearching, setRecipSearching]     = useState(false);
+  const recipBlurTimer = useRef<number | undefined>(undefined);
+
+  // Debounced recipient lookup while typing a phone number, scoped to the locked-in
+  // customer's own past orders (never a cross-customer search).
+  useEffect(() => {
+    if (!token || !customerId || !recipSuggestOpen) { setRecipResults([]); return; }
+    const term = row.recipientPhone.trim();
+    if (term.length < 2) { setRecipResults([]); return; }
+    setRecipSearching(true);
+    const id = window.setTimeout(async () => {
+      try {
+        const results = await searchRecipientSuggestions(token, customerId, term);
+        setRecipResults(results);
+      } catch {
+        setRecipResults([]);
+      } finally {
+        setRecipSearching(false);
+      }
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [token, customerId, recipSuggestOpen, row.recipientPhone]);
+
+  useEffect(() => () => window.clearTimeout(recipBlurTimer.current), []);
+
+  const pickRecipient = (s: RecipientSuggestion) => {
+    onChange({
+      recipientName: s.recipientName,
+      recipientPhone: s.recipientPhone,
+      recipientCity: s.recipientCity,
+      recipientDistrict: s.recipientDistrict,
+      recipientAddress: s.recipientAddress,
+      // The district object (needed to auto-resolve the fee) isn't known from history alone —
+      // left for the admin to reconfirm the price, same as typing the address in by hand.
+    });
+    setRecipSuggestOpen(false); setRecipResults([]);
+  };
 
   const TYPES: { v: OrderType; label: string }[] = [
     { v: 'Send',     label: t.cgoOrderTypeSend },
@@ -524,7 +601,7 @@ function PackageCard({
           <input className="ap-input" value={row.recipientName}
             onChange={e => onChange({ recipientName: e.target.value })} />
         </div>
-        <div className="ap-col-2">
+        <div className="ap-col-2 ap-suggest-wrap">
           <GeorgianPhoneField
             label={t.eomPhone}
             required
@@ -532,7 +609,15 @@ function PackageCard({
             onValueChange={v => onChange({ recipientPhone: v })}
             error={errors.recipientPhone}
             invalidMessage={t.cgoErrInvalidPhone}
+            onFocus={() => setRecipSuggestOpen(true)}
+            onBlur={() => { recipBlurTimer.current = window.setTimeout(() => setRecipSuggestOpen(false), 150); }}
           />
+          {recipSuggestOpen && customerId && (
+            <RecipientSuggestList
+              results={recipResults} searching={recipSearching} noResults={t.apNoResults}
+              onPick={pickRecipient}
+            />
+          )}
         </div>
 
         <div className="ap-col-2">

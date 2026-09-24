@@ -41,6 +41,39 @@ export async function exportOrdersExcel(
     URL.revokeObjectURL(url);
 }
 
+/** A past recipient pulled from order history — not a saved entity, just a distinct
+ *  (name, phone, city, district, address) combination seen on an earlier package. */
+export interface RecipientSuggestion {
+    recipientName: string;
+    recipientPhone: string;
+    recipientCity: string;
+    recipientDistrict: string;
+    recipientAddress: string;
+}
+
+/** Admin/Operator: past recipients from one customer's own order history whose phone
+ *  contains the given digits — powers the recipient-autofill dropdown in AddPackageModal.
+ *  Never a cross-customer search. */
+export async function searchRecipientSuggestions(
+    token: string, customerId: string, phone: string,
+): Promise<RecipientSuggestion[]> {
+    const qs = new URLSearchParams({ customerId, phone });
+    const res = await fetch(`${BASE}/recipients/search?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    return res.json();
+}
+
+/** Customer: past recipients from the caller's own order history whose phone contains the
+ *  given digits — powers the recipient-autofill dropdown on the create-order page. */
+export async function searchMyRecipientSuggestions(
+    token: string, phone: string,
+): Promise<RecipientSuggestion[]> {
+    const qs = new URLSearchParams({ phone });
+    const res = await fetch(`${BASE}/recipients/my-search?${qs}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    return res.json();
+}
+
 export type PostponeReason =
     | 'RecipientDidNotAnswer'
     | 'WrongRecipientPhoneNumber'

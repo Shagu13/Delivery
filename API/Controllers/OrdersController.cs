@@ -8,6 +8,7 @@ using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
 using Application.Orders.Queries.GetOrderByTrackingNumber;
 using Application.Orders.Queries.GetOrderLocations;
+using Application.Orders.Queries.SearchRecipientSuggestions;
 using Application.Orders.Queries;
 using ClosedXML.Excel;
 using Domain.Enums;
@@ -60,6 +61,35 @@ public sealed class OrdersController : BaseController
         CancellationToken ct = default)
     {
         var result = await Sender.Send(new GetOrderLocationsQuery(date, dateTo, CurrentTenantId), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/orders/recipients/search  (Admin/Operator — recipient autofill, one customer's own history) ──
+    // Powers the recipient-phone autofill dropdown in the admin "+ Add Package" flow. Scoped
+    // to the customer already locked in there — never a cross-customer search.
+    [HttpGet("recipients/search")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(IReadOnlyList<RecipientSuggestionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchRecipients(
+        [FromQuery] Guid customerId,
+        [FromQuery] string phone,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new SearchRecipientSuggestionsQuery(customerId, phone ?? string.Empty), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/orders/recipients/my-search  (Customer — recipient autofill, own history) ──
+    [HttpGet("recipients/my-search")]
+    [Authorize(Roles = "Customer")]
+    [ProducesResponseType(typeof(IReadOnlyList<RecipientSuggestionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchMyRecipients([FromQuery] string phone, CancellationToken ct)
+    {
+        var customerIdClaim = User.FindFirstValue("customerId");
+        if (!Guid.TryParse(customerIdClaim, out var customerId))
+            return Forbid();
+
+        var result = await Sender.Send(new SearchRecipientSuggestionsQuery(customerId, phone ?? string.Empty), ct);
         return Ok(result);
     }
 

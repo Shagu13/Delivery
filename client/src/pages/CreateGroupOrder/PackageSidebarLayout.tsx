@@ -8,6 +8,8 @@ import { tierLabel } from '../../api/weightPriceTiers';
 import type { OrderItemRequest, ValidationErrors, OrderType } from '../../types/groupOrder';
 import { useLanguage } from '../../contexts/useLanguage';
 import type { CustomerSpecialPriceLite } from '../../api/customers';
+import { useAuth } from '../../contexts/useAuth';
+import { searchMyRecipientSuggestions, type RecipientSuggestion } from '../../api/orders';
 
 interface CustomerPricing {
   companyServiceCapitalPrice:  number | null;
@@ -125,6 +127,7 @@ function PackageDetail({
   senderAddress, pickupDistrictName, districtLookup, serviceIncludedForced, onChange, onRemove, onPrev, onNext, hasPrev, hasNext, total,
 }: DetailProps) {
   const { t } = useLanguage();
+  const { token } = useAuth();
   const fe = (f: string) => errors[`orders[${index}].${f}`];
   const isReturn   = pkg.orderType === 'Return';
   const isExchange = pkg.orderType === 'Exchange';
@@ -134,6 +137,44 @@ function PackageDetail({
 
   const [selectedDistrict,       setSelectedDistrict]       = useState<District | null>(null);
   const [selectedReturnDistrict, setSelectedReturnDistrict] = useState<District | null>(null);
+
+  // Recipient-phone autofill — suggestions drawn from the customer's own past orders only.
+  const [recipSuggestOpen, setRecipSuggestOpen] = useState(false);
+  const [recipResults, setRecipResults]         = useState<RecipientSuggestion[]>([]);
+  const [recipSearching, setRecipSearching]     = useState(false);
+  const recipBlurTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (!token || !recipSuggestOpen) { setRecipResults([]); return; }
+    const term = pkg.recipientPhone.trim();
+    if (term.length < 2) { setRecipResults([]); return; }
+    setRecipSearching(true);
+    const id = window.setTimeout(async () => {
+      try {
+        const results = await searchMyRecipientSuggestions(token, term);
+        setRecipResults(results);
+      } catch {
+        setRecipResults([]);
+      } finally {
+        setRecipSearching(false);
+      }
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [token, recipSuggestOpen, pkg.recipientPhone]);
+
+  useEffect(() => () => window.clearTimeout(recipBlurTimer.current), []);
+
+  const pickRecipient = (s: RecipientSuggestion) => {
+    onChange(index, 'recipientName', s.recipientName);
+    onChange(index, 'recipientPhone', s.recipientPhone);
+    onChange(index, 'recipientCity', s.recipientCity);
+    onChange(index, 'recipientDistrict', s.recipientDistrict);
+    onChange(index, 'recipientAddress', s.recipientAddress);
+    // Re-resolve the fee against the picked district, same as a manual district pick —
+    // districtLookup is already fully loaded so this needs no extra round trip.
+    if (!isReturn) handleDistrictSelect(districtLookup[s.recipientDistrict] ?? null);
+    setRecipSuggestOpen(false); setRecipResults([]);
+  };
 
   // Pickup district drives swapped pricing: when it isn't the capital (Tbilisi) and the
   // package goes TO the capital, Send/Exchange packages take their *default* price from the
@@ -328,13 +369,37 @@ function PackageDetail({
             placeholder={t.cgoRecipientFNPlaceholder}
             maxLength={200}
           />
-          <GeorgianPhoneField
-            label={t.cgoRecipientPhone} required
-            value={pkg.recipientPhone}
-            onValueChange={v => onChange(index, 'recipientPhone', v)}
-            error={fe('recipientPhone')}
-            invalidMessage={t.cgoErrInvalidPhone}
-          />
+          <div className="psl-suggest-wrap">
+            <GeorgianPhoneField
+              label={t.cgoRecipientPhone} required
+              value={pkg.recipientPhone}
+              onValueChange={v => onChange(index, 'recipientPhone', v)}
+              error={fe('recipientPhone')}
+              invalidMessage={t.cgoErrInvalidPhone}
+              onFocus={() => setRecipSuggestOpen(true)}
+              onBlur={() => { recipBlurTimer.current = window.setTimeout(() => setRecipSuggestOpen(false), 150); }}
+            />
+            {recipSuggestOpen && (recipSearching || recipResults.length > 0) && (
+              <div className="psl-suggest">
+                {recipResults.length === 0 && recipSearching && <div className="psl-suggest__empty">…</div>}
+                {recipResults.length === 0 && !recipSearching && <div className="psl-suggest__empty">{t.cgoNoRecipientResults}</div>}
+                {recipResults.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="psl-suggest__item"
+                    // mousedown fires before the field's blur, so the pick isn't lost
+                    onMouseDown={e => { e.preventDefault(); pickRecipient(s); }}
+                  >
+                    <span className="psl-suggest__name">{s.recipientName || s.recipientPhone}</span>
+                    <span className="psl-suggest__meta">
+                      {s.recipientPhone} · {s.recipientCity}, {s.recipientDistrict}, {s.recipientAddress}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Delivery address */}
@@ -802,6 +867,25 @@ export function PackageSidebarLayout({ packages, errors, customerPricing, weight
         .psl-hint--blue { color: #3b82f6; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.2); }
         .psl-grid { display: grid; gap: 10px; }
         .psl-grid--2 { grid-template-columns: 1fr 1fr; }
+
+        /* Recipient-phone autofill dropdown */
+        .psl-suggest-wrap { position: relative; }
+        .psl-suggest {
+          position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 30;
+          background: var(--color-bg-2); border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+          max-height: 240px; overflow-y: auto;
+        }
+        .psl-suggest__item {
+          display: block; width: 100%; text-align: left; background: none; border: none;
+          border-bottom: 1px solid var(--color-border); padding: 8px 10px; cursor: pointer;
+          color: var(--color-text); font-family: var(--font-body);
+        }
+        .psl-suggest__item:last-child { border-bottom: none; }
+        .psl-suggest__item:hover { background: var(--color-bg-3); }
+        .psl-suggest__name { font-size: 0.82rem; font-weight: 600; display: block; }
+        .psl-suggest__meta { font-size: 0.72rem; color: var(--color-text-muted); margin-top: 2px; display: block; }
+        .psl-suggest__empty { padding: 10px; font-size: 0.78rem; color: var(--color-text-muted); }
 
         /* Checkbox rows (fragile / all-in price) — these class names have no
            stylesheet of their own, so they live here with their only consumer. */

@@ -216,6 +216,17 @@ CSS with the component and import it there.
   `georgianToday()`/`toDateKey()`. Low severity — users are all UTC+4 no-DST, so browser-local
   == Georgian time in practice — but wrong for a mis-configured or travelling client near
   midnight. Route through `georgianTime.ts` when you next touch those lines (rule §1.9).
+- **Recipient-phone autofill dropdown** is implemented twice, independently: `AddPackageModal.tsx`
+  (`PackageCard`, admin "+ Add Package") and `PackageSidebarLayout.tsx` (`PackageDetail`, customer
+  create-order flow) each own their own debounced search, suggestion-list markup, and CSS
+  (`.ap-suggest*` vs `.psl-suggest*`), calling different endpoints
+  (`searchRecipientSuggestions` scoped to the admin's locked-in customer vs
+  `searchMyRecipientSuggestions` scoped to the caller's own JWT `customerId`) that both hit
+  `Application/Orders/Queries/SearchRecipientSuggestions`. A UX or behavior change to one
+  (debounce timing, minimum characters, empty-state copy) should be checked against the other.
+  Only the customer side re-resolves the fee on pick (`PackageSidebarLayout.tsx` has
+  `districtLookup` available for a free `District` lookup; `AddPackageModal.tsx` does not, so
+  picking a suggestion there leaves the price field for the admin to reconfirm).
 
 ---
 
