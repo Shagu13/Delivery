@@ -27,6 +27,11 @@ const BTN_PRIMARY: React.CSSProperties = {
   color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
 };
 
+const DROPDOWN_ITEM: React.CSSProperties = {
+  padding: '0.55rem 0.8rem', cursor: 'pointer', fontSize: '0.85rem',
+  borderBottom: '1px solid var(--color-border)',
+};
+
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode; }) {
   return (
     <div
@@ -64,6 +69,8 @@ function CopyField({ label, value }: { label: string; value: string }) {
 export default function AdminPartnersPage({ token }: Props) {
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [search, setSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
   const [keys, setKeys] = useState<PartnerApiKey[]>([]);
   const [webhooks, setWebhooks] = useState<PartnerWebhook[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +99,10 @@ export default function AdminPartnersPage({ token }: Props) {
     return () => { cancelled = true; };
   }, [token]);
 
+  const filteredCustomers = search.trim()
+    ? customers.filter(c => c.businessName.toLowerCase().includes(search.trim().toLowerCase()))
+    : customers;
+
   const visibleKeys = selectedCustomerId ? keys.filter(k => k.customerId === selectedCustomerId) : keys;
   const visibleWebhooks = selectedCustomerId ? webhooks.filter(w => w.customerId === selectedCustomerId) : webhooks;
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
@@ -118,19 +129,44 @@ export default function AdminPartnersPage({ token }: Props) {
         Issue API keys and webhooks so partner businesses can place orders into the system and receive status updates.
       </p>
 
-      {/* Partner selector */}
+      {/* Partner selector — typable search by business name */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-subtle)' }}>Partner (Customer):</label>
-        <select
-          value={selectedCustomerId}
-          onChange={e => setSelectedCustomerId(e.target.value)}
-          style={{ ...INPUT, width: 'auto', minWidth: 280 }}
-        >
-          <option value="">— All partners —</option>
-          {customers.map(c => (
-            <option key={c.id} value={c.id}>{c.businessName} — {c.firstName} {c.lastName}</option>
-          ))}
-        </select>
+        <div style={{ position: 'relative', width: 320, maxWidth: '100%' }}>
+          <input
+            style={INPUT}
+            value={search}
+            placeholder="Type a business name…"
+            onChange={e => {
+              setSearch(e.target.value);
+              setShowDropdown(true);
+              if (selectedCustomerId) setSelectedCustomerId('');
+            }}
+            onFocus={() => setShowDropdown(true)}
+            onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+          />
+          {selectedCustomerId && (
+            <button
+              onClick={() => { setSelectedCustomerId(''); setSearch(''); }}
+              title="Clear selection"
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', fontSize: '0.9rem' }}
+            >✕</button>
+          )}
+          {showDropdown && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 4, maxHeight: 260, overflowY: 'auto', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+              <div onMouseDown={() => { setSelectedCustomerId(''); setSearch(''); setShowDropdown(false); }} style={DROPDOWN_ITEM}>
+                — All partners —
+              </div>
+              {filteredCustomers.length === 0 ? (
+                <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: 'var(--color-text-subtle)' }}>No matches.</div>
+              ) : filteredCustomers.map(c => (
+                <div key={c.id} onMouseDown={() => { setSelectedCustomerId(c.id); setSearch(c.businessName); setShowDropdown(false); }} style={DROPDOWN_ITEM}>
+                  {c.businessName} <span style={{ color: 'var(--color-text-subtle)' }}>— {c.firstName} {c.lastName}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (
