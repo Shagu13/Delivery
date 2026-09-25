@@ -160,6 +160,15 @@ Live projections built on top of it, both `internal static`:
 explicit override → weight-tier zone price → customer's per-district special price →
 customer negotiated tier (capital/city/district) → district default → unset (null, admin fills later).
 
+**Step 1 (explicit override) is not always trusted.** `BuildAsync` takes an
+`allowClientPriceOverride` flag. `AdminCreateWalkInOrderCommandHandler` (admin/operator) leaves
+it at its default `true` — a staff-entered price is legitimate. `CreateGroupOrderCommandHandler`
+(customer web **and** Partner API — both callers), `CheckoutCartCommandHandler`, and
+`AddOrdersToGroupOrderCommandHandler` (all customer-only endpoints) pass `false`, so step 1 is
+skipped and the fee always falls through to steps 2–4. This exists because those DTOs carry a
+client-computed `CompanyServicePrice` for instant preview (see the client-side reimplementation
+note below) — without the flag, a tampered request could set an arbitrary company fee.
+
 **Pickup-swap pricing:** the *default* price swaps to the batch's pickup district when the
 pickup is **not** the capital **and** the delivery **is** the capital (e.g. Rustavi → Tbilisi
 prices at Rustavi's rate). Non-capital → non-capital prices off the delivery district as usual.

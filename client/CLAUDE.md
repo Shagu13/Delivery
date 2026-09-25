@@ -197,12 +197,18 @@ CSS with the component and import it there.
   per-district special price → customer negotiated capital/city/district tier → district
   default) is authoritative in `GroupOrderOrderBuilder`/`CalculatorController`, but is also
   **reimplemented client-side three times** because the create-order pages need an instant
-  preview without a round trip per keystroke, and that computed value is submitted straight
-  through as the order's explicit-override price: `PackageSidebarLayout.tsx`'s `computeFee`
+  preview without a round trip per keystroke: `PackageSidebarLayout.tsx`'s `computeFee`
   (customer create-order flow), `CreateGroupOrderPage.tsx`'s inline duplicate of the same
   thing (Excel-import path), and `EditOrderModal.tsx`'s `resolveServicePrice` (admin
   add/edit-package auto-fill, shared by `AdminPackagesPage.tsx` and `AdminOrdersPage.tsx`).
   A pricing-waterfall change — like the special-price step above — must touch all four.
+  **The computed value is still submitted as the order's `CompanyServicePrice` field, but it
+  is only authoritative when it reaches an admin/staff-only endpoint.** For the two
+  customer-facing reimplementations (`PackageSidebarLayout.tsx`, `CreateGroupOrderPage.tsx`)
+  it is a preview only — `GroupOrderOrderBuilder` re-derives the fee server-side for every
+  customer/Partner-API order and ignores the submitted number (see
+  [Application/CLAUDE.md §5](../Application/CLAUDE.md#5-shared-policies--reuse-never-re-derive)).
+  `EditOrderModal.tsx` feeds admin-only commands, where the submitted price is still trusted.
 - **"Terminal status" sets are re-encoded ~7 times on the client** with no shared constant,
   and mirror a backend set that also has no constant (see
   [Application/CLAUDE.md §5](../Application/CLAUDE.md)). Named copies: `utils/groupOrderUtils.ts`
