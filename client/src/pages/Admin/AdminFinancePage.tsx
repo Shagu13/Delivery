@@ -889,10 +889,13 @@ function FlowBar({ f, payLabel, busy, onPay, onToggleAll, borderRight, netTotal,
 // One order's amount field for a single flow — checkbox + editable price, always available.
 // `total` = full obligation, `paid` = amount settled so far (shown so an admin sees how much it
 // was vs how much is paid, without an extra column).
-function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmount, paidAt, total, paid }: {
+function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmount, paidAt, total, paid, warning }: {
     applicable: boolean; outstanding: number; checked: boolean; amount: string;
     onToggle: () => void; onAmount: (v: string) => void; paidAt?: string | null;
     total?: number; paid?: number;
+    /** Tooltip text for a warning badge shown next to the outstanding amount, e.g. when
+     *  the courier hasn't yet remitted the cash this payout would be drawn from. */
+    warning?: string;
 }) {
     const { t } = useLanguage();
     if (!applicable)
@@ -920,6 +923,9 @@ function AllocCell({ applicable, outstanding, checked, amount, onToggle, onAmoun
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                 <input type="checkbox" checked={checked} onChange={onToggle}
                     style={{ width: 15, height: 15, accentColor: 'var(--color-accent)', cursor: 'pointer', flexShrink: 0 }} />
+                {warning && (
+                    <span title={warning} style={{ fontSize: '0.82rem', color: '#f59e0b', cursor: 'help', flexShrink: 0 }}>⚠</span>
+                )}
                 {/* Actual amount owed (outstanding), always shown next to the editable field. */}
                 <span title={t.ofinOutstandingCol} style={{ fontSize: '0.78rem', fontWeight: 700, color: outColor, whiteSpace: 'nowrap' }}>{gel(outstanding)}</span>
                 <input type="number" min="0" step="0.01" max={outstanding}
@@ -1272,7 +1278,8 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                                             total={o.codAmount ?? 0} paid={o.codPaidToCustomerAmount ?? 0}
                                                             checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
                                                             onToggle={() => toggle(setSelCod, o.orderId, co)}
-                                                            onAmount={v => setAmt(setSelCod, o.orderId, v)} />}
+                                                            onAmount={v => setAmt(setSelCod, o.orderId, v)}
+                                                            warning={!o.hasCourierTransferedAmount ? t.ofinCourierNotRemittedWarning : undefined} />}
                                                 </div>
                                             </div>
                                         </td>
