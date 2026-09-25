@@ -13,6 +13,21 @@ import '../../styles/dashboard.css';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
+// Last-mile statuses between warehouse acceptance and delivery (mirrors the backend's
+// OrderFinanceQueries.ActiveLastMileStatuses) — an order in one of these is "accepted in
+// warehouse" and its COD is expected, but not yet collected.
+const ACTIVE_LAST_MILE_STATUSES = new Set([
+    'AdminAcceptedOrderInWareHouse',
+    'OrderIsOnItsWayToRecipientsCity',
+    'CourierAssignedToDeliver',
+    'CourierDeliveringTheOrderToRecipient',
+    'DeliveryPostponed',
+]);
+/** Expected COD for an order accepted in warehouse but not yet delivered — nothing collected
+ *  yet, so this is a forecast, not an outstanding balance. */
+const codExpected = (o: OrderFinanceLine) =>
+    (!o.deliveredAt && ACTIVE_LAST_MILE_STATUSES.has(o.status)) ? round2(Math.max(0, o.codAmount ?? 0)) : 0;
+
 /** Format a Date as a local "YYYY-MM-DD" string (matches the date-input value). */
 const toDateStr = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -122,10 +137,20 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                     </div>
                 )}
             </td>
-            {/* COD — company owes customer. "—" for cancelled/failed (nothing collected). */}
+            {/* COD — company owes customer. "—" for cancelled/failed (nothing collected).
+                Not-yet-delivered orders (accepted in warehouse) show the expected amount with
+                a "Pending" badge instead of "Unpaid" — nothing has been collected yet, so it
+                isn't owed back yet either. */}
             <td style={{ ...cell, textAlign: 'right' }}>
                 {(line.isBillableFailedDelivery || cancelledNonBillable) ? (
                     <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
+                ) : !line.deliveredAt ? (
+                    hasCod ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                            <span style={{ fontWeight: 700 }}>{gel(cod)}</span>
+                            <Badge text={t.ofinCodPending} tone="muted" />
+                        </div>
+                    ) : <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
                 ) : (
                     <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
@@ -288,12 +313,17 @@ export function CustomerFinancePage() {
     const hasLocationFilter = !!city || !!district || !!address.trim();
 
     // Remaining (outstanding) balances — mirrors the admin's per-customer "owed" figures:
-    //  · codRemaining     — COD the company still has to pay out for these orders.
+    //  · codRemaining     — COD the company still has to pay out for delivered orders.
     //  · serviceRemaining — sender-paid service fee the customer still has to pay the company.
     // Both are already net of whatever's been paid so far (see codOutstanding/serviceOutstanding);
     // that already-paid portion is what the Balance card below breaks out separately.
     const codRemaining = round2(filtered.reduce((s, i) => s + codOutstanding(i), 0));
     const serviceRemaining = round2(filtered.reduce((s, i) => s + serviceOutstanding(i), 0));
+
+    // Not-yet-delivered COD still in the pipeline (accepted in warehouse through delivery,
+    // nothing collected yet — a forecast, not a balance) + the combined "COD" headline figure.
+    const codNotDelivered = round2(filtered.reduce((s, i) => s + codExpected(i), 0));
+    const codTotal = round2(codRemaining + codNotDelivered);
 
     // Balance — cash that has actually changed hands so far: COD the company has already paid out
     // to the customer, minus the service fee the customer has already paid the company.
@@ -536,9 +566,19 @@ export function CustomerFinancePage() {
                                 </div>
                             );
                         })()}
+                        {/* COD: what the company still has to transfer to the customer — delivered orders
+                            not yet paid out (pink), plus not-yet-delivered orders already accepted in
+                            warehouse (orange, expected — nothing collected yet, so not a balance). */}
+                        <div style={{ background: 'rgba(219,39,119,0.08)', border: '1px solid rgba(219,39,119,0.25)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#db2777' }}>{gel(codTotal)}</div>
+                            <div style={{ fontSize: '0.65rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>{t.ofinSumCodCollected}</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, fontSize: '0.62rem', marginTop: 3, flexWrap: 'wrap' }}>
+                                <span style={{ color: '#db2777', fontWeight: 700 }}>{t.ofinSumDelivered}: {gel(codRemaining)}</span>
+                                <span style={{ color: '#ea580c', fontWeight: 700 }}>{t.ofinSumNotDelivered}: {gel(codNotDelivered)}</span>
+                            </div>
+                        </div>
                         {[
-                            { label: t.ofinSumCodCollected, value: gel(codRemaining), color: '#059669' },
-                            { label: t.ofinSumYouOwe,       value: gel(serviceRemaining), color: '#dc2626' },
+                            { label: t.ofinSumYouOwe, value: gel(serviceRemaining), color: '#dc2626' },
                         ].map(({ label, value, color }) => (
                             <div key={label} style={{ background: 'var(--color-bg-2)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '1.05rem', fontWeight: 800, color }}>{value}</div>

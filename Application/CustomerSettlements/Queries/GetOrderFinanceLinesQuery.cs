@@ -43,8 +43,11 @@ public sealed class GetMyOrderFinanceLinesQueryHandler
 
         // Staff-created walk-in office packages never appear in the customer's own finance
         // page; admins still see and settle them through GetCustomerOrderFinanceLinesQuery.
+        // includeActiveLastMile: the customer's own page additionally surfaces orders still
+        // in the last-mile pipeline (accepted in warehouse through delivery-postponed) so the
+        // COD summary can show expected, not-yet-collected COD alongside delivered-outstanding.
         var query = OrderFinanceQueries.ForFinanceReporting(
-                        OrderFinanceQueries.ForCustomer(_context, customer.Id))
+                        OrderFinanceQueries.ForCustomer(_context, customer.Id), includeActiveLastMile: true)
                                        .Where(o => !o.IsWalkIn);
 
         if (request.PaymentsMode)
@@ -182,6 +185,18 @@ internal static class OrderFinanceQueries
         OrderStatus.OrderNotAccepted,
     };
 
+    /// <summary>Last-mile statuses between warehouse acceptance and delivery (inclusive of the
+    /// postpone loop). Used by <see cref="ForFinanceReporting"/> to surface an order's expected
+    /// COD before it's delivered, regardless of who pays the service fee.</summary>
+    private static readonly OrderStatus[] ActiveLastMileStatuses =
+    {
+        OrderStatus.AdminAcceptedOrderInWareHouse,
+        OrderStatus.OrderIsOnItsWayToRecipientsCity,
+        OrderStatus.CourierAssignedToDeliver,
+        OrderStatus.CourierDeliveringTheOrderToRecipient,
+        OrderStatus.DeliveryPostponed,
+    };
+
     /// <summary>
     /// Orders with the navigations needed for mapping. By default: active (non-cancelled) orders
     /// plus billable failed deliveries (mirrors OrderFinance.IsBillableFailedDelivery; inlined
@@ -216,16 +231,20 @@ internal static class OrderFinanceQueries
     ///     delivery, at any stage of the flow (customers often pre-pay), OR
     ///   • it is a billable failed delivery — the sender owes the fee even though it never
     ///     delivered (mirrors OrderFinance.IsBillableFailedDelivery), OR
-    ///   • it is cancelled (shown with "—" amounts + reason, for transparency).
+    ///   • it is cancelled (shown with "—" amounts + reason, for transparency), OR
+    ///   • (when <paramref name="includeActiveLastMile"/>) it is undelivered but already past
+    ///     warehouse acceptance and has a package COD amount — surfaced so a "not yet delivered,
+    ///     expected COD" figure can be shown regardless of who pays the service fee.
     /// Then drops orders with no company↔customer settlement at all: the recipient pays the
     /// service fee (nothing invoiced to the sender) and there is no package COD for the
     /// company to pay back. Billable failed deliveries and cancelled orders are kept regardless.
     /// </summary>
-    public static IQueryable<Order> ForFinanceReporting(IQueryable<Order> query)
+    public static IQueryable<Order> ForFinanceReporting(IQueryable<Order> query, bool includeActiveLastMile = false)
     {
         query = query.Where(o =>
             (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null
             || (o.WhoPaysForCompanyService == ServicePayer.Sender && o.Status != OrderStatus.Pending)
+            || (includeActiveLastMile && ActiveLastMileStatuses.Contains(o.Status) && o.AmountToCollectForPackage != null)
             || (o.OrderType != OrderType.Return
                 && o.CancellationReason != null
                 && o.CancellationReason != CancellationReason.WarehouseNotReceived
