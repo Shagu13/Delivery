@@ -43,8 +43,11 @@ public sealed class CheckoutCartCommandHandler
                 .FirstOrDefaultAsync(c => c.Id == dto.CustomerId.Value, cancellationToken)
             : null;
 
+        // Customer-only endpoint — never trust a client-submitted CompanyServicePrice;
+        // always re-derive it server-side.
         var built = await GroupOrderOrderBuilder.BuildAsync(
-            _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict);
+            _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict,
+            allowClientPriceOverride: false);
 
         // ── Split: Return orders are always standalone; Send/Exchange may batch.
         //    Mirrors CreateGroupOrderCommandHandler so a Return never lands inside a

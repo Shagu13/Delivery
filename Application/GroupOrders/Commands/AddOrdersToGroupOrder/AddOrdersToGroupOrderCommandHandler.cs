@@ -82,8 +82,11 @@ public sealed class AddOrdersToGroupOrderCommandHandler
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == request.CustomerId, cancellationToken);
 
+        // Customer-only endpoint — never trust a client-submitted CompanyServicePrice;
+        // always re-derive it server-side.
         var built = await GroupOrderOrderBuilder.BuildAsync(
-            _context, _trackingGen, customer, request.Orders, cancellationToken, groupOrder.PickUpDistrict);
+            _context, _trackingGen, customer, request.Orders, cancellationToken, groupOrder.PickUpDistrict,
+            allowClientPriceOverride: false);
 
         // Returns are rejected by the validator, so every built order is a Send/Exchange
         // package that joins the batch and adopts its current status.

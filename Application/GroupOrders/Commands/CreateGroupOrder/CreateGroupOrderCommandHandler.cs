@@ -43,8 +43,11 @@ public sealed class CreateGroupOrderCommandHandler
                 .FirstOrDefaultAsync(c => c.Id == dto.CustomerId.Value, cancellationToken)
             : null;
 
+        // Customer web + Partner API are the only callers of this command — never trust a
+        // client-submitted CompanyServicePrice; always re-derive it server-side.
         var built = await GroupOrderOrderBuilder.BuildAsync(
-            _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict);
+            _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict,
+            allowClientPriceOverride: false);
 
         // ── Split: Return orders become standalone; Send/Exchange go into a GroupOrder ──
         var standaloneReturns = new List<Order>();

@@ -11,6 +11,12 @@ namespace Application.GroupOrders.Commands.Shared;
 /// customer's per-district special price → customer negotiated tier → district default)
 /// and generating tracking numbers.
 ///
+/// <paramref name="allowClientPriceOverride"/> (see <see cref="BuildAsync"/>) gates step 1:
+/// a client-submitted <see cref="DTOs.CreateOrderDto.CompanyServicePrice"/> is only ever
+/// trusted from an admin/staff caller. Customer- and partner-facing callers must pass
+/// <c>false</c> so the fee is always re-derived from steps 2–4 instead of whatever number
+/// the caller's own request body happens to contain.
+///
 /// Pricing is normally keyed off the recipient (delivery) district, but "swaps" to the
 /// batch pickup district when the pickup is NOT in the capital (Tbilisi) <b>and</b> the
 /// delivery IS the capital: e.g. a parcel picked up in Rustavi for delivery to Tbilisi is
@@ -39,7 +45,8 @@ internal static class GroupOrderOrderBuilder
         Customer? customer,
         IReadOnlyList<DTOs.CreateOrderDto> orderDtos,
         CancellationToken ct,
-        string? pickUpDistrictName = null)
+        string? pickUpDistrictName = null,
+        bool allowClientPriceOverride = true)
     {
         // Load the districts referenced by orders so we can fall back to their default price.
         // For Return orders the fee is based on the return pickup district (where courier collects).
@@ -143,8 +150,12 @@ internal static class GroupOrderOrderBuilder
 
             decimal companyServicePrice;
 
-            // ── Step 1: explicit override from sender/admin ───────────────────
-            if (o.CompanyServicePrice.HasValue && o.CompanyServicePrice.Value > 0)
+            // ── Step 1: explicit override from an admin/staff caller ──────────
+            // Only trusted when allowClientPriceOverride is true (admin/walk-in callers).
+            // Customer- and partner-facing callers pass false — the client's own preview
+            // number is never authoritative; it is always re-derived server-side below.
+            if (allowClientPriceOverride
+                && o.CompanyServicePrice.HasValue && o.CompanyServicePrice.Value > 0)
             {
                 companyServicePrice = o.CompanyServicePrice.Value;
             }
