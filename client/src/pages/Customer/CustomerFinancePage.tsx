@@ -175,9 +175,11 @@ export function CustomerFinancePage() {
     const readableDate = (s: string) =>
         new Date(s + 'T00:00:00').toLocaleDateString(lang === 'ka' ? 'ka-GE' : 'en-US',
             { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    // 'placed' filters by order creation date; 'payments' by the COD-payment date
-    // (CodPaidToCustomerAt) — only orders whose COD was paid out are shown; 'receipts'
-    // shows the immutable payment history (PaymentReceipt) by the date it was paid.
+    // 'placed' dates by delivery, falling back to placement while undelivered — same
+    // rule as the admin Finance page, so a given date/range shows the same orders on
+    // both. 'payments' filters by the COD-payment date (CodPaidToCustomerAt) — only
+    // orders whose COD was paid out are shown; 'receipts' shows the immutable payment
+    // history (PaymentReceipt) by the date it was paid.
     const [mode, setMode] = useState<'placed' | 'payments' | 'receipts'>('placed');
     // Date granularity: a single Day, a whole Month, or an inclusive custom Range.
     const [dateMode, setDateMode] = useState<'day' | 'month' | 'range'>('day');
@@ -311,7 +313,7 @@ export function CustomerFinancePage() {
         <div className="dashboard__section">
             <h2 className="dashboard__title">{t.statTitle}</h2>
 
-            {/* Mode toggle: placed (by creation) vs payments (by COD-paid date) */}
+            {/* Mode toggle: placed (by delivery, matches admin) vs payments (by COD-paid date) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
                 <div style={segWrap}>
                     <button style={{ ...segBtn(mode === 'placed'), borderRight: '1px solid var(--color-border)' }} onClick={() => setMode('placed')}>{t.ofinTabPlaced}</button>
@@ -325,7 +327,7 @@ export function CustomerFinancePage() {
 
             {/* Date filter: Day / Month / Range */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{mode === 'payments' ? t.ofinPaidDate : t.ofinFilterPlaced}</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{mode === 'payments' ? t.ofinPaidDate : t.ofinFilterDelivered}</span>
                 <div style={segWrap}>
                     <button style={{ ...segBtn(dateMode === 'day'), borderRight: '1px solid var(--color-border)' }} onClick={() => setDateMode('day')}>{t.ofinViewDaily}</button>
                     <button style={{ ...segBtn(dateMode === 'month'), borderRight: '1px solid var(--color-border)' }} onClick={() => setDateMode('month')}>{t.ofinViewMonthly}</button>

@@ -10,11 +10,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.CustomerSettlements.Queries;
 
 // ── Customer: own order lines ─────────────────────────────────────────────────────
-// Two modes. Placement view (default): all the customer's orders, optionally narrowed
-// to those placed on <see cref="Date"/>. Payments view (<see cref="PaymentsMode"/>):
-// only orders whose COD payout has been recorded (paid), optionally narrowed to those
-// paid on <see cref="Date"/>. The mode is explicit so an empty date never leaks unpaid
-// orders into the payments view.
+// Two modes. Default view: the same row-shaping and effective-date rule
+// (DeliveredAt ?? DeliveredToWarehouseAt ?? CreatedAt) as the admin's
+// GetCustomerOrderFinanceLinesQuery, so a customer and an admin looking at the same
+// date/range see the same orders and the same totals (walk-in packages aside — those
+// stay admin-only). Payments view (<see cref="PaymentsMode"/>): only orders whose COD
+// payout has been recorded (paid), narrowed to those paid on <see cref="Date"/> — a
+// customer-only view with no admin equivalent. The mode is explicit so an empty date
+// never leaks unpaid orders into the payments view.
 public sealed record GetMyOrderFinanceLinesQuery(
     string    CustomerUserId,
     DateOnly? Date,
@@ -40,15 +43,24 @@ public sealed class GetMyOrderFinanceLinesQueryHandler
 
         // Staff-created walk-in office packages never appear in the customer's own finance
         // page; admins still see and settle them through GetCustomerOrderFinanceLinesQuery.
-        var query = OrderFinanceQueries.ForCustomer(_context, customer.Id)
+        var query = OrderFinanceQueries.ForFinanceReporting(
+                        OrderFinanceQueries.ForCustomer(_context, customer.Id))
                                        .Where(o => !o.IsWalkIn);
 
         if (request.PaymentsMode)
+        {
             query = OrderFinanceQueries.FilterByCodPaidAt(query, request.Date, request.Monthly, request.From, request.To)
                                        .OrderByDescending(o => o.CodPaidToCustomerAt);
+        }
         else
-            query = OrderFinanceQueries.FilterByCreatedAt(query, request.Date, request.Monthly, request.From, request.To)
-                                       .OrderByDescending(o => o.CreatedAt);
+        {
+            // Same effective-date rule as the admin read, so the same date/range selects
+            // the same orders on both pages.
+            query = (request.From is not null || request.To is not null)
+                ? OrderFinanceQueries.FilterByEffectiveDateRange(query, request.From, request.To)
+                : OrderFinanceQueries.FilterByEffectiveDate(query, request.Date, request.Monthly);
+            query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt);
+        }
 
         var orders = await query.ToListAsync(ct);
         return orders.Select(OrderFinanceQueries.ToDto).ToList();
@@ -233,29 +245,6 @@ internal static class OrderFinanceQueries
                               || o.Status == OrderStatus.CancelledBySender
                               || o.Status == OrderStatus.OrderNotAccepted
                               || o.Status == OrderStatus.DeliveryPostponed);
-    }
-
-    /// <summary>
-    /// Narrows by placement date (CreatedAt). A from/to range (inclusive, either bound optional)
-    /// takes precedence over a single <paramref name="date"/>; <paramref name="monthly"/> widens
-    /// that date to its whole calendar month. No date and no range → no narrowing.
-    /// </summary>
-    public static IQueryable<Order> FilterByCreatedAt(
-        IQueryable<Order> query, DateOnly? date, bool monthly = false, DateOnly? from = null, DateOnly? to = null)
-    {
-        if (from is not null || to is not null)
-        {
-            if (from is DateOnly f)
-                query = query.Where(o => o.CreatedAt >= f.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-            if (to is DateOnly t)
-                query = query.Where(o => o.CreatedAt < t.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-            return query;
-        }
-        if (date is not DateOnly d) return query;
-        DateTime start, end;
-        if (monthly) { start = new DateTime(d.Year, d.Month, 1, 0, 0, 0, DateTimeKind.Utc); end = start.AddMonths(1); }
-        else         { start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);           end = start.AddDays(1); }
-        return query.Where(o => o.CreatedAt >= start && o.CreatedAt < end);
     }
 
     /// <summary>

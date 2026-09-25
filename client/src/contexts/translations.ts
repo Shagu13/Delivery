@@ -1909,7 +1909,6 @@ const en = {
     // has actually moved so far.
     ofinSumBalance:      'Balance',
     ofinSumNetFormula:   (cod: string, svc: string) => `${cod} − ${svc}`,
-    ofinFilterPlaced:    'Placed on',
     ofinFilterDelivered: 'Delivered on',
     ofinPaidOn:          (d: string) => `Paid ${d}`,
     ofinSavedToast:      'Saved.',
@@ -4027,7 +4026,6 @@ const ka: typeof en = {
     // ბალანსი: თქვენზე უკვე გადმორიცხული COD მინუს თქვენ მიერ უკვე გადახდილი საკურიერო — ფაქტობრივად გადაადგილებული თანხა.
     ofinSumBalance:      'ბალანსი',
     ofinSumNetFormula:   (cod: string, svc: string) => `${cod} − ${svc}`,
-    ofinFilterPlaced:    'განთავსების თარიღი',
     ofinFilterDelivered: 'მიტანის თარიღი',
     ofinPaidOn:          (d: string) => `გადახდილია ${d}`,
     ofinSavedToast:      'შენახულია.',

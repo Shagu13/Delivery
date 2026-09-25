@@ -11,12 +11,16 @@ namespace API.Controllers;
 
 /// <summary>
 /// Per-order finance lines for the reworked settlement pages, plus the admin
-/// per-order payment action. Customers see their own orders by placement date;
-/// admins and couriers see them by delivery date.
+/// per-order payment action. Customers, admins, and couriers all see their default
+/// view dated the same way — by delivery, falling back to placement while an order
+/// is still undelivered — so the same date/range selects the same orders everywhere.
+/// The customer page additionally offers a "payments" view (dated by COD payout)
+/// with no admin equivalent.
 /// </summary>
 public sealed class OrderFinanceController : BaseController
 {
-    // ── GET /api/orderfinance/my  (Customer) — own orders, by placement date ──
+    // ── GET /api/orderfinance/my  (Customer) — own orders, by delivery date (falls
+    //    back to placement while undelivered) — matches the admin/courier reads ──
     [HttpGet("my")]
     [Authorize(Roles = "Customer")]
     [ProducesResponseType(typeof(IReadOnlyList<OrderFinanceLineDto>), StatusCodes.Status200OK)]
