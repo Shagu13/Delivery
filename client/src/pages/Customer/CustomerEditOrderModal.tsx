@@ -184,14 +184,57 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
             </select>
           </div>
 
-          {isUnpaid && (
+          {/* All-in price is fixed at whatever the order was created with — the split
+              between product COD and service fee doesn't change here, only the amount. */}
+          {isUnpaid && order.isCompanyServicePriceIncluded && (
             <FormField
-              label={order.isCompanyServicePriceIncluded ? t.cgoPriceAllIn : t.ceoCod} type="number"
+              label={t.cgoPriceAllIn} type="number"
               value={cod}
               onChange={e => { setCod(e.target.value); clearErr('amountToCollectForPackage'); }}
               error={errors.amountToCollectForPackage}
               placeholder="0.00"
             />
+          )}
+
+          {/* Not bundled: parcel price + company service fee shown side by side, and a
+              read-only total below — same layout as the create-order form. The fee itself
+              isn't editable here (it's resolved by the pricing waterfall, not a customer
+              input), it's shown so the customer can see what's being collected. */}
+          {isUnpaid && !order.isCompanyServicePriceIncluded && (
+            <>
+              <div className="ceo-grid">
+                <FormField
+                  label={t.cgoParcelPrice} type="number"
+                  value={cod}
+                  onChange={e => { setCod(e.target.value); clearErr('amountToCollectForPackage'); }}
+                  error={errors.amountToCollectForPackage}
+                  placeholder="0.00"
+                />
+                <div className="form-field">
+                  <label className="form-field__label">{t.cgoServiceFee}</label>
+                  <input
+                    type="number" readOnly className="form-field__input"
+                    style={{ background: 'var(--color-bg-3)', cursor: 'default', color: 'var(--color-accent)', fontWeight: 600 }}
+                    value={order.companyServicePrice ?? ''}
+                    placeholder={t.cgoServiceFeePlaceholder}
+                  />
+                  {/* Unpaid parcels always bill the fee to the recipient at delivery
+                      (forced above), regardless of the order's original payer. */}
+                  <p className="form-field__hint">{t.cgoServiceFeeHintRecipient}</p>
+                </div>
+              </div>
+              <p className="form-field__hint" style={{ margin: '-8px 0 0' }}>{t.cgoParcelHint}</p>
+
+              <div className="form-field">
+                <label className="form-field__label">{t.cgoTotalPrice}</label>
+                <input
+                  type="number" readOnly className="form-field__input"
+                  style={{ background: 'var(--color-bg-3)', cursor: 'default', color: 'var(--color-text)', fontWeight: 700 }}
+                  value={((parseFloat(cod) || 0) + (order.companyServicePrice ?? 0)).toFixed(2)}
+                />
+                <p className="form-field__hint">{t.cgoTotalPriceHint}</p>
+              </div>
+            </>
           )}
 
           {/* Hidden for unpaid (COD) parcels — the recipient always pays the courier fee
@@ -241,6 +284,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
         .ceo-location__value { font-size:0.9rem;font-weight:600;color:var(--color-text); }
         .ceo-location__hint { font-size:0.74rem;color:var(--color-text-subtle); }
         .ceo-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+        .form-field__hint { font-size:0.75rem;color:var(--color-text-subtle);margin-top:4px; }
         .ceo-footer { display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid var(--color-border); }
         .ceo-btn { padding:10px 20px;border-radius:var(--radius-md);font-size:0.875rem;font-weight:600;cursor:pointer;font-family:var(--font-body); }
         .ceo-btn:disabled { opacity:0.6;cursor:not-allowed; }
