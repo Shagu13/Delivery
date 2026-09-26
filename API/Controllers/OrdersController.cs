@@ -312,6 +312,9 @@ public sealed class OrdersController : BaseController
         if (!Enum.TryParse<ServicePayer>(request.WhoPaysForCompanyService, out var payer))
             return UnprocessableEntity("Invalid WhoPaysForCompanyService value.");
 
+        if (!Enum.TryParse<PaymentStatus>(request.ProductPaymentStatus, out var payStatus))
+            return UnprocessableEntity("Invalid ProductPaymentStatus value.");
+
         await Sender.Send(new UpdateOrderByCustomerCommand(
             OrderId:                   id,
             CustomerId:                customerId,
@@ -320,7 +323,8 @@ public sealed class OrdersController : BaseController
             RecipientAddress:          request.RecipientAddress,
             AmountToCollectForPackage: request.AmountToCollectForPackage,
             Description:               request.Description,
-            WhoPaysForCompanyService:  payer
+            WhoPaysForCompanyService:  payer,
+            ProductPaymentStatus:      payStatus
         ), ct);
 
         return NoContent();
@@ -720,5 +724,6 @@ public sealed record CustomerUpdateOrderRequest(
     string   RecipientAddress,
     decimal? AmountToCollectForPackage,
     string?  Description,
-    string   WhoPaysForCompanyService  // "Sender" | "Recipient"
+    string   WhoPaysForCompanyService,  // "Sender" | "Recipient"
+    string   ProductPaymentStatus       // "Paid" | "NotPaid"
 );

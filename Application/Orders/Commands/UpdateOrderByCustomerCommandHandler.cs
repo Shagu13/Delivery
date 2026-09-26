@@ -35,6 +35,10 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
         order.RecipientAddress   = request.RecipientAddress.Trim();
         order.Description        = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
 
+        // The customer may correct a mismarked payment status (e.g. picked "Paid" by mistake).
+        // Set it first so the payer/COD logic below reacts to the new status, not the old one.
+        order.ProductPaymentStatus = request.ProductPaymentStatus;
+
         // COD (unpaid) parcels always bill the fee to the recipient at delivery — same rule
         // as the create-order form (handlePaymentStatusChange) — so the choice only applies
         // to already-paid parcels.

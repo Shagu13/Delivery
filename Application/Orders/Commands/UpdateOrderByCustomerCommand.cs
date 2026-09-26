@@ -9,12 +9,13 @@ namespace Application.Orders.Commands;
 /// window in which the customer can cancel). Standalone Return orders are out of scope.
 /// </summary>
 public sealed record UpdateOrderByCustomerCommand(
-    Guid         OrderId,
-    Guid         CustomerId,
-    string       RecipientName,
-    string       RecipientPhone,
-    string       RecipientAddress,
-    decimal?     AmountToCollectForPackage,
-    string?      Description,
-    ServicePayer WhoPaysForCompanyService
+    Guid          OrderId,
+    Guid          CustomerId,
+    string        RecipientName,
+    string        RecipientPhone,
+    string        RecipientAddress,
+    decimal?      AmountToCollectForPackage,
+    string?       Description,
+    ServicePayer  WhoPaysForCompanyService,
+    PaymentStatus ProductPaymentStatus
 ) : IRequest;

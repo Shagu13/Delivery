@@ -254,6 +254,9 @@ export interface UpdateMyOrderRequest {
   description: string | null;
   /** Who pays the company service fee. Ignored (forced to Recipient) for unpaid/COD parcels. */
   whoPaysForCompanyService: 'Sender' | 'Recipient';
+  /** The customer may correct a mismarked payment status. Switching to Paid clears the COD
+   *  amount server-side; switching to NotPaid requires one (see amountToCollectForPackage). */
+  productPaymentStatus: 'NotPaid' | 'Paid';
 }
 
 /// Edit one of the customer's own packages (valid until it's assigned to a delivery courier)

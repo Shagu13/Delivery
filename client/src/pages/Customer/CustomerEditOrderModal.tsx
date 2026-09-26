@@ -23,6 +23,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
   const [cod,         setCod]         = useState('');
   const [description, setDescription] = useState('');
   const [payer,       setPayer]       = useState<'Sender' | 'Recipient'>('Sender');
+  const [payStatus,   setPayStatus]   = useState<'NotPaid' | 'Paid'>('NotPaid');
 
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
@@ -43,6 +44,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
     setCod(shownCod != null ? String(shownCod) : '');
     setDescription(order.description ?? '');
     setPayer(order.whoPaysForCompanyService ?? 'Sender');
+    setPayStatus(order.productPaymentStatus);
     setError(null);
     setErrors({});
   }, [order]);
@@ -57,7 +59,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
 
   if (!open || !order) return null;
 
-  const isUnpaid = order.productPaymentStatus === 'NotPaid';
+  const isUnpaid = payStatus === 'NotPaid';
   const cityName     = lang === 'ka' && order.recipientCityGeo     ? order.recipientCityGeo     : order.recipientCity;
   const districtName = lang === 'ka' && order.recipientDistrictGeo ? order.recipientDistrictGeo : order.recipientDistrict;
 
@@ -98,6 +100,7 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
         amountToCollectForPackage: isUnpaid && cod.trim() ? parseFloat(cod) : null,
         description:        description.trim() || null,
         whoPaysForCompanyService: isUnpaid ? 'Recipient' : payer,
+        productPaymentStatus: payStatus,
       }, token);
       onSaved();
       onClose();
@@ -161,6 +164,25 @@ export function CustomerEditOrderModal({ order, open, token, onClose, onSaved }:
             error={errors.recipientAddress}
             placeholder={t.cgoStreetPlaceholder} maxLength={250}
           />
+
+          {/* The customer may correct a mismarked payment status (e.g. picked "Paid" by
+              mistake at checkout). Switching to Paid clears the COD amount; switching to
+              Not Paid forces the service-fee payer to Recipient and requires a COD amount. */}
+          <div className="form-field">
+            <label className="form-field__label">{t.eomPayStatus}</label>
+            <select
+              className="form-field__input"
+              value={payStatus}
+              onChange={e => {
+                const next = e.target.value as 'NotPaid' | 'Paid';
+                setPayStatus(next);
+                if (next === 'Paid') { setCod(''); clearErr('amountToCollectForPackage'); }
+              }}
+            >
+              <option value="NotPaid">{t.eomUnpaid}</option>
+              <option value="Paid">{t.eomPaid}</option>
+            </select>
+          </div>
 
           {isUnpaid && (
             <FormField
