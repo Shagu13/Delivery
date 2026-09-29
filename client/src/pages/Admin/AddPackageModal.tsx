@@ -89,7 +89,7 @@ export function AddPackageModal({ open, onClose, onCreated, resumeDraftId, onDra
   // Null → new customer / not loaded yet → the district's own default price is used.
   const [custPricing, setCustPricing] = useState<CustomerServicePricing | null>(null);
 
-  const [suggestFor, setSuggestFor] = useState<null | 'phoneNumber'>(null);
+  const [suggestFor, setSuggestFor] = useState<null | 'phoneNumber' | 'businessName'>(null);
   const [results, setResults]       = useState<AdminCustomer[]>([]);
   const [searching, setSearching]   = useState(false);
 
@@ -148,11 +148,11 @@ export function AddPackageModal({ open, onClose, onCreated, resumeDraftId, onDra
     }));
   }, [custPricing, open]);
 
-  // Debounced customer lookup while typing a phone number (only when no
-  // existing customer is locked in).
+  // Debounced customer lookup while typing a phone number or business name (only
+  // when no existing customer is locked in). The focused field supplies the term.
   useEffect(() => {
     if (!open || !token || selected || !suggestFor) { setResults([]); return; }
-    const term = cust.phoneNumber.trim();
+    const term = cust[suggestFor].trim();
     if (term.length < 2) { setResults([]); return; }
     setSearching(true);
     const id = window.setTimeout(async () => {
@@ -166,7 +166,7 @@ export function AddPackageModal({ open, onClose, onCreated, resumeDraftId, onDra
       }
     }, 250);
     return () => window.clearTimeout(id);
-  }, [open, token, selected, suggestFor, cust.phoneNumber]);
+  }, [open, token, selected, suggestFor, cust.phoneNumber, cust.businessName]);
 
   useEffect(() => () => window.clearTimeout(blurTimer.current), []);
 
@@ -372,7 +372,23 @@ export function AddPackageModal({ open, onClose, onCreated, resumeDraftId, onDra
           ) : (
             <>
               <p className="ap-hint">{t.apSearchHint}</p>
-              <FormField label={t.businessName} value={cust.businessName} onChange={setCF('businessName')} error={custErrors.businessName} />
+              <div className="ap-suggest-wrap">
+                <FormField
+                  label={t.businessName}
+                  value={cust.businessName}
+                  onChange={setCF('businessName')}
+                  error={custErrors.businessName}
+                  onFocus={() => setSuggestFor('businessName')}
+                  onBlur={() => { blurTimer.current = window.setTimeout(() => setSuggestFor(null), 150); }}
+                />
+                {suggestFor === 'businessName' && (
+                  <CustomerSuggestList
+                    results={results} searching={searching} noResults={t.apNoResults}
+                    accLabel={t.apHasAccountBadge} noAccLabel={t.apNoAccountBadge}
+                    onPick={pickCustomer}
+                  />
+                )}
+              </div>
               <div className="ap-suggest-wrap">
                 <GeorgianPhoneField
                   label={t.phoneNumber}
