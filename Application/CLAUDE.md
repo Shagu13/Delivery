@@ -148,7 +148,8 @@ Live projections built on top of it, both `internal static`:
 | Class | Rule it owns |
 |---|---|
 | `GroupOrders/Commands/Shared/GroupOrderAppendPolicy` | Which statuses still accept new packages (`Pending`, `AcceptedGroupOrder`, `CourierAssignedToPickUp`) — a batch closes when the courier physically collects it. |
-| `GroupOrders/Commands/Shared/OpenBatchResolver` | Find-or-create today's open batch. Use this instead of hand-rolling the lookup. |
+| `GroupOrders/Commands/Shared/OpenBatchResolver` | Find-or-create today's open batch (customer web / Partner API / Return path). Use this instead of hand-rolling the lookup. |
+| `GroupOrders/Commands/Shared/WalkInBatchResolver` | The walk-in equivalent, with its own "open" rule: a walk-in batch is created already at `AdminAcceptedOrderInWareHouse` (no pickup leg), so `GroupOrderAppendPolicy` doesn't apply — it just stays open for the rest of the Georgian day. Scoped to `IsWalkIn` batches only; never folds across channels into a customer's own web-originated batch. |
 | `GroupOrders/Commands/Shared/GroupOrderOrderBuilder` | Builds `Order`s from DTOs and resolves the fee. `internal` — visible to the test projects via `InternalsVisibleTo`. |
 | `Couriers/CourierSalaryEligibility` | Cities where a courier gets a `DefaultSalary` (Tbilisi, Rustavi); elsewhere the admin prices each order. |
 | `Orders/Commands/CustomerOrderActionPolicy` | What a customer may still edit/cancel themselves. |

@@ -13,22 +13,30 @@ import {
   type WalkInPackageInput, type CreateWalkInOrderResult,
 } from '../../api/adminGroupOrders';
 import { searchRecipientSuggestions, type RecipientSuggestion } from '../../api/orders';
+import { useWalkInDrafts } from '../../hooks/useWalkInDrafts';
 import '../../components/ui/Modal.css';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onCreated: (result: CreateWalkInOrderResult) => void;
+  /** Set when reopening from a saved draft (staff-nav basket) — hydrates the form with that
+   *  draft's data instead of starting empty. */
+  resumeDraftId?: string;
+  /** Fired when closing the modal actually persisted a draft (there was something worth
+   *  saving) — lets the parent show a toast. */
+  onDraftSaved?: () => void;
 }
 
-interface CustForm {
+// Exported so the drafts hook/menu can share these shapes rather than redeclaring them.
+export interface CustForm {
   businessName: string; phoneNumber: string;
 }
 const EMPTY_CUST: CustForm = { businessName: '', phoneNumber: '' };
 
-type OrderType = 'Send' | 'Return' | 'Exchange';
+export type OrderType = 'Send' | 'Return' | 'Exchange';
 
-interface PkgRow {
+export interface PkgRow {
   orderType: OrderType;
   recipientName: string;
   recipientPhone: string;
@@ -61,9 +69,18 @@ const emptyPkg = (): PkgRow => ({
 
 type PkgErrors = Partial<Record<keyof PkgRow, string>>;
 
-export function AddPackageModal({ open, onClose, onCreated }: Props) {
+function makeDraftId(): string {
+  return crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function AddPackageModal({ open, onClose, onCreated, resumeDraftId, onDraftSaved }: Props) {
   const { token } = useAuth();
   const { t } = useLanguage();
+  const { saveDraft, deleteDraft, getDraft } = useWalkInDrafts();
+  // Stable for the life of this mount — the parent remounts the modal (via its `key` prop)
+  // on every open, so a fresh session gets a fresh id and a resumed one keeps the same id
+  // across every auto-save until it's submitted or explicitly discarded.
+  const [draftId] = useState<string>(() => resumeDraftId ?? makeDraftId());
 
   const [cust, setCust]       = useState<CustForm>(EMPTY_CUST);
   const [selected, setSelected] = useState<AdminCustomer | null>(null);
@@ -86,11 +103,16 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    setCust(EMPTY_CUST); setSelected(null); setCustErrors({}); setCustPricing(null);
+    const draft = resumeDraftId ? getDraft(resumeDraftId) : null;
+    const startPkgs = draft && draft.pkgs.length > 0 ? draft.pkgs : [emptyPkg()];
+    setCust(draft?.cust ?? EMPTY_CUST); setSelected(draft?.selected ?? null);
+    setCustErrors({}); setCustPricing(null);
     setSuggestFor(null); setResults([]);
-    setPkgs([emptyPkg()]); setPkgErrors([{}]);
-    setApiError(null); setLoading(false);
-  }, [open]);
+    setPkgs(startPkgs); setPkgErrors(startPkgs.map(() => ({})));
+    setLoading(false);
+    // Asked to resume a specific draft but it's gone (expired or already submitted) — say so.
+    setApiError(resumeDraftId && !draft ? t.apDraftExpired : null);
+  }, [open, resumeDraftId, getDraft, t.apDraftExpired]);
 
   // Load the locked-in customer's negotiated pricing (tiers + per-district special prices)
   // so selecting a delivery district auto-fills the fee. New customers stay on null → the
@@ -165,6 +187,26 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
   const unlockCustomer = () => {
     setSelected(null);
     setResults([]); setSuggestFor(null);
+  };
+
+  const hasMeaningfulData = () =>
+    selected !== null ||
+    cust.businessName.trim() !== '' ||
+    cust.phoneNumber.trim() !== '' ||
+    pkgs.some(p => p.recipientName.trim() !== '' || p.recipientPhone.trim() !== '' || p.recipientAddress.trim() !== '');
+
+  // Every close path (backdrop click, header ✕, footer Cancel) routes through here so nothing
+  // entered is ever silently lost — an in-progress form is saved as a resumable draft instead
+  // of discarded. An empty/untouched form saves nothing, and resuming a draft and then
+  // clearing it back out removes the now-empty draft rather than leaving a stale entry behind.
+  const handleClose = () => {
+    if (hasMeaningfulData()) {
+      saveDraft({ id: draftId, savedAt: Date.now(), cust, selected, pkgs });
+      onDraftSaved?.();
+    } else if (resumeDraftId) {
+      deleteDraft(draftId);
+    }
+    onClose();
   };
 
   const setPkg = (i: number, patch: Partial<PkgRow>) => {
@@ -271,6 +313,7 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
         },
         orders,
       });
+      deleteDraft(draftId);
       onCreated(result);
     } catch (err) {
       if (err instanceof WalkInOrderError && err.errors) {
@@ -292,11 +335,11 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
   const custLocked = selected !== null;
 
   return (
-    <div className="ui-modal-overlay" onClick={onClose}>
+    <div className="ui-modal-overlay" onClick={handleClose}>
       <div className="ui-modal ap-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="ui-modal__header">
           <span className="ui-modal__title">{t.apModalTitle}</span>
-          <button className="ui-modal__close" onClick={onClose} aria-label={t.close}>
+          <button className="ui-modal__close" onClick={handleClose} aria-label={t.close}>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
@@ -383,7 +426,7 @@ export function AddPackageModal({ open, onClose, onCreated }: Props) {
         </div>
 
         <div className="ui-modal__footer">
-          <button className="ui-modal__btn ui-modal__btn--ghost" onClick={onClose} disabled={loading}>{t.cancel}</button>
+          <button className="ui-modal__btn ui-modal__btn--ghost" onClick={handleClose} disabled={loading}>{t.cancel}</button>
           <button className="ui-modal__btn ui-modal__btn--primary" onClick={handleSubmit} disabled={loading}>
             {loading ? t.apSubmitting : t.apSubmit}
           </button>

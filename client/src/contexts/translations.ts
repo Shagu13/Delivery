@@ -289,9 +289,24 @@ const en = {
   apSubmit:                'Create Packages',
   apSubmitting:            'Creating…',
   apCreatedToast:          'Packages created.',
+  apDraftSavedToast:       'Saved as draft.',
+  apDraftExpired:          'That draft is no longer available (expired or already submitted).',
   apErrNeedCustomer:       'Select an existing customer or enter the new customer details.',
   apErrNeedPackage:        'Add at least one package.',
   apErrIdNumberRequired:   'ID number is required.',
+
+  // ── Walk-in drafts basket (staff nav) ───────────────────────────────────────
+  widBasketTitle:      'Saved drafts',
+  widMenuTitle:        'Saved Drafts',
+  widEmpty:            'No saved drafts.',
+  widResume:           'Resume',
+  widDiscard:          'Discard',
+  widDiscardTitle:     'Discard draft?',
+  widDiscardMessage:   'This saved walk-in draft will be permanently deleted.',
+  widPackagesLabel:    'packages',
+  widSavedJustNow:     'Saved just now',
+  widSavedMinutesAgo:  'Saved {n}m ago',
+  widSavedHoursAgo:    'Saved {n}h ago',
 
   // ── Admin sidebar ─────────────────────────────────────────────────────────
   sidebarManagement:   'Management',
@@ -2412,9 +2427,24 @@ const ka: typeof en = {
   apSubmit:                'ამანათების შექმნა',
   apSubmitting:            'იქმნება…',
   apCreatedToast:          'ამანათები შეიქმნა.',
+  apDraftSavedToast:       'შენახულია დრაფტად.',
+  apDraftExpired:          'დრაფტი აღარ არის ხელმისაწვდომი (ვადა გაუვიდა ან უკვე გაიგზავნა).',
   apErrNeedCustomer:       'აირჩიეთ არსებული მაღაზია ან შეიყვანეთ ახალი კლიენტის მონაცემები.',
   apErrNeedPackage:        'დაამატეთ მინიმუმ ერთი ამანათი.',
   apErrIdNumberRequired:   'პირადი ნომერი სავალდებულოა.',
+
+  // ── Walk-in drafts basket (staff nav) ───────────────────────────────────────
+  widBasketTitle:      'შენახული დრაფტები',
+  widMenuTitle:        'შენახული დრაფტები',
+  widEmpty:            'შენახული დრაფტი არ არის.',
+  widResume:           'გაგრძელება',
+  widDiscard:          'წაშლა',
+  widDiscardTitle:     'დრაფტის წაშლა?',
+  widDiscardMessage:   'ეს შენახული დრაფტი სამუდამოდ წაიშლება.',
+  widPackagesLabel:    'ამანათი',
+  widSavedJustNow:     'შენახულია ახლახანს',
+  widSavedMinutesAgo:  'შენახულია {n} წთ წინ',
+  widSavedHoursAgo:    'შენახულია {n} სთ წინ',
 
   // ── Admin sidebar ─────────────────────────────────────────────────────────
   sidebarManagement:   'მართვა',

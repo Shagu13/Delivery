@@ -109,6 +109,25 @@ This is **not** the §3.1 `features/` layer — nothing in `AdminPackages/` is i
 by `AdminOrdersPage.tsx` too, *that's* the moment to promote it into `features/` per §3.1 — don't
 treat its current location as already-shared.
 
+### 3.3 Resumable localStorage drafts — `useWalkInDrafts`
+
+`hooks/useWalkInDrafts.ts` is a fourth precedent for the per-user localStorage pattern
+(`contexts/CartProvider.tsx`'s per-customer scoping, `contexts/AuthProvider.tsx`'s single-object
+key, `pages/Courier/components/useGeoSort.ts`'s geocode cache) — no shared `useLocalStorage`
+abstraction exists, each one hand-rolls read/write with a try/catch guard. It backs the admin
+"+ Add Package" walk-in modal (`pages/Admin/AddPackageModal.tsx`): every close path (backdrop
+click, header ✕, Cancel) saves an in-progress form as a draft instead of discarding it, keyed
+per staff username (`delivery_walkin_drafts_<username>`), expiring after 24h. Because
+`useWalkInDrafts` and `AddPackageModal` need each other's types (`WalkInDraft` embeds the
+modal's `CustForm`/`PkgRow`), the modal exports those two interfaces and the hook imports them
+as `import type` only — this keeps the cross-reference to a type-level one, so there is no
+runtime circular-import edge between the two files. `components/layout/WalkInDraftsMenu.tsx`
+(mounted from `StaffNav.tsx` for Admin/Operator) is the basket icon that lists/resumes/discards
+these drafts from anywhere in the portal, using a custom `window` event to stay in sync with the
+modal within one tab (localStorage's own `storage` event doesn't fire in the tab that wrote it).
+Reuse this pattern for the next "don't lose an in-progress form" need rather than inventing
+another one-off.
+
 ---
 
 ## 4. Data fetching

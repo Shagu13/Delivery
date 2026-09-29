@@ -4,6 +4,7 @@ import { useCart } from '../../contexts/useCart';
 import { useLanguage } from '../../contexts/useLanguage';
 import { useAdminPendingCounts } from '../../realtime/useAdminPendingCounts';
 import { LanguageToggle } from '../ui/LanguageToggle';
+import { WalkInDraftsMenu } from './WalkInDraftsMenu';
 
 export function StaffNav() {
     const { user, token } = useAuth();
@@ -11,6 +12,7 @@ export function StaffNav() {
     const { count: cartCount } = useCart();
     const navigate = useNavigate();
     const isAdmin = user?.role === 'Admin';
+    const isOperator = user?.role === 'Operator';
     const isCustomer = user?.role === 'Customer';
     const { pendingGroupOrders: pendingCount, returnExchange: returnExchangeCount } =
         useAdminPendingCounts(token ?? null, isAdmin);
@@ -27,6 +29,7 @@ export function StaffNav() {
                 </Link>
                 <nav className="nav__links">
                     <LanguageToggle />
+                    {(isAdmin || isOperator) && <WalkInDraftsMenu />}
                     {isAdmin && (
                         <button
                             className="nav__pending-btn"

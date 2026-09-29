@@ -147,11 +147,14 @@ export function AdminDashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const tabParam    = searchParams.get('tab') ?? '';
   const statusParam = searchParams.get('status') ?? '';
   const viewParam   = searchParams.get('view') ?? '';
+  // Deep-link from the staff-nav drafts basket ("Resume") — opens the walk-in modal
+  // pre-filled with that saved draft.
+  const resumeDraftParam = searchParams.get('resumeDraft');
   // Deep-link search term (from the global Order Search "Go To"): seeds the destination
   // page's search box so it lands on that exact order.
   const qParam      = searchParams.get('q') ?? '';
@@ -198,11 +201,26 @@ export function AdminDashboard() {
 
   const [showCreateCourier, setShowCreateCourier] = useState(false);
   const [showAddPackage, setShowAddPackage] = useState(false);
+  const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const [editCourier, setEditCourier] = useState<Courier | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // Mobile drawer (the desktop sidebar is hidden below 768px — see dashboard.css).
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // A "Resume" click from the staff-nav drafts basket lands here as ?resumeDraft=<id> —
+  // open the walk-in modal pre-filled with it, then strip the param so it isn't replayed
+  // on a later refresh/navigation.
+  useEffect(() => {
+    if (!resumeDraftParam) return;
+    setResumeDraftId(resumeDraftParam);
+    setShowAddPackage(true);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('resumeDraft');
+      return next;
+    }, { replace: true });
+  }, [resumeDraftParam, setSearchParams]);
 
   // Live return/exchange badge count (SignalR) — shared with the staff nav.
   const { returnExchange: returnExchangeCount } = useAdminPendingCounts(token ?? null, !isOperator);
@@ -677,11 +695,17 @@ export function AdminDashboard() {
       />
 
       <AddPackageModal
-        key={showAddPackage ? 'ap-open' : 'ap-closed'}
+        key={showAddPackage ? `ap-open-${resumeDraftId ?? 'new'}` : 'ap-closed'}
         open={showAddPackage}
-        onClose={() => setShowAddPackage(false)}
+        resumeDraftId={resumeDraftId ?? undefined}
+        onClose={() => { setShowAddPackage(false); setResumeDraftId(null); }}
+        onDraftSaved={() => {
+          setToast(t.apDraftSavedToast);
+          setTimeout(() => setToast(null), 4000);
+        }}
         onCreated={(result) => {
           setShowAddPackage(false);
+          setResumeDraftId(null);
           const n = result.orders.length;
           setToast(`${t.apCreatedToast} (${n})`);
           setTimeout(() => setToast(null), 4000);

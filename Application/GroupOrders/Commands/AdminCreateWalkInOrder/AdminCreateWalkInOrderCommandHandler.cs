@@ -32,6 +32,9 @@ public sealed class AdminCreateWalkInOrderCommandHandler
 
         // ── 1. Resolve the customer ─────────────────────────────────────────────
         Customer customer;
+        // A brand-new customer can't possibly have an existing open batch — skip that
+        // lookup below rather than issuing a query guaranteed to return nothing.
+        var isNewCustomer = false;
 
         if (dto.ExistingCustomerId is Guid existingId)
         {
@@ -52,12 +55,12 @@ public sealed class AdminCreateWalkInOrderCommandHandler
             // Manual entry: reuse an existing customer on an exact phone + business-name
             // match, additionally requiring the ID number to match when one was entered.
             // (BusinessName is globally unique, so phone + business is already a strong key.)
-            customer = await _context.Customers.FirstOrDefaultAsync(
+            var existingCustomer = await _context.Customers.FirstOrDefaultAsync(
                 c => c.PhoneNumber == phone && c.BusinessName == biz
                   && (idNum == null || c.IdNumber == idNum),
                 cancellationToken);
 
-            if (customer is null)
+            if (existingCustomer is null)
             {
                 // Business name stays globally unique — surface the same sentinel error
                 // the registration path uses so the client maps it to a friendly message.
@@ -85,6 +88,11 @@ public sealed class AdminCreateWalkInOrderCommandHandler
                     IsActive          = true,
                 };
                 _context.Customers.Add(customer);
+                isNewCustomer = true;
+            }
+            else
+            {
+                customer = existingCustomer;
             }
         }
 
@@ -120,37 +128,58 @@ public sealed class AdminCreateWalkInOrderCommandHandler
         }
 
         // ── 3. One GroupOrder for the Send/Exchange packages ───────────────────
+        //    A repeat walk-in submission for the same customer, same pickup address, same
+        //    Georgian day folds into that still-open walk-in batch instead of starting a
+        //    new one each time — mirrors the customer web flow's OpenBatchResolver, but with
+        //    its own "open" rule (see WalkInBatchResolver): a walk-in batch has no
+        //    courier-pickup event to close it, so it stays open for the rest of the day, and
+        //    it never folds across channels into a batch the customer created themselves.
         GroupOrder? groupOrder = null;
         if (batchOrders.Count > 0)
         {
-            groupOrder = new GroupOrder
+            if (!isNewCustomer)
             {
-                CustomerId             = customer.Id,
-                SenderFirstName        = customer.FirstName,
-                SenderLastName         = customer.LastName,
-                SenderIdNumber         = customer.IdNumber,
-                SenderBusinessName     = customer.BusinessName,
-                SenderPhone            = customer.PhoneNumber,
-                PickUpCity             = customer.City,
-                PickUpDistrict         = customer.District,
-                PickUpAddress          = customer.Address,
-                PickUpLatitude         = customer.Latitude,
-                PickUpLongitude        = customer.Longitude,
-                NumberOfPackages       = batchOrders.Count,
-                Status                 = OrderStatus.AdminAcceptedOrderInWareHouse,
-                IsWalkIn               = true,
-                // The batch skipped the pickup leg — stamp the timestamps as "now" so the
-                // pickup trace isn't blank on the admin/customer views.
-                CreatedAt              = now,
-                AcceptedAt             = now,
-                PickedUpAt             = now,
-                DeliveredToWarehouseAt = now,
-            };
+                groupOrder = await WalkInBatchResolver.FindOpenBatchAsync(
+                    _context, customer.Id, customer.City, customer.District, customer.Address,
+                    cancellationToken);
+            }
 
-            foreach (var order in batchOrders)
-                groupOrder.Orders.Add(order);
+            if (groupOrder is not null)
+            {
+                GroupOrderOrderBuilder.AttachToBatch(_context, groupOrder, batchOrders);
+                groupOrder.NumberOfPackages += batchOrders.Count;
+            }
+            else
+            {
+                groupOrder = new GroupOrder
+                {
+                    CustomerId             = customer.Id,
+                    SenderFirstName        = customer.FirstName,
+                    SenderLastName         = customer.LastName,
+                    SenderIdNumber         = customer.IdNumber,
+                    SenderBusinessName     = customer.BusinessName,
+                    SenderPhone            = customer.PhoneNumber,
+                    PickUpCity             = customer.City,
+                    PickUpDistrict         = customer.District,
+                    PickUpAddress          = customer.Address,
+                    PickUpLatitude         = customer.Latitude,
+                    PickUpLongitude        = customer.Longitude,
+                    NumberOfPackages       = batchOrders.Count,
+                    Status                 = OrderStatus.AdminAcceptedOrderInWareHouse,
+                    IsWalkIn               = true,
+                    // The batch skipped the pickup leg — stamp the timestamps as "now" so the
+                    // pickup trace isn't blank on the admin/customer views.
+                    CreatedAt              = now,
+                    AcceptedAt             = now,
+                    PickedUpAt             = now,
+                    DeliveredToWarehouseAt = now,
+                };
 
-            _context.GroupOrders.Add(groupOrder);
+                foreach (var order in batchOrders)
+                    groupOrder.Orders.Add(order);
+
+                _context.GroupOrders.Add(groupOrder);
+            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);
