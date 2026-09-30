@@ -10,6 +10,8 @@ import { SwipeButton } from './SwipeButton';
 import { AddressMapLink } from './AddressMapLink';
 import { RouteToolbar } from './RouteToolbar';
 import { CollectConfirmModal } from './CollectConfirmModal';
+import { collectTotal, needsCollect } from './courierCollect';
+import { ScanDeliveryFlow } from './ScanDeliveryFlow';
 import { PostponeModal } from './PostponeModal';
 import { CancelModal } from './CancelModal';
 import { useGeoSort, distanceToAddress } from './useGeoSort';
@@ -83,18 +85,6 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
             : a.recipientDistrict.localeCompare(b.recipientDistrict)
     );
 
-    const needsCollect = (o: CourierOrder) => {
-        const codDue = o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null && o.amountToCollectForPackage > 0;
-        const feeDue = o.whoPaysForCompanyService === 'Recipient' && o.companyServicePrice > 0;
-        return codDue || feeDue;
-    };
-
-    const collectTotal = (o: CourierOrder) => {
-        const cod = o.productPaymentStatus === 'NotPaid' && o.amountToCollectForPackage != null ? o.amountToCollectForPackage : 0;
-        const fee = o.whoPaysForCompanyService === 'Recipient' ? o.companyServicePrice : 0;
-        return cod + fee;
-    };
-
     return (
         <div className="dashboard__section">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -132,6 +122,8 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                     )}
                 </div>
             </div>
+            {/* Scan the parcel's label at the door → confirm delivery in a popup. */}
+            <ScanDeliveryFlow deliveries={deliveries} token={token} busyId={busyId} onAct={handleAct} />
             {/* Free-text search: store name, recipient/address, city/district, order type. */}
             <div style={{ position: 'relative', marginBottom: 10 }}>
                 <input

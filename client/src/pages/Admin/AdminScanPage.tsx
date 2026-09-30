@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { exportScanManifest, scanOrder, scanUnassignedOrder } from '../../api/scan';
 import type { ScannedOrder } from '../../api/scan';
+import { CameraScanner } from '../../components/ui/CameraScanner';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useLanguage } from '../../contexts/useLanguage';
 import { ASSIGN_SESSION_KEY, useScanSession } from '../../hooks/useScanSession';
-import { CameraScanner } from './CameraScanner';
 import { ScanAssignPanel } from './ScanAssignPanel';
 import { ScanCourierGroup } from './ScanCourierGroup';
 import './AdminScanPage.css';
@@ -135,7 +135,7 @@ export default function AdminScanPage({ token }: Props) {
       </form>
 
       {/* Camera scanning (phone) — self-contained; delete this block, the import, the
-          `cameraOn` state and CameraScanner.tsx/.css to remove the feature. */}
+          `cameraOn` state to remove the feature (CameraScanner is shared with the courier app). */}
       {cameraOn
         ? <CameraScanner onDetect={handleCode} onClose={() => setCameraOn(false)} />
         : <button type="button" className="scan-btn" onClick={() => setCameraOn(true)}>{t.scanCamera}</button>}

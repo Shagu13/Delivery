@@ -59,7 +59,9 @@ client/src/
 │   │   └── AdminPackages/  #   AdminPackagesPage.tsx (packages)'s own hook + extracted
 │   │                       #   subcomponents (usePackageSelection, BulkFieldModal, PackageRow,
 │   │                       #   pickup-side modals) — see §3.2
-│   ├── Courier/          # dashboard + components/ (swipe actions, maps, geo-sort, sound)
+│   ├── Courier/          # dashboard + components/ (swipe actions, maps, geo-sort, sound);
+│   │                     #   Scan tab (CourierScanPage: scan-to-claim warehouse parcels) and
+│   │                     #   components/ScanDeliveryFlow (scan-to-deliver popup) use ui/CameraScanner
 │   ├── Customer/
 │   └── Tenant/           # white-label co-admin + public tenant homepage
 ├── realtime/             # SignalR connection, useOrdersChangedSignal, useAdminPendingCounts, pushNotifications

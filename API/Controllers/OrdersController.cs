@@ -217,6 +217,26 @@ public sealed class OrdersController : BaseController
     public async Task<IActionResult> ScanUnassigned(string trackingNumber, CancellationToken ct)
         => Ok(await Sender.Send(new ScanUnassignedOrderQuery(trackingNumber), ct));
 
+    // ── GET /api/orders/courier-scan/{trackingNumber}  (Courier — scan a parcel to claim) ──
+    // Same lookup as the admin Assign mode; another courier's name is kept out of the error.
+    [HttpGet("courier-scan/{trackingNumber}")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(typeof(ScannedOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CourierScan(string trackingNumber, CancellationToken ct)
+        => Ok(await Sender.Send(new ScanUnassignedOrderQuery(trackingNumber, HideCourierName: true), ct));
+
+    // ── POST /api/orders/courier-claim  (Courier — take the scanned parcels) ──
+    [HttpPost("courier-claim")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(typeof(BulkAssignCourierResultDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CourierClaim([FromBody] CourierClaimRequest request, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        return Ok(await Sender.Send(new CourierClaimOrdersCommand(request.OrderIds, userId), ct));
+    }
+
     // ── POST /api/orders/scan-export  (Admin/Operator — courier manifest Excel) ──
     // CourierId set → that courier's file; omitted → "download all" (one sheet per courier).
     [HttpPost("scan-export")]
@@ -754,6 +774,7 @@ public sealed record UpdateOrderRequest(
 );
 
 public sealed record BulkAssignCourierRequest(IReadOnlyList<Guid> OrderIds, Guid CourierId);
+public sealed record CourierClaimRequest(IReadOnlyList<Guid> OrderIds);
 
 public sealed record BulkDeleteOrdersRequest(IReadOnlyList<Guid> OrderIds);
 

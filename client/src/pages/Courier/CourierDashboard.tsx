@@ -11,6 +11,7 @@ import { PickupsPanel } from './components/PickupsPanel';
 import { DeliveriesPanel } from './components/DeliveriesPanel';
 import { CourierHistoryPage } from './CourierHistoryPage';
 import { CourierSettlementsPage } from './CourierSettlementsPage';
+import { CourierScanPage } from './CourierScanPage';
 import { LanguageToggle } from '../../components/ui/LanguageToggle';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { useRefreshOnResume } from '../../hooks/useRefreshOnResume';
@@ -61,7 +62,7 @@ function useIsMobile(breakpoint = 768) {
 }
 
 // ── Root component ─────────────────────────────────────────────────────────────
-type DashView = 'pickups' | 'deliveries' | 'history' | 'settlements';
+type DashView = 'pickups' | 'deliveries' | 'scan' | 'history' | 'settlements';
 
 export function CourierDashboard() {
     const { user, token, signOut } = useAuth();
@@ -92,6 +93,9 @@ export function CourierDashboard() {
     const seenPickupIdsRef = useRef<Set<string> | null>(null);
     const seenDeliveryIdsRef = useRef<Set<string> | null>(null);
     const seenReturnPickupIdsRef = useRef<Set<string> | null>(null);
+    // Parcels the courier just took themselves via the Scan tab — they must not raise the
+    // "new order" popup/chime that exists for admin-assigned orders.
+    const selfClaimedIdsRef = useRef<Set<string>>(new Set());
     const courierPosRef = useRef<{ lat: number; lng: number } | null>(null);
     // Persisted-baseline keys, scoped per courier so reopen surfaces orders assigned while closed.
     const seenKeyPickup = `courier_seen_pickup_v1_${user?.username ?? 'anon'}`;
@@ -147,7 +151,7 @@ export function CourierDashboard() {
     const detectNewDeliveries = useCallback((data: CourierOrder[]) => {
         const ids = new Set(data.map(o => o.id));
         const baseline = seenDeliveryIdsRef.current ?? loadSeenIds(seenKeyDeliv);
-        const added = baseline ? data.filter(o => !baseline.has(o.id)) : [];
+        const added = baseline ? data.filter(o => !baseline.has(o.id) && !selfClaimedIdsRef.current.has(o.id)) : [];
         seenDeliveryIdsRef.current = ids;
         saveSeenIds(seenKeyDeliv, ids);
         if (added.length === 0) return;
@@ -338,6 +342,16 @@ export function CourierDashboard() {
         />
     );
 
+    // Scan tab: the courier takes unassigned warehouse parcels for themselves.
+    const scanPage = (
+        <CourierScanPage
+            token={token!}
+            username={user?.username ?? 'anon'}
+            onBeforeClaim={ids => ids.forEach(id => selfClaimedIdsRef.current.add(id))}
+            onClaimed={count => { if (count > 0) showToast(t.cdScanClaimedToast(count)); void loadDeliveries(true); }}
+        />
+    );
+
     // ── Mobile ─────────────────────────────────────────────────────────────────
     if (isMobile) {
         return (
@@ -365,11 +379,13 @@ export function CourierDashboard() {
                     <div className="mobile-tabs">
                         <button className={`mobile-tab${view === 'pickups'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('pickups')}><MobileTabLabel raw={t.cdTabPickups} /></button>
                         <button className={`mobile-tab${view === 'deliveries'  ? ' mobile-tab--active' : ''}`} onClick={() => setView('deliveries')}><MobileTabLabel raw={t.cdTabDeliveries} /></button>
+                        <button className={`mobile-tab${view === 'scan'        ? ' mobile-tab--active' : ''}`} onClick={() => setView('scan')}><MobileTabLabel raw={t.cdTabScan} /></button>
                         <button className={`mobile-tab${view === 'history'     ? ' mobile-tab--active' : ''}`} onClick={() => setView('history')}><MobileTabLabel raw={t.cdTabHistory} /></button>
                         <button className={`mobile-tab${view === 'settlements' ? ' mobile-tab--active' : ''}`} onClick={() => setView('settlements')}><MobileTabLabel raw={t.cdTabPay} /></button>
                     </div>
                     {view === 'pickups'     && <PickupsPanel    {...pickupProps} />}
                     {view === 'deliveries'  && <DeliveriesPanel {...deliveryProps} />}
+                    {view === 'scan'        && scanPage}
                     {view === 'history'     && <CourierHistoryPage />}
                     {view === 'settlements' && <CourierSettlementsPage />}
                 </main>
@@ -393,6 +409,7 @@ export function CourierDashboard() {
                     <nav className="sidebar__nav">
                         <button className={`sidebar__link${view === 'pickups'     ? ' sidebar__link--active' : ''}`} onClick={() => setView('pickups')}>{t.cdTabPickups}</button>
                         <button className={`sidebar__link${view === 'deliveries'  ? ' sidebar__link--active' : ''}`} onClick={() => setView('deliveries')}>{t.cdTabDeliveries}</button>
+                        <button className={`sidebar__link${view === 'scan'        ? ' sidebar__link--active' : ''}`} onClick={() => setView('scan')}>{t.cdTabScan}</button>
                         <button className={`sidebar__link${view === 'history'     ? ' sidebar__link--active' : ''}`} onClick={() => setView('history')}>{t.cdTabHistory}</button>
                         <button className={`sidebar__link${view === 'settlements' ? ' sidebar__link--active' : ''}`} onClick={() => setView('settlements')}>{t.cdTabSettlements}</button>
                     </nav>
@@ -419,6 +436,7 @@ export function CourierDashboard() {
                 {pushBanner}
                 {view === 'pickups'     && <PickupsPanel    {...pickupProps} />}
                 {view === 'deliveries'  && <DeliveriesPanel {...deliveryProps} />}
+                {view === 'scan'        && scanPage}
                 {view === 'history'     && <CourierHistoryPage />}
                 {view === 'settlements' && <CourierSettlementsPage />}
             </main>

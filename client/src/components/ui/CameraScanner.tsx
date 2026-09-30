@@ -11,8 +11,8 @@ interface Props {
 }
 
 // Phone-camera barcode reader (Code 128 only — the format printed on our labels). Fully
-// self-contained: the Scan page just passes each decoded string to its normal scan path, so
-// removing this file + its CSS and the button in AdminScanPage removes the feature.
+// self-contained (its own CSS): the Scan pages just pass each decoded string to their normal
+// scan path. Used by the admin Scan page and the courier Scan / delivery-scan flows.
 export function CameraScanner({ onDetect, onClose }: Props) {
   const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -49,7 +49,7 @@ export function CameraScanner({ onDetect, onClose }: Props) {
       {error
         ? <p className="cam__error">{t.scanCameraError}</p>
         : <video ref={videoRef} className="cam__video" muted playsInline />}
-      <button type="button" className="scan-btn" onClick={onClose}>{t.scanCameraClose}</button>
+      <button type="button" className="cam__close" onClick={onClose}>{t.scanCameraClose}</button>
     </div>
   );
 }

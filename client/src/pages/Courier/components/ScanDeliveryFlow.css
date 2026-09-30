@@ -1,0 +1,41 @@
+/* Scan-to-deliver: header button + the popup sheet. The collect/postpone/cancel modals it reuses
+   are position:absolute; inset:0, so the fixed overlay below is their containing block. */
+.sdf { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+
+.sdf__scan-btn {
+  min-height: 48px; padding: 0 16px; font-size: 1rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--color-accent); border-radius: 10px;
+  background: var(--color-accent-dim); color: var(--color-text);
+}
+.sdf__notice {
+  padding: 10px 14px; border-radius: 8px; font-size: 0.875rem;
+  background: var(--color-error-bg); color: var(--color-error); overflow-wrap: anywhere;
+}
+
+.sdf-overlay {
+  position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sdf-sheet {
+  width: 100%; max-width: 420px; box-sizing: border-box; max-height: 90vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
+  background: var(--color-bg); border-radius: 16px 16px 0 0;
+}
+.sdf-sheet__track { margin: 0; font-size: 1.15rem; letter-spacing: 0.5px; }
+.sdf-sheet__rows { margin: 0; display: grid; gap: 2px; font-size: 0.9rem; }
+.sdf-sheet__rows dt { font-weight: 700; margin-top: 6px; }
+.sdf-sheet__rows dd { margin: 0; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.sdf-sheet__collect {
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+  border-radius: 10px; background: #fef9c3; border: 1px solid #fde047; color: #92400e; font-size: 0.9rem;
+}
+.sdf-sheet__collect strong { font-size: 1.4rem; }
+
+.sdf-btn {
+  min-height: 48px; padding: 0 16px; font-size: 1rem; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--color-border); border-radius: 10px; background: transparent; color: var(--color-text);
+}
+.sdf-btn:disabled { opacity: 0.6; cursor: default; }
+.sdf-btn--ok { background: #10b981; border-color: #10b981; color: #fff; }
+.sdf-btn--warn { border-color: #f97316; color: #f97316; }
+.sdf-btn--danger { border-color: #dc2626; color: #dc2626; }

@@ -1,3 +1,5 @@
+import type { BulkAssignCourierResult } from './orders';
+
 const BASE = '/api/orders';
 
 /** One scanned package — mirrors Application.Orders.Queries.ScanOrders.ScannedOrderDto. */
@@ -41,6 +43,29 @@ export async function scanUnassignedOrder(token: string, trackingNumber: string)
         headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(await errorMessage(res, 'Scan failed'));
+    return res.json();
+}
+
+/** Courier: look up a scanned warehouse parcel they could take. Same rules as the admin Assign
+ *  lookup; rejects (with the server's message) when the parcel is unknown, a return, already held
+ *  by a courier, or not yet accepted in the warehouse. */
+export async function scanParcelToClaim(token: string, trackingNumber: string): Promise<ScannedOrder> {
+    const res = await fetch(`${BASE}/courier-scan/${encodeURIComponent(trackingNumber.trim())}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(await errorMessage(res, 'Scan failed'));
+    return res.json();
+}
+
+/** Courier: take the scanned parcels for themselves. Returns which were assigned and which were
+ *  refused (someone else got there first, status changed, …). */
+export async function claimScannedParcels(token: string, orderIds: string[]): Promise<BulkAssignCourierResult> {
+    const res = await fetch(`${BASE}/courier-claim`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds }),
+    });
+    if (!res.ok) throw new Error(await errorMessage(res, 'Claim failed'));
     return res.json();
 }
 
