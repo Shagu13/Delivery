@@ -1,11 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { exportScanManifest, scanOrder } from '../../api/scan';
+import { exportScanManifest, scanOrder, scanUnassignedOrder } from '../../api/scan';
 import type { ScannedOrder } from '../../api/scan';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useLanguage } from '../../contexts/useLanguage';
-import { useScanSession } from '../../hooks/useScanSession';
+import { ASSIGN_SESSION_KEY, useScanSession } from '../../hooks/useScanSession';
 import { CameraScanner } from './CameraScanner';
+import { ScanAssignPanel } from './ScanAssignPanel';
 import { ScanCourierGroup } from './ScanCourierGroup';
 import './AdminScanPage.css';
 
@@ -18,22 +19,49 @@ interface Notice {
   text: string;
 }
 
+type ScanMode = 'manifest' | 'assign';
+
 // Barcode scanners type the code + Enter into whatever is focused, so this screen is one
 // always-focused input. Each scan adds a package to a per-courier list; Excel is generated
 // from that list on demand (a browser can't append to a file it already downloaded).
 export default function AdminScanPage({ token }: Props) {
   const { t, lang } = useLanguage();
   const session = useScanSession();
+  const assignSession = useScanSession(ASSIGN_SESSION_KEY);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<ScanMode>('manifest');
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
 
+  // A hardware scanner is just a keyboard: it types into whatever is focused. After a click on a
+  // button/tab the focus is elsewhere, so route the next printable keystroke back to the scan
+  // input (focusing during keydown means that same character still lands in it). Skipped while
+  // a dialog is open or another field (e.g. the courier select) is being used.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLSelectElement
+        || active instanceof HTMLTextAreaElement) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      inputRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const scan = useMutation({
-    mutationFn: (tracking: string) => scanOrder(token, tracking),
-    onSuccess: (order: ScannedOrder) => {
+    mutationFn: ({ tracking, scanMode }: { tracking: string; scanMode: ScanMode }) =>
+      scanMode === 'assign' ? scanUnassignedOrder(token, tracking) : scanOrder(token, tracking),
+    onSuccess: (order: ScannedOrder, { scanMode }) => {
+      if (scanMode === 'assign') {
+        assignSession.add(order);
+        setNotice({ kind: 'ok', text: `${order.trackingNumber} · ${order.recipientCity}, ${order.recipientDistrict}` });
+        return;
+      }
       session.add(order);
       setNotice({ kind: 'ok', text: `${order.trackingNumber} → ${order.courierFullName ?? ''}` });
     },
@@ -62,11 +90,17 @@ export default function AdminScanPage({ token }: Props) {
   const handleCode = (raw: string) => {
     const value = raw.trim().toUpperCase();
     if (!value) return;
-    if (session.has(value)) {
+    if ((mode === 'assign' ? assignSession : session).has(value)) {
       setNotice({ kind: 'error', text: `${value} — ${t.scanDuplicate}` });
       return;
     }
-    scan.mutate(value);
+    scan.mutate({ tracking: value, scanMode: mode });
+  };
+
+  const switchMode = (next: ScanMode) => {
+    setMode(next);
+    setNotice(null);
+    inputRef.current?.focus();
   };
 
   const submit = (e: React.FormEvent) => {
@@ -78,6 +112,15 @@ export default function AdminScanPage({ token }: Props) {
 
   return (
     <div className="scan-page">
+      <div className="scan-tabs" role="tablist">
+        {(['manifest', 'assign'] as const).map(m => (
+          <button key={m} type="button" role="tab" aria-selected={mode === m}
+            className={`scan-tab${mode === m ? ' scan-tab--active' : ''}`} onClick={() => switchMode(m)}>
+            {m === 'manifest' ? t.scanModeManifest : t.scanModeAssign}
+          </button>
+        ))}
+      </div>
+
       <form className="scan-form" onSubmit={submit}>
         <input
           ref={inputRef}
@@ -88,7 +131,6 @@ export default function AdminScanPage({ token }: Props) {
           autoFocus
           autoComplete="off"
           autoCapitalize="characters"
-          disabled={scan.isPending}
         />
       </form>
 
@@ -100,7 +142,14 @@ export default function AdminScanPage({ token }: Props) {
 
       {notice && <div className={`scan-notice scan-notice--${notice.kind}`} role="status">{notice.text}</div>}
 
-      {groups.length === 0 ? (
+      {mode === 'assign' ? (
+        <ScanAssignPanel
+          token={token}
+          session={assignSession}
+          onAddToManifest={orders => orders.forEach(session.add)}
+          onError={text => setNotice({ kind: 'error', text })}
+        />
+      ) : groups.length === 0 ? (
         <p className="scan-empty">{t.scanEmpty}</p>
       ) : (
         <>

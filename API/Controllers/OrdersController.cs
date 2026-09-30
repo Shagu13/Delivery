@@ -208,6 +208,15 @@ public sealed class OrdersController : BaseController
     public async Task<IActionResult> Scan(string trackingNumber, CancellationToken ct)
         => Ok(await Sender.Send(new ScanOrderQuery(trackingNumber), ct));
 
+    // ── GET /api/orders/scan-unassigned/{trackingNumber}  (Admin/Operator — Assign-mode lookup) ──
+    [HttpGet("scan-unassigned/{trackingNumber}")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(ScannedOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ScanUnassigned(string trackingNumber, CancellationToken ct)
+        => Ok(await Sender.Send(new ScanUnassignedOrderQuery(trackingNumber), ct));
+
     // ── POST /api/orders/scan-export  (Admin/Operator — courier manifest Excel) ──
     // CourierId set → that courier's file; omitted → "download all" (one sheet per courier).
     [HttpPost("scan-export")]

@@ -8,6 +8,27 @@
 }
 .scan-input:focus { outline: none; border-color: var(--color-border-focus); box-shadow: var(--shadow-focus); }
 
+.scan-tabs { display: flex; gap: 8px; }
+.scan-tab {
+  flex: 1; min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: #fff; color: var(--color-text-muted);
+}
+.scan-tab--active { background: var(--color-accent); border-color: var(--color-accent); color: #1a1714; }
+
+.scan-assign-bar { display: flex; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--color-border); }
+.scan-select {
+  flex: 1; min-width: 180px; min-height: 40px; padding: 0 12px; font-size: 16px; box-sizing: border-box;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: #fff; color: var(--color-text);
+}
+
+.scan-result {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px; background: #fff;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
+.scan-result__title { margin: 0; font-weight: 700; color: var(--color-success); }
+.scan-result__failed { margin: 6px 0 0; padding-left: 18px; }
+
 .scan-notice { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 14px; }
 .scan-notice--ok { background: var(--color-success-bg); color: var(--color-success); }
 .scan-notice--error { background: var(--color-error-bg); color: var(--color-error); }

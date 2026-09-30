@@ -33,6 +33,17 @@ export async function scanOrder(token: string, trackingNumber: string): Promise<
     return res.json();
 }
 
+/** Admin/Operator, Assign mode: look up a scanned barcode that is still waiting for a courier.
+ *  Rejects (with the server's message) when it is unknown, a return, already assigned, or not
+ *  yet accepted in the warehouse. */
+export async function scanUnassignedOrder(token: string, trackingNumber: string): Promise<ScannedOrder> {
+    const res = await fetch(`${BASE}/scan-unassigned/${encodeURIComponent(trackingNumber.trim())}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(await errorMessage(res, 'Scan failed'));
+    return res.json();
+}
+
 /** Admin/Operator: download the courier manifest Excel for the scanned tracking numbers.
  *  `courierId` set → that courier's file; omitted → one workbook with a sheet per courier. */
 export async function exportScanManifest(
