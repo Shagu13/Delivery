@@ -76,7 +76,10 @@ function renderBarcode(value: string): string {
     if (!value) return '';
     try {
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        JsBarcode(svg, value, { format: 'CODE128', displayValue: false, margin: 0, width: 2, height: 60 });
+        // margin 20 = 10 modules (module width 2) of blank quiet zone each side, the Code 128
+        // minimum. Hardware laser/CCD scanners need it; phone cameras don't, which is why a
+        // margin-less barcode scanned fine on a phone but not on a scanner device.
+        JsBarcode(svg, value, { format: 'CODE128', displayValue: false, margin: 20, width: 2, height: 60 });
         const w = parseFloat(svg.getAttribute('width') ?? '');
         const h = parseFloat(svg.getAttribute('height') ?? '');
         if (!w || !h) return '';
