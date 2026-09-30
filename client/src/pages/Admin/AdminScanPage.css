@@ -1,0 +1,47 @@
+.scan-page { display: flex; flex-direction: column; gap: 14px; max-width: 860px; }
+
+.scan-input {
+  width: 100%; box-sizing: border-box; padding: 14px 16px;
+  font-size: 18px; letter-spacing: 1px; text-transform: uppercase;
+  border: 2px solid var(--color-border); border-radius: var(--radius-md);
+  background: #fff; color: var(--color-text);
+}
+.scan-input:focus { outline: none; border-color: var(--color-border-focus); box-shadow: var(--shadow-focus); }
+
+.scan-notice { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 14px; }
+.scan-notice--ok { background: var(--color-success-bg); color: var(--color-success); }
+.scan-notice--error { background: var(--color-error-bg); color: var(--color-error); }
+
+.scan-empty { color: var(--color-text-muted); text-align: center; padding: 32px 0; }
+
+.scan-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.scan-toolbar__total { margin-right: auto; font-weight: 600; }
+
+.scan-btn {
+  min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: #fff; color: var(--color-text);
+}
+.scan-btn:disabled { opacity: 0.6; cursor: default; }
+.scan-btn--primary { background: var(--color-accent); border-color: var(--color-accent); color: #1a1714; }
+
+.scan-group { background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+.scan-group__head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--color-border); }
+.scan-group__name { margin: 0; font-size: 16px; }
+.scan-group__count {
+  background: var(--color-accent-dim); color: var(--color-warning);
+  border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 700; margin-right: auto;
+}
+
+.scan-list { list-style: none; margin: 0; padding: 0; }
+.scan-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
+.scan-row:last-child { border-bottom: none; }
+.scan-row__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.scan-row__track { font-weight: 700; letter-spacing: 0.5px; }
+.scan-row__who, .scan-row__addr { font-size: 13px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.scan-row__cod { font-weight: 700; white-space: nowrap; }
+.scan-row__remove {
+  min-width: 40px; min-height: 40px; border: none; background: none; cursor: pointer;
+  color: var(--color-text-subtle); font-size: 16px;
+}
+.scan-row__remove:hover { color: var(--color-error); }

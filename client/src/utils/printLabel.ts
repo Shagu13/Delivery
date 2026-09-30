@@ -3,6 +3,8 @@
 // user "Save as PDF" to download). Label text is Georgian by request, so senders /
 // couriers reading the physical sticker get a consistent local-language label.
 
+import JsBarcode from 'jsbarcode';
+
 export interface ParcelLabelData {
     storeName: string;
     recipientName: string;
@@ -66,6 +68,29 @@ function renderLogo(b: BrandAssets): string {
     return b.logo ? `<div class="brand-top"><img class="brand__logo" src="${b.logo}" alt="DILO" /></div>` : '';
 }
 
+// Code 128 barcode of the tracking number, as an inline SVG string. JsBarcode emits a
+// fixed pixel width; we drop it and keep only a viewBox, so CSS (width:100%, per-size
+// height) stretches the bars to exactly the label's inner width — it can never overflow
+// the border. Every module scales by the same factor, so it stays scannable.
+function renderBarcode(value: string): string {
+    if (!value) return '';
+    try {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        JsBarcode(svg, value, { format: 'CODE128', displayValue: false, margin: 0, width: 2, height: 60 });
+        const w = parseFloat(svg.getAttribute('width') ?? '');
+        const h = parseFloat(svg.getAttribute('height') ?? '');
+        if (!w || !h) return '';
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.removeAttribute('style');
+        svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        svg.setAttribute('preserveAspectRatio', 'none');
+        return `<div class="barcode">${svg.outerHTML}</div>`;
+    } catch {
+        return ''; // unencodable value — print the label without a barcode
+    }
+}
+
 function renderLabel(d: ParcelLabelData, brand: BrandAssets): string {
     return `
     <div class="label">
@@ -79,6 +104,7 @@ function renderLabel(d: ParcelLabelData, brand: BrandAssets): string {
         <div class="rule"></div>
         <div class="pay"><span class="lbl">${L.toPay}:</span> <span class="amount">${esc(d.amountText)}</span></div>
         <div class="spacer"></div>
+        ${renderBarcode(d.trackingNumber)}
         <div class="track">${L.tracking}: ${esc(d.trackingNumber)}</div>
         <div class="spacer spacer--end"></div>
     </div>`;
@@ -169,6 +195,8 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     /* Company logo header — centered above the store name. */
     .brand-top { display: flex; align-items: center; justify-content: center; margin-bottom: 3mm; }
     .brand__logo { width: auto; object-fit: contain; }
+    .barcode { width: 100%; flex: none; margin-bottom: 1.5mm; }
+    .barcode svg { display: block; width: 100%; height: 100%; shape-rendering: crispEdges; }
     .track { letter-spacing: 0.5px; border-top: 1px solid #000; padding-top: 3mm; overflow-wrap: anywhere; }
 
     /* ── Size: A6 100×150mm (default) ── */
@@ -180,6 +208,7 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-a6 .amount { font-size: 20pt; }
     .size-a6 .track { font-size: 11pt; }
     .size-a6 .brand__logo { height: 16mm; max-width: 45mm; }
+    .size-a6 .barcode { height: 16mm; }
     .size-a6 .rule { margin: 3mm 0; }
     .size-a6 .brand-top { margin-bottom: 1.5mm; }
 
@@ -192,6 +221,7 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l100x74 .amount { font-size: 13pt; }
     .size-l100x74 .track { font-size: 8.5pt; padding-top: 1.5mm; }
     .size-l100x74 .brand__logo { height: 5mm; max-width: 25mm; }
+    .size-l100x74 .barcode { height: 9mm; margin-bottom: 1mm; }
     .size-l100x74 .rule { margin: 1.5mm 0; }
     .size-l100x74 .brand-top { margin-bottom: 0.5mm; }
 
@@ -204,6 +234,7 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l70x100 .amount { font-size: 14pt; }
     .size-l70x100 .track { font-size: 9pt; padding-top: 1.5mm; }
     .size-l70x100 .brand__logo { height: 10mm; max-width: 20mm; }
+    .size-l70x100 .barcode { height: 11mm; }
     .size-l70x100 .rule { margin: 1.8mm 0; }
     .size-l70x100 .brand-top { margin-bottom: 1mm; }
 
@@ -218,6 +249,7 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l58x40 .brand__logo { height: 5mm; max-width: 20mm; }
     /* Tiny type dithers worst — go heavier so strokes stay solid on paper. */
     .size-l58x40 .field, .size-l58x40 .lbl, .size-l58x40 .track { font-weight: 600; }
+    .size-l58x40 .barcode { height: 5mm; margin-bottom: 0.5mm; }
     .size-l58x40 .rule { margin: 0.6mm 0; }
     .size-l58x40 .brand-top { margin-bottom: 0.4mm; }
 
@@ -231,6 +263,7 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l40x58 .track { font-size: 5.5pt; padding-top: 1mm; }
     .size-l40x58 .brand__logo { height: 6mm; max-width: 25mm; }
     .size-l40x58 .field, .size-l40x58 .lbl, .size-l40x58 .track { font-weight: 600; }
+    .size-l40x58 .barcode { height: 7mm; margin-bottom: 0.8mm; }
     .size-l40x58 .rule { margin: 0.9mm 0; }
     .size-l40x58 .brand-top { margin-bottom: 0.75mm; }
 </style>

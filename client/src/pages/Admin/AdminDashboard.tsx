@@ -39,6 +39,7 @@ import { DateRangeNav } from '../../components/ui/DateRangeNav';
 const AdminCustomersPage         = lazy(() => import('./AdminCustomersPage'));
 const AdminCitiesPage            = lazy(() => import('./AdminCitiesPage'));
 const AdminSchedulePage          = lazy(() => import('./AdminSchedulePage'));
+const AdminScanPage              = lazy(() => import('./AdminScanPage'));
 const AdminOrdersPage            = lazy(() => import('./AdminOrdersPage'));
 const AdminPackagesPage          = lazy(() => import('./AdminPackagesPage'));
 const AdminWeightPriceTiersPage  = lazy(() => import('./AdminWeightPriceTiersPage'));
@@ -127,15 +128,15 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch' | 'recipients' | 'deletePackage';
+type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch' | 'recipients' | 'deletePackage' | 'scan';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch', 'recipients', 'deletePackage'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch', 'recipients', 'deletePackage', 'scan'];
 
 // Views an Operator (partial-admin role) may open. Operators now have full admin-level
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
 // stay hidden (stripped server-side + revenue columns hidden via canSeeRevenue below).
 // Still Admin-only: Finance, Operators management, Partner API, Weight Tiers, Tenants.
-const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'history', 'returnExchange', 'orderSearch', 'recipients'];
+const OPERATOR_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'history', 'returnExchange', 'orderSearch', 'recipients', 'scan'];
 
 // Views a tenant co-admin (TenantAdmin) may open — all scoped to their tenant. Pick-Up is
 // accept-only and Delivery is read-only (both via canManage=false); Finance renders the
@@ -381,6 +382,16 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">{t.navSchedule}</span>
           </button>
           )}
+          {/* Scan (barcode → courier Excel) — Admin + Operator. */}
+          {!isTenant && (
+          <button className={`sidebar__link ${activeView === 'scan' ? 'sidebar__link--active' : ''}`} onClick={() => goTo('scan')} title={t.navScan}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M1.5 5V2.5a1 1 0 0 1 1-1H5M11 1.5h2.5a1 1 0 0 1 1 1V5M14.5 11v2.5a1 1 0 0 1-1 1H11M5 14.5H2.5a1 1 0 0 1-1-1V11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M4.5 5v6M7 5v6M9.5 5v6M11.5 5v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            <span className="sidebar__link-text">{t.navScan}</span>
+          </button>
+          )}
           {/* Pricing / integrations / tenancy — Admin only. */}
           {!isOperator && !isTenant && (<>
           <button
@@ -599,6 +610,7 @@ export function AdminDashboard() {
             {activeView === 'customers' && t.topbarCustomers}
             {activeView === 'cities' && t.topbarCities}
             {activeView === 'schedule' && t.navSchedule}
+            {activeView === 'scan' && t.navScan}
             {activeView === 'weightTiers' && t.topbarWeightTiers}
             {activeView === 'bankAccounts' && t.topbarBankAccounts}
             {activeView === 'partners' && 'Partner API'}
@@ -650,6 +662,7 @@ export function AdminDashboard() {
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
                   {activeView === 'cities' && <AdminCitiesPage token={token ?? ''} />}
                   {activeView === 'schedule' && <AdminSchedulePage token={token ?? ''} />}
+                  {activeView === 'scan' && <AdminScanPage token={token ?? ''} />}
                   {activeView === 'weightTiers' && token && (
                       <AdminWeightPriceTiersPage token={token} />
                   )}

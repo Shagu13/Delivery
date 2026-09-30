@@ -1,4 +1,6 @@
+using API.Excel;
 using API.Models.Orders;
+using Application.Orders.Queries.ScanOrders;
 using Application.Common.Models;
 using Application.Courier.Queries;
 using Application.Orders.Commands;
@@ -195,6 +197,34 @@ public sealed class OrdersController : BaseController
         return File(ms.ToArray(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             fileName);
+    }
+
+    // ── GET /api/orders/scan/{trackingNumber}  (Admin/Operator — barcode scan lookup) ──
+    [HttpGet("scan/{trackingNumber}")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(ScannedOrderDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Scan(string trackingNumber, CancellationToken ct)
+        => Ok(await Sender.Send(new ScanOrderQuery(trackingNumber), ct));
+
+    // ── POST /api/orders/scan-export  (Admin/Operator — courier manifest Excel) ──
+    // CourierId set → that courier's file; omitted → "download all" (one sheet per courier).
+    [HttpPost("scan-export")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportScanned([FromBody] ScanExportRequest request, CancellationToken ct)
+    {
+        List<ScannedOrderDto> orders = await Sender.Send(
+            new GetScannedOrdersQuery(request.TrackingNumbers, request.CourierId), ct);
+
+        string label = request.CourierId is null
+            ? "all-couriers"
+            : (orders.FirstOrDefault()?.CourierFullName ?? "courier").Replace(' ', '-');
+
+        return File(CourierManifestExcelBuilder.Build(orders, request.Lang),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"manifest-{label}-{Domain.CustomTime.Now:yyyyMMdd-HHmm}.xlsx");
     }
 
     // ── GET /api/orders/track/{trackingNumber}  (Public) ─────────────────────
