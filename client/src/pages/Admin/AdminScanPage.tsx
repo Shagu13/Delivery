@@ -21,6 +21,13 @@ interface Notice {
 
 type ScanMode = 'manifest' | 'assign';
 
+// Tracking numbers are only A–Z / 0–9, so the physical key identifies the character whatever
+// keyboard layout is active (KeyD → 'D', Digit1 / Numpad1 → '1'). Anything else returns null.
+function layoutIndependentChar(code: string): string | null {
+  const m = /^(?:Key([A-Z])|(?:Digit|Numpad)([0-9]))$/.exec(code);
+  return m ? (m[1] ?? m[2]) : null;
+}
+
 // Barcode scanners type the code + Enter into whatever is focused, so this screen is one
 // always-focused input. Each scan adds a package to a per-courier list; Excel is generated
 // from that list on demand (a browser can't append to a file it already downloaded).
@@ -38,16 +45,25 @@ export default function AdminScanPage({ token }: Props) {
 
   // A hardware scanner is just a keyboard: it types into whatever is focused. After a click on a
   // button/tab the focus is elsewhere, so route the next printable keystroke back to the scan
-  // input (focusing during keydown means that same character still lands in it). Skipped while
-  // a dialog is open or another field (e.g. the courier select) is being used.
+  // input. Skipped while a dialog is open or another field (e.g. the courier select) is being used.
+  // Letters/digits are taken from the physical key (`e.code`), not the typed character, so a
+  // Georgian OS keyboard layout can't turn the Latin tracking number into Georgian letters.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const input = inputRef.current;
       const active = document.activeElement;
-      if (active instanceof HTMLInputElement || active instanceof HTMLSelectElement
-        || active instanceof HTMLTextAreaElement) return;
+      if (active !== input && (active instanceof HTMLInputElement || active instanceof HTMLSelectElement
+        || active instanceof HTMLTextAreaElement)) return;
       if (document.querySelector('[aria-modal="true"]')) return;
-      inputRef.current?.focus();
+      const ch = layoutIndependentChar(e.code);
+      if (ch) {
+        e.preventDefault();
+        input?.focus();
+        setCode(c => c + ch);
+        return;
+      }
+      if (active !== input && e.key.length === 1) input?.focus();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
