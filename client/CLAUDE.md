@@ -105,6 +105,13 @@ modeled on `Courier/`'s existing page-root-plus-`components/` pattern (§3), sca
 outlier size (was 2073 lines; the entry file is now ~1150). `usePackageSelection` is a deliberate,
 noted exception to the "state stays inline in the component" house style, justified by size alone.
 
+**Data flow:** the visible list is always server-paged (`mainQuery`, `PAGE_SIZE` rows). The
+same-day merge helpers (`mergeableByCustomer`, `batchesFor`, `multiBatchCustomers`,
+`ungroupedCustomers`) read a *separate* `windowScopedQuery` that is scoped to the single
+effective day, not the whole active set — it used to fetch 500 rows (every active batch) and
+discard all but one day client-side, which made each load hydrate ~340 batches to show 30.
+`AdminOrdersPage.tsx` already pages server-side and has no such window.
+
 This is **not** the §3.1 `features/` layer — nothing in `AdminPackages/` is imported by
 `AdminOrdersPage.tsx` or any other page; it's private to `AdminPackagesPage.tsx`. If a piece of it
 (e.g. the salary/price bulk-fill modal, or the assign/deliver gating logic) turns out to be needed

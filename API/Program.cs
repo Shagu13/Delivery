@@ -116,6 +116,9 @@ try
     builder.Services.AddHttpClient("webhooks", c => c.Timeout = TimeSpan.FromSeconds(10));
     builder.Services.AddHostedService<API.Webhooks.WebhookSenderService>();
 
+    // ── Cold-start warm-up: runs the Packages page queries once after startup ──
+    builder.Services.AddHostedService<API.Warmup.QueryWarmupService>();
+
     // ── Swagger ──────────────────────────────────────────────────────────────
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>

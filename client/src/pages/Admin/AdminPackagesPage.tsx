@@ -176,46 +176,35 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
     excludeCompleted: true,
   };
 
-  // Mirrors the main list's filters/date window, but with a generous pageSize instead of
-  // paginating — a batch count within one browsing window is realistically small. Feeds
-  // mergeableByCustomer/batchesFor/multiBatchCustomers/ungroupedCustomers, which need every
-  // batch for a day (not just whatever fits on the current 30-item page) to detect same-day
-  // merge candidates and unattached orders correctly.
-  const windowScopedKey = ['admin', 'packages', 'windowScoped', pkgFilters, pkgDate, pkgDateTo] as const;
+  // Merge-candidate window. Everything fed from it — mergeableByCustomer/batchesFor/
+  // multiBatchCustomers/ungroupedCustomers/ungroupedListOrders — only ever looks at batches of the
+  // single effective day (each one filters on georgianDateKeyOf(createdAt) === effectiveDayKey),
+  // so fetch just that day with the page's other filters. Previously this requested the whole
+  // active set (500 rows) and discarded all but one day client-side, which made every Packages
+  // load hydrate ~340 batches / ~2,500 orders to display 30.
+  const windowScopedKey = ['admin', 'packages', 'windowScoped', pkgFilters, effectiveDayKey] as const;
   const windowScopedQuery = useQuery({
     queryKey: windowScopedKey,
-    queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page: 1, pageSize: 500 }),
+    queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: effectiveDayKey, dateTo: effectiveDayKey, page: 1, pageSize: 500 }),
     enabled: !!token,
     placeholderData: keepPreviousData,
   });
   const windowScopedOrders = windowScopedQuery.data?.items ?? [];
-  const windowScopedTotal  = windowScopedQuery.data?.totalCount ?? 0;
 
-  // The window above already holds every matching row in the near-universal case (its 500-row
-  // cap is already assumed "realistically small" per the comment above), so the current page
-  // can be sliced from it in memory instead of firing a second, identically-filtered request
-  // against the same (expensive, free-text-search-scanning) backend query. mainQuery only needs
-  // to hit the network for the rare filter that genuinely returns more than 500 matches.
-  const needsServerPage = windowScopedTotal > 500;
-
+  // The visible list is always server-paged (PAGE_SIZE rows), independent of the window above.
   const listQueryKey = ['admin', 'packages', 'list', pkgFilters, pkgDate, pkgDateTo, page] as const;
 
   const mainQuery = useQuery({
     queryKey: listQueryKey,
     queryFn: () => fetchGroupOrders(token ?? '', { ...pkgFilters, date: pkgDate, dateTo: pkgDateTo, page, pageSize: PAGE_SIZE }),
-    enabled: !!token && needsServerPage,
+    enabled: !!token,
     placeholderData: keepPreviousData,
   });
-  const groupOrders = needsServerPage
-    ? (mainQuery.data?.items ?? [])
-    : windowScopedOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const totalPages = needsServerPage
-    ? (mainQuery.data?.totalPages ?? 1)
-    : Math.max(1, Math.ceil(windowScopedTotal / PAGE_SIZE));
-  const loading = needsServerPage ? mainQuery.isPending : windowScopedQuery.isPending;
-  const activeListQuery = needsServerPage ? mainQuery : windowScopedQuery;
-  const error = activeListQuery.isError
-    ? (activeListQuery.error instanceof Error ? activeListQuery.error.message : t.goLoadingOrders)
+  const groupOrders = mainQuery.data?.items ?? [];
+  const totalPages = mainQuery.data?.totalPages ?? 1;
+  const loading = mainQuery.isPending;
+  const error = mainQuery.isError
+    ? (mainQuery.error instanceof Error ? mainQuery.error.message : t.goLoadingOrders)
     : null;
 
   const summaryQuery = useQuery({
@@ -227,19 +216,19 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   // Reload with the current filters/page — used by realtime pings and after any mutation that
   // doesn't itself change a filter (assign courier, save price/salary, move/merge/group…).
-  // Refetches whichever query is actually backing the visible page right now (see
-  // needsServerPage above), since that's what a single-row edit needs refreshed to show up.
-  // Returns the refetch promise so callers that need the fresh data before proceeding can await it.
-  const reload = useCallback(
-    () => (needsServerPage ? mainQuery.refetch() : windowScopedQuery.refetch()),
-    [needsServerPage, mainQuery, windowScopedQuery],
-  );
+  // Refetches the visible page (30 rows) and, in the background, the single-day merge window.
+  // Returns the visible page's refetch promise so callers that need the fresh data before
+  // proceeding can await it.
   const loadSummary = useCallback(() => summaryQuery.refetch(), [summaryQuery]);
   const loadWindowScoped = useCallback(() => windowScopedQuery.refetch(), [windowScopedQuery]);
+  const reload = useCallback(() => {
+    void loadWindowScoped();
+    return mainQuery.refetch();
+  }, [mainQuery, loadWindowScoped]);
 
   // Patches a single order's courier/status directly into both cached Packages list queries —
   // mirrors AdminOrdersPage's patchOrders so a single-row (re)assign updates the row instantly
-  // instead of waiting on reload()'s full (expensive, up-to-500-row) list refetch. reload() still
+  // instead of waiting on reload()'s list refetch. reload() still
   // runs afterwards (see PackageRow's onChanged) to reconcile everything else in the background.
   // Deps are stringified so the callback's identity is stable across renders where the filters
   // haven't actually changed, even though listQueryKey/windowScopedKey are new array literals
@@ -281,20 +270,19 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
 
   useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
     if (!isQueryFresh(windowScopedQuery)) void loadWindowScoped();
-    if (needsServerPage && !isQueryFresh(mainQuery)) void mainQuery.refetch();
+    if (!isQueryFresh(mainQuery)) void mainQuery.refetch();
     if (!isQueryFresh(summaryQuery)) void loadSummary();
   });
 
-  // Refetch everything a mutation elsewhere in the batch/group-order flow could have changed.
-  // loadWindowScoped() alone covers the visible page in the common case (see needsServerPage);
-  // mainQuery is only refetched too when it's genuinely the page's data source right now.
+  // Refetch everything a mutation elsewhere in the batch/group-order flow could have changed:
+  // the visible page, the single-day merge window, and the day summary.
   // Shared by every pickup-side action (move/merge/group/accept/warehouse-accept) so they don't
   // each hand-roll the same triplet of refetches.
   const reloadAll = useCallback(() => {
     void loadWindowScoped();
-    if (needsServerPage) void mainQuery.refetch();
+    void mainQuery.refetch();
     void loadSummary();
-  }, [loadWindowScoped, needsServerPage, mainQuery, loadSummary]);
+  }, [loadWindowScoped, mainQuery, loadSummary]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });

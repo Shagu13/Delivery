@@ -35,6 +35,9 @@ API/
 │   └── RealtimeNotifier.cs        # IRealtimeNotifier       (singleton)
 ├── Notifications/OrderAssignmentNotifier.cs   # IOrderAssignmentNotifier (singleton, fire-and-forget)
 ├── Webhooks/WebhookSenderService.cs           # BackgroundService draining the outbox
+├── Warmup/QueryWarmupService.cs               # BackgroundService: runs the Packages page queries once after
+│                                               #   startup so the first real request isn't a ~16 s cold start.
+│                                               #   Best-effort; a new heavy admin query shape can be added to it
 ├── Excel/FinanceExcelBuilder.cs   # shared ClosedXML builder for the finance-export endpoints —
 │                                   #   reuse this (or CustomerSettlementsController's older
 │                                   #   BuildInvoiceExcel) rather than hand-rolling a new one
