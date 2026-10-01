@@ -16,6 +16,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     public DbSet<CustomerSecondaryAddress> CustomerSecondaryAddresses => Set<CustomerSecondaryAddress>();
     public DbSet<CustomerBankAccount> CustomerBankAccounts => Set<CustomerBankAccount>();
     public DbSet<CompanyBankAccount>  CompanyBankAccounts  => Set<CompanyBankAccount>();
+    public DbSet<LabelDesign>         LabelDesigns         => Set<LabelDesign>();
     public DbSet<Tenant>           Tenants           => Set<Tenant>();
     public DbSet<TenantSettlement> TenantSettlements => Set<TenantSettlement>();
     public DbSet<Warehouse>        Warehouses        => Set<Warehouse>();
@@ -165,6 +166,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(a => a.BankName).HasMaxLength(100).IsRequired();
             e.Property(a => a.AccountHolderName).HasMaxLength(150).IsRequired();
             e.Property(a => a.AccountNumber).HasMaxLength(50).IsRequired();
+        });
+
+        // ── LabelDesign (one user's saved parcel-label print settings; one row per user) ──
+        modelBuilder.Entity<LabelDesign>(e =>
+        {
+            e.HasKey(d => d.Id);
+            e.Property(d => d.OwnerUserId).HasMaxLength(450).IsRequired();   // matches Identity's key length
+            e.Property(d => d.PrefsJson).IsRequired();
+            e.HasIndex(d => d.OwnerUserId).IsUnique();
         });
 
         // ── Tenant (white-label brand) ────────────────────────────────────────

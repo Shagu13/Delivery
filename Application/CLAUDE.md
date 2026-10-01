@@ -51,6 +51,9 @@ Application/
 ├── CompanyFinance/  CustomerSettlements/  Settlements/   # finance reads (derived live)
 ├── PartnerApiKeys/  PartnerOrders/  PartnerWebhooks/     # external integration
 ├── Push/  Sms/  Tenants/  TenantSettlements/  WeightPriceTiers/
+├── LabelDesigns/                       # per-user label-print settings: Get / Save (upsert), any signed-in role,
+│                                       #   scoped by the JWT user id. Plural folder on purpose — `Application.LabelDesign`
+│                                       #   would clash with the entity.
 ```
 
 ---

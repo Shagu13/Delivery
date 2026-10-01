@@ -661,6 +661,32 @@ namespace Persistence.Migrations
                     b.ToTable("GroupOrders");
                 });
 
+            modelBuilder.Entity("Domain.LabelDesign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PrefsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId")
+                        .IsUnique();
+
+                    b.ToTable("LabelDesigns");
+                });
+
             modelBuilder.Entity("Domain.Order", b =>
                 {
                     b.Property<Guid>("Id")

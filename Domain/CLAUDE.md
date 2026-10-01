@@ -36,6 +36,7 @@ Domain/
 ├── City.cs / District.cs       # reference data, soft-deleted, EN + Geo names
 ├── WeightPriceTier.cs          # capital/city/district price per weight band
 ├── DeliverySchedule.cs         # 7 day-of-week bools per City; no row = not configured yet
+├── LabelDesign.cs              # one user's saved label-print settings (size, custom w/h, logo position) as client-owned JSON; one row per user
 │
 ├── Tenant.cs                   # white-label brand (host, branding, HomepageJson, co-admin)
 ├── TenantSettlement.cs         # monthly dilo ↔ tenant settlement (the only surviving aggregate)

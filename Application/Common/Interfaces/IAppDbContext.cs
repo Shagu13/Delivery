@@ -11,6 +11,7 @@ public interface IAppDbContext
     DbSet<CustomerSecondaryAddress> CustomerSecondaryAddresses { get; }
     DbSet<CustomerBankAccount>  CustomerBankAccounts { get; }
     DbSet<CompanyBankAccount>   CompanyBankAccounts  { get; }
+    DbSet<LabelDesign>          LabelDesigns         { get; }
     DbSet<Tenant>               Tenants              { get; }
     DbSet<TenantSettlement>     TenantSettlements    { get; }
     DbSet<Warehouse>            Warehouses           { get; }

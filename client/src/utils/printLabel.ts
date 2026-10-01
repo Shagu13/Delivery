@@ -4,6 +4,10 @@
 // couriers reading the physical sticker get a consistent local-language label.
 
 import JsBarcode from 'jsbarcode';
+import { queryClient } from '../queryClient';
+import {
+    fetchLabelDesign, saveLabelDesign, LABEL_DESIGN_QUERY_KEY, type LabelDesign,
+} from '../api/labelDesign';import type { AuthUser } from '../types/auth';
 
 export interface ParcelLabelData {
     storeName: string;
@@ -65,7 +69,12 @@ const esc = (s: string) =>
 // Company logo, centered in a header row at the top of the label (fills what would
 // otherwise be dead white space above the store name).
 function renderLogo(b: BrandAssets): string {
-    return b.logo ? `<div class="brand-top"><img class="brand__logo" src="${b.logo}" alt="DILO" /></div>` : '';
+    if (!b.logo) return '';
+    // Two copies of the logo: the in-flow one is invisible and only reserves the header
+    // space (so the text layout never shifts); `.logo-float` is the visible one, absolutely
+    // positioned so the admin can drag it anywhere on the label (see the toolbar script).
+    return `<div class="brand-top"><img class="brand__logo" src="${b.logo}" alt="" /></div>`
+        + `<img class="logo-float" src="${b.logo}" alt="DILO" draggable="false" title="${T_DRAG_LOGO}" />`;
 }
 
 // Code 128 barcode of the tracking number, as an inline SVG string. JsBarcode emits a
@@ -126,14 +135,62 @@ const LABEL_SIZES: readonly SizeDef[] = [
     { id: 'l70x100', label: '70×100მმ',       page: '70mm 100mm'  },
     { id: 'l58x40',  label: '58×40მმ',        page: '58mm 40mm'   },
     { id: 'l40x58',  label: '40×58მმ',        page: '40mm 58mm'   },
+    // User-typed width × height; `page` is a placeholder, the toolbar script sets the real one.
+    { id: 'custom',  label: 'საკუთარი ზომა',  page: '100mm 150mm' },
 ];
 const DEFAULT_SIZE = LABEL_SIZES[0].id;
+const CUSTOM_MIN_MM = 30;
+const CUSTOM_MAX_MM = 150;
 
 // On-screen toolbar copy (never printed).
 const T_SIZE  = 'ლეიბლის ზომა';
 const T_PRINT = 'ბეჭდვა';
+const T_WIDTH = 'სიგანე';
+const T_HEIGHT = 'სიმაღლე';
+const T_MM = 'მმ';
+const T_RESET_LOGO = 'ლოგოს საწყისი პოზიცია';
+const T_DRAG_LOGO = 'გადაიტანეთ ლოგო სასურველ ადგილას';
 
-function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
+// Who is printing: the label window's settings (last size, custom width/height, logo position
+// per size) are saved per user — in the database via /api/labeldesign so they follow the
+// user across browsers, with localStorage as a fast local copy.
+function readStoredSession(): Pick<AuthUser, 'token' | 'username'> | null {
+    try {
+        const raw = localStorage.getItem('delivery_auth');
+        return raw ? JSON.parse(raw) as AuthUser : null;
+    } catch {
+        return null;   // storage unavailable or corrupt — fall back to local-only settings
+    }
+}
+
+// The user's saved settings JSON from the server, or null if they have none / the request
+// fails (the popup then falls back to its localStorage copy). Always fetched fresh at print
+// time so a change made on another device is picked up.
+async function loadSavedPrefs(token: string | undefined): Promise<string | null> {
+    if (!token) return null;
+    try {
+        const saved = await queryClient.fetchQuery({
+            queryKey: LABEL_DESIGN_QUERY_KEY,
+            queryFn: () => fetchLabelDesign(token),
+            staleTime: 0,
+        });
+        return saved?.prefsJson ?? null;
+    } catch {
+        return queryClient.getQueryData<LabelDesign | null>(LABEL_DESIGN_QUERY_KEY)?.prefsJson ?? null;
+    }
+}
+
+interface WindowContext {
+    storageKey: string;
+    /** Settings JSON from the server; null = none saved (use the localStorage copy). */
+    serverPrefsJson: string | null;
+}
+
+// JSON for embedding inside the popup's inline <script>; '<' is escaped so a value can
+// never close the tag.
+const scriptJson = (v: unknown) => JSON.stringify(v).replace(/</g, '\\u003c');
+
+function buildHtml(labels: ParcelLabelData[], brand: BrandAssets, ctx: WindowContext): string {
     const options = LABEL_SIZES
         .map(s => `<option value="${s.id}"${s.id === DEFAULT_SIZE ? ' selected' : ''}>${esc(s.label)}</option>`)
         .join('');
@@ -156,27 +213,34 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     }
 
     /* ── On-screen size picker (hidden when printing) ── */
+    /* Sticky (not fixed) so it can wrap onto several rows in the narrow popup without
+       covering the labels underneath. */
     .toolbar {
-        position: fixed; top: 0; left: 0; right: 0; z-index: 10;
-        display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+        position: sticky; top: 0; z-index: 10;
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px;
         background: #1f2937; color: #fff; font: 14px sans-serif;
         box-shadow: 0 1px 6px rgba(0,0,0,0.25);
     }
     .toolbar select { font: 14px sans-serif; padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; }
-    .toolbar button { margin-left: auto; padding: 6px 20px; border: none; border-radius: 6px;
+    .toolbar input[type=number] { width: 64px; font: 14px sans-serif; padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5e1; }
+    .custom-dims { display: none; align-items: center; gap: 8px; }
+    .toolbar button { padding: 6px 20px; border: none; border-radius: 6px;
         background: #2563eb; color: #fff; font: 600 14px sans-serif; cursor: pointer; }
+    #print-btn { margin-left: auto; }
+    #reset-logo { padding: 6px 12px; background: #4b5563; font-weight: 500; }
     @media screen {
-        body { padding-top: 52px; background: #e5e7eb; }
-        .label { margin: 0 auto 12px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+        body { padding-bottom: 12px; background: #e5e7eb; }
+        .label { margin: 12px auto 0; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+        .logo-float:hover { outline: 1px dashed #2563eb; }
     }
     @media print {
         .toolbar { display: none !important; }
-        body { padding-top: 0 !important; background: #fff; }
+        body { background: #fff; }
         .label { margin: 0 !important; box-shadow: none !important; }
     }
 
     /* ── Shared structure (sizes only override dimensions/fonts below) ── */
-    .label { page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
+    .label { position: relative; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
     /* Suppress the trailing break on the final label. Use :last-of-type, not :last-child:
        the <script> tag is the last child of <body>, so the last label never matches
        :last-child — which left page-break-after:always on it and printed a blank page. */
@@ -197,7 +261,10 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .spacer--end { flex-grow: 2; }
     /* Company logo header — centered above the store name. */
     .brand-top { display: flex; align-items: center; justify-content: center; margin-bottom: 3mm; }
-    .brand__logo { width: auto; object-fit: contain; }
+    .brand__logo { width: auto; object-fit: contain; visibility: hidden; }
+    /* The visible, draggable logo. Width/height/left/top are set by the toolbar script. */
+    .logo-float { position: absolute; z-index: 2; object-fit: contain; cursor: grab;
+        touch-action: none; user-select: none; -webkit-user-select: none; }
     .barcode { width: 100%; flex: none; margin-bottom: 1.5mm; }
     .barcode svg { display: block; width: 100%; height: 100%; shape-rendering: crispEdges; }
     .track { letter-spacing: 0.5px; border-top: 1px solid #000; padding-top: 3mm; overflow-wrap: anywhere; }
@@ -269,26 +336,215 @@ function buildHtml(labels: ParcelLabelData[], brand: BrandAssets): string {
     .size-l40x58 .barcode { height: 7mm; margin-bottom: 0.8mm; }
     .size-l40x58 .rule { margin: 0.9mm 0; }
     .size-l40x58 .brand-top { margin-bottom: 0.75mm; }
+
+    /* ── Size: custom — A6 proportions scaled by --k (square root of the area ratio vs A6),
+       with --w / --h / --k set on <body> by the toolbar script. ── */
+    .size-custom .label { width: var(--w); height: var(--h); padding: calc(7mm * var(--k)) calc(8mm * var(--k)); }
+    .size-custom .store { font-size: calc(19pt * var(--k)); margin-bottom: calc(2mm * var(--k)); }
+    .size-custom .field { font-size: calc(13pt * var(--k)); margin-bottom: calc(1.5mm * var(--k)); }
+    .size-custom .lbl { font-size: calc(10pt * var(--k)); }
+    .size-custom .pay { font-size: calc(14pt * var(--k)); }
+    .size-custom .amount { font-size: calc(20pt * var(--k)); }
+    .size-custom .track { font-size: calc(11pt * var(--k)); padding-top: calc(3mm * var(--k)); }
+    .size-custom .brand__logo { height: calc(16mm * var(--k)); max-width: calc(45mm * var(--k)); }
+    .size-custom .barcode { height: calc(16mm * var(--k)); margin-bottom: calc(1.5mm * var(--k)); }
+    .size-custom .rule { margin: calc(3mm * var(--k)) 0; }
+    .size-custom .brand-top { margin-bottom: calc(1.5mm * var(--k)); }
+    /* Small custom labels get the same heavier weight as the 58×40 / 40×58 presets. */
+    .size-custom.tiny .field, .size-custom.tiny .lbl, .size-custom.tiny .track { font-weight: 600; }
 </style>
 </head>
 <body class="size-${DEFAULT_SIZE}">
 <div class="toolbar">
     <label>${T_SIZE}: <select id="size-select">${options}</select></label>
+    <span class="custom-dims" id="custom-dims">
+        <label>${T_WIDTH} <input id="dim-w" type="number" min="${CUSTOM_MIN_MM}" max="${CUSTOM_MAX_MM}" step="1" /></label>
+        <label>${T_HEIGHT} <input id="dim-h" type="number" min="${CUSTOM_MIN_MM}" max="${CUSTOM_MAX_MM}" step="1" /></label>
+        <span>${T_MM}</span>
+    </span>
+    <button id="reset-logo" type="button">${T_RESET_LOGO}</button>
     <button id="print-btn" type="button">${T_PRINT}</button>
 </div>
 ${labels.map(l => renderLabel(l, brand)).join('')}
 <script>
 (function () {
     var PAGE = ${JSON.stringify(Object.fromEntries(LABEL_SIZES.map(s => [s.id, s.page])))};
-    function applySize(id) {
-        document.body.className = 'size-' + id;
-        document.getElementById('page-style').textContent =
-            '@page { size: ' + (PAGE[id] || '100mm 150mm') + '; margin: 0; }';
+    var KEY = ${scriptJson(ctx.storageKey)};
+    var MIN = ${CUSTOM_MIN_MM}, MAX = ${CUSTOM_MAX_MM};
+    var DEFAULT_SIZE = ${scriptJson(DEFAULT_SIZE)};
+    // The user's settings as saved in the database (a JSON string), or null if none.
+    var SERVER_PREFS = ${scriptJson(ctx.serverPrefsJson)};
+
+    // ── Remembered preferences: last size, custom width/height, logo position per size.
+    //    Loaded from the server copy when there is one (it follows the user across devices),
+    //    otherwise from this browser's localStorage; saved to both on every change. ──
+    var prefs = { size: DEFAULT_SIZE, w: 100, h: 150, logo: {} };
+    function clamp(v) {
+        v = Math.round(Number(v));   // whole mm
+        if (!isFinite(v)) v = MIN;
+        return Math.min(MAX, Math.max(MIN, v));
     }
+    function parseObject(text) {
+        try {
+            var r = JSON.parse(text);
+            return r && typeof r === 'object' ? r : null;
+        } catch (e) { return null; }
+    }
+    var raw = parseObject(SERVER_PREFS);
+    if (!raw) {
+        try { raw = parseObject(localStorage.getItem(KEY)); } catch (e) { /* storage unavailable */ }
+    }
+    if (raw) {
+        // Never trust stored values — validate every field (the server only checks it is JSON).
+        if (typeof raw.size === 'string' && PAGE[raw.size]) prefs.size = raw.size;
+        if (typeof raw.w === 'number') prefs.w = clamp(raw.w);
+        if (typeof raw.h === 'number') prefs.h = clamp(raw.h);
+        if (raw.logo && typeof raw.logo === 'object') {
+            Object.keys(raw.logo).forEach(function (id) {
+                var p = raw.logo[id];
+                if (PAGE[id] && p && typeof p.x === 'number' && typeof p.y === 'number'
+                    && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1) prefs.logo[id] = { x: p.x, y: p.y };
+            });
+        }
+    }
+
+    // Saves go to localStorage immediately and to the server a moment after the last change
+    // (a drag fires many updates). The server call runs in the opener window, which holds the
+    // auth token; it is a no-op when the opener is gone or the user is not signed in.
+    var syncedJson = '';
+    var pushTimer = null;
+    function pushToServer() {
+        pushTimer = null;
+        var json = JSON.stringify(prefs);
+        syncedJson = json;
+        // On failure (offline / opener closed) forget the sync so the next change retries.
+        var failed = function () { if (syncedJson === json) syncedJson = ''; };
+        try {
+            window.saveLabelPrefs(json).then(null, failed);
+        } catch (e) { failed(); }
+    }
+    function save() {
+        var json = JSON.stringify(prefs);
+        try { localStorage.setItem(KEY, json); } catch (e) { /* ignore */ }
+        if (json === syncedJson) return;
+        if (pushTimer) clearTimeout(pushTimer);
+        pushTimer = setTimeout(pushToServer, 600);
+    }
+    // Closing the window right after a change must not lose it.
+    window.addEventListener('pagehide', function () {
+        if (pushTimer) { clearTimeout(pushTimer); pushToServer(); }
+    });
+
     var sel = document.getElementById('size-select');
+    var dims = document.getElementById('custom-dims');
+    var inW = document.getElementById('dim-w');
+    var inH = document.getElementById('dim-h');
+    var labelEls = Array.prototype.slice.call(document.querySelectorAll('.label'));
+
+    // ── Draggable logo: the in-flow copy reserves space, the floating copy is placed at a
+    //    fraction (x, y) of the label so the position scales across sizes. ──
+    function placeLogos() {
+        labelEls.forEach(function (label) {
+            var ph = label.querySelector('.brand__logo');
+            var fl = label.querySelector('.logo-float');
+            if (!ph || !fl) return;
+            var lr = label.getBoundingClientRect();
+            var pr = ph.getBoundingClientRect();
+            if (!lr.width || !lr.height) return;
+            fl.style.width = pr.width + 'px';
+            fl.style.height = pr.height + 'px';
+            var p = prefs.logo[prefs.size] || {
+                x: (pr.left - lr.left) / lr.width,
+                y: (pr.top - lr.top) / lr.height
+            };
+            fl.style.left = (p.x * 100) + '%';
+            fl.style.top = (p.y * 100) + '%';
+        });
+    }
+
+    var drag = null;
+    document.addEventListener('pointerdown', function (e) {
+        var fl = e.target && e.target.closest ? e.target.closest('.logo-float') : null;
+        if (!fl) return;
+        var fr = fl.getBoundingClientRect();
+        drag = { label: fl.parentNode, dx: e.clientX - fr.left, dy: e.clientY - fr.top, fw: fr.width, fh: fr.height };
+        try { fl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+        e.preventDefault();
+    });
+    document.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        var lr = drag.label.getBoundingClientRect();
+        var x = (e.clientX - drag.dx - lr.left) / lr.width;
+        var y = (e.clientY - drag.dy - lr.top) / lr.height;
+        x = Math.min(1 - drag.fw / lr.width, Math.max(0, x));
+        y = Math.min(1 - drag.fh / lr.height, Math.max(0, y));
+        prefs.logo[prefs.size] = { x: x, y: y };
+        placeLogos();
+    });
+    function endDrag() {
+        if (!drag) return;
+        drag = null;
+        save();
+    }
+    document.addEventListener('pointerup', endDrag);
+    document.addEventListener('pointercancel', endDrag);
+
+    document.getElementById('reset-logo').addEventListener('click', function () {
+        delete prefs.logo[prefs.size];
+        save();
+        placeLogos();
+    });
+
+    // ── Size handling ──
+    function applySize(id) {
+        prefs.size = id;
+        var b = document.body;
+        var page = PAGE[id] || PAGE[DEFAULT_SIZE];
+        b.className = 'size-' + id;
+        dims.style.display = id === 'custom' ? 'flex' : 'none';
+        if (id === 'custom') {
+            var k = Math.sqrt(prefs.w * prefs.h / (100 * 150));
+            b.style.setProperty('--w', prefs.w + 'mm');
+            b.style.setProperty('--h', prefs.h + 'mm');
+            b.style.setProperty('--k', String(k));
+            if (k < 0.6) b.classList.add('tiny');
+            page = prefs.w + 'mm ' + prefs.h + 'mm';
+        }
+        document.getElementById('page-style').textContent = '@page { size: ' + page + '; margin: 0; }';
+        placeLogos();
+        save();
+    }
+    function onDims(commit) {
+        var w = Number(inW.value), h = Number(inH.value);
+        if (commit) {
+            prefs.w = clamp(w);
+            prefs.h = clamp(h);
+            inW.value = prefs.w;
+            inH.value = prefs.h;
+        } else if (w >= MIN && w <= MAX && h >= MIN && h <= MAX) {
+            prefs.w = Math.round(w);
+            prefs.h = Math.round(h);
+        } else {
+            return; // mid-typing, out of range — wait for the change event to clamp
+        }
+        applySize('custom');
+    }
+
     sel.addEventListener('change', function () { applySize(sel.value); });
+    inW.addEventListener('input', function () { onDims(false); });
+    inH.addEventListener('input', function () { onDims(false); });
+    inW.addEventListener('change', function () { onDims(true); });
+    inH.addEventListener('change', function () { onDims(true); });
     document.getElementById('print-btn').addEventListener('click', function () { window.print(); });
-    applySize(sel.value);
+
+    sel.value = prefs.size;
+    inW.value = prefs.w;
+    inH.value = prefs.h;
+    applySize(prefs.size);
+    // Loading alone must not write back to the server; only a real change should.
+    syncedJson = JSON.stringify(prefs);
+    // The logo's natural width is unknown until it has loaded — re-place once everything has.
+    window.addEventListener('load', placeLogos);
 })();
 </script>
 </body>
@@ -300,19 +556,36 @@ export async function printParcelLabels(labels: ParcelLabelData[]): Promise<void
 
     // Open the window synchronously (still inside the click handler) so pop-up
     // blockers don't reject it; brand assets are fetched afterwards.
-    const win = window.open('', '_blank', 'width=420,height=640');
+    const win = window.open('', '_blank', 'width=560,height=700');
     if (!win) {
         alert('Please allow pop-ups to print labels.');
         return;
     }
     win.document.write('<!doctype html><meta charset="utf-8"><title>Parcel labels</title><body style="font:14px sans-serif;padding:16px;color:#555">Preparing labels…</body>');
 
-    const brand = await loadBrandAssets();
+    const session = readStoredSession();
+    const [brand, serverPrefsJson] = await Promise.all([loadBrandAssets(), loadSavedPrefs(session?.token)]);
 
     win.document.open();
-    win.document.write(buildHtml(labels, brand));
+    win.document.write(buildHtml(labels, brand, {
+        storageKey: `delivery_label_prefs_${session?.username ?? ''}`,
+        serverPrefsJson,
+    }));
     win.document.close();
     win.focus();
+
+    // The popup saves through this window, which owns the auth token (it is never written
+    // into the popup's HTML). Assigned after document.close(): the popup only calls it from
+    // a debounced save, and document.open() above would otherwise be free to drop it.
+    if (session?.token) {
+        const token = session.token;
+        Object.assign(win, {
+            saveLabelPrefs: async (prefsJson: string): Promise<void> => {
+                await saveLabelDesign({ prefsJson }, token);
+                queryClient.setQueryData<LabelDesign | null>(LABEL_DESIGN_QUERY_KEY, { prefsJson });
+            },
+        });
+    }
 
     // The window shows an on-screen size picker + Print button; the user chooses the
     // paper/label size and prints from there (so "Print" reflects their chosen size).
