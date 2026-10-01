@@ -51,7 +51,7 @@ available), act in `SavedChanges` (so nothing fires for a rolled-back change).
 |---|---|---|
 | `PendingCountsChangeInterceptor` | Insert/update of a `GroupOrder` or a Return/Exchange `Order` | Pushes refreshed admin badge counts over SignalR via `IPendingCountsNotifier`. Replaced 30-second client polling. |
 | `RealtimeDashboardInterceptor` | Any order-set change; courier assignment/reassignment | `NotifyAdminsOrdersChanged()` to all admins, `NotifyCourierOrdersChanged(id)` to the courier gained *and* the one lost. Payload-free — clients refetch through their normal API. |
-| `WebhookOutboxInterceptor` | `Order.Status` transitions | Writes one `WebhookDelivery` outbox row per active partner webhook, in a **fresh scope after commit**. `API/Webhooks/WebhookSenderService` drains them. |
+| `WebhookOutboxInterceptor` | `Order.Status` transitions | Writes one `WebhookDelivery` outbox row per active partner webhook, in a **fresh scope after commit**. `API/Webhooks/WebhookSenderService` drains them. Short-circuits via a cached "any active webhook" flag (`WebhookCacheKeys.AnyActive`, 5-min TTL) so deployments with no webhooks pay no extra queries per status change — the create/deactivate webhook handlers must keep invalidating that key. |
 
 Handlers may also ping explicitly through `IRealtimeNotifier` when a change isn't visible to
 the interceptor. Prefer a new interceptor or an explicit ping over sprinkling notification

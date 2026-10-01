@@ -12,8 +12,13 @@ public sealed class CreatePartnerWebhookCommandHandler
     : IRequestHandler<CreatePartnerWebhookCommand, PartnerWebhookDto>
 {
     private readonly IAppDbContext _context;
+    private readonly ICacheService _cache;
 
-    public CreatePartnerWebhookCommandHandler(IAppDbContext context) => _context = context;
+    public CreatePartnerWebhookCommandHandler(IAppDbContext context, ICacheService cache)
+    {
+        _context = context;
+        _cache = cache;
+    }
 
     public async Task<PartnerWebhookDto> Handle(
         CreatePartnerWebhookCommand request,
@@ -32,6 +37,7 @@ public sealed class CreatePartnerWebhookCommandHandler
 
         _context.PartnerWebhooks.Add(webhook);
         await _context.SaveChangesAsync(cancellationToken);
+        await _cache.RemoveAsync(WebhookCacheKeys.AnyActive, cancellationToken);
 
         return new PartnerWebhookDto(
             webhook.Id,

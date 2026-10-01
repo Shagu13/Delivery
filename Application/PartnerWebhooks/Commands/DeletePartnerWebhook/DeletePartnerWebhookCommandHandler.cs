@@ -10,8 +10,13 @@ public sealed class DeletePartnerWebhookCommandHandler
     : IRequestHandler<DeletePartnerWebhookCommand>
 {
     private readonly IAppDbContext _context;
+    private readonly ICacheService _cache;
 
-    public DeletePartnerWebhookCommandHandler(IAppDbContext context) => _context = context;
+    public DeletePartnerWebhookCommandHandler(IAppDbContext context, ICacheService cache)
+    {
+        _context = context;
+        _cache = cache;
+    }
 
     public async Task Handle(DeletePartnerWebhookCommand request, CancellationToken cancellationToken)
     {
@@ -25,5 +30,6 @@ public sealed class DeletePartnerWebhookCommandHandler
         webhook.IsActive      = false;
         webhook.DeactivatedAt = CustomTime.Now;
         await _context.SaveChangesAsync(cancellationToken);
+        await _cache.RemoveAsync(WebhookCacheKeys.AnyActive, cancellationToken);
     }
 }

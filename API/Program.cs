@@ -78,6 +78,20 @@ try
                   .RequireClaim(System.Security.Claims.ClaimTypes.Name, "systemadmin"));
     });
 
+    // ── Response compression ─────────────────────────────────────────────────
+    // The admin list endpoints return large JSON and the SPA bundle is several MB; gzip/brotli
+    // cuts both sharply on slow connections. Default MIME set covers JSON, JS, CSS, SVG, HTML.
+    builder.Services.AddResponseCompression(o =>
+    {
+        o.EnableForHttps = true;
+        o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+        o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    });
+    builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(
+        o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+    builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
+        o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+
     // ── Controllers ──────────────────────────────────────────────────────────
     builder.Services.AddControllers()
         .AddJsonOptions(o =>
@@ -191,6 +205,7 @@ try
         app.UseSwaggerUI(c =>
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "Delivery API v1"));
     }
+    app.UseResponseCompression();
     app.UseStaticFiles();
     app.UseCors("AllowFrontend");
     app.UseHttpsRedirection();
