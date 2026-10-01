@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.GroupOrders.DTOs;
@@ -5,6 +6,7 @@ using Domain;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Application.GroupOrders.Queries.GetAllGroupOrders;
 
@@ -63,10 +65,13 @@ public sealed class GetAllGroupOrdersQueryHandler
 
     private readonly IAppDbContext _context;
     private readonly ICacheService _cache;
-    public GetAllGroupOrdersQueryHandler(IAppDbContext context, ICacheService cache)
+    private readonly ILogger<GetAllGroupOrdersQueryHandler> _logger;
+    public GetAllGroupOrdersQueryHandler(
+        IAppDbContext context, ICacheService cache, ILogger<GetAllGroupOrdersQueryHandler> logger)
     {
         _context = context;
         _cache = cache;
+        _logger = logger;
     }
 
     public async Task<PagedResult<AdminGroupOrderDto>> Handle(
@@ -242,8 +247,13 @@ public sealed class GetAllGroupOrdersQueryHandler
         // This is the expensive step when a free-text search is active (the Contains() scan
         // above can't use an index) — cache it briefly so the paginated + window-scoped calls
         // the Packages page fires for the same filters don't each pay for it separately.
+        // Per-stage timings (logged once at the end) to show where a slow list request spends
+        // its time: id scan, page hydration, geo lookups, or in-memory mapping.
+        long t0 = Stopwatch.GetTimestamp();
+
         var phase1CacheKey = BuildPhase1CacheKey(request);
         var phase1 = await _cache.GetAsync<Phase1Result>(phase1CacheKey, cancellationToken);
+        bool phase1CacheHit = phase1 is not null;
         if (phase1 is null)
         {
             var goRowsFresh = await goQuery
@@ -255,6 +265,7 @@ public sealed class GetAllGroupOrdersQueryHandler
             phase1 = new Phase1Result(goRowsFresh, soRowsFresh);
             await _cache.SetAsync(phase1CacheKey, phase1, Phase1CacheDuration, cancellationToken);
         }
+        TimeSpan phase1Time = Stopwatch.GetElapsedTime(t0);
         var goRows = phase1.GoRows;
         var soRows = phase1.SoRows;
         var totalCount = goRows.Count + soRows.Count;
@@ -270,6 +281,7 @@ public sealed class GetAllGroupOrdersQueryHandler
         var pageSoIds = pageIds.Where(x => x.IsStandalone).Select(x => x.Id).ToHashSet();
 
         // ── Phase 2: hydrate full Include() graphs — only for this page's ids ────
+        long t1 = Stopwatch.GetTimestamp();
         var groupOrders = pageGoIds.Count == 0
             ? new List<GroupOrder>()
             : await _context.GroupOrders
@@ -284,6 +296,9 @@ public sealed class GetAllGroupOrdersQueryHandler
                 .Where(go => pageGoIds.Contains(go.Id))
                 .ToListAsync(cancellationToken);
 
+        TimeSpan hydrateGoTime = Stopwatch.GetElapsedTime(t1);
+
+        long t2 = Stopwatch.GetTimestamp();
         var standalone = pageSoIds.Count == 0
             ? new List<Order>()
             : await _context.Orders
@@ -293,12 +308,29 @@ public sealed class GetAllGroupOrdersQueryHandler
                 .Where(o => pageSoIds.Contains(o.Id))
                 .ToListAsync(cancellationToken);
 
-        var (cityGeo, districtGeo) = await GroupOrderMapping.BuildGeoLookupsAsync(_context, _cache, cancellationToken);
+        TimeSpan hydrateSoTime = Stopwatch.GetElapsedTime(t2);
 
+        long t3 = Stopwatch.GetTimestamp();
+        var (cityGeo, districtGeo) = await GroupOrderMapping.BuildGeoLookupsAsync(_context, _cache, cancellationToken);
+        TimeSpan geoTime = Stopwatch.GetElapsedTime(t3);
+
+        long t4 = Stopwatch.GetTimestamp();
         var items = groupOrders.Select(go => GroupOrderMapping.MapGroupOrder(go, cityGeo, districtGeo))
             .Concat(standalone.Select(o => GroupOrderMapping.MapStandalone(o, cityGeo, districtGeo)))
             .OrderByDescending(dto => dto.CreatedAt)
             .ToList();
+        TimeSpan mapTime = Stopwatch.GetElapsedTime(t4);
+
+        _logger.LogInformation(
+            "[TIMING] GetAllGroupOrders page={Page} size={PageSize} total={Total} returned={Returned} " +
+            "(batches={Batches}, standalone={Standalone}, orders={Orders}) | " +
+            "phase1={Phase1Ms}ms{CacheNote} hydrateBatches={HydrateGoMs}ms hydrateStandalone={HydrateSoMs}ms " +
+            "geo={GeoMs}ms map={MapMs}ms",
+            request.Page, request.PageSize, totalCount, items.Count,
+            groupOrders.Count, standalone.Count, groupOrders.Sum(go => go.Orders.Count),
+            (long)phase1Time.TotalMilliseconds, phase1CacheHit ? "(cache hit)" : string.Empty,
+            (long)hydrateGoTime.TotalMilliseconds, (long)hydrateSoTime.TotalMilliseconds,
+            (long)geoTime.TotalMilliseconds, (long)mapTime.TotalMilliseconds);
 
         return new PagedResult<AdminGroupOrderDto>(items, totalCount, request.Page, request.PageSize);
     }
