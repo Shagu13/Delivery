@@ -174,11 +174,14 @@ function validate(
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+/** A package in the form. `cartId` is set once it has been saved to the cart (and kept visible). */
+type FormPackage = OrderItemRequest & { cartId?: string };
+
 export function CreateGroupOrderPage() {
     const { user, token } = useAuth();
     const { t, lang } = useLanguage();
     const navigate = useNavigate();
-    const { addItems } = useCart();
+    const { saveItems, removeItem } = useCart();
 
     // ── Append mode ────────────────────────────────────────────────────────────
     // /send?batch=<id> adds packages to an existing open batch instead of creating a
@@ -191,7 +194,7 @@ export function CreateGroupOrderPage() {
 
     const [sender,       setSender]       = useState<SenderFormData>(EMPTY_SENDER);
     const [useOtherAddr, setUseOtherAddr] = useState(false);
-    const [packages,     setPackages]     = useState<OrderItemRequest[]>([{ ...EMPTY_PACKAGE }]);
+    const [packages,     setPackages]     = useState<FormPackage[]>([{ ...EMPTY_PACKAGE }]);
     const [errors,       setErrors]       = useState<ValidationErrors>({});
     const [submitting,   setSubmitting]   = useState(false);
     // Brief "added to cart" confirmation shown after stashing packages (stays on page).
@@ -357,12 +360,88 @@ export function CreateGroupOrderPage() {
         }, [],
     );
 
+    // Form package → order payload (strips the form-only `cartId`, normalises payment fields).
+    const toPayload = (p: FormPackage): OrderItemRequest => {
+        const rest: FormPackage = { ...p };
+        delete rest.cartId;
+        return {
+            ...rest,
+            description: p.description?.trim() || undefined,
+            // Unpaid (COD) parcels: the recipient always pays the courier
+            // fee, so the chooser is hidden — pin the value to Recipient.
+            whoPaysForCompanyService: p.productPaymentStatus === 'NotPaid' ? 'Recipient' : p.whoPaysForCompanyService,
+            amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
+            companyServicePrice: p.companyServicePrice ?? undefined,
+            isCompanyServicePriceIncluded: serviceIncludedForced || !!p.isCompanyServicePriceIncluded,
+            weightPriceTierId: p.weightPriceTierId || undefined,
+            orderType: p.orderType,
+            returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
+            returnPickupCity:     p.orderType === 'Return' ? p.returnPickupCity?.trim()     : undefined,
+            returnPickupDistrict: p.orderType === 'Return' ? p.returnPickupDistrict?.trim() : undefined,
+        };
+    };
+
+    const senderSnapshot = () => ({
+        senderFirstName:        sender.senderFirstName,
+        senderLastName:         sender.senderLastName,
+        senderIdNumber:         sender.senderIdNumber?.trim() || undefined,
+        senderBusinessName:     sender.senderBusinessName,
+        senderPhone:            sender.senderPhone,
+        alternativeSenderPhone: sender.alternativeSenderPhone.trim() || undefined,
+        pickUpCity:             sender.pickUpCity,
+        pickUpDistrict:         sender.pickUpDistrict,
+        pickUpAddress:          sender.pickUpAddress,
+        note:                   sender.note.trim() || undefined,
+    });
+
+    // Stashes the packages at `indexes` in the cart: ones already there are overwritten with the
+    // current form values, new ones are added and remembered by `cartId` so they stay visible but
+    // are never added twice. Returns how many were newly added.
+    const saveToCart = (indexes: number[]): number => {
+        const adds: number[] = [];
+        const updates: Record<string, OrderItemRequest> = {};
+        indexes.forEach(i => {
+            const id = packages[i].cartId;
+            if (id) updates[id] = toPayload(packages[i]);
+            else adds.push(i);
+        });
+        const ids = saveItems(adds.map(i => toPayload(packages[i])), updates, senderSnapshot());
+        if (adds.length > 0) {
+            const idByIndex = new Map(adds.map((pkgIndex, n) => [pkgIndex, ids[n]]));
+            setPackages(prev => prev.map((p, i) => (idByIndex.has(i) ? { ...p, cartId: idByIndex.get(i) } : p)));
+        }
+        return adds.length;
+    };
+
+    const flashAdded = (count: number) => {
+        setJustAdded(count);
+        if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+        addedTimerRef.current = setTimeout(() => setJustAdded(null), 4000);
+    };
+
+    // "Add Package" also auto-saves the packages filled in so far, so a refresh can't lose them.
+    // Only valid ones are stashed; invalid ones stay in the form with their errors. Append mode
+    // submits straight to a batch (no cart), so it just opens another editor.
     const addPackage = () => {
         if (packages.length >= 100) return;
+        if (!appendMode) {
+            const validationErrors = validate(sender, packages, cities, cityDistrictCache, t, serviceIncludedForced, false);
+            setErrors(validationErrors);
+            const senderOk = Object.keys(validationErrors).every(k => k.startsWith('orders['));
+            const valid = senderOk
+                ? packages.map((_, i) => i).filter(i => !Object.keys(validationErrors).some(k => k.startsWith(`orders[${i}].`)))
+                : [];
+            if (valid.length > 0) {
+                const added = saveToCart(valid);
+                if (added > 0) flashAdded(added);
+            }
+        }
         setPackages(prev => [...prev, { ...EMPTY_PACKAGE }]);
     };
 
     const removePackage = useCallback((index: number) => {
+        const cartId = packages[index]?.cartId;
+        if (cartId) removeItem(cartId);
         setPackages(prev => prev.filter((_, i) => i !== index));
         setErrors(prev => {
             const next: ValidationErrors = {};
@@ -379,7 +458,7 @@ export function CreateGroupOrderPage() {
             });
             return next;
         });
-    }, []);
+    }, [packages, removeItem]);
 
     // ── Excel handlers ────────────────────────────────────────────────────────
     const handleDownloadTemplate = async () => {
@@ -499,46 +578,20 @@ export function CreateGroupOrderPage() {
             return;
         }
 
-        const ordersPayload: OrderItemRequest[] = packages.map(p => ({
-            ...p,
-            description: p.description?.trim() || undefined,
-            // Unpaid (COD) parcels: the recipient always pays the courier
-            // fee, so the chooser is hidden — pin the value to Recipient.
-            whoPaysForCompanyService: p.productPaymentStatus === 'NotPaid' ? 'Recipient' : p.whoPaysForCompanyService,
-            amountToCollectForPackage: p.productPaymentStatus === 'NotPaid' ? p.amountToCollectForPackage : undefined,
-            companyServicePrice: p.companyServicePrice ?? undefined,
-            isCompanyServicePriceIncluded: serviceIncludedForced || !!p.isCompanyServicePriceIncluded,
-            weightPriceTierId: p.weightPriceTierId || undefined,
-            orderType: p.orderType,
-            returnPickupAddress:  p.orderType === 'Return' ? p.returnPickupAddress?.trim()  : undefined,
-            returnPickupCity:     p.orderType === 'Return' ? p.returnPickupCity?.trim()     : undefined,
-            returnPickupDistrict: p.orderType === 'Return' ? p.returnPickupDistrict?.trim() : undefined,
-        }));
+        const ordersPayload: OrderItemRequest[] = packages.map(toPayload);
 
         // ── New orders → cart ─────────────────────────────────────────────────
         // Brand-new orders are stashed in the cart. The customer stays on the page so
-        // they can add more packages; they place everything later from the cart.
+        // they can add more packages; they place everything later from the cart. Packages
+        // already auto-saved by "Add Package" are updated in place, not added again.
         if (!appendMode) {
-            addItems(ordersPayload, {
-                senderFirstName:        sender.senderFirstName,
-                senderLastName:         sender.senderLastName,
-                senderIdNumber:         sender.senderIdNumber?.trim() || undefined,
-                senderBusinessName:     sender.senderBusinessName,
-                senderPhone:            sender.senderPhone,
-                alternativeSenderPhone: sender.alternativeSenderPhone.trim() || undefined,
-                pickUpCity:             sender.pickUpCity,
-                pickUpDistrict:         sender.pickUpDistrict,
-                pickUpAddress:          sender.pickUpAddress,
-                note:                   sender.note.trim() || undefined,
-            });
+            saveToCart(packages.map((_, i) => i));
             // Reset just the package editors (keep sender/pickup) for the next package.
             setPackages([{ ...EMPTY_PACKAGE }]);
             setErrors({});
             setGlobalError(null);
             setImportedCount(null);
-            setJustAdded(ordersPayload.length);
-            if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
-            addedTimerRef.current = setTimeout(() => setJustAdded(null), 4000);
+            flashAdded(ordersPayload.length);
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }

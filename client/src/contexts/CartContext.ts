@@ -25,6 +25,9 @@ export interface CartContextValue {
     count: number;
     sender: CartSender | null;
     addItems: (items: OrderItemRequest[], sender: CartSender) => void;
+    /** Adds `adds` as new cart items and overwrites existing items by clientId (`updates`) in one
+     *  write. Returns the clientIds assigned to `adds`, in order. */
+    saveItems: (adds: OrderItemRequest[], updates: Record<string, OrderItemRequest>, sender: CartSender) => string[];
     removeItem: (clientId: string) => void;
     clear: () => void;
 }

@@ -44,14 +44,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
         } catch { /* storage unavailable — keep in memory */ }
     }, [key]);
 
-    const addItems = useCallback((newItems: OrderItemRequest[], snd: CartSender) => {
+    const saveItems = useCallback((
+        adds: OrderItemRequest[], updates: Record<string, OrderItemRequest>, snd: CartSender,
+    ): string[] => {
+        const added: CartItem[] = adds.map(i => ({ ...i, clientId: makeId() }));
         setItems(prev => {
-            const next = [...prev, ...newItems.map(i => ({ ...i, clientId: makeId() }))];
+            const next = [
+                ...prev.map(i => (updates[i.clientId] ? { ...updates[i.clientId], clientId: i.clientId } : i)),
+                ...added,
+            ];
             write(next, snd);
             return next;
         });
         setSender(snd);
+        return added.map(i => i.clientId);
     }, [write]);
+
+    const addItems = useCallback((newItems: OrderItemRequest[], snd: CartSender) => {
+        saveItems(newItems, {}, snd);
+    }, [saveItems]);
 
     const removeItem = useCallback((clientId: string) => {
         setItems(prev => {
@@ -68,8 +79,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, [write]);
 
     const value = useMemo<CartContextValue>(() => ({
-        items, count: items.length, sender, addItems, removeItem, clear,
-    }), [items, sender, addItems, removeItem, clear]);
+        items, count: items.length, sender, addItems, saveItems, removeItem, clear,
+    }), [items, sender, addItems, saveItems, removeItem, clear]);
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

@@ -8,7 +8,7 @@ API, so it works with any backend language or framework.
 > **You have been given:** an **API key** (`pk_…`). Keep it on your backend only —
 > never expose it in browser/mobile client code, a public repo, or a frontend bundle.
 
-- **Base URL:** `https://<your-delivery-domain>` *(provided separately)*
+- **Base URL:** `https://dilo.ge` 
 - **Format:** JSON (`Content-Type: application/json`); all responses are JSON.
 - **Auth:** send your API key in the `X-Api-Key` header on every request.
 
