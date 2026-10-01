@@ -6,6 +6,7 @@ import {
 } from '../../../api/orders';
 import type { CourierOrder } from '../../../api/orders';
 import { PhoneActions } from '../../../components/ui/PhoneActions';
+import { CallPhoneButton } from '../../../components/ui/CallPhoneButton';
 import { SwipeButton } from './SwipeButton';
 import { AddressMapLink } from './AddressMapLink';
 import { RouteToolbar } from './RouteToolbar';
@@ -204,7 +205,7 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                                         )}
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelPhone}</span>
-                                            <PhoneActions phone={order.recipientPhone} />
+                                            <CallPhoneButton phone={order.recipientPhone} />
                                         </div>
                                         <div className="courier-card__row">
                                             <span className="courier-card__label">{t.cdLabelLocation}</span>

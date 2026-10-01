@@ -20,6 +20,8 @@ const en = {
   backToHome:         '← Back to home',
   createAccount:      'Create account',
   phoneActionsCall:      'Call',
+  callPhoneTitle:        'Call recipient',
+  callPhoneMessage:      (phone: string) => `Call ${phone}?`,
   phoneActionsWhatsapp:  'Message on WhatsApp',
 
   // ── Field labels ──────────────────────────────────────────────────────────
@@ -2202,6 +2204,8 @@ const ka: typeof en = {
   backToHome:         '← მთავარ გვერდზე',
   createAccount:      'ანგარიშის შექმნა',
   phoneActionsCall:      'დარეკვა',
+  callPhoneTitle:        'მიმღებთან დარეკვა',
+  callPhoneMessage:      (phone: string) => `დარეკვა ${phone}-ზე?`,
   phoneActionsWhatsapp:  'WhatsApp შეტყობინება',
 
   // ── Field labels ──────────────────────────────────────────────────────────
