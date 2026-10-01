@@ -734,7 +734,8 @@ export async function printParcelLabels(labels: ParcelLabelData[]): Promise<void
         Object.assign(win, {
             saveLabelPrefs: async (prefsJson: string): Promise<void> => {
                 await saveLabelDesign({ prefsJson }, token);
-                queryClient.setQueryData<LabelDesign | null>(LABEL_DESIGN_QUERY_KEY, { prefsJson });
+                const saved: LabelDesign = { prefsJson };
+                queryClient.setQueryData(LABEL_DESIGN_QUERY_KEY, saved);
             },
         });
     }
