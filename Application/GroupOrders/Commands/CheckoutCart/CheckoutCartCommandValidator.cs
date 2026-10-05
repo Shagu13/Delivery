@@ -28,7 +28,7 @@ public sealed class CheckoutCartCommandValidator : AbstractValidator<CheckoutCar
         RuleFor(x => x.Dto.Note).MaximumLength(500).When(x => x.Dto.Note is not null);
         RuleFor(x => x.Dto.Orders)
             .NotEmpty().WithMessage("At least one order (package) is required.")
-            .Must(o => o.Count <= 100).WithMessage("A single checkout cannot exceed 100 packages.");
+            .Must(o => o.Count <= 300).WithMessage("A single checkout cannot exceed 300 packages.");
         RuleForEach(x => x.Dto.Orders).SetValidator(new CreateOrderDtoValidator(context));
     }
 }

@@ -15,7 +15,7 @@ public sealed class AddOrdersToGroupOrderCommandValidator
 
         RuleFor(x => x.Orders)
             .NotEmpty().WithMessage("At least one package is required.")
-            .Must(o => o.Count <= 100).WithMessage("Cannot add more than 100 packages at once.");
+            .Must(o => o.Count <= 300).WithMessage("Cannot add more than 300 packages at once.");
 
         // Returns are standalone orders, never part of a batch — appending only applies
         // to Send/Exchange packages.

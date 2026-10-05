@@ -9,8 +9,25 @@ import '../../styles/dashboard.css';
 
 const errorBoxStyle: CSSProperties = {
     background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
-    borderRadius: 'var(--radius-sm)', color: '#ef4444', fontSize: '0.82rem', padding: '10px 14px',
+    borderRadius: 'var(--radius-sm)', color: '#ef4444', fontSize: '0.82rem', padding: '10px 14px', whiteSpace: 'pre-line',
+    maxHeight: 240, overflowY: 'auto',
 };
+
+/**
+ * The API's generic 422 title ("One or more validation errors occurred.") hides the real
+ * reason, which lives in `errors`. Flatten every one into its own line with the exact server
+ * text and the field path that failed, e.g. "Package 3 (Dto.Orders[2].RecipientPhone): ...".
+ */
+function describeApiError(e: ApiError): string {
+    if (!e.errors) return e.message;
+    const lines = new Set<string>();
+    for (const [key, messages] of Object.entries(e.errors)) {
+        const row = /Orders\[(\d+)\]/i.exec(key);
+        const prefix = row ? `Package ${Number(row[1]) + 1} (${key}): ` : key ? `(${key}): ` : '';
+        for (const msg of messages) lines.add(prefix + msg);
+    }
+    return lines.size === 0 ? e.message : [...lines].join('\n');
+}
 
 export function CartPage() {
     const { token } = useAuth();
@@ -32,7 +49,7 @@ export function CartPage() {
             clear();
             navigate('/customer?view=shipments');
         } catch (e) {
-            setError(e instanceof ApiError ? e.message : t.cartCheckoutError);
+            setError(e instanceof ApiError ? describeApiError(e) : t.cartCheckoutError);
             setConfirming(false);
         } finally {
             setPlacing(false);

@@ -34,7 +34,7 @@ public sealed class AdminCreateWalkInOrderCommandValidator
 
         RuleFor(x => x.Dto.Orders)
             .NotEmpty().WithMessage("At least one package is required.")
-            .Must(o => o.Count <= 100).WithMessage("Cannot create more than 100 packages at once.");
+            .Must(o => o.Count <= 300).WithMessage("Cannot create more than 300 packages at once.");
 
         // Reuse the per-package rules (recipient, city/district existence, price ≥ 0) that
         // the customer and partner create-order paths use.

@@ -423,7 +423,7 @@ export function CreateGroupOrderPage() {
     // Only valid ones are stashed; invalid ones stay in the form with their errors. Append mode
     // submits straight to a batch (no cart), so it just opens another editor.
     const addPackage = () => {
-        if (packages.length >= 100) return;
+        if (packages.length >= 300) return;
         if (!appendMode) {
             const validationErrors = validate(sender, packages, cities, cityDistrictCache, t, serviceIncludedForced, false);
             setErrors(validationErrors);
@@ -953,7 +953,7 @@ export function CreateGroupOrderPage() {
                     )}
 
                     <div className="form-footer">
-                        {packages.length < 100 && (
+                        {packages.length < 300 && (
                             <div className="form-footer__summary">
                                 <button type="button" className={`btn btn--add-package${appendMode ? ' btn--add-package--append' : ''}`} onClick={addPackage}>
                                     <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
