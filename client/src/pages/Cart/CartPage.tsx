@@ -5,6 +5,7 @@ import { useCart } from '../../contexts/useCart';
 import { useLanguage } from '../../contexts/useLanguage';
 import { checkoutCart, ApiError } from '../../api/groupOrders';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import '../../styles/dashboard.css';
 
 const errorBoxStyle: CSSProperties = {
@@ -36,6 +37,7 @@ export function CartPage() {
     const navigate = useNavigate();
 
     const [confirming, setConfirming] = useState(false);
+    const [clearing, setClearing] = useState(false);
     const [placing, setPlacing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -143,7 +145,18 @@ export function CartPage() {
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 gap: 12, padding: 16, flexWrap: 'wrap' }}>
-                                <a href="/send" className="btn-ghost" style={{ fontWeight: 600 }}>{t.cartAddPackage}</a>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    <a href="/send" className="btn-ghost" style={{ fontWeight: 600 }}>{t.cartAddPackage}</a>
+                                    <button
+                                        type="button"
+                                        className="btn-ghost"
+                                        onClick={() => setClearing(true)}
+                                        disabled={placing}
+                                        style={{ fontWeight: 600, color: '#ef4444' }}
+                                    >
+                                        {t.cartClear}
+                                    </button>
+                                </div>
                                 <button
                                     type="button"
                                     className="btn-primary"
@@ -157,6 +170,16 @@ export function CartPage() {
                     )}
                 </div>
             </main>
+
+            <ConfirmDialog
+                open={clearing}
+                title={t.cartClearTitle}
+                message={t.cartClearBody(count)}
+                confirmLabel={t.cartClear}
+                variant="danger"
+                onConfirm={() => { clear(); setClearing(false); }}
+                onCancel={() => setClearing(false)}
+            />
 
             {confirming && (
                 <div

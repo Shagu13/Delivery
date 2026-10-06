@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Finance;
 using Application.GroupOrders.DTOs;
 using Application.Orders.DTOs;
 using Domain.Enums;
@@ -64,7 +65,8 @@ public sealed class GetCourierDeliveryHistoryQueryHandler
             DeliveredAt:        o.DeliveredAt,
             CancelledAt:        o.CancelledAt,
             ShopName:           o.GroupOrder?.SenderBusinessName ?? o.Customer?.BusinessName,
-            ShopPhone:          o.GroupOrder?.SenderPhone        ?? o.Customer?.PhoneNumber
+            ShopPhone:          o.GroupOrder?.SenderPhone        ?? o.Customer?.PhoneNumber,
+            CollectedAmount:    o.Status == OrderStatus.DeliveredToRecipient ? OrderFinance.ExpectedCourierCash(o) : 0m
         )).ToList();
     }
 }

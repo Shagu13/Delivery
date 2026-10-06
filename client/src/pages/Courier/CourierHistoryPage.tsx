@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -10,6 +10,7 @@ import type { CourierOrderHistory } from '../../api/orders';
 import type { CourierPickupHistory } from '../../api/adminGroupOrders';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { getStatusMeta } from '../../utils/statusMeta';
+import { georgianDateKeyOf } from '../../utils/georgianTime';
 import '../../styles/dashboard.css';
 
 function fmt(dateStr: string | null | undefined): string {
@@ -110,21 +111,43 @@ function DeliveryHistoryTab({ token }: { token: string }) {
 
     if (loading) return <div className="dashboard__loader">{t.cdHistDeliveryLoading}</div>;
 
+    // Items arrive newest-first, so a day header goes before the first card of each Georgian day.
+    // The subtotal is the cash collected at the door for that day (server-computed per order).
+    const closedAtOf = (o: CourierOrderHistory) =>
+        (DELIVERED_STATUSES.includes(o.status) ? o.deliveredAt : (o.cancelledAt ?? o.deliveredAt)) ?? o.createdAt;
+    const dayTotals = new Map<string, number>();
+    for (const o of items) {
+        const key = georgianDateKeyOf(closedAtOf(o));
+        dayTotals.set(key, (dayTotals.get(key) ?? 0) + o.collectedAmount);
+    }
+
     return (
         <HistoryState error={error} empty={t.cdHistDeliveryEmpty} emptyHint={t.cdHistDeliveryEmptyHint}
             onRetry={retry} hasItems={items.length > 0}>
-            {items.map(order => {
+            {items.map((order, i) => {
                 const delivered = DELIVERED_STATUSES.includes(order.status);
                 const closedAt  = delivered ? order.deliveredAt : (order.cancelledAt ?? order.deliveredAt);
+                const dayKey    = georgianDateKeyOf(closedAtOf(order));
+                const dayTotal  = dayTotals.get(dayKey) ?? 0;
+                const showDay   = i === 0 || georgianDateKeyOf(closedAtOf(items[i - 1])) !== dayKey;
                 return (
-                <HistoryCard key={order.id}
+                <Fragment key={order.id}>
+                {showDay && (
+                    <div className="hist-day">
+                        <span>{fmt(closedAtOf(order))}</span>
+                        {dayTotal > 0 && (
+                            <span className="hist-day__sum">{t.cdHistDayCollected}: ₾{dayTotal.toFixed(2)}</span>
+                        )}
+                    </div>
+                )}
+                <HistoryCard
                     title={<>{order.isFragile ? '🥚' : '📦'} {recipientDisplayName(order.recipientName, t.recipientUnknown)}</>}
                     status={order.status}
                     location={`${order.recipientCity}, ${order.recipientDistrict}`}
                     address={order.recipientAddress}
                     note={order.description}
-                    extraLine={
-                        (order.shopName || order.shopPhone) && (
+                    extraLine={<>
+                        {(order.shopName || order.shopPhone) && (
                             <div className="hist-card__line">
                                 <span>🏬</span>
                                 <span>
@@ -133,8 +156,14 @@ function DeliveryHistoryTab({ token }: { token: string }) {
                                     {order.shopPhone && <PhoneActions phone={order.shopPhone} />}
                                 </span>
                             </div>
-                        )
-                    }
+                        )}
+                        {order.collectedAmount > 0 && (
+                            <div className="hist-card__line">
+                                <span>💰</span>
+                                <span className="hist-card__collected">{t.cdHistCollected}: ₾{order.collectedAmount.toFixed(2)}</span>
+                            </div>
+                        )}
+                    </>}
                     dates={<>
                         <div className="hist-card__date">🗓 {t.cdHistCreated} {fmt(order.createdAt)}</div>
                         {closedAt && (
@@ -144,6 +173,7 @@ function DeliveryHistoryTab({ token }: { token: string }) {
                         )}
                     </>}
                 />
+                </Fragment>
                 );
             })}
         </HistoryState>

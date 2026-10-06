@@ -21,9 +21,10 @@ function formatSavedAgo(savedAt: number, t: Translations): string {
 export function WalkInDraftsMenu() {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const { drafts, count, deleteDraft } = useWalkInDrafts();
+  const { drafts, count, deleteDraft, clearDrafts } = useWalkInDrafts();
 
   const [open, setOpen] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
   const [discardTarget, setDiscardTarget] = useState<WalkInDraft | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -63,7 +64,12 @@ export function WalkInDraftsMenu() {
 
       {open && (
         <div className="wid-menu">
-          <div className="wid-menu__title">{t.widMenuTitle}</div>
+          <div className="wid-menu__head">
+            <div className="wid-menu__title">{t.widMenuTitle}</div>
+            {drafts.length > 0 && (
+              <button type="button" className="wid-item__discard" onClick={() => setClearOpen(true)}>{t.widClearAll}</button>
+            )}
+          </div>
           {drafts.length === 0 && <div className="wid-menu__empty">{t.widEmpty}</div>}
           {drafts.map(d => {
             const name = d.selected?.businessName || d.cust.businessName || '—';
@@ -100,6 +106,16 @@ export function WalkInDraftsMenu() {
         onCancel={() => setDiscardTarget(null)}
       />
 
+      <ConfirmDialog
+        open={clearOpen}
+        title={t.widClearAllTitle}
+        message={t.widClearAllMessage(count)}
+        confirmLabel={t.widClearAll}
+        variant="danger"
+        onConfirm={() => { clearDrafts(); setClearOpen(false); }}
+        onCancel={() => setClearOpen(false)}
+      />
+
       <style>{`
         .wid-wrap { position: relative; }
         .wid-menu {
@@ -116,6 +132,7 @@ export function WalkInDraftsMenu() {
           box-shadow: 0 8px 24px rgba(0,0,0,0.16);
           padding: 8px;
         }
+        .wid-menu__head { display: flex; align-items: center; justify-content: space-between; }
         .wid-menu__title { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-subtle); padding: 4px 6px 8px; }
         .wid-menu__empty { font-size: 0.8rem; color: var(--color-text-muted); padding: 8px 6px; }
         .wid-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 8px 6px; border-radius: var(--radius-sm); }

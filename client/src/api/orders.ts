@@ -355,6 +355,8 @@ export interface CourierOrderHistory {
     /** The sender's (not recipient's) business name and phone. */
     shopName: string | null;
     shopPhone: string | null;
+    /** Cash (COD + recipient-paid fee) the courier collected at the door; 0 unless delivered. */
+    collectedAmount: number;
 }
 
 export async function fetchMyDeliveryHistory(token: string): Promise<CourierOrderHistory[]> {

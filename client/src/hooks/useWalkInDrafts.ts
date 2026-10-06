@@ -81,10 +81,15 @@ export function useWalkInDrafts() {
     notifyChanged();
   }, [key]);
 
+  const clearDrafts = useCallback(() => {
+    writeRaw(key, []);
+    notifyChanged();
+  }, [key]);
+
   const getDraft = useCallback(
     (id: string): WalkInDraft | null => loadFresh(key).find(d => d.id === id) ?? null,
     [key],
   );
 
-  return { drafts, count: drafts.length, saveDraft, deleteDraft, getDraft };
+  return { drafts, count: drafts.length, saveDraft, deleteDraft, clearDrafts, getDraft };
 }

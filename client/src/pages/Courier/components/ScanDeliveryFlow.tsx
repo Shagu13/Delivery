@@ -5,7 +5,7 @@ import {
 } from '../../../api/orders';
 import type { CourierOrder } from '../../../api/orders';
 import { CameraScanner } from '../../../components/ui/CameraScanner';
-import { CallPhoneButton } from '../../../components/ui/CallPhoneButton';
+import { PhoneActions } from '../../../components/ui/PhoneActions';
 import { CollectConfirmModal } from './CollectConfirmModal';
 import { PostponeModal } from './PostponeModal';
 import { CancelModal } from './CancelModal';
@@ -72,7 +72,7 @@ export function ScanDeliveryFlow({ deliveries, token, busyId, onAct }: Props) {
                                 {order.senderBusinessName && <><dt>{t.cdLabelSender}</dt><dd>{order.senderBusinessName}</dd></>}
                                 <dt>{order.recipientName}</dt>
                                 <dd>{[order.recipientAddress, order.recipientDistrict, order.recipientCity].filter(Boolean).join(', ')}</dd>
-                                {order.recipientPhone && <><dt>{t.cdLabelPhone}</dt><dd><CallPhoneButton phone={order.recipientPhone} /></dd></>}
+                                {order.recipientPhone && <><dt>{t.cdLabelPhone}</dt><dd><PhoneActions phone={order.recipientPhone} /></dd></>}
                             </dl>
                             {mustCollect && (
                                 <div className="sdf-sheet__collect">
