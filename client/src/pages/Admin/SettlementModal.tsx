@@ -2,12 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
     fetchCourierOrderFinanceAdmin,
-    recordCourierPayment,
+    payCourierOrders,
     OrderFinanceApiError,
 } from '../../api/orderFinance';
-import type { OrderFinanceLine } from '../../api/orderFinance';
+import type { OrderFinanceLine, CourierPaymentFlow } from '../../api/orderFinance';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { round2 } from '../../utils/orderFinanceOutstanding';
+import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll } from './FinanceAllocation';
+import type { Sel } from './FinanceAllocation';
+
+// Outstanding per order for each courier flow — server-computed (OrderFinance), never re-derived here.
+const salaryOut = (o: OrderFinanceLine) => o.courierSalaryOutstanding;
+const codOut    = (o: OrderFinanceLine) => o.courierCodTransferOutstanding;
 
 interface Props {
     open: boolean;
@@ -46,8 +53,14 @@ export function SettlementModal({
     const [date,    setDate]    = useState(initialDate ?? todayIso());
     const [lines,   setLines]   = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
-    const [busyId,  setBusyId]  = useState<string | null>(null);
+    const [busy,    setBusy]    = useState(false);
     const [error,   setError]   = useState<string | null>(null);
+    const [selSalary, setSelSalary] = useState<Sel>({});
+    const [selCod,    setSelCod]    = useState<Sel>({});
+
+    // A ticked row freezes its outstanding amount so it can be hand-edited; drop the
+    // selection whenever fresh lines arrive so a stale amount is never submitted.
+    useEffect(() => { setSelSalary({}); setSelCod({}); }, [lines]);
 
     // `silent` refreshes the line data in place without flipping the full-screen spinner —
     // used after a per-order pay toggle so the table stays mounted and the modal keeps its
@@ -84,22 +97,33 @@ export function SettlementModal({
 
     const handleDateChange = (d: string) => { setDate(d); load(d); };
 
-    const toggle = async (o: OrderFinanceLine, flow: 'salary' | 'cod') => {
-        setBusyId(o.orderId);
+    const salaryFlow = buildFlow(lines, selSalary, salaryOut, o => o.courierSalaryPaidAmount ?? 0);
+    const codFlow    = buildFlow(lines, selCod,    codOut,    o => o.codTransferedToCompanyByCourier ?? 0);
+
+    // Pays the ticked orders for one flow in a single action (one receipt per click).
+    const doPay = async (flow: CourierPaymentFlow) => {
+        const isSalary = flow === 'Salary';
+        const f   = isSalary ? salaryFlow : codFlow;
+        const sel = isSalary ? selSalary : selCod;
+        const out = isSalary ? salaryOut : codOut;
+        const chosen = f.payable.filter(o => sel[o.orderId]?.checked);
+        if (chosen.length === 0) { setError(t.ofinErrSelectOrders); return; }
+        for (const o of chosen) {
+            const a = Number(amountOf(sel, o, out));
+            if (isNaN(a) || a <= 0 || a > out(o) + 0.005) { setError(t.ofinErrAllocInvalid); return; }
+        }
+        const allocations = chosen.map(o => ({ orderId: o.orderId, amount: round2(Number(amountOf(sel, o, out))) }));
+
+        setBusy(true);
         setError(null);
         try {
-            await recordCourierPayment(
-                flow === 'salary'
-                    ? { orderId: o.orderId, salaryPaid: !o.isCourierSalaryPaid }
-                    : { orderId: o.orderId, codTransferred: !o.hasCourierTransferedAmount },
-                token,
-            );
+            await payCourierOrders(courierId, flow, allocations, token);
             await load(date, true);   // silent — keep the table mounted & scroll position intact
             onCreated();
         } catch (err) {
-            setError(err instanceof OrderFinanceApiError ? err.message : 'Failed to record payment.');
+            setError(err instanceof OrderFinanceApiError ? err.message : t.ofinErrAction);
         } finally {
-            setBusyId(null);
+            setBusy(false);
         }
     };
 
@@ -215,10 +239,19 @@ export function SettlementModal({
                                 </div>
                             </fieldset>
 
-                            {/* ── Per-order rows with salary / COD toggles ──── */}
+                            {/* ── Per-order rows: tick orders, edit amounts, pay in one click ──── */}
                             {lines.length > 0 ? (
                                 <fieldset className="modal__fieldset">
                                     <legend className="modal__legend">{t.stlmDeliveredOrders(lines.length)}</legend>
+                                    {/* Pay bars: salary (company → courier) left, COD hand-over (courier → company) right */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', marginBottom: 12 }}>
+                                        <FlowBar f={salaryFlow} payLabel={t.stlmPaySalary} busy={busy} borderRight
+                                            onToggleAll={check => toggleAll(setSelSalary, salaryFlow.payable, salaryOut, check)}
+                                            onPay={() => doPay('Salary')} />
+                                        <FlowBar f={codFlow} payLabel={t.stlmRecordCodTransfer} busy={busy}
+                                            onToggleAll={check => toggleAll(setSelCod, codFlow.payable, codOut, check)}
+                                            onPay={() => doPay('CodTransfer')} />
+                                    </div>
                                     <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
                                         <table className="go-orders-table settlement-orders-table">
                                             <thead>
@@ -227,14 +260,12 @@ export function SettlementModal({
                                                     <th>{t.stlmThRecipient}</th>
                                                     <th>{t.stlmThPayer}</th>
                                                     <th style={{ textAlign: 'right' }}>{t.stlmThSalary}</th>
-                                                    <th style={{ textAlign: 'center' }}>{t.stlmSalaryEarned}</th>
                                                     <th style={{ textAlign: 'right' }}>{t.stlmThCod}</th>
-                                                    <th style={{ textAlign: 'center' }}>{t.stlmCourierToCompany}</th>
+                                                    <th style={{ textAlign: 'right' }}>{t.stlmCourierToCompany}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {lines.map(o => {
-                                                    const busy = busyId === o.orderId;
                                                     return (
                                                         <tr key={o.orderId}>
                                                             <td><span className="tn-badge">{o.trackingNumber}</span></td>
@@ -244,17 +275,24 @@ export function SettlementModal({
                                                                     {o.whoPaysForCompanyService === 'Recipient' ? t.stlmRcpt : t.stlmSndr}
                                                                 </span>
                                                             </td>
-                                                            <td style={{ textAlign: 'right', color: '#f97316', fontWeight: 600 }}>
-                                                                {o.courierSalary != null ? fmt(o.courierSalary) : <Dash />}
-                                                            </td>
-                                                            <td style={{ textAlign: 'center' }}>
-                                                                <PayToggle on={o.isCourierSalaryPaid} busy={busy} onClick={() => toggle(o, 'salary')} />
+                                                            <td style={{ textAlign: 'right' }}>
+                                                                <AllocCell applicable={(o.courierSalary ?? 0) > 0} notApplicableLabel="—"
+                                                                    outstanding={salaryOut(o)} paidAt={o.courierSalaryPaidAt}
+                                                                    total={o.courierSalary ?? 0} paid={o.courierSalaryPaidAmount ?? 0}
+                                                                    checked={selSalary[o.orderId]?.checked ?? false} amount={amountOf(selSalary, o, salaryOut)}
+                                                                    onToggle={() => toggle(setSelSalary, o.orderId, salaryOut(o))}
+                                                                    onAmount={v => setAmt(setSelSalary, o.orderId, v)} />
                                                             </td>
                                                             <td style={{ textAlign: 'right', color: 'var(--color-text-subtle)' }}>
                                                                 {o.amountOfCashCollected != null ? fmt(o.amountOfCashCollected) : <Dash />}
                                                             </td>
-                                                            <td style={{ textAlign: 'center' }}>
-                                                                <PayToggle on={o.hasCourierTransferedAmount} busy={busy} onClick={() => toggle(o, 'cod')} />
+                                                            <td style={{ textAlign: 'right' }}>
+                                                                <AllocCell applicable={(o.amountOfCashCollected ?? 0) > 0} notApplicableLabel="—"
+                                                                    outstanding={codOut(o)} paidAt={o.codTransferedToCompanyByCourierAt}
+                                                                    paid={o.codTransferedToCompanyByCourier ?? 0}
+                                                                    checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
+                                                                    onToggle={() => toggle(setSelCod, o.orderId, codOut(o))}
+                                                                    onAmount={v => setAmt(setSelCod, o.orderId, v)} />
                                                             </td>
                                                         </tr>
                                                     );
@@ -328,11 +366,6 @@ export function SettlementModal({
                 .stl-payer-badge { display:inline-block;font-size:0.65rem;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:0.04em; }
                 .stl-payer-badge--recipient { background:rgba(196,127,23,0.12);color:#c47f17; }
                 .stl-payer-badge--sender { background:rgba(99,102,241,0.1);color:#818cf8; }
-
-                .stl-toggle { display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;border:1px solid var(--color-border);background:var(--color-bg-3);color:var(--color-text-muted);font-size:0.7rem;font-weight:700;cursor:pointer;transition:all var(--transition); }
-                .stl-toggle:hover:not(:disabled) { border-color:var(--color-text-muted); }
-                .stl-toggle:disabled { opacity:0.5;cursor:wait; }
-                .stl-toggle--on { background:rgba(5,150,105,0.12);border-color:rgba(5,150,105,0.3);color:#059669; }
             `}</style>
         </>,
         document.body
@@ -340,20 +373,6 @@ export function SettlementModal({
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
-
-function PayToggle({ on, busy, onClick }: { on: boolean; busy: boolean; onClick: () => void }) {
-    const { t } = useLanguage();
-    return (
-        <button type="button" className={`stl-toggle ${on ? 'stl-toggle--on' : ''}`} disabled={busy} onClick={onClick}>
-            {on ? (
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 8l4 4 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-            ) : null}
-            {on ? t.stlmPaid : t.stlmMarkPaid}
-        </button>
-    );
-}
 
 function Dash() {
     return <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>;

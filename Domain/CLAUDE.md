@@ -40,7 +40,8 @@ Domain/
 │
 ├── Tenant.cs                   # white-label brand (host, branding, HomepageJson, co-admin)
 ├── TenantSettlement.cs         # monthly dilo ↔ tenant settlement (the only surviving aggregate)
-├── PaymentReceipt.cs           # + PaymentReceiptAllocation — one admin pay/settle action
+├── PaymentReceipt.cs           # + PaymentReceiptAllocation — one admin pay/settle action; customer OR courier
+│                               #   (Flow enum; CustomerId/CourierId nullable, exactly one set; IsService kept for customer rows)
 ├── PushSubscription.cs         # courier Web Push endpoint
 ├── PasswordResetToken.cs
 ├── PartnerApiKey.cs / PartnerWebhook.cs / WebhookDelivery.cs
@@ -50,6 +51,7 @@ Domain/
     ├── OrderType.cs            # Send | Return | Exchange
     ├── PaymentStatus.cs        # product COD: NotPaid | Paid
     ├── ServicePayer.cs         # who pays the courier fee: Sender | Recipient
+    ├── PaymentReceiptFlow.cs   # CodPayout | ServiceFee | CourierSalary | CourierCodTransfer
     ├── CompanyServicePaymentStatus.cs
     ├── CancellationReason.cs   # drives billable-vs-not (see Application/Finance)
     ├── PostponeReason.cs

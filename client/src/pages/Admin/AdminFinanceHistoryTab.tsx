@@ -7,6 +7,7 @@ import { fetchCouriers } from '../../api/couriers';
 import { fetchCustomerSettlements, CustomerSettlementApiError } from '../../api/customerSettlements';
 import { fetchCourierSettlementsAdmin, SettlementApiError } from '../../api/settlements';
 import { fetchCustomerPaymentReceipts, OrderFinanceApiError } from '../../api/orderFinance';
+import { CourierPaymentReceiptsPanel } from '../../components/ui/CourierPaymentReceiptsPanel';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -581,7 +582,7 @@ function PaymentReceiptsSection({ token }: { token: string }) {
 
 export function AdminFinanceHistoryTab({ token }: { token: string }) {
     const { t } = useLanguage();
-    const [view, setView] = useState<'customers' | 'couriers' | 'payments'>('customers');
+    const [view, setView] = useState<'customers' | 'couriers' | 'payments' | 'courierPayments'>('customers');
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -589,11 +590,13 @@ export function AdminFinanceHistoryTab({ token }: { token: string }) {
                 <button className={`go-seg__btn ${view === 'customers' ? 'go-seg__btn--active' : ''}`} onClick={() => setView('customers')}>{t.finTabCustomers}</button>
                 <button className={`go-seg__btn ${view === 'couriers'  ? 'go-seg__btn--active' : ''}`} onClick={() => setView('couriers')}>{t.finTabCouriers}</button>
                 <button className={`go-seg__btn ${view === 'payments'  ? 'go-seg__btn--active' : ''}`} onClick={() => setView('payments')}>{t.finTabPaymentHistory}</button>
+                <button className={`go-seg__btn ${view === 'courierPayments' ? 'go-seg__btn--active' : ''}`} onClick={() => setView('courierPayments')}>{t.finTabCourierPayments}</button>
             </div>
 
             {view === 'customers' && <CustomerLedger token={token} />}
             {view === 'couriers'  && <CourierLedger  token={token} />}
             {view === 'payments'  && <PaymentReceiptsSection token={token} />}
+            {view === 'courierPayments' && <CourierPaymentReceiptsPanel token={token} admin />}
         </div>
     );
 }

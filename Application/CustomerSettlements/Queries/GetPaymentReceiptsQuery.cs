@@ -83,6 +83,7 @@ internal static class PaymentReceiptQueries
     public static IQueryable<PaymentReceipt> Base(IAppDbContext context) =>
         context.PaymentReceipts
             .AsNoTracking()
+            .Include(p => p.Courier)
             .Include(p => p.Allocations).ThenInclude(a => a.Order!).ThenInclude(o => o.Courier);
 
     /// <summary>
@@ -113,7 +114,10 @@ internal static class PaymentReceiptQueries
         IsService:   p.IsService,
         TotalAmount: p.TotalAmount,
         PaidAt:      p.PaidAt.ToString("o"),
-        Orders:      p.Allocations.Select(a => new PaymentReceiptOrderDto(
+        Flow:        p.Flow,
+        CourierId:   p.CourierId,
+        CourierName: p.Courier is null ? null : $"{p.Courier.FirstName} {p.Courier.LastName}",
+        Orders:     p.Allocations.Select(a => new PaymentReceiptOrderDto(
             OrderId:          a.OrderId,
             TrackingNumber:   a.Order?.TrackingNumber ?? string.Empty,
             RecipientName:    a.Order?.RecipientName ?? string.Empty,

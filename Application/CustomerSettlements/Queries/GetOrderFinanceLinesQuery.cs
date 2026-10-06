@@ -421,7 +421,9 @@ internal static class OrderFinanceQueries
             CancellationComment:          o.CancellationComment,
             PostponeComment:              o.PostponeComment,
             OrderNote:                    o.GroupOrder?.Note,
-            Description:                  o.Description
+            Description:                  o.Description,
+            CourierSalaryOutstanding:        OrderFinance.CourierSalaryOutstanding(o),
+            CourierCodTransferOutstanding:   OrderFinance.CourierCodTransferOutstanding(o)
         );
     }
 }

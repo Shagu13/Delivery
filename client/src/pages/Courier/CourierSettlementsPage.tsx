@@ -6,6 +6,7 @@ import { fetchMySettlements } from '../../api/settlements';
 import type { CourierSettlementItem } from '../../api/settlements';
 import { fetchCourierOrderFinance } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
+import { CourierPaymentReceiptsPanel } from '../../components/ui/CourierPaymentReceiptsPanel';
 import '../../styles/dashboard.css';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
@@ -282,6 +283,13 @@ export function CourierSettlementsPage() {
             )}
 
             {token && <CourierOrdersByDay token={token} />}
+
+            {token && (
+                <div style={{ marginTop: 28 }}>
+                    <h3 className="dashboard__title" style={{ fontSize: '1rem', marginBottom: 8 }}>{t.courierRcptTitle}</h3>
+                    <CourierPaymentReceiptsPanel token={token} />
+                </div>
+            )}
         </div>
     );
 }

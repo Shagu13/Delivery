@@ -81,6 +81,7 @@ public sealed class PayCustomerOrdersCommandHandler
             {
                 CustomerId  = request.CustomerId,
                 IsService   = request.Service,
+                Flow        = request.Service ? PaymentReceiptFlow.ServiceFee : PaymentReceiptFlow.CodPayout,
                 TotalAmount = applied.Sum(a => a.Amount),
                 PaidAt      = now,
             };

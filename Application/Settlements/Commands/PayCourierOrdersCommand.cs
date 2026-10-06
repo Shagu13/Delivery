@@ -51,6 +51,8 @@ public sealed class PayCourierOrdersCommandHandler
         var byId = orders.ToDictionary(o => o.Id);
         var now  = CustomTime.Now;
 
+        var applied = new List<CourierOrderPaymentAllocation>();
+
         foreach (var alloc in request.Allocations)
         {
             if (alloc.Amount <= 0m) continue;
@@ -62,6 +64,26 @@ public sealed class PayCourierOrdersCommandHandler
                 ApplySalary(order, alloc.Amount, now);
             else
                 ApplyCodTransfer(order, alloc.Amount, now);
+
+            applied.Add(alloc);
+        }
+
+        // Immutable receipt of this action — order-level fields above are overwritten in place
+        // on the next payment and carry no history. Mirrors PayCustomerOrdersCommand.
+        if (applied.Count > 0)
+        {
+            var receipt = new PaymentReceipt
+            {
+                CourierId   = request.CourierId,
+                Flow        = request.Flow == CourierPaymentFlow.Salary
+                    ? PaymentReceiptFlow.CourierSalary
+                    : PaymentReceiptFlow.CourierCodTransfer,
+                TotalAmount = applied.Sum(a => a.Amount),
+                PaidAt      = now,
+            };
+            foreach (CourierOrderPaymentAllocation a in applied)
+                receipt.Allocations.Add(new PaymentReceiptAllocation { OrderId = a.OrderId, Amount = a.Amount });
+            _context.PaymentReceipts.Add(receipt);
         }
 
         await _context.SaveChangesAsync(ct);
@@ -70,14 +92,10 @@ public sealed class PayCourierOrdersCommandHandler
 
     private static void ApplySalary(Order order, decimal amount, DateTime now)
     {
-        decimal owed        = order.CourierSalary ?? 0m;
-        decimal already     = order.CourierSalaryPaidAmount ?? 0m;
-        decimal outstanding = owed - already;
-
-        if (amount > outstanding + Epsilon)
+        if (amount > OrderFinance.CourierSalaryOutstanding(order) + Epsilon)
             throw new ConflictException($"Salary payment for order {order.TrackingNumber} exceeds its outstanding balance.");
 
-        order.CourierSalaryPaidAmount = already + amount;
+        order.CourierSalaryPaidAmount = (order.CourierSalaryPaidAmount ?? 0m) + amount;
         order.CourierSalaryPaidAt     = now;
     }
 
@@ -85,17 +103,11 @@ public sealed class PayCourierOrdersCommandHandler
     {
         // Recipient-pays orders: the courier keeps their salary out of the collected cash,
         // so the cash they owe the company is the collected total minus salary.
-        bool    keepSalary = order.WhoPaysForCompanyService == ServicePayer.Recipient;
-        decimal salary     = keepSalary ? (order.CourierSalary ?? 0m) : 0m;
-        decimal owed        = OrderFinance.ExpectedCourierCash(order) - salary;
-        decimal already     = order.CodTransferedToCompanyByCourier ?? 0m;
-        decimal outstanding = owed - already;
-
-        if (amount > outstanding + Epsilon)
+        if (amount > OrderFinance.CourierCodTransferOutstanding(order) + Epsilon)
             throw new ConflictException($"COD transfer for order {order.TrackingNumber} exceeds its outstanding balance.");
 
-        order.IsCourierSalaryIncludedSpecialCase = keepSalary;
-        order.CodTransferedToCompanyByCourier    = already + amount;
+        order.IsCourierSalaryIncludedSpecialCase = order.WhoPaysForCompanyService == ServicePayer.Recipient;
+        order.CodTransferedToCompanyByCourier    = (order.CodTransferedToCompanyByCourier ?? 0m) + amount;
         order.CodTransferedToCompanyByCourierAt   = now;
     }
 }

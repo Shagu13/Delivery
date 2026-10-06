@@ -1085,8 +1085,17 @@ namespace Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("CustomerId")
+                    b.Property<Guid?>("CourierId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Flow")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
 
                     b.Property<bool>("IsService")
                         .HasColumnType("bit");
@@ -1098,6 +1107,8 @@ namespace Persistence.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CourierId");
 
                     b.HasIndex("CustomerId");
 
@@ -1734,11 +1745,17 @@ namespace Persistence.Migrations
 
             modelBuilder.Entity("Domain.PaymentReceipt", b =>
                 {
+                    b.HasOne("Domain.Courier", "Courier")
+                        .WithMany()
+                        .HasForeignKey("CourierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Domain.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Courier");
 
                     b.Navigation("Customer");
                 });

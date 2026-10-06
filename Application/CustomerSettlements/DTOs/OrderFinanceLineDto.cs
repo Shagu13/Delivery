@@ -82,5 +82,12 @@ public sealed record OrderFinanceLineDto(
     /// Null for standalone Return orders (no parent GroupOrder).</summary>
     string?  OrderNote,
     /// <summary>The package description entered for this order, if any.</summary>
-    string?  Description
+    string?  Description,
+
+    /// <summary>Salary still owed to the courier (OrderFinance.CourierSalaryOutstanding) — the
+    /// cap for a bulk salary payment on this order.</summary>
+    decimal  CourierSalaryOutstanding,
+    /// <summary>Cash the courier may still record as handed over (OrderFinance.CourierCodTransferOutstanding)
+    /// — the cap for a bulk COD hand-over on this order.</summary>
+    decimal  CourierCodTransferOutstanding
 );

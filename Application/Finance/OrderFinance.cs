@@ -152,6 +152,22 @@ public static class OrderFinance
     public static bool IsCourierSalaryPaid(Order o) =>
         (o.CourierSalary ?? 0m) - (o.CourierSalaryPaidAmount ?? 0m) <= Epsilon;
 
+    /// <summary>Salary the company still owes the courier for this order (never negative).</summary>
+    public static decimal CourierSalaryOutstanding(Order o) =>
+        Math.Max(0m, (o.CourierSalary ?? 0m) - (o.CourierSalaryPaidAmount ?? 0m));
+
+    /// <summary>
+    /// Cash the courier may still record as handed over to the company for this order — the cap
+    /// <c>PayCourierOrdersCommand</c> enforces. Recipient-pays orders: the courier keeps their
+    /// salary out of the collected cash, so the handover is the collected total minus salary.
+    /// Never negative.
+    /// </summary>
+    public static decimal CourierCodTransferOutstanding(Order o)
+    {
+        decimal keptSalary = o.WhoPaysForCompanyService == ServicePayer.Recipient ? (o.CourierSalary ?? 0m) : 0m;
+        return Math.Max(0m, ExpectedCourierCash(o) - keptSalary - (o.CodTransferedToCompanyByCourier ?? 0m));
+    }
+
     /// <summary>
     /// True once the company service fee is fully settled. Always true when the recipient
     /// pays (collected in cash at delivery) or when it was netted out of the COD payout.

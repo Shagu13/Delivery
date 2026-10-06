@@ -65,6 +65,11 @@ export interface OrderFinanceLine {
     orderNote: string | null;
     /** The package description entered for this order, if any. */
     description: string | null;
+    /** Salary still owed to the courier — the cap for a bulk salary payment (OrderFinance.CourierSalaryOutstanding). */
+    courierSalaryOutstanding: number;
+    /** Cash the courier may still record as handed over — the cap for a bulk COD hand-over
+     *  (OrderFinance.CourierCodTransferOutstanding). */
+    courierCodTransferOutstanding: number;
 }
 
 export interface OrderPaymentRequest {
@@ -312,14 +317,21 @@ export interface PaymentReceiptOrder {
     amount: number;
 }
 
+export type PaymentReceiptFlow = 'CodPayout' | 'ServiceFee' | 'CourierSalary' | 'CourierCodTransfer';
+
 export interface PaymentReceipt {
     id: string;
-    /** false = COD payout (company → customer); true = service fee collected (customer → company). */
+    /** Customer receipts: false = COD payout (company → customer); true = service fee collected
+     *  (customer → company). Courier receipts leave it false — read `flow` instead. */
     isService: boolean;
     totalAmount: number;
     /** When the payment was recorded (ISO-8601). */
     paidAt: string;
     orders: PaymentReceiptOrder[];
+    flow: PaymentReceiptFlow;
+    /** Set for courier receipts only (CourierSalary / CourierCodTransfer). */
+    courierId: string | null;
+    courierName: string | null;
 }
 
 interface PaymentReceiptDateOpts { date?: string; monthly?: boolean; from?: string; to?: string; }
@@ -340,6 +352,31 @@ export async function fetchCustomerPaymentReceipts(
     const params = paymentReceiptParams(opts);
     params.set('customerId', customerId);
     const res = await fetch(`/api/orderfinance/payment-receipts?${params}`, {
+        headers: authHeaders(token), cache: 'no-store',
+    });
+    return handle<PaymentReceipt[]>(res, 'Failed to load payment history');
+}
+
+// ── Admin — courier payment history (salary paid / COD hand-over); omit courierId for all ──
+export async function fetchCourierPaymentReceiptsAdmin(
+    token: string, opts: PaymentReceiptDateOpts & { courierId?: string } = {},
+): Promise<PaymentReceipt[]> {
+    const params = paymentReceiptParams(opts);
+    if (opts.courierId) params.set('courierId', opts.courierId);
+    const q = params.toString() ? `?${params}` : '';
+    const res = await fetch(`/api/orderfinance/payment-receipts/couriers${q}`, {
+        headers: authHeaders(token), cache: 'no-store',
+    });
+    return handle<PaymentReceipt[]>(res, 'Failed to load courier payment history');
+}
+
+// ── Courier — own payment history ─────────────────────────────────────────────────
+export async function fetchMyCourierPaymentReceipts(
+    token: string, opts: PaymentReceiptDateOpts = {},
+): Promise<PaymentReceipt[]> {
+    const params = paymentReceiptParams(opts);
+    const q = params.toString() ? `?${params}` : '';
+    const res = await fetch(`/api/orderfinance/payment-receipts/courier/my${q}`, {
         headers: authHeaders(token), cache: 'no-store',
     });
     return handle<PaymentReceipt[]>(res, 'Failed to load payment history');

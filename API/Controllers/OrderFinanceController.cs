@@ -4,6 +4,7 @@ using Application.CustomerSettlements.Commands;
 using Application.CustomerSettlements.DTOs;
 using Application.CustomerSettlements.Queries;
 using Application.Settlements.Commands;
+using Application.Settlements.Queries;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -249,6 +250,33 @@ public sealed class OrderFinanceController : BaseController
         CancellationToken ct)
     {
         var result = await Sender.Send(new GetMyPaymentReceiptsQuery(CurrentUserId, date, monthly, from, to), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/orderfinance/payment-receipts/couriers  (Admin) — courier payment history ──
+    // courierId omitted = every courier's receipts.
+    [HttpGet("payment-receipts/couriers")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IReadOnlyList<PaymentReceiptDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPaymentReceiptsForCouriers(
+        [FromQuery] Guid? courierId, [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCourierPaymentReceiptsQuery(courierId, date, monthly, from, to), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/orderfinance/payment-receipts/courier/my  (Courier) — own payment history ──
+    [HttpGet("payment-receipts/courier/my")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(typeof(IReadOnlyList<PaymentReceiptDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyCourierPaymentReceipts(
+        [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCourierPaymentReceiptsQuery(CurrentCourierId, date, monthly, from, to), ct);
         return Ok(result);
     }
 }

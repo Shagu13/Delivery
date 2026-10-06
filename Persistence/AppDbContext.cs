@@ -216,9 +216,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
         {
             e.HasKey(p => p.Id);
             e.HasIndex(p => p.CustomerId);
+            e.HasIndex(p => p.CourierId);
             e.HasIndex(p => p.PaidAt);
             e.HasOne(p => p.Customer).WithMany()
              .HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(p => p.Courier).WithMany()
+             .HasForeignKey(p => p.CourierId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(p => p.Flow).HasConversion<string>().HasMaxLength(30).IsUnicode(false);
             e.Property(p => p.TotalAmount).HasColumnType("decimal(18,2)");
             e.HasMany(p => p.Allocations).WithOne(a => a.PaymentReceipt)
              .HasForeignKey(a => a.PaymentReceiptId).OnDelete(DeleteBehavior.Cascade);

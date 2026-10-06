@@ -1,8 +1,11 @@
+using Domain.Enums;
+
 namespace Domain;
 
 /// <summary>
-/// One admin "pay/settle" action against a customer: a single COD payout or service-fee
-/// collection, covering one or more orders in one atomic click. Order-level payment facts
+/// One admin "pay/settle" action against a customer or a courier: a single COD payout,
+/// service-fee collection, courier salary payment or courier COD hand-over, covering one
+/// or more orders in one atomic click. Order-level payment facts
 /// (Order.CodPaidToCustomerAmount/At, ServicePaidByCustomerAmount/At) are overwritten in
 /// place and carry no history — this is the persisted record of "on this date we paid/
 /// collected $Y across these orders" that both admin and customer can browse by date.
@@ -10,10 +13,16 @@ namespace Domain;
 public class PaymentReceipt
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid CustomerId { get; set; }
+    // Exactly one of CustomerId / CourierId is set, matching Flow.
+    public Guid? CustomerId { get; set; }
     public Customer? Customer { get; set; }
+    public Guid? CourierId { get; set; }
+    public Courier? Courier { get; set; }
 
-    // false = COD payout (company → customer), true = service fee collected (customer → company)
+    public PaymentReceiptFlow Flow { get; set; }
+
+    // Customer receipts only: false = COD payout (company → customer), true = service fee
+    // collected (customer → company). Kept alongside Flow; courier receipts leave it false.
     public bool IsService { get; set; }
     public decimal TotalAmount { get; set; }
     public DateTime PaidAt { get; set; } = CustomTime.Now;
