@@ -1,3 +1,4 @@
+using Application.Common.Search;
 using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.Finance;
@@ -109,6 +110,7 @@ public sealed class GetAllOrdersQueryHandler
             // search block for why (sargable StartsWith + an index per field vs. a Contains()
             // scan; DB collation is case-insensitive so .ToLower() is unnecessary either way).
             var term = request.Search.Trim();
+            var bn   = BusinessNameSearch.Variants(term); // shop names may be stored as "Name"
             var matchesRecipient = request.Party != "sender";
             var matchesSender    = request.Party != "recipient";
             query = query.Where(o =>
@@ -121,7 +123,7 @@ public sealed class GetAllOrdersQueryHandler
                      o.RecipientDistrict.StartsWith(term)))
                 ||
                 (matchesSender &&
-                    ((o.GroupOrder != null && o.GroupOrder.SenderBusinessName.StartsWith(term)) ||
+                    ((o.GroupOrder != null && (o.GroupOrder.SenderBusinessName.StartsWith(bn[0]) || o.GroupOrder.SenderBusinessName.StartsWith(bn[1]) || o.GroupOrder.SenderBusinessName.StartsWith(bn[2]) || o.GroupOrder.SenderBusinessName.StartsWith(bn[3]) || o.GroupOrder.SenderBusinessName.StartsWith(bn[4]) || o.GroupOrder.SenderBusinessName.StartsWith(bn[5]) || o.GroupOrder.SenderBusinessName.StartsWith(bn[6]))) ||
                      (o.GroupOrder != null && o.GroupOrder.SenderFirstName.StartsWith(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.SenderLastName.StartsWith(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.SenderPhone.StartsWith(term)) ||
@@ -129,7 +131,7 @@ public sealed class GetAllOrdersQueryHandler
                      (o.GroupOrder != null && o.GroupOrder.PickUpCity.StartsWith(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.PickUpDistrict.StartsWith(term)) ||
                      (o.GroupOrder != null && o.GroupOrder.PickUpAddress.StartsWith(term)) ||
-                     (o.Customer != null && o.Customer.BusinessName.StartsWith(term)) ||
+                     (o.Customer != null && (o.Customer.BusinessName.StartsWith(bn[0]) || o.Customer.BusinessName.StartsWith(bn[1]) || o.Customer.BusinessName.StartsWith(bn[2]) || o.Customer.BusinessName.StartsWith(bn[3]) || o.Customer.BusinessName.StartsWith(bn[4]) || o.Customer.BusinessName.StartsWith(bn[5]) || o.Customer.BusinessName.StartsWith(bn[6]))) ||
                      (o.Customer != null && o.Customer.PhoneNumber.StartsWith(term)) ||
                      (o.Customer != null && o.Customer.City.StartsWith(term)) ||
                      (o.Customer != null && o.Customer.District.StartsWith(term)) ||

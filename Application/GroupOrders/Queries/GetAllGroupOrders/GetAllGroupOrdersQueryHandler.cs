@@ -1,3 +1,4 @@
+using Application.Common.Search;
 using System.Diagnostics;
 using Application.Common.Interfaces;
 using Application.Common.Models;
@@ -117,6 +118,7 @@ public sealed class GetAllGroupOrdersQueryHandler
             // this OR chain would force a full scan of the whole predicate regardless of how
             // many other branches are indexed, so every branch has to make the same switch.
             var term = request.SearchTerm.Trim();
+            var bn   = BusinessNameSearch.Variants(term); // shop names may be stored as "Name"
             // Party = "recipient" restricts the search to each order's own recipient fields
             // (name/phone/address/city/district) — sender/pickup fields are excluded so a
             // recipient-side search never matches on the sender's name. Party = "sender"
@@ -130,7 +132,7 @@ public sealed class GetAllGroupOrdersQueryHandler
                 (matchesSender &&
                     (go.SenderFirstName.StartsWith(term) ||
                      go.SenderLastName.StartsWith(term) ||
-                     go.SenderBusinessName.StartsWith(term) ||
+                     (go.SenderBusinessName.StartsWith(bn[0]) || go.SenderBusinessName.StartsWith(bn[1]) || go.SenderBusinessName.StartsWith(bn[2]) || go.SenderBusinessName.StartsWith(bn[3]) || go.SenderBusinessName.StartsWith(bn[4]) || go.SenderBusinessName.StartsWith(bn[5]) || go.SenderBusinessName.StartsWith(bn[6])) ||
                      go.SenderPhone.StartsWith(term) ||
                      (go.AlternativeSenderPhone != null && go.AlternativeSenderPhone.StartsWith(term)) ||
                      go.PickUpCity.StartsWith(term) ||
@@ -157,7 +159,7 @@ public sealed class GetAllGroupOrdersQueryHandler
                      o.RecipientAddress.StartsWith(term)))
                 ||
                 (matchesSender && o.Customer != null &&
-                    (o.Customer.BusinessName.StartsWith(term) ||
+                    ((o.Customer.BusinessName.StartsWith(bn[0]) || o.Customer.BusinessName.StartsWith(bn[1]) || o.Customer.BusinessName.StartsWith(bn[2]) || o.Customer.BusinessName.StartsWith(bn[3]) || o.Customer.BusinessName.StartsWith(bn[4]) || o.Customer.BusinessName.StartsWith(bn[5]) || o.Customer.BusinessName.StartsWith(bn[6])) ||
                      o.Customer.FirstName.StartsWith(term) ||
                      o.Customer.LastName.StartsWith(term) ||
                      o.Customer.PhoneNumber.StartsWith(term) ||
