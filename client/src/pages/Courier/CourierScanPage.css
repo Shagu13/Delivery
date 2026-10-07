@@ -32,3 +32,5 @@
 .cscan-row__track { font-weight: 700; letter-spacing: 0.5px; }
 .cscan-row__addr { font-size: 0.8rem; color: var(--color-text-muted); overflow-wrap: anywhere; }
 .cscan-row__remove { min-width: 44px; min-height: 44px; border: none; background: none; cursor: pointer; color: var(--color-text-subtle); font-size: 1rem; }
+.cscan-notice--row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cscan-notice__close { flex: none; min-width: 40px; min-height: 40px; background: none; border: 0; color: inherit; font-size: 1rem; cursor: pointer; }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { claimScannedParcels, scanParcelToClaim } from '../../api/scan';
 import type { ScannedOrder } from '../../api/scan';
@@ -20,6 +20,7 @@ interface Props {
 }
 
 interface Notice {
+  id: number;
   kind: 'ok' | 'error';
   text: string;
 }
@@ -29,6 +30,8 @@ interface ClaimResult {
   failed: { trackingNumber: string; error: string }[];
 }
 
+const MAX_NOTICES = 4;
+
 // Start → scan → Finish: scanned warehouse parcels collect in a list on the phone and nothing is
 // assigned until Finish, so a mis-scan is just removed from the list. The list is kept in
 // localStorage so a phone lock or an app switch mid-scan doesn't lose it.
@@ -36,7 +39,13 @@ export function CourierScanPage({ token, username, onBeforeClaim, onClaimed }: P
   const { t } = useLanguage();
   const session = useScanSession(`delivery_courier_scan_${username}`);
   const [cameraOn, setCameraOn] = useState(false);
-  const [notice, setNotice] = useState<Notice | null>(null);
+  // Newest first. Scans can land back to back, so each result gets its own line instead of
+  // overwriting the previous one — otherwise a quick success hides the rejection before it is read.
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const noticeId = useRef(0);
+  const pushNotice = (kind: Notice['kind'], text: string) =>
+    setNotices(prev => [{ id: ++noticeId.current, kind, text }, ...prev].slice(0, MAX_NOTICES));
+  const dismissNotice = (id: number) => setNotices(prev => prev.filter(n => n.id !== id));
   const [result, setResult] = useState<ClaimResult | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
@@ -44,9 +53,9 @@ export function CourierScanPage({ token, username, onBeforeClaim, onClaimed }: P
     mutationFn: (tracking: string) => scanParcelToClaim(token, tracking),
     onSuccess: (order: ScannedOrder) => {
       session.add(order);
-      setNotice({ kind: 'ok', text: `${order.trackingNumber} · ${order.recipientCity}, ${order.recipientDistrict}` });
+      pushNotice('ok', `${order.trackingNumber} · ${order.recipientCity}, ${order.recipientDistrict}`);
     },
-    onError: (e: Error) => setNotice({ kind: 'error', text: e.message }),
+    onError: (e: Error, tracking: string) => pushNotice('error', `${tracking} — ${e.message}`),
   });
 
   const claim = useMutation({
@@ -60,18 +69,18 @@ export function CourierScanPage({ token, username, onBeforeClaim, onClaimed }: P
       // reported below (someone else got them first) and can't be retried from here.
       session.clear();
       setCameraOn(false);
-      setNotice(null);
+      setNotices([]);
       setResult({ assigned: res.succeeded.length, failed });
       onClaimed(res.succeeded.length);
     },
-    onError: (e: Error) => setNotice({ kind: 'error', text: e.message }),
+    onError: (e: Error) => pushNotice('error', e.message),
   });
 
   const handleCode = (raw: string) => {
     const value = raw.trim().toUpperCase();
     if (!value) return;
     if (session.has(value)) {
-      setNotice({ kind: 'error', text: `${value} — ${t.scanDuplicate}` });
+      pushNotice('error', `${value} — ${t.scanDuplicate}`);
       return;
     }
     scan.mutate(value);
@@ -79,7 +88,7 @@ export function CourierScanPage({ token, username, onBeforeClaim, onClaimed }: P
 
   const start = () => {
     setResult(null);
-    setNotice(null);
+    setNotices([]);
     setCameraOn(true);
   };
 
@@ -104,7 +113,14 @@ export function CourierScanPage({ token, username, onBeforeClaim, onClaimed }: P
           </button>
         )}
 
-      {notice && <div className={`cscan-notice cscan-notice--${notice.kind}`} role="status">{notice.text}</div>}
+      {notices.map(n => (
+        <div key={n.id} className={`cscan-notice cscan-notice--row cscan-notice--${n.kind}`} role="status">
+          <span>{n.text}</span>
+          {n.kind === 'error' && (
+            <button type="button" className="cscan-notice__close" aria-label={t.scanRemove} onClick={() => dismissNotice(n.id)}>✕</button>
+          )}
+        </div>
+      ))}
 
       {result && (
         <section className="cscan-card">
@@ -151,7 +167,7 @@ export function CourierScanPage({ token, username, onBeforeClaim, onClaimed }: P
         title={t.scanClear}
         message={t.scanClearConfirm}
         variant="danger"
-        onConfirm={() => { session.clear(); setCameraOn(false); setNotice(null); setConfirmDiscard(false); }}
+        onConfirm={() => { session.clear(); setCameraOn(false); setNotices([]); setConfirmDiscard(false); }}
         onCancel={() => setConfirmDiscard(false)}
       />
     </div>

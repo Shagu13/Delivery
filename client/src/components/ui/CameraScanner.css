@@ -9,3 +9,13 @@
   border: 1px solid var(--color-border); border-radius: var(--radius-sm);
   background: var(--color-bg); color: var(--color-text);
 }
+
+.cam__stage { position: relative; }
+.cam__stage .cam__video { display: block; }
+/* Wide, short box matching a barcode's shape: tells the courier where to put the bars. */
+.cam__aim {
+  position: absolute; left: 8%; right: 8%; top: 50%; height: 34%; transform: translateY(-50%);
+  border: 2px solid var(--color-accent); border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35); pointer-events: none;
+}
+.cam__hint { margin: 0; font-size: 13px; color: var(--color-text-muted, var(--color-text)); text-align: center; }
