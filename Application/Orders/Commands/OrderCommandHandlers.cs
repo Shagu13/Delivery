@@ -121,12 +121,13 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Live-refresh dashboards: the newly assigned courier (order appears),
-        // the previous courier on a re-assignment (order leaves), and admins.
-        _notifier.NotifyCourierOrdersChanged(courier.Id);
-        if (previousCourierId is Guid prev && prev != courier.Id)
-            _notifier.NotifyCourierOrdersChanged(prev);
-        _notifier.NotifyAdminsOrdersChanged();
+        // Live-refresh dashboards. RealtimeDashboardInterceptor already pings admins and both the
+        // new and previous courier whenever CourierId changes, so pinging them here too just made
+        // every admin refetch the list twice. The one case it misses is a same-courier retry
+        // (e.g. a postponed order re-assigned to the same person): CourierId is unchanged, so
+        // only that courier needs the explicit ping.
+        if (previousCourierId == courier.Id)
+            _notifier.NotifyCourierOrdersChanged(courier.Id);
 
         // Heads-up push + recipient SMS for the courier's new delivery — real external
         // network calls, run in the background (see IOrderAssignmentNotifier) so a slow
@@ -149,9 +150,9 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
 // One DB round trip for the whole batch (instead of the admin UI firing one HTTP
 // request per order): a single SaveChangesAsync covers every order, so the
 // SaveChanges interceptors (realtime dashboard pings, partner webhook outbox check)
-// also run once for the batch instead of once per order. Push/SMS notifications are
-// still one per newly assigned order, but run in the background via
-// IOrderAssignmentNotifier so they never gate the response.
+// also run once for the batch instead of once per order. Push/SMS notifications are queued
+// as one background job for the whole selection (one push, one recipient SMS per order) via
+// IOrderAssignmentNotifier, so they never gate the response.
 public sealed class BulkAssignCourierToOrdersCommandHandler
     : IRequestHandler<BulkAssignCourierToOrdersCommand, BulkAssignCourierResultDto>
 {
@@ -194,7 +195,7 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
 
         var succeeded = new List<Guid>();
         var failed = new List<BulkAssignFailureDto>();
-        var toNotify = new List<(Guid CourierId, string Phone, string Tracking, string? Business, string City, string District)>();
+        var toNotify = new List<AssignedDeliveryNotice>();
 
         var foundIds = orders.Select(o => o.Id).ToHashSet();
         foreach (var missingId in requestedIds.Where(id => !foundIds.Contains(id)))
@@ -258,8 +259,8 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
             // Only on a genuinely new assignment (not a re-assign back to the same courier).
             if (previousCourierId != courier.Id)
             {
-                toNotify.Add((
-                    courier.Id, order.RecipientPhone, order.TrackingNumber,
+                toNotify.Add(new AssignedDeliveryNotice(
+                    order.RecipientPhone, order.TrackingNumber,
                     order.GroupOrder?.SenderBusinessName, order.RecipientCity, order.RecipientDistrict));
             }
         }
@@ -270,8 +271,9 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
         // Realtime admin/courier dashboard pings fire once for the whole batch via
         // RealtimeDashboardInterceptor (reacts to the CourierId changes above) — no need
         // to call IRealtimeNotifier explicitly here.
-        foreach (var n in toNotify)
-            _assignmentNotifier.NotifyCourierAssigned(n.CourierId, n.Phone, n.Tracking, n.Business, n.City, n.District);
+        // One background job for the whole selection (one push, N SMS in one scope) — not N jobs.
+        if (toNotify.Count > 0)
+            _assignmentNotifier.NotifyCourierAssignedBulk(courier.Id, toNotify);
 
         return new BulkAssignCourierResultDto(succeeded, failed);
     }

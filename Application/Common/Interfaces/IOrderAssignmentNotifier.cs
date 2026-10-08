@@ -31,4 +31,33 @@ public interface IOrderAssignmentNotifier
         string? senderBusinessName,
         string pickUpCity,
         string pickUpDistrict);
+
+    /// <summary>
+    /// Bulk form of <see cref="NotifyCourierAssigned"/>: ONE background job for the whole
+    /// selection — a single "N new deliveries" push to the courier and one recipient SMS per
+    /// order, all sent from one DI scope. Use this from any handler that hands several orders
+    /// to the same courier, so an N-order assign doesn't spawn N scopes, N subscription
+    /// queries and N lock-screen alerts. Returns immediately; failures are logged.
+    /// </summary>
+    void NotifyCourierAssignedBulk(Guid courierId, IReadOnlyList<AssignedDeliveryNotice> deliveries);
+
+    /// <summary>
+    /// Bulk form of <see cref="NotifyCourierAssignedPickup"/>: one "N new pickups" push for
+    /// all batches handed to the courier. Returns immediately; failures are logged.
+    /// </summary>
+    void NotifyCourierAssignedPickupBulk(Guid courierId, IReadOnlyList<AssignedPickupNotice> pickups);
 }
+
+/// <summary>What the recipient SMS and the courier push need to know about one assigned delivery.</summary>
+public sealed record AssignedDeliveryNotice(
+    string RecipientPhone,
+    string TrackingNumber,
+    string? SenderBusinessName,
+    string RecipientCity,
+    string RecipientDistrict);
+
+/// <summary>What the courier push needs to know about one assigned pickup batch.</summary>
+public sealed record AssignedPickupNotice(
+    string? SenderBusinessName,
+    string PickUpCity,
+    string PickUpDistrict);

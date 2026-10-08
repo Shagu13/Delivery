@@ -422,6 +422,12 @@ internal sealed class NoopAssignmentNotifier : Application.Common.Interfaces.IOr
 
     public void NotifyCourierAssignedPickup(
         Guid courierId, string? senderBusinessName, string pickUpCity, string pickUpDistrict) { }
+
+    public void NotifyCourierAssignedBulk(
+        Guid courierId, IReadOnlyList<Application.Common.Interfaces.AssignedDeliveryNotice> deliveries) { }
+
+    public void NotifyCourierAssignedPickupBulk(
+        Guid courierId, IReadOnlyList<Application.Common.Interfaces.AssignedPickupNotice> pickups) { }
 }
 
 /// <summary>SignalR refetch pings — no dashboards connected in tests.</summary>

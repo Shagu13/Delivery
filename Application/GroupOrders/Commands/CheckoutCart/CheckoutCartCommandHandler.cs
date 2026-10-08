@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Application.Common.Interfaces;
 using Application.CustomerSettlements;
 using Application.GroupOrders.Commands.Shared;
@@ -36,6 +37,11 @@ public sealed class CheckoutCartCommandHandler
     {
         var dto = request.Dto;
 
+        // Per-stage timings, logged once at the end — same idea as GetAllGroupOrders' [TIMING] line.
+        // A checkout was seen taking ~2 s with the admin SMS only ~80 ms of it; this shows which of
+        // build / batch lookup / save / SMS owns the rest.
+        long t0 = Stopwatch.GetTimestamp();
+
         // Load customer for negotiated price tiers / all-in pricing flag.
         var customer = dto.CustomerId.HasValue
             ? await _context.Customers
@@ -48,6 +54,9 @@ public sealed class CheckoutCartCommandHandler
         var built = await GroupOrderOrderBuilder.BuildAsync(
             _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict,
             allowClientPriceOverride: false);
+        TimeSpan buildTime = Stopwatch.GetElapsedTime(t0);
+
+        long t1 = Stopwatch.GetTimestamp();
 
         // ── Split: Return orders are always standalone; Send/Exchange may batch.
         //    Mirrors CreateGroupOrderCommandHandler so a Return never lands inside a
@@ -122,10 +131,15 @@ public sealed class CheckoutCartCommandHandler
             }
         }
 
+        TimeSpan batchTime = Stopwatch.GetElapsedTime(t1);
+
+        long t2 = Stopwatch.GetTimestamp();
         await _context.SaveChangesAsync(cancellationToken);
+        TimeSpan saveTime = Stopwatch.GetElapsedTime(t2);
 
         // Only a genuinely new batch gets the admin SMS — packages silently folded into an
         // already-announced open batch don't need a second notification.
+        long t3 = Stopwatch.GetTimestamp();
         if (isNewGroupOrder && groupOrder is not null)
         {
             try
@@ -138,6 +152,14 @@ public sealed class CheckoutCartCommandHandler
                     "Failed to send admin SMS notification for GroupOrder {GroupOrderId}", groupOrder.Id);
             }
         }
+        TimeSpan smsTime = Stopwatch.GetElapsedTime(t3);
+
+        _logger.LogInformation(
+            "[TIMING] CheckoutCart orders={Orders} newBatch={NewBatch} | build={BuildMs}ms batch={BatchMs}ms " +
+            "save={SaveMs}ms adminSms={SmsMs}ms",
+            built.Count, isNewGroupOrder,
+            (long)buildTime.TotalMilliseconds, (long)batchTime.TotalMilliseconds,
+            (long)saveTime.TotalMilliseconds, (long)smsTime.TotalMilliseconds);
 
         return new CreateGroupOrderResultDto(
             GroupOrderId:       groupOrder?.Id ?? Guid.Empty,

@@ -45,7 +45,7 @@ public sealed class BulkAssignCourierToGroupOrdersCommandHandler
 
         var succeeded = new List<Guid>();
         var failed = new List<BulkAssignCourierToGroupOrdersFailureDto>();
-        var toNotify = new List<(Guid CourierId, string? Business, string City, string District)>();
+        var toNotify = new List<AssignedPickupNotice>();
 
         var foundIds = groupOrders.Select(go => go.Id).ToHashSet();
         foreach (var missingId in requestedIds.Where(id => !foundIds.Contains(id)))
@@ -69,7 +69,7 @@ public sealed class BulkAssignCourierToGroupOrdersCommandHandler
                     order.Status = OrderStatus.CourierAssignedToPickUp;
 
             succeeded.Add(groupOrder.Id);
-            toNotify.Add((courier.Id, groupOrder.SenderBusinessName, groupOrder.PickUpCity, groupOrder.PickUpDistrict));
+            toNotify.Add(new AssignedPickupNotice(groupOrder.SenderBusinessName, groupOrder.PickUpCity, groupOrder.PickUpDistrict));
         }
 
         if (succeeded.Count > 0)
@@ -77,8 +77,9 @@ public sealed class BulkAssignCourierToGroupOrdersCommandHandler
 
         // Realtime admin/courier dashboard pings fire once for the whole batch via
         // RealtimeDashboardInterceptor (reacts to the CourierId/Status changes above).
-        foreach (var n in toNotify)
-            _assignmentNotifier.NotifyCourierAssignedPickup(n.CourierId, n.Business, n.City, n.District);
+        // One "N new pickups" push for the whole selection, not one job per batch.
+        if (toNotify.Count > 0)
+            _assignmentNotifier.NotifyCourierAssignedPickupBulk(courier.Id, toNotify);
 
         return new BulkAssignCourierToGroupOrdersResultDto(succeeded, failed);
     }

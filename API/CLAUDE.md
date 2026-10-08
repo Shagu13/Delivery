@@ -92,7 +92,7 @@ and are called from the Persistence interceptors:
 |---|---|
 | `IPendingCountsNotifier` | `PendingCounts(PendingGroupOrders, ReturnExchange)` — the staff-nav badges. |
 | `IRealtimeNotifier` | Payload-free "refetch" pings: `adminOrdersChanged` to all admins, `courierOrdersChanged` to one courier. |
-| `IOrderAssignmentNotifier` | Not SignalR — queues the courier Web Push + recipient SMS in the background. |
+| `IOrderAssignmentNotifier` | Not SignalR — queues the courier Web Push + recipient SMS in the background. A handler assigning several orders to one courier must call the `*Bulk` methods (one job: one "N new deliveries" push + the SMS loop in one scope), never the single-order method in a loop — N fire-and-forget scopes starved the DB pool and slowed the post-assign list refetches 20–50×. |
 
 Pings carry no data on purpose: the client re-queries through its normal API, so there is one
 source of truth for shape and authorization. The frontend subscribes with
