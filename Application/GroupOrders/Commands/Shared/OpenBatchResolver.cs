@@ -33,9 +33,11 @@ public static class OpenBatchResolver
         var today = CustomTime.Today;
 
         // Status and address are compared in memory: Appendable is a HashSet and the
-        // trimmed case-insensitive comparison does not translate to SQL.
+        // trimmed case-insensitive comparison does not translate to SQL. The batches' Orders are
+        // deliberately not loaded: callers only need the batch's Id/Status (AttachToBatch adds
+        // new orders by FK), and tracking every order the customer created today made a large
+        // checkout spend ~1.5 s here and again in SaveChanges' change detection.
         var todaysBatches = await context.GroupOrders
-            .Include(g => g.Orders)
             .Where(g => g.CustomerId == customerId && g.CreatedAt.Date == today)
             .OrderBy(g => g.CreatedAt)
             .ToListAsync(cancellationToken);
