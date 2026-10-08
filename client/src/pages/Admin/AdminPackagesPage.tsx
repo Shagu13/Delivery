@@ -21,6 +21,7 @@ import { useLanguage } from '../../contexts/useLanguage';
 import type { PagedResult } from '../../types/paging';
 import { georgianToday, georgianDateKeyOf, toDateKey } from '../../utils/georgianTime';
 import { resolveDateWindow } from '../../utils/dateWindow';
+import { isQueryFreshLive } from '../../utils/queryFreshness';
 import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { LocationMultiPicker } from '../../components/ui/LocationMultiPicker';
@@ -263,15 +264,13 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   // Skip a query the SignalR ping wants refetched when it's already fetching or was
   // fetched moments ago — almost always an echo of the reload this same admin's own
   // action just triggered directly (reload()/reloadAfterAction()), not new data from
-  // someone else. Halves the grouporders calls fired per action on this (slow) list.
-  const SELF_ECHO_MS = 4000;
-  const isQueryFresh = (q: { isFetching: boolean; dataUpdatedAt: number }) =>
-    q.isFetching || Date.now() - q.dataUpdatedAt < SELF_ECHO_MS;
-
+  // someone else. Halves the grouporders calls fired per action on this (slow) list. Freshness
+  // is read from the query cache (isQueryFreshLive), not the render's query result - see
+  // utils/queryFreshness.
   useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
-    if (!isQueryFresh(windowScopedQuery)) void loadWindowScoped();
-    if (!isQueryFresh(mainQuery)) void mainQuery.refetch();
-    if (!isQueryFresh(summaryQuery)) void loadSummary();
+    if (!isQueryFreshLive(queryClient, windowScopedKey)) void loadWindowScoped();
+    if (!isQueryFreshLive(queryClient, listQueryKey)) void mainQuery.refetch();
+    if (!isQueryFreshLive(queryClient, ['admin', 'pickup', 'summary', effectiveDayKey])) void loadSummary();
   });
 
   // Refetch everything a mutation elsewhere in the batch/group-order flow could have changed:

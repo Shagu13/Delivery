@@ -29,6 +29,7 @@ import { useOrdersChangedSignal } from '../../realtime/useOrdersChangedSignal';
 import { isCompletedGroupOrder } from '../../utils/groupOrderUtils';
 import { georgianToday, georgianDateKeyOf } from '../../utils/georgianTime';
 import { resolveDateWindow } from '../../utils/dateWindow';
+import { isQueryFreshLive } from '../../utils/queryFreshness';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 
 // Every one of these is a whole separate admin sub-page (its own data fetching, its own
@@ -1092,11 +1093,10 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
     // data in the background instead of forcing a full reload/spinner. Skip a ping that
     // arrives while already fetching or moments after the last fetch — almost always an
     // echo of this same admin's own action, not new data from someone else. Mirrors
-    // AdminOrders' (Pick-Up) SELF_ECHO_MS guard so a busy system doesn't re-pull this
+    // AdminOrders' (Pick-Up) self-echo guard so a busy system doesn't re-pull this
     // page's stats + SMS balance on every single ping.
-    const SELF_ECHO_MS = 4000;
     useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
-        if (overviewQuery.isFetching || Date.now() - overviewQuery.dataUpdatedAt < SELF_ECHO_MS) return;
+        if (isQueryFreshLive(queryClient, ADMIN_OVERVIEW_QUERY_KEY(isOperator))) return;
         void queryClient.invalidateQueries({ queryKey: ADMIN_OVERVIEW_QUERY_KEY(isOperator) });
     });
 
@@ -1485,8 +1485,10 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, filterCity, filterDistricts, filterParty, filterStatus, windowDate, windowDateTo]);
 
+  const queryClient = useQueryClient();
+  const mainQueryKey = ['admin', 'pickup', 'list', pickupFilters, page] as const;
   const mainQuery = useQuery({
-    queryKey: ['admin', 'pickup', 'list', pickupFilters, page] as const,
+    queryKey: mainQueryKey,
     queryFn: () => fetchGroupOrders(token ?? '', { ...pickupFilters, page, pageSize: PICKUP_PAGE_SIZE }),
     enabled: !!token,
     // Keep the previous page's rows on screen while the next page/filter loads instead
@@ -1500,8 +1502,9 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
 
   // The Non-Grouped tools are per-day; summarize the effective day (the chosen day,
   // or today while showing All) so they keep working without a day filter.
+  const summaryQueryKey = ['admin', 'pickup', 'summary', effectiveDayKey] as const;
   const summaryQuery = useQuery({
-    queryKey: ['admin', 'pickup', 'summary', effectiveDayKey] as const,
+    queryKey: summaryQueryKey,
     queryFn: () => fetchPickupDay(token ?? '', effectiveDayKey),
     enabled: !!token,
   });
@@ -1513,8 +1516,9 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   // (the selected day, or the day of any order actually visible in the list), regardless
   // of which page of the main feed it would otherwise land on. A generous pageSize instead
   // of paginating — a batch count within one browsing window is realistically small.
+  const windowScopedQueryKey = ['admin', 'pickup', 'windowScoped', pickupFilters] as const;
   const windowScopedQuery = useQuery({
-    queryKey: ['admin', 'pickup', 'windowScoped', pickupFilters] as const,
+    queryKey: windowScopedQueryKey,
     queryFn: () => fetchGroupOrders(token ?? '', { ...pickupFilters, page: 1, pageSize: 500 }).then(r => r.items),
     enabled: !!token,
     placeholderData: keepPreviousData,
@@ -1541,15 +1545,13 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
   // filters/page, no spinner) so new customer orders appear without a manual refresh.
   // Skip a query the ping wants refetched when it's already fetching or was fetched moments
   // ago - almost always an echo of this same admin's own action, not new data from someone
-  // else. Mirrors AdminPackagesPage's SELF_ECHO_MS guard so the two last-mile pages behave
-  // the same and a busy system doesn't refetch the (up-to-500-row) list on every ping.
-  const SELF_ECHO_MS = 4000;
-  const isQueryFresh = (q: { isFetching: boolean; dataUpdatedAt: number }) =>
-    q.isFetching || Date.now() - q.dataUpdatedAt < SELF_ECHO_MS;
+  // else. Mirrors AdminPackagesPage's guard so the two last-mile pages behave the same and a
+  // busy system doesn't refetch the (up-to-500-row) list on every ping. Freshness is read from
+  // the query cache (isQueryFreshLive), not the render's query result - see utils/queryFreshness.
   useOrdersChangedSignal(token ?? null, 'adminOrdersChanged', () => {
-    if (!isQueryFresh(mainQuery))         void load(page);
-    if (!isQueryFresh(summaryQuery))      void loadSummary();
-    if (!isQueryFresh(windowScopedQuery)) void loadWindowScoped();
+    if (!isQueryFreshLive(queryClient, mainQueryKey))         void load(page);
+    if (!isQueryFreshLive(queryClient, summaryQueryKey))      void loadSummary();
+    if (!isQueryFreshLive(queryClient, windowScopedQueryKey)) void loadWindowScoped();
   });
 
   const toggleExpand = (id: string) => {
