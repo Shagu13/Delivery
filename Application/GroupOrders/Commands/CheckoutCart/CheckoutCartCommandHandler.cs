@@ -53,7 +53,7 @@ public sealed class CheckoutCartCommandHandler
         // always re-derive it server-side.
         var built = await GroupOrderOrderBuilder.BuildAsync(
             _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict,
-            allowClientPriceOverride: false);
+            allowClientPriceOverride: false, pickUpCityName: dto.PickUpCity);
         TimeSpan buildTime = Stopwatch.GetElapsedTime(t0);
 
         long t1 = Stopwatch.GetTimestamp();

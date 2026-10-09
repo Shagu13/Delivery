@@ -190,6 +190,12 @@ city. Managed by admins via `PUT/DELETE /api/customers/{id}/special-prices`
 `CompanyServicePrice` explicit-override field — so does every client-side reimplementation of
 this waterfall (see [client/CLAUDE.md §7](client/CLAUDE.md#7-known-duplication--check-both)).
 
+**District lookup is by (city, district name), never name alone.** District names repeat across
+cities (e.g. three "Central"s), and orders store only the name strings. `GroupOrderOrderBuilder.FindDistrict`
+prefers the row in the order's city (`RecipientCity` / `ReturnPickupCity` / the batch's `PickUpCity`);
+a name-only match is just the fallback. A name-only lookup priced a Tbilisi order as a village.
+`CalculatorController` is unaffected — it takes district IDs.
+
 ### "Terminal status" sets — the un-DRYest thing in the codebase
 
 There is **no single constant** for "this order/batch is finished". The set is re-encoded

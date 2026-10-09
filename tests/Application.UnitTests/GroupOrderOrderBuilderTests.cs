@@ -1,4 +1,5 @@
 using Application.Common.Exceptions;
+using Application.GroupOrders.DTOs;
 using Domain;
 using Domain.Enums;
 using Persistence;
@@ -493,5 +494,31 @@ public class GroupOrderOrderBuilderTests
         await Assert.ThrowsAsync<ValidationException>(() => Build(
             ctx, customer: null,
             Order("TbilisiCenter", payment: PaymentStatus.NotPaid, amount: 3m, allIn: true)));
+    }
+
+    // ── Same district name in several cities ───────────────────────────────────
+
+    [Fact]
+    public async Task Same_named_districts_are_resolved_by_city_not_by_name_alone()
+    {
+        using AppDbContext ctx = NewContext();
+        City village = new() { CityName = "Village City" };
+        City tbilisi = new() { CityName = "Tbilisi" };
+        // The village row is inserted first so a name-only FirstOrDefault would pick it.
+        District villageDup = Dist("Central", 4m);
+        villageDup.CityId = village.Id;
+        District tbilisiDup = Dist("Central", 6m, capital: true);
+        tbilisiDup.CityId = tbilisi.Id;
+        ctx.Cities.AddRange(village, tbilisi);
+        ctx.Districts.AddRange(villageDup, tbilisiDup);
+        ctx.SaveChanges();
+
+        CreateOrderDto dto = Order("Central") with { RecipientCity = "Tbilisi" };
+        Customer customer = Cust(capital: 10m, district: 3m);
+
+        List<Order> built = await Build(ctx, customer, dto);
+
+        // Capital tier (10) proves the Tbilisi row was used, not the village one (district tier 3).
+        Assert.Equal(10m, built[0].CompanyServicePrice);
     }
 }

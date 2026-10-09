@@ -47,7 +47,7 @@ public sealed class CreateGroupOrderCommandHandler
         // client-submitted CompanyServicePrice; always re-derive it server-side.
         var built = await GroupOrderOrderBuilder.BuildAsync(
             _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict,
-            allowClientPriceOverride: false);
+            allowClientPriceOverride: false, pickUpCityName: dto.PickUpCity);
 
         // ── Split: Return orders become standalone; Send/Exchange go into a GroupOrder ──
         var standaloneReturns = new List<Order>();

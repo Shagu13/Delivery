@@ -98,7 +98,8 @@ public sealed class AdminCreateWalkInOrderCommandHandler
 
         // ── 2. Build the Order entities (fee resolution, tracking numbers) ──────
         var built = await GroupOrderOrderBuilder.BuildAsync(
-            _context, _trackingGen, customer, dto.Orders, cancellationToken, customer.District);
+            _context, _trackingGen, customer, dto.Orders, cancellationToken, customer.District,
+            pickUpCityName: customer.City);
 
         var now = CustomTime.Now;
 

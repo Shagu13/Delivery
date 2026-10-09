@@ -86,7 +86,7 @@ public sealed class AddOrdersToGroupOrderCommandHandler
         // always re-derive it server-side.
         var built = await GroupOrderOrderBuilder.BuildAsync(
             _context, _trackingGen, customer, request.Orders, cancellationToken, groupOrder.PickUpDistrict,
-            allowClientPriceOverride: false);
+            allowClientPriceOverride: false, pickUpCityName: groupOrder.PickUpCity);
 
         // Returns are rejected by the validator, so every built order is a Send/Exchange
         // package that joins the batch and adopts its current status.

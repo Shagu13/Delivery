@@ -46,7 +46,8 @@ internal static class GroupOrderOrderBuilder
         IReadOnlyList<DTOs.CreateOrderDto> orderDtos,
         CancellationToken ct,
         string? pickUpDistrictName = null,
-        bool allowClientPriceOverride = true)
+        bool allowClientPriceOverride = true,
+        string? pickUpCityName = null)
     {
         // Load the districts referenced by orders so we can fall back to their default price.
         // For Return orders the fee is based on the return pickup district (where courier collects).
@@ -60,10 +61,20 @@ internal static class GroupOrderOrderBuilder
             .Distinct()
             .ToList();
 
+        // District names are NOT unique across cities, so every lookup below is by
+        // (city, district name) — see FindDistrict.
         var districts = await context.Districts
             .AsNoTracking()
-            .Where(d => districtNames.Contains(d.DistrictName))
+            .Where(d => d.DateDeleted == null && districtNames.Contains(d.DistrictName))
             .ToListAsync(ct);
+
+        var cityIds = districts.Select(d => d.CityId).Distinct().ToList();
+        var cityNames = cityIds.Count > 0
+            ? await context.Cities
+                .AsNoTracking()
+                .Where(c => cityIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.CityName, ct)
+            : new Dictionary<Guid, string>();
 
         // Bulk-load this customer's per-district special prices for the districts in play —
         // avoids a per-order query, mirroring how weight tiers and districts are loaded above.
@@ -102,8 +113,7 @@ internal static class GroupOrderOrderBuilder
         // (checked per order below).
         var pickUpDistrict = string.IsNullOrWhiteSpace(pickUpDistrictName)
             ? null
-            : districts.FirstOrDefault(d =>
-                d.DistrictName.Equals(pickUpDistrictName, StringComparison.OrdinalIgnoreCase));
+            : FindDistrict(districts, cityNames, pickUpCityName, pickUpDistrictName);
         bool pickUpCanSwapPricing = pickUpDistrict is not null && !pickUpDistrict.IsCapitalTerritory;
 
         var built = new List<Order>(orderDtos.Count);
@@ -125,14 +135,13 @@ internal static class GroupOrderOrderBuilder
             if (o.OrderType == OrderType.Return)
             {
                 var returnName = o.ReturnPickupDistrict ?? o.RecipientDistrict;
-                district = districts.FirstOrDefault(d =>
-                    d.DistrictName.Equals(returnName, StringComparison.OrdinalIgnoreCase));
+                var returnCity = o.ReturnPickupDistrict is not null ? o.ReturnPickupCity : o.RecipientCity;
+                district = FindDistrict(districts, cityNames, returnCity, returnName);
                 customerZone = district;
             }
             else
             {
-                customerZone = districts.FirstOrDefault(d =>
-                    d.DistrictName.Equals(o.RecipientDistrict, StringComparison.OrdinalIgnoreCase));
+                customerZone = FindDistrict(districts, cityNames, o.RecipientCity, o.RecipientDistrict);
 
                 // Swap only for a non-capital pickup delivering INTO the capital. Non-capital
                 // → non-capital keeps the delivery district's own zone and default price.
@@ -262,6 +271,33 @@ internal static class GroupOrderOrderBuilder
             order.Status       = batch.Status;
             context.Orders.Add(order);
         }
+    }
+
+    /// <summary>
+    /// Resolves a district by (city, district name). District names repeat across cities,
+    /// so a name-only match can land on another city's row and mis-price the order
+    /// (e.g. a Tbilisi district priced as a village). Falls back to a name-only match only
+    /// when no candidate belongs to the given city (legacy/unknown city text).
+    /// </summary>
+    private static District? FindDistrict(
+        IReadOnlyList<District> districts,
+        IReadOnlyDictionary<Guid, string> cityNames,
+        string? cityName,
+        string districtName)
+    {
+        var byName = districts
+            .Where(d => d.DistrictName.Equals(districtName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (!string.IsNullOrWhiteSpace(cityName))
+        {
+            var inCity = byName.FirstOrDefault(d =>
+                cityNames.TryGetValue(d.CityId, out var n)
+                && n.Equals(cityName, StringComparison.OrdinalIgnoreCase));
+            if (inCity is not null) return inCity;
+        }
+
+        return byName.FirstOrDefault();
     }
 
     /// <summary>
