@@ -3607,6 +3607,7 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
                   <th>{t.crwThSender}</th>
                   <th>{t.crwThCityAddress}</th>
                   <th>{t.aopThStatus}</th>
+                  <th>COD</th>
                   <th>{t.crwThSvcPrice}</th>
                   <th>{t.crwThCourierSalary}</th>
                   {canSeeRevenue && <th>{t.aopThRevenue}</th>}
@@ -3636,7 +3637,17 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
                         <div>{pickupCityFor(o)}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)' }}>{pickupAddressFor(o)}</div>
                       </td>
-                      <td><StatusBadge status={o.status} /></td>
+                      <td>
+                        <StatusBadge status={o.status} />
+                        {o.assignedToCourierAt && (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)', marginTop: 3 }}>
+                            {t.crwAssignedOn}: {new Date(o.assignedToCourierAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ fontWeight: 600 }}>
+                        {o.amountToCollectForPackage != null ? `₾${o.amountToCollectForPackage.toFixed(2)}` : '—'}
+                      </td>
                       <td style={{ fontWeight: 600 }}>₾{o.companyServicePrice.toFixed(2)}</td>
                       <td>
                         {o.courierSalary != null

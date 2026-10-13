@@ -13,6 +13,7 @@ public sealed record OrderFinanceLineDto(
     string  RecipientCity,
     string  RecipientDistrict,
     string  RecipientAddress,
+    string  RecipientPhone,
     string  OrderType,
     string  Status,
     string  ProductPaymentStatus,

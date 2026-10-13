@@ -1,0 +1,59 @@
+using Application.Common.Interfaces;
+using Domain;
+using Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+
+namespace Application.Settlements;
+
+/// <summary>
+/// Keeps the stored courier-salary payment history consistent after an admin changes an
+/// order's <see cref="Order.CourierSalary"/>. When the new salary is below what was already
+/// paid, the order's paid amount is capped at the new salary and the surplus is trimmed off
+/// that order's <see cref="PaymentReceiptAllocation"/>s (newest receipt first); receipt totals
+/// are adjusted and emptied receipts removed. Raising the salary needs no change — the extra
+/// simply becomes outstanding (derived live by OrderFinance).
+/// </summary>
+public static class CourierSalaryReceiptReconciler
+{
+    private const decimal Epsilon = 0.005m;
+
+    /// <summary>Call after assigning the new salary on a tracked order; the caller saves.</summary>
+    public static async Task ReconcileAsync(
+        IAppDbContext context, Order order, decimal? newSalary, CancellationToken ct)
+    {
+        decimal paid = order.CourierSalaryPaidAmount ?? 0m;
+        decimal cap  = newSalary ?? 0m;
+        decimal excess = paid - cap;
+        if (excess <= Epsilon) return;
+
+        order.CourierSalaryPaidAmount = cap > Epsilon ? cap : null;
+        if (order.CourierSalaryPaidAmount is null) order.CourierSalaryPaidAt = null;
+
+        List<PaymentReceiptAllocation> allocations = await context.PaymentReceiptAllocations
+            .Include(a => a.PaymentReceipt)
+            .Where(a => a.OrderId == order.Id
+                     && a.PaymentReceipt!.Flow == PaymentReceiptFlow.CourierSalary)
+            .OrderByDescending(a => a.PaymentReceipt!.PaidAt)
+            .ToListAsync(ct);
+
+        foreach (PaymentReceiptAllocation alloc in allocations)
+        {
+            if (excess <= Epsilon) break;
+
+            decimal cut = Math.Min(alloc.Amount, excess);
+            alloc.Amount -= cut;
+            alloc.PaymentReceipt!.TotalAmount -= cut;
+            excess -= cut;
+
+            if (alloc.Amount <= Epsilon)
+                context.PaymentReceiptAllocations.Remove(alloc);
+        }
+
+        // Drop receipts left with no allocations (their total is now zero).
+        foreach (PaymentReceipt receipt in allocations
+                     .Select(a => a.PaymentReceipt!)
+                     .Distinct()
+                     .Where(r => r.TotalAmount <= Epsilon))
+            context.PaymentReceipts.Remove(receipt);
+    }
+}

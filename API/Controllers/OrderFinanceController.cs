@@ -153,7 +153,7 @@ public sealed class OrderFinanceController : BaseController
     public async Task<IActionResult> GetForCourierAdmin(
         [FromQuery] Guid courierId, [FromQuery] DateOnly? date, CancellationToken ct)
     {
-        var result = await Sender.Send(new GetCourierOrderFinanceLinesQuery(courierId, date), ct);
+        var result = await Sender.Send(new GetCourierOrderFinanceLinesQuery(courierId, date, IncludePostponed: true), ct);
         return Ok(result);
     }
 

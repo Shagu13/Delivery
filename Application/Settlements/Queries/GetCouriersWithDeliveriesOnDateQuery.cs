@@ -50,7 +50,12 @@ public sealed class GetCouriersWithDeliveriesOnDateQueryHandler
                            && o.CancellationReason != CancellationReason.WarehouseNotReceived
                            && o.CancellationReason != CancellationReason.DidNotWant
                            && (o.DeliveredAt ?? o.CancelledAt) >= dayStart
-                           && (o.DeliveredAt ?? o.CancelledAt) <= dayEnd)))
+                           && (o.DeliveredAt ?? o.CancelledAt) <= dayEnd)
+                       // Postponed deliveries are listed in the settlement modal (dated by the
+                       // postpone event), so the courier must appear on that day too.
+                       || (o.Status == OrderStatus.DeliveryPostponed
+                           && o.PostponedAt >= dayStart
+                           && o.PostponedAt <= dayEnd)))
             .Select(o => o.CourierId!.Value)
             .Distinct()
             .ToListAsync(cancellationToken);

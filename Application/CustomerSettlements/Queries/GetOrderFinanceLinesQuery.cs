@@ -153,7 +153,8 @@ public sealed class GetAllCustomersOrderFinanceLinesQueryHandler
 // ── Courier: own delivered order lines, dated by delivery ─────────────────────────
 public sealed record GetCourierOrderFinanceLinesQuery(
     Guid      CourierId,
-    DateOnly? Date
+    DateOnly? Date,
+    bool      IncludePostponed = false
 ) : IRequest<IReadOnlyList<OrderFinanceLineDto>>;
 
 public sealed class GetCourierOrderFinanceLinesQueryHandler
@@ -167,7 +168,7 @@ public sealed class GetCourierOrderFinanceLinesQueryHandler
     {
         var query = OrderFinanceQueries.Base(_context)
             .Where(o => o.CourierId == request.CourierId);
-        query = OrderFinanceQueries.FilterByDeliveredAt(query, request.Date)
+        query = OrderFinanceQueries.FilterByDeliveredAt(query, request.Date, request.IncludePostponed)
                                    .OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt);
 
         var orders = await query.ToListAsync(ct);
@@ -298,18 +299,23 @@ internal static class OrderFinanceQueries
     /// those with a delivery timestamp (last-mile DeliveredAt or return drop-off
     /// DeliveredToWarehouseAt). When a date is given, narrows to that single day.
     /// </summary>
-    public static IQueryable<Order> FilterByDeliveredAt(IQueryable<Order> query, DateOnly? date)
+    public static IQueryable<Order> FilterByDeliveredAt(
+        IQueryable<Order> query, DateOnly? date, bool includePostponed = false)
     {
         // CancelledAt covers billable failed deliveries (courier earns salary) that have no
         // delivery timestamp; Base() has already limited the set to active + billable orders,
-        // so the only cancelled orders here are billable ones.
-        query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) != null);
+        // so the only cancelled orders here are billable ones. includePostponed (admin
+        // settlement modal only) additionally lists DeliveryPostponed orders, dated by PostponedAt.
+        query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) != null
+                              || (includePostponed && o.Status == OrderStatus.DeliveryPostponed && o.PostponedAt != null));
 
         if (date is not DateOnly d) return query;
         var start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var end   = start.AddDays(1);
-        return query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) >= start
-                             && (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) <  end);
+        return query.Where(o => ((o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) >= start
+                              && (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) <  end)
+                             || (includePostponed && o.Status == OrderStatus.DeliveryPostponed
+                                 && o.PostponedAt >= start && o.PostponedAt < end));
     }
 
     /// <summary>
@@ -385,6 +391,7 @@ internal static class OrderFinanceQueries
             RecipientCity:                o.RecipientCity,
             RecipientDistrict:            o.RecipientDistrict,
             RecipientAddress:             o.RecipientAddress,
+            RecipientPhone:               o.RecipientPhone,
             OrderType:                    o.OrderType.ToString(),
             Status:                       o.Status.ToString(),
             ProductPaymentStatus:         o.ProductPaymentStatus.ToString(),

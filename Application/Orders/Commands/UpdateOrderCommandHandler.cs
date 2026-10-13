@@ -59,6 +59,7 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         }
 
         order.CourierSalary       = request.CourierSalary;
+        await Application.Settlements.CourierSalaryReceiptReconciler.ReconcileAsync(_context, order, request.CourierSalary, cancellationToken);
 
         // Auto-recalculate company revenue when both values are set
         order.CompanyRevenue = request.CourierSalary.HasValue

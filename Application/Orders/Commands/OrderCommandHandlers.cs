@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Settlements;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -960,6 +961,7 @@ public sealed class SetCourierSalaryCommandHandler : IRequestHandler<SetCourierS
 
         order.CourierSalary = request.Salary;
         order.CompanyRevenue = order.CompanyServicePrice - request.Salary;
+        await CourierSalaryReceiptReconciler.ReconcileAsync(_context, order, request.Salary, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

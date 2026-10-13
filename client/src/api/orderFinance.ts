@@ -8,6 +8,7 @@ export interface OrderFinanceLine {
     recipientCity: string;
     recipientDistrict: string;
     recipientAddress: string;
+    recipientPhone: string;
     orderType: string;
     status: string;
     productPaymentStatus: string; // "Paid" | "NotPaid"

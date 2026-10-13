@@ -6,6 +6,7 @@ import {
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine, CourierPaymentFlow } from '../../api/orderFinance';
+import { setCourierSalary } from '../../api/orders';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { round2 } from '../../utils/orderFinanceOutstanding';
@@ -57,6 +58,8 @@ export function SettlementModal({
     const [error,   setError]   = useState<string | null>(null);
     const [selSalary, setSelSalary] = useState<Sel>({});
     const [selCod,    setSelCod]    = useState<Sel>({});
+    // Tracking numbers stay hidden until the header switch is ticked.
+    const [showTracking, setShowTracking] = useState(false);
 
     // A ticked row freezes its outstanding amount so it can be hand-edited; drop the
     // selection whenever fresh lines arrive so a stale amount is never submitted.
@@ -95,7 +98,24 @@ export function SettlementModal({
         return () => window.removeEventListener('keydown', handler);
     }, [open, onClose]);
 
-    const handleDateChange = (d: string) => { setDate(d); load(d); };
+    // Admin edits an order's actual salary (Order.CourierSalary); the server trims stored
+    // receipts if it drops below what was already paid.
+    const saveSalary = async (orderId: string, value: string): Promise<boolean> => {
+        const n = Number(value);
+        if (value.trim() === '' || isNaN(n) || n < 0) { setError(t.stlmErrSalaryInvalid); return false; }
+        setError(null);
+        try {
+            await setCourierSalary(token, orderId, round2(n));
+            await load(date, true);
+            onCreated();
+            return true;
+        } catch (err) {
+            setError(err instanceof Error ? err.message : t.ofinErrAction);
+            return false;
+        }
+    };
+
+    const handleDateChange =(d: string) => { setDate(d); load(d); };
 
     const salaryFlow = buildFlow(lines, selSalary, salaryOut, o => o.courierSalaryPaidAmount ?? 0);
     const codFlow    = buildFlow(lines, selCod,    codOut,    o => o.codTransferedToCompanyByCourier ?? 0);
@@ -256,8 +276,16 @@ export function SettlementModal({
                                         <table className="go-orders-table settlement-orders-table">
                                             <thead>
                                                 <tr>
-                                                    <th>{t.stlmThTracking}</th>
+                                                    <th>
+                                                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', textTransform: 'none' }}>
+                                                            <input type="checkbox" checked={showTracking}
+                                                                onChange={e => setShowTracking(e.target.checked)} />
+                                                            {showTracking ? t.stlmThTracking : t.stlmShowTracking}
+                                                        </label>
+                                                    </th>
+                                                    <th>{t.stlmThSenderBusiness}</th>
                                                     <th>{t.stlmThRecipient}</th>
+                                                    <th>{t.stlmThRecipientContact}</th>
                                                     <th>{t.stlmThPayer}</th>
                                                     <th style={{ textAlign: 'right' }}>{t.stlmThSalary}</th>
                                                     <th style={{ textAlign: 'right' }}>{t.stlmThCod}</th>
@@ -266,10 +294,31 @@ export function SettlementModal({
                                             </thead>
                                             <tbody>
                                                 {lines.map(o => {
+                                                    const postponed      = o.status === 'DeliveryPostponed';
+                                                    const billableCancel = o.isBillableFailedDelivery;
+                                                    // Postponed / billable-cancelled orders carry salary only — no COD.
+                                                    const salaryOnly     = postponed || billableCancel;
                                                     return (
                                                         <tr key={o.orderId}>
-                                                            <td><span className="tn-badge">{o.trackingNumber}</span></td>
+                                                            <td>
+                                                                {showTracking && <span className="tn-badge">{o.trackingNumber}</span>}
+                                                                {postponed && (
+                                                                    <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#f97316' }}>{t.stlmBadgePostponed}</div>
+                                                                )}
+                                                                {billableCancel && (
+                                                                    <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#dc2626' }}>
+                                                                        {t.stlmBadgeBillableCancel}{o.cancellationReason ? ` (${o.cancellationReason})` : ''}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ fontWeight: 600 }}>{o.customerBusinessName || '—'}</td>
                                                             <td style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</td>
+                                                            <td>
+                                                                <div>{o.recipientPhone}</div>
+                                                                <div style={{ fontSize: '0.72rem', color: 'var(--color-text-subtle)' }}>
+                                                                    {[o.recipientCity, o.recipientDistrict, o.recipientAddress].filter(Boolean).join(', ')}
+                                                                </div>
+                                                            </td>
                                                             <td>
                                                                 <span className={`stl-payer-badge stl-payer-badge--${o.whoPaysForCompanyService.toLowerCase()}`}>
                                                                     {o.whoPaysForCompanyService === 'Recipient' ? t.stlmRcpt : t.stlmSndr}
@@ -282,12 +331,15 @@ export function SettlementModal({
                                                                     checked={selSalary[o.orderId]?.checked ?? false} amount={amountOf(selSalary, o, salaryOut)}
                                                                     onToggle={() => toggle(setSelSalary, o.orderId, salaryOut(o))}
                                                                     onAmount={v => setAmt(setSelSalary, o.orderId, v)} />
+                                                                <SalaryEditor salary={o.courierSalary ?? 0}
+                                                                    label={t.stlmEditSalary} saveLabel={t.stlmSaveSalary}
+                                                                    onSave={v => saveSalary(o.orderId, v)} />
                                                             </td>
                                                             <td style={{ textAlign: 'right', color: 'var(--color-text-subtle)' }}>
-                                                                {o.amountOfCashCollected != null ? fmt(o.amountOfCashCollected) : <Dash />}
+                                                                {!salaryOnly && o.amountOfCashCollected != null ? fmt(o.amountOfCashCollected) : <Dash />}
                                                             </td>
                                                             <td style={{ textAlign: 'right' }}>
-                                                                <AllocCell applicable={(o.amountOfCashCollected ?? 0) > 0} notApplicableLabel="—"
+                                                                <AllocCell applicable={!salaryOnly && (o.amountOfCashCollected ?? 0) > 0} notApplicableLabel="—"
                                                                     outstanding={codOut(o)} paidAt={o.codTransferedToCompanyByCourierAt}
                                                                     paid={o.codTransferedToCompanyByCourier ?? 0}
                                                                     checked={selCod[o.orderId]?.checked ?? false} amount={amountOf(selCod, o, codOut)}
@@ -339,7 +391,7 @@ export function SettlementModal({
                 @keyframes modal-slide-up { from{opacity:0;transform:translate(-50%,calc(-50% + 16px))} to{opacity:1;transform:translate(-50%,-50%)} }
                 @keyframes spin { to{transform:rotate(360deg)} }
 
-                .settlement-modal { width:min(820px,calc(100vw - 32px)); }
+                .settlement-modal { width:min(1000px,calc(100vw - 32px)); }
                 .stl-date-nav { display:flex;align-items:center;gap:6px; }
                 .stl-date-arrow { display:flex;align-items:center;justify-content:center;width:30px;height:34px;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-muted);transition:background var(--transition),color var(--transition),border-color var(--transition);flex-shrink:0; }
                 .stl-date-arrow:hover:not(:disabled) { background:var(--color-border);color:var(--color-text); }
@@ -376,4 +428,29 @@ export function SettlementModal({
 
 function Dash() {
     return <span style={{ opacity: 0.4, fontSize: '0.78rem' }}>—</span>;
+}
+
+/** Inline editor for an order's actual courier salary: pencil → input → save / cancel. */
+function SalaryEditor({ salary, label, saveLabel, onSave }: {
+    salary: number; label: string; saveLabel: string; onSave: (value: string) => Promise<boolean>;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [value,   setValue]   = useState('');
+    if (!editing)
+        return (
+            <button type="button" title={label} aria-label={label}
+                onClick={() => { setValue(salary.toFixed(2)); setEditing(true); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', padding: '2px 4px' }}>
+                ✎
+            </button>
+        );
+    return (
+        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 4 }}>
+            <input type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)}
+                style={{ width: 80, fontSize: '16px', padding: '2px 6px' }} />
+            <button type="button" className="go-action-btn"
+                onClick={async () => { if (await onSave(value)) setEditing(false); }}>{saveLabel}</button>
+            <button type="button" className="go-action-btn go-action-btn--ghost" onClick={() => setEditing(false)}>✕</button>
+        </div>
+    );
 }

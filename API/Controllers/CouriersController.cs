@@ -169,6 +169,14 @@ public sealed class CouriersController : BaseController
         return Ok(orders);
     }
 
+    /// <summary>Open last-mile statuses: shown on today's assigned list even when assigned on an earlier day.</summary>
+    private static readonly OrderStatus[] CarryOverStatuses =
+    {
+        OrderStatus.CourierAssignedToDeliver,
+        OrderStatus.CourierDeliveringTheOrderToRecipient,
+        OrderStatus.DeliveryPostponed,
+    };
+
     // ── GET /api/couriers/assigned?date=YYYY-MM-DD  (Admin) ───────────────────
     /// <summary>
     /// Returns the orders assigned to a courier on the given Georgian calendar day, each
@@ -194,10 +202,14 @@ public sealed class CouriersController : BaseController
         DateTime dayEnd = day.AddDays(1);
 
         bool hideRevenue = User.IsInRole("Operator");
+        // Today's view also carries over still-open deliveries assigned on earlier days.
+        bool carryOver = day == CustomTime.Today;
         var orders = await _context.Orders
             .AsNoTracking()
             .Where(o => o.CourierId != null
-                     && o.AssignedToCourierAt >= day && o.AssignedToCourierAt < dayEnd)
+                     && ((o.AssignedToCourierAt >= day && o.AssignedToCourierAt < dayEnd)
+                         || (carryOver && o.AssignedToCourierAt < day
+                             && CarryOverStatuses.Contains(o.Status))))
             .OrderByDescending(o => o.AssignedToCourierAt)
             .Select(o => new
             {
@@ -249,6 +261,7 @@ public sealed class CouriersController : BaseController
     {
         DateTime day    = date.Date;
         DateTime dayEnd = day.AddDays(1);
+        bool carryOver  = day == CustomTime.Today;
 
         var courierName = await _context.Couriers
             .AsNoTracking()
@@ -261,7 +274,9 @@ public sealed class CouriersController : BaseController
             .Include(o => o.GroupOrder)!.ThenInclude(g => g!.Customer)
             .Include(o => o.Customer)
             .Where(o => o.CourierId == courierId
-                     && o.AssignedToCourierAt >= day && o.AssignedToCourierAt < dayEnd)
+                     && ((o.AssignedToCourierAt >= day && o.AssignedToCourierAt < dayEnd)
+                         || (carryOver && o.AssignedToCourierAt < day
+                             && CarryOverStatuses.Contains(o.Status))))
             .OrderBy(o => o.CreatedAt)
             .ToListAsync(ct);
 
