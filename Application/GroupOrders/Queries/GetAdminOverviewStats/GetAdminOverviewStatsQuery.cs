@@ -16,19 +16,13 @@ public sealed record AdminOverviewRecentItemDto(
     DateTime CreatedAt);
 
 public sealed record AdminOverviewStatsDto(
-    int TotalOrders,
-    int PendingPickup,
-    int InTransit,
     List<AdminOverviewRecentItemDto> Recent);
 
 /// <summary>
-/// Lightweight aggregate counts + an 8-row "recent batches" list for the Admin Overview tab.
-/// Replaces what used to be a plain <c>GET /api/grouporders?pageSize=1000</c> call from the
-/// client — that pulled up to 1000 fully-hydrated batches (each with its Courier, Customer,
-/// and Customer.SpecialPrices.District.City graphs) just to compute three counts and show
-/// the newest 8 rows, which cost several MB and several seconds once the table has real
-/// history. This computes the counts as plain SQL aggregates and only ever hydrates the
-/// handful of fields the 8 shown rows actually display.
+/// The 8-row "recent batches" list for the Admin Overview tab. Replaces what used to be a plain
+/// <c>GET /api/grouporders?pageSize=1000</c> call from the client — that pulled up to 1000
+/// fully-hydrated batches just to show the newest 8 rows. Only ever hydrates the handful of
+/// fields the shown rows display. The monthly counts live in <c>GetAdminMonthlyStatsQuery</c>.
 /// </summary>
 public sealed record GetAdminOverviewStatsQuery : IRequest<AdminOverviewStatsDto>;
 
@@ -36,26 +30,12 @@ public sealed class GetAdminOverviewStatsQueryHandler
     : IRequestHandler<GetAdminOverviewStatsQuery, AdminOverviewStatsDto>
 {
     // Mirrors GetAllGroupOrdersQueryHandler.CancelledStatuses — a standalone order in one of
-    // these statuses is excluded from the count, same as it's excluded from the Packages list.
+    // these statuses is excluded, same as it's excluded from the Packages list.
     private static readonly OrderStatus[] CancelledStatuses =
     [
         OrderStatus.CancelledByAdmin,
         OrderStatus.CancelledBySender,
         OrderStatus.OrderNotAccepted,
-    ];
-
-    private static readonly OrderStatus[] PendingPickupStatuses =
-    [
-        OrderStatus.Pending,
-        OrderStatus.AcceptedGroupOrder,
-        OrderStatus.CourierAssignedToPickUp,
-    ];
-
-    private static readonly OrderStatus[] InTransitStatuses =
-    [
-        OrderStatus.OrderIsOnItsWayToRecipientsCity,
-        OrderStatus.CourierAssignedToDeliver,
-        OrderStatus.CourierDeliveringTheOrderToRecipient,
     ];
 
     private readonly IAppDbContext _context;
@@ -66,29 +46,11 @@ public sealed class GetAdminOverviewStatsQueryHandler
         CancellationToken cancellationToken)
     {
         // A standalone order (GroupOrderId == null) is its own "batch" of one — see
-        // GroupOrderMapping.MapStandalone — so it counts toward every stat below exactly
-        // like a GroupOrder's child order would.
+        // GroupOrderMapping.MapStandalone — so it is listed like a GroupOrder.
         var standaloneOrders = _context.Orders
             .AsNoTracking()
             .Where(o => o.GroupOrderId == null && o.CustomerId != null && o.Customer != null
                      && !CancelledStatuses.Contains(o.Status));
-
-        // Every Order belongs to a GroupOrder xor is a standalone Order — one CountAsync
-        // over the whole table, no join needed.
-        var totalOrders = await _context.Orders.AsNoTracking()
-            .CountAsync(o => o.GroupOrderId != null
-                           || (o.CustomerId != null && !CancelledStatuses.Contains(o.Status)), cancellationToken);
-
-        var pendingPickup =
-            await _context.GroupOrders.AsNoTracking()
-                .CountAsync(go => PendingPickupStatuses.Contains(go.Status), cancellationToken)
-            + await standaloneOrders
-                .CountAsync(o => PendingPickupStatuses.Contains(o.Status), cancellationToken);
-
-        // In-transit statuses live on the Order itself regardless of GroupOrderId, so this is
-        // a single count over the whole table too.
-        var inTransit = await _context.Orders.AsNoTracking()
-            .CountAsync(o => InTransitStatuses.Contains(o.Status), cancellationToken);
 
         // ── Recent 8: merge-paginate the same way GetAllGroupOrdersQueryHandler's Phase 1
         //    does, but only ever select the handful of fields this list actually renders. ──
@@ -116,6 +78,6 @@ public sealed class GetAdminOverviewStatsQueryHandler
             .Take(8)
             .ToList();
 
-        return new AdminOverviewStatsDto(totalOrders, pendingPickup, inTransit, recent);
+        return new AdminOverviewStatsDto(recent);
     }
 }

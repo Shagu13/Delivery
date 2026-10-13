@@ -169,20 +169,45 @@ export interface AdminOverviewRecentItem {
 }
 
 export interface AdminOverviewStats {
-    totalOrders: number;
-    pendingPickup: number;
-    inTransit: number;
     recent: AdminOverviewRecentItem[];
 }
 
-/** Admin Overview tab: aggregate counts + the 8 most recently created batches. A dedicated
- *  lightweight endpoint rather than `fetchGroupOrders(token, { pageSize: 1000 })` — that used
- *  to pull up to 1000 fully-hydrated batches just to compute three counts and show 8 rows. */
+/** Admin Overview tab: the 8 most recently created batches. A dedicated lightweight endpoint
+ *  rather than `fetchGroupOrders(token, { pageSize: 1000 })` — that used to pull up to 1000
+ *  fully-hydrated batches just to show 8 rows. */
 export async function fetchAdminOverviewStats(token: string): Promise<AdminOverviewStats> {
     const res = await fetch(`${BASE}/overview-stats`, {
         headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Failed to fetch overview stats');
+    return res.json();
+}
+
+/** Coarse outcome bucket — mirrors the backend's MonthlyStatusGroup. */
+export type MonthlyStatusGroup = 'Delivered' | 'Active' | 'Postponed' | 'Cancelled' | 'Returned';
+export type MonthlyOrderType = 'Send' | 'Return' | 'Exchange';
+
+export interface AdminMonthlyStats {
+    year: number;
+    month: number;
+    total: number;
+    statuses: { status: string; group: MonthlyStatusGroup; count: number }[];
+    days: { day: number; group: MonthlyStatusGroup; count: number }[];
+    cities: { city: string; group: MonthlyStatusGroup; count: number }[];
+    couriers: { courierId: string; courierName: string; group: MonthlyStatusGroup; count: number }[];
+}
+
+/** Admin Overview: statistics of every order created in `month` (1–12), optionally one order type.
+ *  Every list is split by group so the page can filter by a clicked pie slice without refetching. */
+export async function fetchAdminMonthlyStats(
+    token: string, year: number, month: number, type?: MonthlyOrderType,
+): Promise<AdminMonthlyStats> {
+    const qs = new URLSearchParams({ year: String(year), month: String(month) });
+    if (type) qs.set('type', type);
+    const res = await fetch(`${BASE}/overview-monthly?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch monthly stats');
     return res.json();
 }
 

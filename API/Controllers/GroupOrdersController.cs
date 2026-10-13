@@ -18,6 +18,7 @@ using Application.GroupOrders.Commands.GroupAndWarehouseStandaloneOrder;
 using Application.GroupOrders.Commands.SetGroupOrderPickupDate;
 using Application.GroupOrders.DTOs;
 using Application.Orders.Commands.SoftDeletePackage;
+using Application.GroupOrders.Queries.GetAdminMonthlyStats;
 using Application.GroupOrders.Queries.GetAdminOverviewStats;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
 using Application.GroupOrders.Queries.GetCustomerGroupOrders;
@@ -270,6 +271,20 @@ public sealed class GroupOrdersController : BaseController
     public async Task<IActionResult> GetOverviewStats(CancellationToken ct)
     {
         var result = await Sender.Send(new GetAdminOverviewStatsQuery(), ct);
+        return Ok(result);
+    }
+
+    // ── GET /api/grouporders/overview-monthly  (Admin Overview tab — month statistics) ─
+    [HttpGet("overview-monthly")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(AdminMonthlyStatsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOverviewMonthly(
+        [FromQuery] int year,
+        [FromQuery] int month,
+        [FromQuery] OrderType? type = null,
+        CancellationToken ct = default)
+    {
+        var result = await Sender.Send(new GetAdminMonthlyStatsQuery(year, month, type), ct);
         return Ok(result);
     }
 

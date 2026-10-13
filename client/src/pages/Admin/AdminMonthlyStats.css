@@ -1,0 +1,99 @@
+.oms { margin-bottom: 32px; }
+
+.oms__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.oms__month { display: flex; align-items: center; gap: 8px; }
+
+.oms__month-label {
+  min-width: 150px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.oms__nav,
+.oms__chip {
+  min-height: 40px;
+  padding: 0 14px;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.oms__nav { width: 40px; padding: 0; font-size: 1.3rem; line-height: 1; }
+.oms__nav:disabled { opacity: 0.4; cursor: default; }
+
+.oms__types { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.oms__chip--active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #000;
+  font-weight: 700;
+}
+
+.oms__message {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* Group cards double as filters. */
+.oms__card {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.oms__card--active { outline: 2px solid var(--color-accent); }
+
+.oms__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.oms__panel { margin-bottom: 16px; }
+.oms__grid .oms__panel { margin-bottom: 0; }
+.oms__panel-body { padding: 16px 12px; }
+
+.oms__hint {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-text-subtle);
+}
+
+.oms__nodata {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.oms__dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 8px;
+  border-radius: 50%;
+}
+
+@media (max-width: 640px) {
+  .oms__grid { grid-template-columns: 1fr; }
+  .oms__controls { flex-direction: column; align-items: stretch; }
+  .oms__month { justify-content: space-between; }
+}

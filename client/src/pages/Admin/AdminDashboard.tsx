@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
 import { AddPackageModal } from './AddPackageModal';
+import { AdminMonthlyStats } from './AdminMonthlyStats';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
 import { fetchGroupOrders, fetchAdminOverviewStats,
     fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup, mergeGroupOrders, moveOrderToGroup,
@@ -1100,9 +1101,6 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
         void queryClient.invalidateQueries({ queryKey: ADMIN_OVERVIEW_QUERY_KEY(isOperator) });
     });
 
-    const totalOrders = overviewStats?.totalOrders ?? 0;
-    const pendingPickup = overviewStats?.pendingPickup ?? 0;
-    const inTransit = overviewStats?.inTransit ?? 0;
     const activeCouriers = couriers.filter(c => !c.isDeleted).length;
     const recent = overviewStats?.recent ?? [];
 
@@ -1116,9 +1114,6 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
     const smsLow = smsBalance !== null && smsBalance < 50;
 
     const stats: { label: string; value: string; sub: string; low?: boolean }[] = [
-        { label: t.overviewTotalOrders ?? 'Total Orders', value: loading ? '…' : String(totalOrders), sub: t.overviewAllTime ?? 'All time' },
-        { label: t.overviewPendingPickup ?? 'Pending Pickup', value: loading ? '…' : String(pendingPickup), sub: t.overviewAwaitingCourier ?? 'Awaiting courier' },
-        { label: t.overviewInTransit ?? 'In Transit', value: loading ? '…' : String(inTransit), sub: t.overviewActiveDeliveries ?? 'Active deliveries' },
         // Courier roster + SMS credits are admin-only; operators don't see them.
         ...(isOperator ? [] : [
             { label: t.overviewActiveCouriers ?? 'Active Couriers', value: loading ? '…' : String(activeCouriers), sub: t.overviewAvailableNow ?? 'Available now' },
@@ -1133,7 +1128,7 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
 
     return (
         <>
-            <div className="stat-grid">
+            {stats.length > 0 && <div className="stat-grid">
                 {stats.map((s, i) => (
                     <div
                         className="stat-card"
@@ -1155,7 +1150,8 @@ function AdminOverview({ token, isOperator = false }: { token: string; isOperato
                         </div>
                     </div>
                 ))}
-            </div>
+            </div>}
+            <AdminMonthlyStats token={token} />
             <div className="content-card">
                 <div className="content-card__header">
                     <span className="content-card__title">{t.overviewRecentGroupOrders ?? 'Recent Group Orders'}</span>
