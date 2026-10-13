@@ -354,9 +354,11 @@ public sealed class CouriersController : BaseController
     /// The pickup-leg mirror of <see cref="GetAssignedForDay"/>: group-order batches
     /// tagged with the courier who collects them, for one Georgian calendar day.
     ///
-    /// Today → every batch the courier is still out on (assigned, not yet collected,
-    ///         not cancelled) plus the batches they collected today.
-    /// Past  → only the batches actually collected that day, dated by PickedUpAt.
+    /// A batch belongs to a day by its scheduled pickup date (<c>WhenPackagePickedUpDate</c>,
+    /// else its created date). A day lists:
+    ///   • the batches actually collected that day (dated by PickedUpAt), and
+    ///   • the batches scheduled for that day that are still uncollected and not closed.
+    /// So an old uncollected batch shows on its own day, not on today's list.
     /// </summary>
     [HttpGet("assigned-pickups")]
     [Authorize(Roles = "Admin,Operator")]
@@ -366,16 +368,14 @@ public sealed class CouriersController : BaseController
     {
         DateTime day    = date.Date;
         DateTime dayEnd = day.AddDays(1);
-        bool isToday    = day == CustomTime.Today;
 
         IQueryable<GroupOrder> query = _context.GroupOrders
             .AsNoTracking()
-            .Where(g => g.CourierId != null);
-
-        query = isToday
-            ? query.Where(g => (g.PickedUpAt >= day && g.PickedUpAt < dayEnd)
-                            || (g.PickedUpAt == null && !ClosedGroupOrderStatuses.Contains(g.Status)))
-            : query.Where(g => g.PickedUpAt >= day && g.PickedUpAt < dayEnd);
+            .Where(g => g.CourierId != null)
+            .Where(g => (g.PickedUpAt >= day && g.PickedUpAt < dayEnd)
+                     || (g.PickedUpAt == null && !ClosedGroupOrderStatuses.Contains(g.Status)
+                         && (g.WhenPackagePickedUpDate ?? g.CreatedAt) >= day
+                         && (g.WhenPackagePickedUpDate ?? g.CreatedAt) < dayEnd));
 
         var pickups = await query
             .OrderByDescending(g => g.PickedUpAt)
