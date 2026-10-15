@@ -226,20 +226,42 @@ const en = {
   // ── Forgot password page ──────────────────────────────────────────────────
   forgotPwdEyebrow:    'Account Recovery',
   forgotPwdTitle:      'Forgot your password?',
-  forgotPwdHint:       'Enter your registered email and phone number and we\'ll send you a reset link via SMS.',
-  forgotPwdSubmit:     'Send Reset Link',
+  forgotPwdHint:       'Enter your registered email and phone number and we\'ll text you a 6-digit code.',
+  forgotPwdSubmit:     'Send Code',
   forgotPwdSubmitting: 'Sending…',
-  forgotPwdSent:       'If that number is registered, you\'ll receive an SMS with a reset link shortly. The link is valid for 2 hours.',
   forgotPwdFailed:     'Something went wrong. Please try again.',
   forgotPwdBackToLogin: '← Back to sign in',
 
-  // ── Reset password page ───────────────────────────────────────────────────
+  // ── Reset password: code step ─────────────────────────────────────────────
+  resetCodeTitle:      'Enter the code',
+  resetCodeHint:       'We sent a 6-digit code to your phone. Enter it below.',
+  resetCodeLabel:      '6-digit code',
+  resetCodeSubmit:     'Verify Code',
+  resetCodeVerifying:  'Verifying…',
+  resetCodeExpiresIn:  (mmss: string) => `Code expires in ${mmss}`,
+  resetCodeExpired:    'The code has expired. Request a new one.',
+  resetCodeResend:     'Resend code',
+  resetCodeResendIn:   (s: number) => `Resend available in ${s}s`,
+  resetCodeChangeDetails: '← Change email or phone',
+  errCodeLength:       'Enter all 6 digits of the code.',
+
+  // ── Reset password: new password step ─────────────────────────────────────
   resetPwdEyebrow:     'New Password',
   resetPwdTitle:       'Reset your password',
   resetPwdSubmit:      'Set New Password',
   resetPwdSubmitting:  'Saving…',
-  resetPwdFailed:      'Failed to reset password. The link may have expired or already been used.',
-  resetPwdInvalidLink: 'This reset link is invalid or incomplete. Please request a new one.',
+  resetPwdFailed:      'Failed to reset password. Please start again.',
+
+  // ── Reset password: server errors (mapped by error code) ──────────────────
+  resetErrAccountNotFound: 'The email and phone number don\'t match any account. Please check them and try again.',
+  resetErrResendTooSoon:   (s: number) => `Please wait ${s} seconds before requesting a new code.`,
+  resetErrTooManyRequests: 'Too many code requests. Please try again in an hour.',
+  resetErrSmsFailed:       'We couldn\'t send the SMS right now. Please try again in a few minutes.',
+  resetErrSmsInvalidPhone: 'We couldn\'t send an SMS to this phone number. Please contact support.',
+  resetErrCodeWrong:       (n: number) => `Incorrect code. ${n} attempt(s) left.`,
+  resetErrCodeExpired:     'This code has expired. Please request a new one.',
+  resetErrTooManyAttempts: 'Too many wrong attempts. Please request a new code.',
+  resetErrTicketInvalid:   'Your verification has expired. Please start again.',
 
   // ── Register page ─────────────────────────────────────────────────────────
   registerTitle:       'Create your account',
@@ -691,6 +713,7 @@ const en = {
   crwThPackages:        'Packages',
   crwThPickedUp:        'Picked up',
   crwNavAssignedOn:     'Assigned on',
+  crwTodayOnlyHint:     "Highlighted: show only today's assignments (hide earlier open deliveries)",
   crwNavPickedUpOn:     'Picked up on',
   // Today shows what each courier is holding right now; past days show what they closed.
   crwNavCurrentlyHeld:  'Currently assigned',
@@ -2462,20 +2485,42 @@ const ka: typeof en = {
   // ── Forgot password page ──────────────────────────────────────────────────
   forgotPwdEyebrow:    'ანგარიშის აღდგენა',
   forgotPwdTitle:      'დაგავიწყდათ პაროლი?',
-  forgotPwdHint:       'შეიყვანეთ რეგისტრირებული ელ.ფოსტა და ტელეფონის ნომერი და გამოგიგზავნით SMS-ს.',
-  forgotPwdSubmit:     'ბმულის გაგზავნა',
+  forgotPwdHint:       'შეიყვანეთ რეგისტრირებული ელ.ფოსტა და ტელეფონის ნომერი და SMS-ით გამოგიგზავნით 6-ციფრიან კოდს.',
+  forgotPwdSubmit:     'კოდის გაგზავნა',
   forgotPwdSubmitting: 'იგზავნება…',
-  forgotPwdSent:       'თუ ეს ნომერი რეგისტრირებულია, მალე მიიღებთ SMS-ს. ბმული მოქმედია 2 საათი.',
   forgotPwdFailed:     'დაფიქსირდა შეცდომა. გთხოვთ სცადოთ ხელახლა.',
   forgotPwdBackToLogin: '← უკან შესვლაზე',
 
-  // ── Reset password page ───────────────────────────────────────────────────
+  // ── Reset password: code step ─────────────────────────────────────────────
+  resetCodeTitle:      'შეიყვანეთ კოდი',
+  resetCodeHint:       'თქვენს ნომერზე გამოვგზავნეთ 6-ციფრიანი კოდი. შეიყვანეთ ქვემოთ.',
+  resetCodeLabel:      '6-ციფრიანი კოდი',
+  resetCodeSubmit:     'კოდის დადასტურება',
+  resetCodeVerifying:  'მოწმდება…',
+  resetCodeExpiresIn:  (mmss: string) => `კოდი ამოიწურება: ${mmss}`,
+  resetCodeExpired:    'კოდის მოქმედების ვადა ამოიწურა. მოითხოვეთ ახალი.',
+  resetCodeResend:     'კოდის ხელახლა გაგზავნა',
+  resetCodeResendIn:   (s: number) => `ხელახლა გაგზავნა შესაძლებელია ${s} წამში`,
+  resetCodeChangeDetails: '← ელ.ფოსტის ან ნომრის შეცვლა',
+  errCodeLength:       'შეიყვანეთ კოდის ყველა 6 ციფრი.',
+
+  // ── Reset password: new password step ─────────────────────────────────────
   resetPwdEyebrow:     'ახალი პაროლი',
   resetPwdTitle:       'პაროლის განახლება',
   resetPwdSubmit:      'პაროლის დაყენება',
   resetPwdSubmitting:  'ინახება…',
-  resetPwdFailed:      'პაროლის განახლება ვერ მოხერხდა. ბმული შეიძლება ამოიწურა ან უკვე გამოყენებულია.',
-  resetPwdInvalidLink: 'ეს ბმული არასწორია. გთხოვთ მოითხოვოთ ახალი.',
+  resetPwdFailed:      'პაროლის განახლება ვერ მოხერხდა. გთხოვთ დაიწყოთ თავიდან.',
+
+  // ── Reset password: server errors (mapped by error code) ──────────────────
+  resetErrAccountNotFound: 'ელ.ფოსტა და ტელეფონის ნომერი არცერთ ანგარიშს არ ემთხვევა. გთხოვთ შეამოწმოთ და სცადოთ ხელახლა.',
+  resetErrResendTooSoon:   (s: number) => `გთხოვთ დაელოდოთ ${s} წამი ახალი კოდის მოთხოვნამდე.`,
+  resetErrTooManyRequests: 'კოდის ძალიან ბევრი მოთხოვნა. სცადეთ ერთი საათის შემდეგ.',
+  resetErrSmsFailed:       'SMS ამჟამად ვერ გაიგზავნა. გთხოვთ სცადოთ რამდენიმე წუთში.',
+  resetErrSmsInvalidPhone: 'ამ ნომერზე SMS-ის გაგზავნა ვერ მოხერხდა. გთხოვთ დაუკავშირდეთ მხარდაჭერას.',
+  resetErrCodeWrong:       (n: number) => `კოდი არასწორია. დარჩენილია ${n} მცდელობა.`,
+  resetErrCodeExpired:     'კოდის მოქმედების ვადა ამოიწურა. მოითხოვეთ ახალი.',
+  resetErrTooManyAttempts: 'ძალიან ბევრი არასწორი მცდელობა. მოითხოვეთ ახალი კოდი.',
+  resetErrTicketInvalid:   'დადასტურების ვადა ამოიწურა. გთხოვთ დაიწყოთ თავიდან.',
 
   // ── Register page ─────────────────────────────────────────────────────────
   registerTitle:       'შექმენით ანგარიში',
@@ -2927,6 +2972,7 @@ const ka: typeof en = {
   crwThPackages:        'ამანათები',
   crwThPickedUp:        'გატანის დრო',
   crwNavAssignedOn:     'მინიჭების თარიღი',
+  crwTodayOnlyHint:     'მონიშნულია: მხოლოდ დღეს მინიჭებული (წინა დღეების გახსნილი შეკვეთების გარეშე)',
   crwNavPickedUpOn:     'გატანის თარიღი',
   crwNavCurrentlyHeld:  'ამჟამად მინიჭებული',
   crwNavDeliveredOn:    'მიწოდების თარიღი',

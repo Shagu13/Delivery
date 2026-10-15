@@ -460,10 +460,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
         modelBuilder.Entity<PasswordResetToken>(e =>
         {
             e.HasKey(t => t.Id);
-            e.HasIndex(t => t.Code).IsUnique();
             e.HasIndex(t => t.UserId);
             e.HasIndex(t => t.ExpiresAt);
-            e.Property(t => t.Code).HasMaxLength(20).IsRequired();
+            e.HasIndex(t => t.TicketHash);
+            e.Property(t => t.CodeHash).HasMaxLength(64);
+            e.Property(t => t.TicketHash).HasMaxLength(64);
             e.Property(t => t.UserId).HasMaxLength(450).IsRequired();
             e.Property(t => t.IdentityToken).HasMaxLength(2000).IsRequired();
         });

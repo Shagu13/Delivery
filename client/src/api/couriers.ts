@@ -119,8 +119,9 @@ export interface CourierDayDelivery extends CourierOrder {
 export async function fetchAssignedForDay(
     dayKey: string,
     token: string,
+    includePrevious = true,
 ): Promise<CourierDayDelivery[]> {
-    const qs = new URLSearchParams({ date: dayKey });
+    const qs = new URLSearchParams({ date: dayKey, includePrevious: String(includePrevious) });
     const res = await fetch(`/api/couriers/assigned?${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
     });
@@ -137,8 +138,9 @@ export async function exportAssignedForCourierExcel(
     courierId: string,
     token: string,
     lang: 'ka' | 'en' = 'ka',
+    includePrevious = true,
 ): Promise<void> {
-    const qs = new URLSearchParams({ date: dayKey, courierId, lang });
+    const qs = new URLSearchParams({ date: dayKey, courierId, lang, includePrevious: String(includePrevious) });
     const res = await fetch(`/api/couriers/assigned/export?${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
     });

@@ -28,7 +28,8 @@ Infrastructure/
 ├── Services/
 │   ├── JwtSettings.cs          # bound from the "Jwt" config section
 │   ├── JwtTokenGenerator.cs    # IJwtTokenGenerator
-│   └── CacheService.cs         # ICacheService over IDistributedCache
+│   ├── CacheService.cs         # ICacheService over IDistributedCache
+│   └── OneTimeCodeHasher.cs    # IOneTimeCodeHasher — HMAC-SHA256 for SMS reset codes/tickets, key derived from Jwt secret
 ├── Sms/
 │   ├── SmsService.cs                       # ISmsService — raw UBill gateway
 │   ├── AdminNotificationSmsService.cs      # "new group order pending" → all admins with a phone
@@ -87,7 +88,7 @@ country code (`995599123456`). It returns `SmsResult` — a small local success/
 deliberately *not* the app-wide result type, so the SMS layer stays self-contained.
 
 Triggers currently wired: new GroupOrder → admins; courier assigned → recipient;
-password reset → the user.
+password reset → the user (6-digit code, valid 5 min; `PasswordResetSmsService` returns the `SmsResult` so the handler can tell the user when the SMS failed — the one SMS service that does not swallow the outcome).
 
 ---
 

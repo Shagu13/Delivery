@@ -2905,6 +2905,9 @@ function AdminCouriers({
   const today = useMemo(() => georgianToday(), []);
   const dayKey = toDateKey(day);
   const isToday = dayKey === toDateKey(today);
+  // false (default) = today's view also lists open deliveries carried over from earlier days;
+  // true = strictly orders assigned today. Resets on reload by design.
+  const [todayOnly, setTodayOnly] = useState(false);
   const shiftDay = (delta: number) =>
     setDay(d => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; });
 
@@ -2915,18 +2918,18 @@ function AdminCouriers({
     setError(null);
     const request = mode === 'pickup'
       ? fetchAssignedPickupsForDay(dayKey, token).then(d => { if (!cancelled) setPickups(d); })
-      : fetchAssignedForDay(dayKey, token).then(d => { if (!cancelled) setDeliveries(d); });
+      : fetchAssignedForDay(dayKey, token, !todayOnly).then(d => { if (!cancelled) setDeliveries(d); });
     request
       .catch(() => { if (!cancelled) setError(mode === 'pickup' ? 'Failed to load assigned pickups' : 'Failed to load assigned orders'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [dayKey, token, mode]);
+  }, [dayKey, token, mode, todayOnly]);
 
   // Silently re-fetch the day's deliveries after a per-row action (mark delivered/postpone/
   // cancel) mutates an order — no loading spinner, mirrors the Packages page's `loadSilent`.
   const reloadDeliveries = useCallback(() => {
-    fetchAssignedForDay(dayKey, token).then(setDeliveries).catch(() => {});
-  }, [dayKey, token]);
+    fetchAssignedForDay(dayKey, token, !todayOnly).then(setDeliveries).catch(() => {});
+  }, [dayKey, token, todayOnly]);
   // Same, for the pickup leg — needed after a (bulk) pickup-courier reassignment.
   const reloadPickups = useCallback(() => {
     fetchAssignedPickupsForDay(dayKey, token).then(setPickups).catch(() => {});
@@ -2938,7 +2941,7 @@ function AdminCouriers({
   const handleExportCourier = useCallback(async (courierId: string) => {
     setExportingCourierId(courierId);
     try {
-      await exportAssignedForCourierExcel(dayKey, courierId, token, lang);
+      await exportAssignedForCourierExcel(dayKey, courierId, token, lang, !todayOnly);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : t.aopBulkFailed);
     } finally {
@@ -3094,12 +3097,25 @@ function AdminCouriers({
               {day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
             {isToday && (
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 100, padding: '1px 8px' }}>Today</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 100, padding: '1px 8px' }}>{t.pickupToday}</span>
             )}
           </div>
           <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.85rem', lineHeight: 1, opacity: isToday ? 0.4 : 1 }} onClick={() => !isToday && shiftDay(1)} disabled={isToday} title="Next day">›</button>
-          {!isToday && (
-            <button className="go-action-btn go-action-btn--ghost" style={{ padding: '5px 11px', fontSize: '0.75rem' }} onClick={() => setDay(today)}>Today</button>
+          {(mode === 'delivery' || !isToday) && (
+            <button
+              className="go-action-btn go-action-btn--ghost"
+              style={{
+                padding: '5px 11px', fontSize: '0.75rem',
+                ...(mode === 'delivery' && isToday && todayOnly
+                  ? { background: '#10b981', borderColor: '#10b981', color: '#fff' }
+                  : {}),
+              }}
+              aria-pressed={mode === 'delivery' && isToday ? todayOnly : undefined}
+              title={mode === 'delivery' ? t.crwTodayOnlyHint : undefined}
+              onClick={() => (isToday ? setTodayOnly(v => !v) : setDay(today))}
+            >
+              {t.pickupToday}
+            </button>
           )}
           <button className="go-action-btn" style={{ padding: '5px 13px', fontSize: '0.75rem' }} onClick={() => setView('all')}>
             All Couriers ›

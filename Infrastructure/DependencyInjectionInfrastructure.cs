@@ -82,6 +82,7 @@ public static class DependencyInjectionInfrastructure
         }
 
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddSingleton<IOneTimeCodeHasher, OneTimeCodeHasher>();
         services.AddScoped<ICacheService, CacheService>();
 
         // ── SMS ──────────────────────────────────────────────────────────────

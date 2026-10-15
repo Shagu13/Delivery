@@ -196,14 +196,17 @@ public sealed class CouriersController : BaseController
     [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAssignedForDay(
-        [FromQuery] DateTime date, CancellationToken ct)
+        [FromQuery] DateTime date,
+        [FromQuery] bool includePrevious = true,
+        CancellationToken ct = default)
     {
         DateTime day    = date.Date;
         DateTime dayEnd = day.AddDays(1);
 
         bool hideRevenue = User.IsInRole("Operator");
-        // Today's view also carries over still-open deliveries assigned on earlier days.
-        bool carryOver = day == CustomTime.Today;
+        // Today's view also carries over still-open deliveries assigned on earlier days,
+        // unless the admin switched that off (includePrevious=false → strictly today's).
+        bool carryOver = includePrevious && day == CustomTime.Today;
         var orders = await _context.Orders
             .AsNoTracking()
             .Where(o => o.CourierId != null
@@ -257,11 +260,12 @@ public sealed class CouriersController : BaseController
         [FromQuery] DateTime date,
         [FromQuery] Guid     courierId,
         [FromQuery] string   lang = "ka",
+        [FromQuery] bool     includePrevious = true,
         CancellationToken ct = default)
     {
         DateTime day    = date.Date;
         DateTime dayEnd = day.AddDays(1);
-        bool carryOver  = day == CustomTime.Today;
+        bool carryOver  = includePrevious && day == CustomTime.Today;
 
         var courierName = await _context.Couriers
             .AsNoTracking()

@@ -192,6 +192,22 @@
   outline: none;
 }
 
+/* A standalone input (email, SMS code) has no wrapper to draw its border — the phone field
+   borrows one from .login-form__phone-wrap — so give it the same box here. */
+.login-form__field > .login-form__input {
+  flex: none;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.login-form__field > .login-form__input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(196, 127, 23, 0.12);
+}
+
 .login-form__input::placeholder {
   color: var(--color-text-muted);
   opacity: 0.6;

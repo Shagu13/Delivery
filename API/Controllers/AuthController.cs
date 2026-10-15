@@ -2,6 +2,7 @@ using API.Models.Auth;
 using Application.Auth.Commands.Login;
 using Application.Auth.Commands.RequestPasswordReset;
 using Application.Auth.Commands.ResetPassword;
+using Application.Auth.Commands.VerifyPasswordResetCode;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
@@ -42,9 +43,20 @@ public sealed class AuthController : BaseController
     public async Task<IActionResult> ForgotPassword(
         [FromBody] ForgotPasswordRequest request, CancellationToken ct)
     {
-        var baseUrl = $"{Request.Scheme}://{Request.Host}/reset-password";
-        await Sender.Send(new RequestPasswordResetCommand(request.Email, request.PhoneNumber, baseUrl), ct);
-        return Ok();
+        var result = await Sender.Send(new RequestPasswordResetCommand(request.Email, request.PhoneNumber), ct);
+        return Ok(new ForgotPasswordResponse(result.ExpiresInSeconds, result.ResendInSeconds));
+    }
+
+    // ── Verify reset code ─────────────────────────────────────────────────────
+
+    [HttpPost("verify-reset-code")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> VerifyResetCode(
+        [FromBody] VerifyResetCodeRequest request, CancellationToken ct)
+    {
+        string ticket = await Sender.Send(new VerifyPasswordResetCodeCommand(request.Email, request.Code), ct);
+        return Ok(new VerifyResetCodeResponse(ticket));
     }
 
     // ── Reset password ────────────────────────────────────────────────────────
@@ -56,7 +68,7 @@ public sealed class AuthController : BaseController
         [FromBody] ResetPasswordRequest request, CancellationToken ct)
     {
         await Sender.Send(new ResetPasswordCommand(
-            Code:               request.Code,
+            Ticket:             request.Ticket,
             NewPassword:        request.NewPassword,
             ConfirmNewPassword: request.ConfirmNewPassword), ct);
 

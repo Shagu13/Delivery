@@ -32,7 +32,7 @@ npm run lint
 ```
 
 > **Do not run build / type-check / lint to verify a change** — the user builds themselves.
-> A frontend commit includes the rebuilt `API/wwwroot` assets.
+> The deploy workflow runs `npm ci && npm run build` itself, so a frontend commit does not need rebuilt `API/wwwroot` assets.
 
 ---
 

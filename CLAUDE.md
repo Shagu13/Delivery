@@ -142,7 +142,7 @@ In development Vite proxies `/api/*` and `/hubs/*` (WebSocket upgrade included) 
 + `MapFallbackToFile("index.html")`.
 
 > **Do not run frontend build / type-check / lint to "verify" a change** — the user builds
-> themselves. Committing rebuilt `API/wwwroot` assets is part of a frontend commit.
+> themselves. The deploy workflow builds the frontend itself, so do **not** commit rebuilt `API/wwwroot` assets.
 
 ---
 
@@ -157,7 +157,7 @@ Delivery.Tests.slnx        # the one to use for `dotnet test`
 ├── Persistence/           # AppDbContext (+ Identity), 69 migrations, 3 SaveChanges interceptors
 ├── Infrastructure/        # JWT, SMS (UBill), Web Push (VAPID), Redis/memory cache
 ├── API/                   # Controllers, ApiKey auth handler, SignalR hub, webhook BackgroundService
-│   └── wwwroot/           # the built frontend (committed)
+│   └── wwwroot/           # built frontend output (produced by CI on deploy; don't commit rebuilds)
 ├── client/                # React 19 + TS + Vite SPA (PWA)
 ├── tests/
 │   ├── Application.UnitTests/     # xUnit + EF in-memory

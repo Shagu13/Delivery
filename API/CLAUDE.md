@@ -41,7 +41,7 @@ API/
 ├── Excel/FinanceExcelBuilder.cs   # shared ClosedXML builder for the finance-export endpoints —
 │                                   #   reuse this (or CustomerSettlementsController's older
 │                                   #   BuildInvoiceExcel) rather than hand-rolling a new one
-└── wwwroot/                       # built frontend — committed, produced by `npm run build`
+└── wwwroot/                       # built frontend — produced by `npm run build` (CI builds it on deploy; don't commit rebuilds)
 ```
 
 ---

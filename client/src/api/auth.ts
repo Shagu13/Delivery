@@ -4,6 +4,8 @@ export class AuthError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Stable server error code (e.g. 'CodeWrong') from a 422 response, when there is one. */
+    public readonly code?: string,
   ) {
     super(message);
     this.name = 'AuthError';
@@ -28,36 +30,55 @@ export async function login(data: LoginRequest): Promise<AuthUser> {
   return response.json() as Promise<AuthUser>;
 }
 
+/** Builds an AuthError from a failed response, keeping the server's error code for translation. */
+async function toAuthError(response: Response, fallback: string): Promise<AuthError> {
+  const body = await response.json().catch(() => null);
+  const errors = body?.errors as Record<string, string[]> | undefined;
+  const code = errors ? Object.keys(errors)[0] : undefined;
+  const message = errors ? Object.values(errors).flat()[0] : body?.title ?? fallback;
+  return new AuthError(response.status, message, code);
+}
+
+export interface ForgotPasswordResult {
+  expiresInSeconds: number;
+  resendInSeconds:  number;
+}
+
 /**
- * Sends a password-reset SMS for the account matching the given email + phone.
- * Always resolves — never rejects for unknown accounts.
+ * Step 1 — texts a 6-digit code to the phone on the account matching email + phone.
+ * Rejects with a user-friendly AuthError when nothing matches or the SMS could not be sent.
  */
-export async function forgotPassword(email: string, phoneNumber: string): Promise<void> {
+export async function forgotPassword(email: string, phoneNumber: string): Promise<ForgotPasswordResult> {
   const response = await fetch('/api/auth/forgot-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, phoneNumber }),
   });
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new AuthError(
-      response.status,
-      body?.title ?? 'Something went wrong. Please try again.',
-    );
-  }
+  if (!response.ok) throw await toAuthError(response, 'Something went wrong. Please try again.');
+  return response.json() as Promise<ForgotPasswordResult>;
+}
+
+/** Step 2 — checks the SMS code; returns the single-use ticket that authorises step 3. */
+export async function verifyResetCode(email: string, code: string): Promise<string> {
+  const response = await fetch('/api/auth/verify-reset-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code }),
+  });
+
+  if (!response.ok) throw await toAuthError(response, 'Failed to verify the code.');
+  const body = await response.json() as { ticket: string };
+  return body.ticket;
 }
 
 export interface ResetPasswordPayload {
-  code:               string;   // Short code from SMS link (?code=A3K9PQ2X1B)
+  ticket:             string;   // from verifyResetCode
   newPassword:        string;
   confirmNewPassword: string;
 }
 
-/**
- * Submits the short reset code and new password.
- * The server resolves the full Identity token internally.
- */
+/** Step 3 — sets the new password using the ticket from step 2. */
 export async function resetPassword(data: ResetPasswordPayload): Promise<void> {
   const response = await fetch('/api/auth/reset-password', {
     method: 'POST',
@@ -65,12 +86,5 @@ export async function resetPassword(data: ResetPasswordPayload): Promise<void> {
     body: JSON.stringify(data),
   });
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    const message =
-      body?.errors
-        ? Object.values(body.errors as Record<string, string[]>).flat()[0]
-        : body?.title ?? 'Failed to reset password. The link may have expired.';
-    throw new AuthError(response.status, message);
-  }
+  if (!response.ok) throw await toAuthError(response, 'Failed to reset password. Please start again.');
 }

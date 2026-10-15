@@ -1,4 +1,4 @@
-using Application.Common.Exceptions;
+using Application.Auth.Shared;
 using Application.Common.Interfaces;
 using Application.Common.Validation;
 using Domain;
@@ -7,18 +7,18 @@ using FluentValidation.Results;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using ValidationException = FluentValidation.ValidationException;
+using ValidationException = Application.Common.Exceptions.ValidationException;
 
 namespace Application.Auth.Commands.ResetPassword;
 
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Accepts the short code from the SMS link, looks up the stored Identity token,
-/// and resets the user's password. The short code is marked as used on success.
+/// Final step of the SMS-code reset: the ticket issued by <c>VerifyPasswordResetCodeCommand</c>
+/// proves the code was entered correctly. The ticket is consumed on success.
 /// </summary>
 public sealed record ResetPasswordCommand(
-    string Code,              // Short 10-char code from the SMS link (?code=A3K9PQ2X1B)
+    string Ticket,
     string NewPassword,
     string ConfirmNewPassword
 ) : IRequest;
@@ -30,7 +30,7 @@ public sealed class ResetPasswordCommandValidator
 {
     public ResetPasswordCommandValidator()
     {
-        RuleFor(x => x.Code).NotEmpty();
+        RuleFor(x => x.Ticket).NotEmpty();
 
         RuleFor(x => x.NewPassword).ApplyPasswordRules();
 
@@ -47,46 +47,44 @@ public sealed class ResetPasswordCommandHandler
 {
     private readonly IAppDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IOneTimeCodeHasher _hasher;
 
     public ResetPasswordCommandHandler(
         IAppDbContext context,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IOneTimeCodeHasher hasher)
     {
         _context     = context;
         _userManager = userManager;
+        _hasher      = hasher;
     }
 
     public async Task Handle(
         ResetPasswordCommand request,
         CancellationToken cancellationToken)
     {
-        // Look up the short code record
-        var record = await _context.PasswordResetTokens
-            .FirstOrDefaultAsync(t => t.Code == request.Code, cancellationToken);
+        string ticketHash = _hasher.Hash(PasswordResetCodePolicy.TicketContext, request.Ticket);
 
-        if (record is null || record.IsUsed || record.ExpiresAt <= CustomTime.Now)
-            throw new ValidationException(new[]
-            {
-                new ValidationFailure("Code",
-                    "This reset link is invalid or has expired. Please request a new one.")
-            });
+        PasswordResetToken? record = await _context.PasswordResetTokens
+            .FirstOrDefaultAsync(t => t.TicketHash == ticketHash && !t.IsUsed, cancellationToken);
 
-        var user = await _userManager.FindByIdAsync(record.UserId)
-            ?? throw new NotFoundException(nameof(ApplicationUser), record.UserId);
+        if (record is null || record.TicketExpiresAt is null || record.TicketExpiresAt <= CustomTime.Now)
+            throw PasswordResetErrors.Fail(PasswordResetErrors.TicketInvalid,
+                "Your verification has expired. Please start again.");
 
-        // Use the full Identity token stored server-side to reset the password
-        var result = await _userManager.ResetPasswordAsync(
+        ApplicationUser user = await _userManager.FindByIdAsync(record.UserId)
+            ?? throw PasswordResetErrors.Fail(PasswordResetErrors.TicketInvalid,
+                "Your verification has expired. Please start again.");
+
+        // The full Identity token stays server-side.
+        IdentityResult result = await _userManager.ResetPasswordAsync(
             user, record.IdentityToken, request.NewPassword);
 
         if (!result.Succeeded)
-        {
-            var failures = result.Errors
-                .Select(e => new ValidationFailure(e.Code, e.Description));
-            throw new ValidationException(failures);
-        }
+            throw new ValidationException(
+                result.Errors.Select(e => new ValidationFailure(e.Code, e.Description)));
 
-        // Mark as used so the short code cannot be replayed
-        record.IsUsed = true;
+        record.IsUsed = true;   // the ticket cannot be replayed
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

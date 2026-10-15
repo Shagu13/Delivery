@@ -20,45 +20,36 @@ public sealed class PasswordResetSmsService : IPasswordResetSmsService
         _logger     = logger;
     }
 
-    public async Task SendPasswordResetLinkAsync(
+    public async Task<SmsResult> SendPasswordResetCodeAsync(
         string phoneNumber,
-        string resetLink,
+        string code,
+        int validForMinutes,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber))
         {
-            _logger.LogWarning(
-                "Password reset SMS skipped: phone number is empty.");
-            return;
+            _logger.LogWarning("Password reset SMS skipped: phone number is empty.");
+            return SmsResult.Failure("Phone number is required.", 400);
         }
 
-        var message = FormatMessage(resetLink);
-
-        var result = await _smsService.SendSmsAsync(
+        SmsResult result = await _smsService.SendSmsAsync(
             phoneNumber,
-            message,
+            FormatMessage(code, validForMinutes),
             cancellationToken);
 
         if (result.IsSuccess)
-        {
             _logger.LogInformation(
-                "Password reset SMS sent to {Phone}. SmsId={SmsId}",
-                phoneNumber, result.Value);
-        }
+                "Password reset SMS sent to {Phone}. SmsId={SmsId}", phoneNumber, result.Value);
         else
-        {
-            // Log and continue — a failed SMS must never surface a 500 to the caller.
-            // The endpoint always returns 200 to avoid leaking account existence.
+            // The caller turns this into a friendly message; the raw gateway error stays in the log.
             _logger.LogError(
-                "Failed to send password reset SMS to {Phone}: {Error}",
-                phoneNumber, result.Error);
-        }
+                "Failed to send password reset SMS to {Phone}: {Error}", phoneNumber, result.Error);
+
+        return result;
     }
 
     // ── Message formatter ────────────────────────────────────────────────────
 
-    private static string FormatMessage(string resetLink) =>
-        $"DILO: პაროლის აღსადგენად გადადით ბმულზე:\n" +
-        $"{resetLink}\n" +
-        $"თუ ეს მოთხოვნა არ გამოგიგზავნიათ, უგულებელყავით ეს შეტყობინება.";
+    private static string FormatMessage(string code, int validForMinutes) =>
+        $"ერთჯერადი კოდი: {code}";
 }

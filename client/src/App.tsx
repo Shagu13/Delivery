@@ -18,7 +18,6 @@ const LoginPage            = lazy(() => import('./pages/Login/LoginPage').then(m
 const RegisterPage         = lazy(() => import('./pages/Register/RegisterPage').then(m => ({ default: m.RegisterPage })));
 const ContactPage          = lazy(() => import('./pages/Contact/ContactPage').then(m => ({ default: m.ContactPage })));
 const ForgotPasswordPage   = lazy(() => import('./pages/ForgotPassword/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
-const ResetPasswordPage    = lazy(() => import('./pages/ResetPassword/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 const CreateGroupOrderPage = lazy(() => import('./pages/CreateGroupOrder/CreateGroupOrderPage').then(m => ({ default: m.CreateGroupOrderPage })));
 const CartPage             = lazy(() => import('./pages/Cart/CartPage').then(m => ({ default: m.CartPage })));
 const AdminDashboard       = lazy(() => import('./pages/Admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
@@ -75,7 +74,7 @@ export default function App() {
                                 <Route path="/register" element={<RegisterPage />} />
                                 <Route path="/contact" element={<ContactPage />} />
                                 <Route path="/forgot-password"   element={<ForgotPasswordPage />} />
-                                <Route path="/reset-password"    element={<ResetPasswordPage />} />
+                                <Route path="/reset-password"    element={<Navigate to="/forgot-password" replace />} />
 
                                 {/* Send packages — Customer only */}
                                 <Route
