@@ -2947,7 +2947,7 @@ function AdminCouriers({
     } finally {
       setExportingCourierId(null);
     }
-  }, [dayKey, token, lang, t]);
+  }, [dayKey, token, lang, t, todayOnly]);
 
   // Cross-courier multi-select for bulk reassignment — a set of order ids (delivery mode)
   // or group-order ids (pickup mode). Cleared whenever the underlying id-space changes.
