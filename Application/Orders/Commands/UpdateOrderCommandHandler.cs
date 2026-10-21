@@ -66,25 +66,6 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
             ? request.CompanyServicePrice - request.CourierSalary.Value
             : null;
 
-        // For an already-delivered order, the physical cash the courier collected is
-        // derived from the (now edited) service price / package COD. Re-derive it so the
-        // courier settlement's cash totals stay correct. Covers Send/Exchange deliveries
-        // (DeliveredToRecipient, ExchangeCompleted) and return drop-offs
-        // (DeliveredReturnOrderToWarehouse, ReturnedToSender). Mirrors the cash formula in
-        // the delivery handlers:
-        //   Recipient pays fee → package COD (if any) + service fee.
-        //   Sender pays fee    → package COD only (returns carry none → no cash).
-        var isDelivered = order.Status is OrderStatus.DeliveredToRecipient
-                                       or OrderStatus.ExchangeCompleted
-                                       or OrderStatus.DeliveredReturnOrderToWarehouse
-                                       or OrderStatus.ReturnedToSender;
-        if (isDelivered)
-        {
-            order.AmountOfCashCollected = order.WhoPaysForCompanyService == ServicePayer.Recipient
-                ? (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice
-                : order.AmountToCollectForPackage;
-        }
-
         // ── Order type & return pickup ────────────────────────────────────────
         order.OrderType = request.OrderType;
 
@@ -125,6 +106,26 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
                     order.DeliveredAt ??= CustomTime.Now;
                 }
             }
+        }
+
+        // For an already-delivered order (including one the admin just overrode to a delivered
+        // status above), the physical cash the courier collected is derived from the (now
+        // edited) service price / package COD. Re-derive it so the courier settlement's cash
+        // totals stay correct. Covers Send/Exchange deliveries (DeliveredToRecipient,
+        // ExchangeCompleted) and return drop-offs (DeliveredReturnOrderToWarehouse,
+        // ReturnedToSender). Mirrors the cash formula in the delivery handlers:
+        //   Recipient pays fee → package COD (if any) + service fee.
+        //   Sender pays fee    → package COD only (returns carry none → no cash).
+        // A billable failed delivery collected nothing, so it keeps whatever it has.
+        var isDelivered = order.Status is OrderStatus.DeliveredToRecipient
+                                       or OrderStatus.ExchangeCompleted
+                                       or OrderStatus.DeliveredReturnOrderToWarehouse
+                                       or OrderStatus.ReturnedToSender;
+        if (isDelivered && !Application.Finance.OrderFinance.IsBillableFailedDelivery(order))
+        {
+            order.AmountOfCashCollected = order.WhoPaysForCompanyService == ServicePayer.Recipient
+                ? (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice
+                : order.AmountToCollectForPackage;
         }
 
         await _context.SaveChangesAsync(cancellationToken);
