@@ -103,7 +103,7 @@ internal static class CourierSettlementProjection
                 TotalOrdersDelivered:          orders.Count,
                 NumberOfOrdersCancelled:       cancelledByDay.TryGetValue(day, out var c) ? c : 0,
                 NumberOfOrderPostponed:        postponedByDay.TryGetValue(day, out var pp) ? pp : 0,
-                TotalAmountOfCashCollected:    orders.Sum(x => x.AmountOfCashCollected ?? 0m),
+                TotalAmountOfCashCollected:    orders.Sum(OrderFinance.ExpectedCourierCash),
                 TotalCompanyServiceRevenue:    orders.Sum(x => x.CompanyServicePrice),
                 TotalCourierSalary:            orders.Sum(x => x.CourierSalary ?? 0m),
                 TotalCourierSalaryPaid:        orders.Sum(x => x.CourierSalaryPaidAmount ?? 0m),
