@@ -2960,6 +2960,14 @@ function AdminCouriers({
       return next;
     });
   }, []);
+  // Tick or untick a whole set of ids at once (a courier's "select all" header checkbox).
+  const setManySelected = useCallback((ids: string[], checked: boolean) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      for (const id of ids) { if (checked) next.add(id); else next.delete(id); }
+      return next;
+    });
+  }, []);
 
   const [bulkCourierId, setBulkCourierId] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -3208,6 +3216,7 @@ function AdminCouriers({
                 pickups={r.items as CourierDayPickup[]}
                 selected={selected}
                 onToggleSelected={toggleSelected}
+                onSetManySelected={setManySelected}
               />
             ))}
           </div>
@@ -3225,6 +3234,7 @@ function AdminCouriers({
                 onError={setActionError}
                 selected={selected}
                 onToggleSelected={toggleSelected}
+                onSetManySelected={setManySelected}
                 onExport={() => handleExportCourier(r.courier.courierId)}
                 exporting={exportingCourierId === r.courier.courierId}
               />
@@ -3416,12 +3426,39 @@ function isPickupRowReassignable(p: CourierDayPickup): boolean {
   return PICKUP_ROW_REASSIGNABLE_STATUSES.includes(p.status);
 }
 
-function CourierPickupRow({ courier, pickups, selected, onToggleSelected }: {
+// The header "select all" checkbox shared by both courier tables: ticks every selectable row
+// of one courier, shows a dash when only some are ticked.
+function SelectAllCheckbox({ ids, selected, onSetManySelected }: {
+  ids: string[]; selected: Set<string>; onSetManySelected: (ids: string[], checked: boolean) => void;
+}) {
+  const { t } = useLanguage();
+  if (ids.length === 0) return null;
+  const tickedCount = ids.filter(id => selected.has(id)).length;
+  const allTicked = tickedCount === ids.length;
+  return (
+    <input
+      type="checkbox"
+      title={t.aopSelectAll}
+      aria-label={t.aopSelectAll}
+      checked={allTicked}
+      ref={el => { if (el) el.indeterminate = tickedCount > 0 && !allTicked; }}
+      onChange={() => onSetManySelected(ids, !allTicked)}
+    />
+  );
+}
+
+function CourierPickupRow({ courier, pickups, selected, onToggleSelected, onSetManySelected }: {
   courier: Courier; pickups: CourierDayPickup[];
   selected: Set<string>; onToggleSelected: (id: string) => void;
+  onSetManySelected: (ids: string[], checked: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useLanguage();
+
+  const selectableIds = useMemo(
+    () => pickups.filter(isPickupRowReassignable).map(p => p.id),
+    [pickups],
+  );
 
   const totalPackages = useMemo(
     () => pickups.reduce((sum, p) => sum + p.numberOfPackages, 0),
@@ -3473,7 +3510,9 @@ function CourierPickupRow({ courier, pickups, selected, onToggleSelected }: {
             <table className="go-orders-table" style={{ minWidth: 640 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 32 }} />
+                  <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+                    <SelectAllCheckbox ids={selectableIds} selected={selected} onSetManySelected={onSetManySelected} />
+                  </th>
                   <th>{t.crwThSender}</th>
                   <th>{t.crwThPickupLocation}</th>
                   <th>{t.crwThAddress}</th>
@@ -3532,14 +3571,20 @@ function isCourierRowDeliverable(o: CourierOrder): boolean {
   return o.orderType !== 'Return' && COURIER_ROW_LAST_MILE_STATUSES.includes(o.status);
 }
 
-function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, onChanged, onError, selected, onToggleSelected, onExport, exporting }: {
+function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, onChanged, onError, selected, onToggleSelected, onSetManySelected, onExport, exporting }: {
   courier: Courier; orders: CourierDayDelivery[]; canSeeRevenue?: boolean;
   token: string; couriers: Courier[]; onChanged: () => void; onError: (msg: string) => void;
   selected: Set<string>; onToggleSelected: (id: string) => void;
+  onSetManySelected: (ids: string[], checked: boolean) => void;
   onExport: () => void; exporting: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useLanguage();
+
+  const selectableIds = useMemo(
+    () => orders.filter(isCourierRowDeliverable).map(o => o.id),
+    [orders],
+  );
 
   const salaryTotal = useMemo(
     () => orders.reduce((sum, o) => sum + (o.courierSalary ?? 0), 0),
@@ -3618,7 +3663,9 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
             <table className="go-orders-table" style={{ minWidth: 700 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 32 }} />
+                  <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
+                    <SelectAllCheckbox ids={selectableIds} selected={selected} onSetManySelected={onSetManySelected} />
+                  </th>
                   <th>{t.aopThTracking}</th>
                   <th>{t.crwThSender}</th>
                   <th>{t.crwThCityAddress}</th>
