@@ -17,6 +17,7 @@ import type { Courier } from '../../api/couriers';
 import { useLanguage } from '../../contexts/useLanguage';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { recipientFeePortion } from '../../utils/orderFinanceOutstanding';
 import { georgianDateKeyOf } from '../../utils/georgianTime';
 
 // Print icon shared by the label buttons.
@@ -33,7 +34,7 @@ const printIcon = (
 // as the product-only portion (gross − fee), so the fee must be added back for the total.
 function recipientAmountDue(o: AdminOrder): number {
     const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-    const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
+    const fee = o.whoPaysForCompanyService === 'Recipient' ? recipientFeePortion(o) : 0;
     return cod + fee;
 }
 

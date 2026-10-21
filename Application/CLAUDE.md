@@ -114,6 +114,8 @@ Key entry points:
 | `ExpectedCourierCash(o)` / `OutstandingCourierRemittance(o)` | What the courier collected vs. still owes the company. |
 | `CodOwedToCustomer(o)` / `ServiceOwedBySender(o)` | The two opposite receivables. |
 | `Is*Paid(o)` / `HasCourierTransferedAmount(o)` | Settled checks, with a 0.005 epsilon. |
+| `RecipientFeePortion(o)` / `SenderServiceShare(o)` | The two halves of a fee that carries a `CustomerSurcharge` (fee 7, surcharge 1: recipient pays 6 in cash, the sender owes 1). `SenderServiceShare` is the whole fee for sender-pays orders and billable failures, only the surcharge for recipient-pays, 0 for an ordinary recipient-pays order. **Every "service owed by sender" sum uses it — never `CompanyServicePrice` — and every "cash the recipient hands over" uses `RecipientFeePortion`.** `ServiceInflow`, `ServiceOwedBySender`, `IsCompanyServicePaid`, `ExpectedCourierCash`, `DeliveredCashCollected` already do. |
+| `ServicePaymentStatus(o)` | The stored `CompanyServicePaymentStatus` that matches the live figures (Paid once the sender's share is settled). Delivery handlers use it instead of hard-coding `Paid`, so a surcharge stays Unpaid. |
 | `DeliveredCashCollected(o)` | Cash recorded as collected for an already-delivered order after an admin edits its fee/COD (recipient-pays: COD + fee; sender-pays: COD). Used by the edit, re-price and `SetOrderPrices` handlers. |
 
 Two conventions make the four business cases (product Paid/Unpaid × fee paid by
@@ -127,6 +129,11 @@ Live projections built on top of it, both `internal static`:
   GroupOrder (or per standalone Return).
 - `Settlements/Queries/CourierSettlementProjection` — per-courier day summaries, shared by
   the courier "my settlements" and the admin "by courier" reads so they cannot drift.
+
+**Courier-facing fee.** `CourierOrderDto.CompanyServicePrice` is deliberately *not* the company fee on a
+recipient-pays order: `CourierOrderMapping` sends only `RecipientFeePortion`, because that is all the
+courier collects (the courier app adds it to the COD client-side). The admin/customer order DTOs carry the
+real fee plus `CustomerSurcharge`, and their `recipientAmountDue` helpers use `recipientFeePortion`.
 
 ### Where finance bugs actually come from
 

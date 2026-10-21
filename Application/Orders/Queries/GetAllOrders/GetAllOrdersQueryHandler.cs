@@ -207,6 +207,7 @@ public sealed class GetAllOrdersQueryHandler
                 AmountToCollectForPackage:o.AmountToCollectForPackage,
                 CompanyServicePrice:      o.CompanyServicePrice,
                 IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded,
+                CustomerSurcharge:        o.CustomerSurcharge,
                 CourierSalary:            o.CourierSalary,
                 // Company margin is dilo-internal — never shown to a tenant co-admin or an operator.
                 CompanyRevenue:           request.TenantId.HasValue || request.HideCompanyRevenue ? null : o.CompanyRevenue,

@@ -26,7 +26,7 @@ import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 import { OutstandingBalancesModal } from './OutstandingBalancesModal';
 import { MultiCityDistrictFilter } from '../../components/ui/MultiCityDistrictFilter';
 import type { CityDistrictOption } from '../../components/ui/MultiCityDistrictFilter';
-import { round2, CANCELLED_STATUSES, isCancelledNonBillable, serviceOutstanding, codOutstanding } from '../../utils/orderFinanceOutstanding';
+import { round2, CANCELLED_STATUSES, isCancelledNonBillable, serviceOutstanding, codOutstanding, senderServiceShare, recipientFeePortion } from '../../utils/orderFinanceOutstanding';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
 
@@ -525,7 +525,7 @@ function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
                                                                         </td>
                                                                         <td style={{ ...fsubcell, color: statusColor, fontWeight: 700 }}>{getStatusMeta(o.status, lang).short}</td>
                                                                         <td style={{ ...fsubcell, textAlign: 'right', color: so > 0.005 ? '#ef4444' : 'var(--color-text-subtle)' }}>
-                                                                            {o.senderOwesService ? gel(o.companyServicePrice) : '—'}
+                                                                            {(o.senderOwesService || o.customerSurcharge > 0) ? gel(senderServiceShare(o)) : '—'}
                                                                             {so > 0.005 && <div style={{ fontSize: '0.62rem', fontWeight: 700 }}>{t.finGridOwed}</div>}
                                                                         </td>
                                                                         <td style={{ ...fsubcell, textAlign: 'right', color: co > 0.005 ? '#b45309' : 'var(--color-text-subtle)' }}>
@@ -858,6 +858,11 @@ function PricesEditor({ line, token, onError, onSaved }: {
     const [fee, setFee] = useState(current.toFixed(2));
     const [cod, setCod] = useState(currentCod != null ? currentCod.toFixed(2) : '');
     const [codTouched, setCodTouched] = useState(false);
+    // A surcharge (the part of the fee the customer owes on top of what the recipient pays) only
+    // exists on recipient-pays orders.
+    const isRecipientPays = line.whoPaysForCompanyService === 'Recipient';
+    const currentSurcharge = line.customerSurcharge;
+    const [surcharge, setSurcharge] = useState(currentSurcharge.toFixed(2));
     const [saving, setSaving] = useState(false);
 
     // Re-sync the display whenever the saved values change (after a reload).
@@ -865,40 +870,49 @@ function PricesEditor({ line, token, onError, onSaved }: {
         if (editing) return;
         setFee(current.toFixed(2));
         setCod(currentCod != null ? currentCod.toFixed(2) : '');
+        setSurcharge(currentSurcharge.toFixed(2));
         setCodTouched(false);
-    }, [current, currentCod, editing]);
+    }, [current, currentCod, currentSurcharge, editing]);
 
     const cancel = () => { setEditing(false); };
 
-    // Recipient-pays orders with a COD: keep the recipient's total (COD + fee) constant until
-    // the admin edits the COD by hand. Sender-pays fees aren't part of that total.
-    const keepsTotal = line.whoPaysForCompanyService === 'Recipient' && currentCod != null;
-    const onFeeChange = (v: string) => {
-        setFee(v);
-        const n = Number(v);
-        if (keepsTotal && !codTouched && v.trim() !== '' && !isNaN(n) && n >= 0) {
-            setCod(Math.max(0, round2((currentCod ?? 0) + current - n)).toFixed(2));
-        }
+    // Recipient-pays orders with a COD: keep the recipient's total (COD + fee − surcharge) constant
+    // until the admin edits the COD by hand. Sender-pays fees aren't part of that total.
+    const keepsTotal = isRecipientPays && currentCod != null;
+    const suggestCod = (feeStr: string, surStr: string) => {
+        const f = Number(feeStr);
+        const s = surStr.trim() === '' ? 0 : Number(surStr);
+        if (!keepsTotal || codTouched || feeStr.trim() === '' || isNaN(f) || f < 0 || isNaN(s) || s < 0) return;
+        const recipientTotal = (currentCod ?? 0) + current - currentSurcharge;
+        setCod(Math.max(0, round2(recipientTotal - (f - s))).toFixed(2));
     };
+    const onFeeChange = (v: string) => { setFee(v); suggestCod(v, surcharge); };
+    const onSurchargeChange = (v: string) => { setSurcharge(v); suggestCod(fee, v); };
 
     const feeN = Number(fee);
     const codN = cod.trim() === '' ? null : Number(cod);
+    const surN = isRecipientPays ? (surcharge.trim() === '' ? 0 : Number(surcharge)) : 0;
+    const surchargeTooBig = !isNaN(surN) && !isNaN(feeN) && surN > feeN + 0.0001;
     const valid = fee.trim() !== '' && !isNaN(feeN) && feeN >= 0
-        && (codN === null || (!isNaN(codN) && codN >= 0));
-    const total = valid ? round2((codN ?? 0) + feeN) : 0;
+        && (codN === null || (!isNaN(codN) && codN >= 0))
+        && !isNaN(surN) && surN >= 0 && !surchargeTooBig;
+    // What the recipient hands the courier: COD plus their part of the fee (all of it unless a surcharge applies).
+    const total = valid ? round2((codN ?? 0) + feeN - surN) : 0;
     const cash = line.amountOfCashCollected;
     const warnCash = valid && line.deliveredAt != null && !line.isBillableFailedDelivery
-        && line.whoPaysForCompanyService === 'Recipient' && cash != null && Math.abs(total - cash) > 0.005;
+        && isRecipientPays && cash != null && Math.abs(total - cash) > 0.005;
     const warnPaid = valid && (line.codPaidToCustomerAmount ?? 0) > (codN ?? 0) + 0.005;
+    const warnSurchargePaid = valid && isRecipientPays && (line.servicePaidByCustomerAmount ?? 0) > surN + 0.005;
 
     const save = async () => {
-        if (!valid) { onError(t.ofinSvcInvalid); return; }
+        if (!valid) { onError(surchargeTooBig ? t.ofinPriceSurchargeInvalid : t.ofinSvcInvalid); return; }
         const unchanged = round2(feeN) === round2(current)
-            && (codN === null ? currentCod === null : currentCod !== null && round2(codN) === round2(currentCod));
+            && (codN === null ? currentCod === null : currentCod !== null && round2(codN) === round2(currentCod))
+            && round2(surN) === round2(currentSurcharge);
         if (unchanged) { setEditing(false); return; }
         setSaving(true);
         try {
-            await setOrderPrices(token, line.orderId, round2(feeN), codN === null ? null : round2(codN));
+            await setOrderPrices(token, line.orderId, round2(feeN), codN === null ? null : round2(codN), round2(surN));
             setEditing(false);
             onSaved();
         } catch (e) {
@@ -936,9 +950,19 @@ function PricesEditor({ line, token, onError, onSaved }: {
                 <input type="number" min="0" step="0.01" value={cod} disabled={saving}
                     onChange={e => { setCod(e.target.value); setCodTouched(true); }} onKeyDown={keys} style={input} />
             </label>
+            {isRecipientPays && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={t.ofinPriceSurchargeTitle}>
+                    <span style={lbl}>{t.ofinPriceSurcharge}:</span>
+                    <span style={{ color: 'var(--color-text-subtle)' }}>₾</span>
+                    <input type="number" min="0" step="0.01" value={surcharge} disabled={saving}
+                        onChange={e => onSurchargeChange(e.target.value)} onKeyDown={keys} style={input} />
+                </label>
+            )}
             {valid && <span style={{ color: 'var(--color-text-muted)', fontWeight: 700 }}>{t.ofinPriceTotal(gel(total))}</span>}
+            {surchargeTooBig && <span style={warn}>{t.ofinPriceSurchargeInvalid}</span>}
             {warnCash && cash != null && <span style={warn}>{t.ofinPriceWarnCash(gel(cash), gel(total))}</span>}
             {warnPaid && <span style={warn}>{t.ofinPriceWarnPaid(gel(line.codPaidToCustomerAmount ?? 0))}</span>}
+            {warnSurchargePaid && <span style={warn}>{t.ofinPriceWarnSurchargePaid(gel(line.servicePaidByCustomerAmount ?? 0))}</span>}
             <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => void save()} disabled={saving} style={{ ...btn, background: 'var(--color-accent)', color: '#fff', borderColor: 'var(--color-accent)' }}>{saving ? '…' : t.save}</button>
                 <button onClick={cancel} disabled={saving} style={{ ...btn, background: 'var(--color-bg-3)', color: 'var(--color-text-muted)' }}>✕</button>
@@ -1120,7 +1144,9 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                 // COD-collected breakdown (compact one-liner). Recipient-pays: COD + Fee = total
                                 // (cash the courier collected). Sender-pays: COD only, fee invoiced to the sender.
                                 const codVal = hasNoCod(o) ? 0 : (o.codAmount ?? 0);
-                                const fee = o.companyServicePrice;
+                                // Recipient-pays: only the recipient's portion of the fee is part of the cash collected;
+                                // a customer surcharge is appended below as a sender receivable.
+                                const fee = isSenderPays ? o.companyServicePrice : recipientFeePortion(o);
                                 let breakdown = '—';
                                 // Only delivered orders (or billable failed deliveries, which still owe the fee)
                                 // have a "collected" breakdown; postponed / in-progress / cancelled show "—".
@@ -1130,6 +1156,8 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                     else if (fee > 0 && isSenderPays)     breakdown = `${t.ofinFeeShort} ${gel(fee)} (${t.ofinSenderShort})`;
                                     else if (fee > 0)                     breakdown = `${t.ofinFeeShort} ${gel(fee)}`;
                                     else if (codVal > 0)                  breakdown = `COD ${gel(codVal)}`;
+                                    if (!isSenderPays && o.customerSurcharge > 0)
+                                        breakdown += ` · ${t.ofinFeeShort} +${gel(o.customerSurcharge)} (${t.ofinSenderShort})`;
                                 }
 
                                 return (
@@ -1177,6 +1205,11 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                             <div style={{ fontSize: '0.64rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
                                                 {isSenderPays ? t.ofinSenderPays : t.ofinRecipientPays}
                                             </div>
+                                            {!isSenderPays && o.customerSurcharge > 0 && (
+                                                <div style={{ fontSize: '0.64rem', fontWeight: 700, color: '#b45309', marginTop: 1 }}>
+                                                    {t.ofinSurchargeAdmin(gel(o.customerSurcharge))}
+                                                </div>
+                                            )}
                                         </td>
                                         {/* COD collected breakdown. */}
                                         <td style={{ ...fcell, textAlign: 'right', whiteSpace: 'nowrap', color: breakdown === '—' ? 'var(--color-text-subtle)' : 'var(--color-text)', fontWeight: 600 }}>
@@ -1189,8 +1222,8 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                                     <span style={settleLbl}>{t.ofinFeeShort}</span>
                                                     {isCancelledNonBillable(o)
                                                         ? <span style={{ minWidth: 160, textAlign: 'right', color: 'var(--color-text-subtle)' }}>—</span>
-                                                        : <AllocCell applicable={isSenderPays} outstanding={so} paidAt={o.servicePaidByCustomerAt}
-                                                            total={o.companyServicePrice} paid={o.servicePaidByCustomerAmount ?? 0}
+                                                        : <AllocCell applicable={isSenderPays || o.customerSurcharge > 0} outstanding={so} paidAt={o.servicePaidByCustomerAt}
+                                                            total={senderServiceShare(o)} paid={o.servicePaidByCustomerAmount ?? 0}
                                                             checked={selSvc[o.orderId]?.checked ?? false} amount={amountOf(selSvc, o, svcOut)}
                                                             onToggle={() => toggle(setSelSvc, o.orderId, so)}
                                                             onAmount={v => setAmt(setSelSvc, o.orderId, v)} />}

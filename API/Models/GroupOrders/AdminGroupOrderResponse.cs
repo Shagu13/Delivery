@@ -87,5 +87,8 @@ public sealed record AdminOrderResponse(
     string? CancellationComment = null,
     /// <summary>When an admin marked this cancelled order as physically returned to the sender.
     /// Null otherwise — drives the History "Cancelled &amp; Returned" bucket.</summary>
-    DateTime? CancelledReturnedToSenderAt = null
+    DateTime? CancelledReturnedToSenderAt = null,
+    /// <summary>The part of <see cref="CompanyServicePrice"/> the sender owes on top of what the
+    /// recipient pays; the recipient's amount due is COD + fee − this surcharge.</summary>
+    decimal CustomerSurcharge = 0m
 );

@@ -145,6 +145,8 @@ export interface CustomerOrder {
   /** Who pays the company service fee — decides whether it's added to the recipient's amount due. */
   whoPaysForCompanyService?: 'Sender' | 'Recipient';
   companyServicePrice?: number;
+  /** The part of the fee the sender owes on top of what the recipient pays (see recipientFeePortion). */
+  customerSurcharge?: number;
   /** True when amountToCollectForPackage is the all-in price (product + service fee bundled). */
   isCompanyServicePriceIncluded?: boolean;
   amountToCollectForPackage?: number | null;

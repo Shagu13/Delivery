@@ -24,6 +24,7 @@ import { getStatusMeta } from '../../utils/statusMeta';
 import { STATUS_COLORS } from '../../utils/statusColors';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
+import { recipientFeePortion } from '../../utils/orderFinanceOutstanding';
 import { PriceCalculatorCard } from '../Home/PriceCalculatorModal';
 import { CustomerFinancePage } from './CustomerFinancePage';
 import { CustomerStatisticsPage } from './CustomerStatisticsPage';
@@ -162,7 +163,7 @@ function orderMatchesSearch(o: CustomerOrder, q: string): boolean {
 // collectible (e.g. prepaid product whose service fee the sender covers).
 function recipientAmountDue(o: CustomerOrder): number {
   const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-  const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
+  const fee = o.whoPaysForCompanyService === 'Recipient' ? recipientFeePortion(o) : 0;
   return cod + fee;
 }
 

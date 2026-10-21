@@ -72,6 +72,7 @@ public sealed class GetTenantGroupOrdersQueryHandler
             CourierSalary:                    o.CourierSalary,
             CompanyServicePrice:              o.CompanyServicePrice,
             IsCompanyServicePriceIncluded:    o.IsCompanyServicePriceIncluded,
+            CustomerSurcharge:                o.CustomerSurcharge,
             // Company margin is dilo-internal — never surfaced to a tenant co-admin.
             CompanyRevenue:                   null,
             CourierId:                        o.CourierId,

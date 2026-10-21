@@ -1294,7 +1294,8 @@ public sealed class GroupOrdersController : BaseController
                 DeliveredAt:                      o.DeliveredAt,
                 CancellationReason:               o.CancellationReason?.ToString(),
                 CancellationComment:              o.CancellationComment,
-                CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt
+                CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt,
+                CustomerSurcharge:                o.CustomerSurcharge
             )).ToList(),
             IsStandalone: go.IsStandalone,
             PickUpLatitude: go.PickUpLatitude,

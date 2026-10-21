@@ -71,6 +71,13 @@ export interface OrderFinanceLine {
     /** Cash the courier may still record as handed over — the cap for a bulk COD hand-over
      *  (OrderFinance.CourierCodTransferOutstanding). */
     courierCodTransferOutstanding: number;
+
+    /** The part of the service fee the sender owes on top of what the recipient pays (0 for an ordinary order). */
+    customerSurcharge: number;
+    /** What the sender still owes for the service fee — server-computed (OrderFinance.ServiceOwedBySender):
+     *  the whole fee less payments on sender-pays orders and billable failures, only the unpaid
+     *  surcharge on a recipient-pays order, 0 otherwise. */
+    serviceOwedBySender: number;
 }
 
 export interface OrderPaymentRequest {

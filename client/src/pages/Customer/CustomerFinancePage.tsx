@@ -101,6 +101,9 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
     // Use the server's computed truth: a failed delivery shifts the fee to the sender even when
     // the order was originally recipient-pays. A non-billable cancellation owes nothing.
     const isSenderPays = line.senderOwesService && !cancelledNonBillable;
+    // A recipient-pays order can still carry a surcharge the customer owes on top (the sender's
+    // share of a fee the recipient mostly pays). It is settled like a small sender-paid fee.
+    const hasSurcharge = !isSenderPays && !cancelledNonBillable && line.customerSurcharge > 0.005;
     const servicePaid = line.companyServicePaymentStatus === 'Paid';
     // COD is only owed back to the customer when there is a package amount to collect.
     // Orders with no COD (codAmount null/0) have nothing to pay back → no paid/unpaid label.
@@ -180,7 +183,15 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                                 ? <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
                                 : <Badge text={t.ofinRecipientPays} tone="muted" />}
                         </div>
-                        {isSenderPays && (line.servicePaidByCustomerAmount ?? 0) > 0.005 && (
+                        {hasSurcharge && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', marginTop: 2 }}>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#b45309' }}>
+                                    {t.ofinSurchargeCustomer(gel(line.customerSurcharge))}
+                                </span>
+                                <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
+                            </div>
+                        )}
+                        {(isSenderPays || hasSurcharge) && (line.servicePaidByCustomerAmount ?? 0) > 0.005 && (
                             <div style={paidDateStyle}>
                                 {t.ofinPaid} {gel(line.servicePaidByCustomerAmount ?? 0)}
                                 {line.servicePaidByCustomerAt ? ` · ${fmtPaidDate(line.servicePaidByCustomerAt)}` : ''}
@@ -330,7 +341,7 @@ export function CustomerFinancePage() {
     const codPaid = filtered.reduce(
         (s, i) => (i.isBillableFailedDelivery || isCancelledNonBillable(i)) ? s : s + (i.codPaidToCustomerAmount ?? 0), 0);
     const servicePaid = filtered.reduce(
-        (s, i) => (i.senderOwesService && !isCancelledNonBillable(i)) ? s + (i.servicePaidByCustomerAmount ?? 0) : s, 0);
+        (s, i) => ((i.senderOwesService || i.customerSurcharge > 0) && !isCancelledNonBillable(i)) ? s + (i.servicePaidByCustomerAmount ?? 0) : s, 0);
     const codPaidNet = codPaid - servicePaid;
 
     // Receipts-mode totals: gross paid out per type, and the net cash handed to the customer

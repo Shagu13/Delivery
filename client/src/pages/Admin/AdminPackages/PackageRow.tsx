@@ -3,6 +3,7 @@
 // props; the only thing this file owns is the row's own markup.
 import { useLanguage } from '../../../contexts/useLanguage';
 import { recipientDisplayName } from '../../../utils/recipientName';
+import { recipientFeePortion } from '../../../utils/orderFinanceOutstanding';
 import { printParcelLabels } from '../../../utils/printLabel';
 import { PhoneActions } from '../../../components/ui/PhoneActions';
 import type { AdminGroupOrder, AdminOrder } from '../../../api/adminGroupOrders';
@@ -106,7 +107,7 @@ export function PackageRow({
           // (only when unpaid) plus the company service fee (only when the recipient
           // pays it). Shown stacked — COD, + fee, = total — when both parts apply.
           const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-          const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
+          const fee = o.whoPaysForCompanyService === 'Recipient' ? recipientFeePortion(o) : 0;
           const total = cod + fee;
           if (total <= 0) return <span style={{ opacity: 0.4 }}>—</span>;
           // Only break the figure apart when both a product COD and a recipient-paid

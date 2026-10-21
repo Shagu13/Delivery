@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } fr
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { setCourierSalary, setCompanyServicePrice, bulkAssignCourierToOrders, adminMarkOrderDelivered, exportOrdersExcel, fetchOrderLocations } from '../../api/orders';
+import { recipientFeePortion } from '../../utils/orderFinanceOutstanding';
 import { fetchCouriers } from '../../api/couriers';
 import type { Courier } from '../../api/couriers';
 import { useAuth } from '../../contexts/useAuth';
@@ -55,6 +56,8 @@ export interface AdminOrderItem {
   productPaymentStatus: string;
   whoPaysForCompanyService: string;
   companyServicePrice: number;
+  /** The part of the fee the sender owes on top of what the recipient pays (see recipientFeePortion). */
+  customerSurcharge?: number;
   isCompanyServicePriceIncluded: boolean;
   courierSalary: number | null;
   companyRevenue: number | null;
@@ -172,7 +175,7 @@ function initials(name: string) {
 // as the product-only portion (gross − fee), so the fee must be added back for the total.
 function recipientAmountDue(o: AdminOrderItem): number {
   const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-  const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
+  const fee = o.whoPaysForCompanyService === 'Recipient' ? recipientFeePortion(o) : 0;
   return cod + fee;
 }
 
@@ -1130,7 +1133,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
             // stacked — COD, + fee, = total — when both apply. Operators (no
             // canManage) must not see the service fee, so they get the total only.
             const cod = order.productPaymentStatus === 'NotPaid' ? (order.amountToCollectForPackage ?? 0) : 0;
-            const fee = order.whoPaysForCompanyService === 'Recipient' ? (order.companyServicePrice ?? 0) : 0;
+            const fee = order.whoPaysForCompanyService === 'Recipient' ? recipientFeePortion(order) : 0;
             const total = cod + fee;
             if (total <= 0) return <span className="aop-price aop-price--empty">—</span>;
             if (!canManage || !(cod > 0 && fee > 0)) return <span className="aop-price">₾{total.toFixed(2)}</span>;

@@ -51,6 +51,8 @@ export interface AdminOrder {
     amountToCollectForPackage: number | null;
     amountOfCashCollected: number | null;
     companyServicePrice: number;
+    /** The part of the fee the sender owes on top of what the recipient pays (see recipientFeePortion). */
+    customerSurcharge?: number;
     isCompanyServicePriceIncluded: boolean;
     courierSalary: number | null;
     companyRevenue: number | null;

@@ -90,7 +90,11 @@ Groups to know:
 - **Pricing** — `CompanyServicePrice` (the fee), `CourierSalary`, `AmountToCollectForPackage`
   (product COD), `WeightPriceTierId`, `IsCompanyServicePriceIncluded` (the entered price was all-in),
   `OriginalPackagePrice` (the pre-delivery COD, frozen at delivery so it survives a courier's door
-  correction of `AmountToCollectForPackage`; reference only — no finance formula reads it).
+  correction of `AmountToCollectForPackage`; reference only — no finance formula reads it),
+  `CustomerSurcharge` (per-order, admin-set: the part of a recipient-paid fee the *sender* owes on top —
+  fee 7, recipient pays 6, customer owes 1; always 0 for sender-pays orders, never above the fee. Read it
+  only through `OrderFinance.RecipientFeePortion` / `SenderServiceShare`. Tenant-tier settlements
+  (`TenantSettlementService`, tenant finance overview) do **not** include it yet).
 - **Per-order settlement** — `CodPaidToCustomerAmount/At`, `ServicePaidByCustomerAmount/At`,
   `CourierSalaryPaidAmount/At`, `CodTransferedToCompanyByCourier/At`, and the two
   `*SpecialCase` booleans. **Never read these raw** — go through `Application.Finance.OrderFinance`,

@@ -69,6 +69,7 @@ internal static class GroupOrderMapping
         CourierSalary:                    o.CourierSalary,
         CompanyServicePrice:              o.CompanyServicePrice,
         IsCompanyServicePriceIncluded:    o.IsCompanyServicePriceIncluded,
+        CustomerSurcharge:                o.CustomerSurcharge,
         CompanyRevenue:                   o.CompanyRevenue,
         CourierId:                        o.CourierId,
         CreatedAt:                        o.CreatedAt,

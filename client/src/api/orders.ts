@@ -265,8 +265,9 @@ export const setCourierSalary       = (token: string, id: string, salary: number
 export const setCompanyServicePrice = (token: string, id: string, price: number) =>
     orderAction(token, id, 'company-service-price', { price });
 /** Admin sets an order's service fee and COD together (Finance price editor). A null COD clears it. */
-export const setOrderPrices = (token: string, id: string, companyServicePrice: number, amountToCollectForPackage: number | null) =>
-    orderAction(token, id, 'prices', { companyServicePrice, amountToCollectForPackage });
+export const setOrderPrices = (
+    token: string, id: string, companyServicePrice: number, amountToCollectForPackage: number | null, customerSurcharge: number,
+) => orderAction(token, id, 'prices', { companyServicePrice, amountToCollectForPackage, customerSurcharge });
 /** Admin postpones an assigned delivery (mirrors the courier action). Comment is only kept
  *  (and required by the UI) for the "Other" reason. */
 export const adminPostponeOrder = (token: string, id: string, reason: PostponeReason, comment?: string) =>

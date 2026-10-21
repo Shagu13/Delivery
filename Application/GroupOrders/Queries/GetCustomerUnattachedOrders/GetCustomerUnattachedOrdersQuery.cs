@@ -77,6 +77,7 @@ public sealed class GetCustomerUnattachedOrdersQueryHandler
             CourierSalary:                 o.CourierSalary,
             CompanyServicePrice:           o.CompanyServicePrice,
             IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded,
+            CustomerSurcharge:             o.CustomerSurcharge,
             CompanyRevenue:                o.CompanyRevenue,
             CourierId:                     o.CourierId,
             CreatedAt:                     o.CreatedAt,

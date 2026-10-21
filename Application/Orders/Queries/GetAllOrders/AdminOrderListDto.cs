@@ -62,5 +62,8 @@ public sealed record AdminOrderListDto(
     /// <see cref="Application.Finance.OrderFinance.ExpectedCourierCash"/>. Used by the admin
     /// Excel export's COD column.
     /// </summary>
-    decimal  ExpectedCourierCash = 0m
+    decimal  ExpectedCourierCash = 0m,
+    /// <summary>The part of the service fee the sender owes on top of what the recipient pays; the
+    /// recipient's amount due is COD + fee − this surcharge.</summary>
+    decimal  CustomerSurcharge = 0m
 );

@@ -103,5 +103,9 @@ public sealed record AdminOrderDto(
     /// <see cref="Application.Finance.OrderFinance.ExpectedCourierCash"/>. Used by the admin
     /// Excel export's COD column; not surfaced through <c>AdminGroupOrderResponse</c>.
     /// </summary>
-    decimal              ExpectedCourierCash = 0m
+    decimal              ExpectedCourierCash = 0m,
+    /// <summary>The part of <see cref="CompanyServicePrice"/> the sender owes on top of what the
+    /// recipient pays (see <see cref="Domain.Order.CustomerSurcharge"/>). The amount due from the
+    /// recipient is COD + fee − this surcharge.</summary>
+    decimal              CustomerSurcharge = 0m
 );

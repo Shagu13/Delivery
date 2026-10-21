@@ -3,6 +3,7 @@
 // can be imported from anywhere in this folder without pulling React state along with it.
 import type { AdminGroupOrder, AdminOrder } from '../../../api/adminGroupOrders';
 import { recipientDisplayName } from '../../../utils/recipientName';
+import { recipientFeePortion } from '../../../utils/orderFinanceOutstanding';
 import type { ParcelLabelData } from '../../../utils/printLabel';
 import type { AdminOrderItem } from '../AdminOrdersPage';
 
@@ -62,9 +63,9 @@ export function isDeliverable(o: AdminOrderItem): boolean {
   return o.orderType !== 'Return' && LAST_MILE_STATUSES.includes(o.status);
 }
 
-export function recipientAmountDue(o: { productPaymentStatus: string; amountToCollectForPackage: number | null; whoPaysForCompanyService: string; companyServicePrice: number }): number {
+export function recipientAmountDue(o: { productPaymentStatus: string; amountToCollectForPackage: number | null; whoPaysForCompanyService: string; companyServicePrice: number; customerSurcharge?: number }): number {
   const cod = o.productPaymentStatus === 'NotPaid' ? (o.amountToCollectForPackage ?? 0) : 0;
-  const fee = o.whoPaysForCompanyService === 'Recipient' ? (o.companyServicePrice ?? 0) : 0;
+  const fee = o.whoPaysForCompanyService === 'Recipient' ? recipientFeePortion(o) : 0;
   return cod + fee;
 }
 
