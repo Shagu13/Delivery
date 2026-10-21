@@ -159,12 +159,13 @@ export function SettlementModal({
     // Showing only the recorded hand-overs read 0 until the admin ticked them, hiding what is due.
     const toTransfer     = lines.reduce(
         (s, o) => s + (o.codTransferedToCompanyByCourier ?? 0) + o.courierCodTransferOutstanding, 0);
-    // Income = service fees earned minus courier salary (OrderFinance.CompanyRevenue per order).
-    // companyNetCash is a running cash position that swings with payout timing (COD paid out to
-    // customers, cash the courier hasn't handed over yet), so it understated income. A postponed
-    // order has earned no fee yet — it only costs its salary.
+    // Income = service fees earned minus courier salary (OrderFinance.CompanyRevenue per order), over
+    // COMPLETED orders only (delivered, or a billable failure) — the same set the day summaries use.
+    // companyNetCash is a running cash position that swings with payout timing, so it understated
+    // income. A postponed order is skipped: it has earned no fee yet, and it is delivered on a later
+    // day whose own revenue already deducts its salary — counting it here would charge that salary twice.
     const netIncome      = lines.reduce(
-        (s, o) => s + (o.status === 'DeliveryPostponed' ? -(o.courierSalary ?? 0) : o.companyRevenue), 0);
+        (s, o) => s + (o.status === 'DeliveryPostponed' ? 0 : o.companyRevenue), 0);
     const salaryUnpaid   = salaryEarned - salaryPaid;
 
     return createPortal(
