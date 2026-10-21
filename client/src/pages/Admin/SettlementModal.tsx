@@ -154,7 +154,11 @@ export function SettlementModal({
     const salaryEarned   = lines.reduce((s, o) => s + (o.courierSalary ?? 0), 0);
     const salaryPaid     = lines.reduce((s, o) => s + (o.courierSalaryPaidAmount ?? 0), 0);
     const cashCollected  = lines.reduce((s, o) => s + (o.amountOfCashCollected ?? 0), 0);
-    const transferred    = lines.reduce((s, o) => s + (o.codTransferedToCompanyByCourier ?? 0), 0);
+    // Cash the courier owes the company for the day: what they have already handed over plus what is
+    // still outstanding (server-computed: collected cash − salary kept out of it − handed over).
+    // Showing only the recorded hand-overs read 0 until the admin ticked them, hiding what is due.
+    const toTransfer     = lines.reduce(
+        (s, o) => s + (o.codTransferedToCompanyByCourier ?? 0) + o.courierCodTransferOutstanding, 0);
     // Income = service fees earned minus courier salary (OrderFinance.CompanyRevenue per order).
     // companyNetCash is a running cash position that swings with payout timing (COD paid out to
     // customers, cash the courier hasn't handed over yet), so it understated income. A postponed
@@ -254,7 +258,7 @@ export function SettlementModal({
                                     </div>
                                     <div className="stl-fin-row">
                                         <span className="stl-fin-label">{t.stlmCourierToCompany}</span>
-                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(transferred)}</span>
+                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(toTransfer)}</span>
                                     </div>
                                     <div className="stl-fin-divider" />
                                     <div className="stl-fin-row">
