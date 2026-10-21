@@ -120,6 +120,18 @@ public sealed class SetOrderCompanyServicePriceCommandValidator : AbstractValida
     }
 }
 
+public sealed class SetOrderPricesCommandValidator : AbstractValidator<SetOrderPricesCommand>
+{
+    public SetOrderPricesCommandValidator()
+    {
+        RuleFor(x => x.OrderId).NotEmpty();
+        RuleFor(x => x.CompanyServicePrice).GreaterThanOrEqualTo(0m).WithMessage("Service price must be zero or more.");
+        RuleFor(x => x.AmountToCollectForPackage!.Value)
+            .GreaterThanOrEqualTo(0m).When(x => x.AmountToCollectForPackage.HasValue)
+            .WithMessage("COD must be zero or more.");
+    }
+}
+
 public sealed class SetDistrictCompanyServicePriceCommandValidator : AbstractValidator<SetDistrictCompanyServicePriceCommand>
 {
     public SetDistrictCompanyServicePriceCommandValidator()

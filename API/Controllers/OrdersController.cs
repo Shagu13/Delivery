@@ -586,6 +586,19 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/{id}/prices  (Admin/Operator) ─────────────────────────
+    [HttpPut("{id:guid}/prices")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetOrderPrices(
+        Guid id,
+        [FromBody] SetOrderPricesRequest request,
+        CancellationToken ct)
+    {
+        await Sender.Send(new SetOrderPricesCommand(id, request.CompanyServicePrice, request.AmountToCollectForPackage), ct);
+        return NoContent();
+    }
+
     // ── GET /api/orders/courier/{courierId}/daily  (Admin) ────────────────────
     [HttpGet("courier/{courierId:guid}/daily")]
     [Authorize(Roles = "Admin")]
@@ -745,6 +758,7 @@ public sealed record SetCourierSalaryRequest(decimal Salary);
 /// <summary>Optional body for admin-mark-delivered: assign a courier when unassigned and/or set salary.</summary>
 public sealed record AdminMarkDeliveredRequest(Guid? CourierId, decimal? Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
+public sealed record SetOrderPricesRequest(decimal CompanyServicePrice, decimal? AmountToCollectForPackage);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason, string? Comment = null);
 /// <summary>Optional correction to the parcel COD amount, applied atomically with delivery.</summary>
 public sealed record MarkDeliveredRequest(decimal? UpdatedCodAmount);

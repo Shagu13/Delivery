@@ -1017,9 +1017,7 @@ public sealed class SetOrderCompanyServicePriceCommandHandler : IRequestHandler<
                                        or OrderStatus.DeliveredReturnOrderToWarehouse
                                        or OrderStatus.ReturnedToSender;
         if (isDelivered)
-            order.AmountOfCashCollected = order.WhoPaysForCompanyService == ServicePayer.Recipient
-                ? (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice
-                : order.AmountToCollectForPackage;
+            order.AmountOfCashCollected = Application.Finance.OrderFinance.DeliveredCashCollected(order);
         else
             // The all-in re-slice above can move the product price; before delivery that is
             // still the original.

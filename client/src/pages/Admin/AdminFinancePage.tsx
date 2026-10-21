@@ -17,7 +17,7 @@ import {
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
-import { setCompanyServicePrice, fetchOrderLocations } from '../../api/orders';
+import { setOrderPrices, fetchOrderLocations } from '../../api/orders';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
 import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll } from './FinanceAllocation';
@@ -843,28 +843,62 @@ function CommentCell({ description, comment }: { description: string | null; com
     );
 }
 
-// Inline editor for an order's company service price. Saving propagates through the
-// backend to the customer + courier settlements and the company overview, so an admin
-// can correct a wrong price (e.g. city vs district rate) even after delivery.
-function ServicePriceEditor({ orderId, current, token, onError, onSaved }: {
-    orderId: string; current: number; token: string; onError: (m: string) => void; onSaved: () => void;
+// Inline editor for an order's company service fee AND its COD, side by side. The admin decides
+// both values; nothing is re-split behind their back. Typing a new fee pre-fills the COD so a
+// recipient-pays total (COD + fee) stays the same, but the COD stays editable. Saving propagates
+// through the backend to the customer + courier settlements and the company overview, so an
+// admin can correct a wrong price (e.g. city vs district rate) even after delivery.
+function PricesEditor({ line, token, onError, onSaved }: {
+    line: OrderFinanceLine; token: string; onError: (m: string) => void; onSaved: () => void;
 }) {
     const { t } = useLanguage();
+    const current = line.companyServicePrice;
+    const currentCod = line.codAmount;
     const [editing, setEditing] = useState(false);
-    const [val, setVal] = useState(current.toFixed(2));
+    const [fee, setFee] = useState(current.toFixed(2));
+    const [cod, setCod] = useState(currentCod != null ? currentCod.toFixed(2) : '');
+    const [codTouched, setCodTouched] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Re-sync the display whenever the saved value changes (after a reload).
-    useEffect(() => { if (!editing) setVal(current.toFixed(2)); }, [current, editing]);
+    // Re-sync the display whenever the saved values change (after a reload).
+    useEffect(() => {
+        if (editing) return;
+        setFee(current.toFixed(2));
+        setCod(currentCod != null ? currentCod.toFixed(2) : '');
+        setCodTouched(false);
+    }, [current, currentCod, editing]);
 
-    const cancel = () => { setEditing(false); setVal(current.toFixed(2)); };
+    const cancel = () => { setEditing(false); };
+
+    // Recipient-pays orders with a COD: keep the recipient's total (COD + fee) constant until
+    // the admin edits the COD by hand. Sender-pays fees aren't part of that total.
+    const keepsTotal = line.whoPaysForCompanyService === 'Recipient' && currentCod != null;
+    const onFeeChange = (v: string) => {
+        setFee(v);
+        const n = Number(v);
+        if (keepsTotal && !codTouched && v.trim() !== '' && !isNaN(n) && n >= 0) {
+            setCod(Math.max(0, round2((currentCod ?? 0) + current - n)).toFixed(2));
+        }
+    };
+
+    const feeN = Number(fee);
+    const codN = cod.trim() === '' ? null : Number(cod);
+    const valid = fee.trim() !== '' && !isNaN(feeN) && feeN >= 0
+        && (codN === null || (!isNaN(codN) && codN >= 0));
+    const total = valid ? round2((codN ?? 0) + feeN) : 0;
+    const cash = line.amountOfCashCollected;
+    const warnCash = valid && line.deliveredAt != null && !line.isBillableFailedDelivery
+        && line.whoPaysForCompanyService === 'Recipient' && cash != null && Math.abs(total - cash) > 0.005;
+    const warnPaid = valid && (line.codPaidToCustomerAmount ?? 0) > (codN ?? 0) + 0.005;
+
     const save = async () => {
-        const n = Number(val);
-        if (isNaN(n) || n < 0) { onError(t.ofinSvcInvalid); return; }
-        if (round2(n) === round2(current)) { setEditing(false); return; }
+        if (!valid) { onError(t.ofinSvcInvalid); return; }
+        const unchanged = round2(feeN) === round2(current)
+            && (codN === null ? currentCod === null : currentCod !== null && round2(codN) === round2(currentCod));
+        if (unchanged) { setEditing(false); return; }
         setSaving(true);
         try {
-            await setCompanyServicePrice(token, orderId, round2(n));
+            await setOrderPrices(token, line.orderId, round2(feeN), codN === null ? null : round2(codN));
             setEditing(false);
             onSaved();
         } catch (e) {
@@ -873,26 +907,42 @@ function ServicePriceEditor({ orderId, current, token, onError, onSaved }: {
     };
 
     const btn: React.CSSProperties = { fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: '1px solid var(--color-border)' };
+    const input: React.CSSProperties = { width: 72, textAlign: 'right', background: 'var(--color-bg-3)', border: '1px solid var(--color-accent)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.74rem', padding: '2px 5px', outline: 'none' };
+    const lbl: React.CSSProperties = { color: 'var(--color-text-subtle)', minWidth: 56, textAlign: 'right' };
+    const warn: React.CSSProperties = { maxWidth: 220, whiteSpace: 'normal', textAlign: 'right', color: '#d97706', fontWeight: 600, lineHeight: 1.3 };
+    const keys = (e: React.KeyboardEvent) => { if (e.key === 'Enter') void save(); if (e.key === 'Escape') cancel(); };
+
+    if (!editing) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: '0.7rem', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--color-text-subtle)' }}>{t.ofinColService}:</span>
+                <strong style={{ color: 'var(--color-text-muted)', fontWeight: 700 }}>{gel(current)}</strong>
+                <button onClick={() => setEditing(true)} style={{ ...btn, background: 'var(--color-bg-3)', color: 'var(--color-accent)' }}>{t.edit}</button>
+            </div>
+        );
+    }
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: '0.7rem', flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--color-text-subtle)' }}>{t.ofinColService}:</span>
-            {editing ? (
-                <>
-                    <span style={{ color: 'var(--color-text-subtle)' }}>₾</span>
-                    <input type="number" min="0" step="0.01" value={val} autoFocus disabled={saving}
-                        onChange={e => setVal(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') void save(); if (e.key === 'Escape') cancel(); }}
-                        style={{ width: 64, textAlign: 'right', background: 'var(--color-bg-3)', border: '1px solid var(--color-accent)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', fontSize: '0.74rem', padding: '2px 5px', outline: 'none' }} />
-                    <button onClick={() => void save()} disabled={saving} style={{ ...btn, background: 'var(--color-accent)', color: '#fff', borderColor: 'var(--color-accent)' }}>{saving ? '…' : t.save}</button>
-                    <button onClick={cancel} disabled={saving} style={{ ...btn, background: 'var(--color-bg-3)', color: 'var(--color-text-muted)' }}>✕</button>
-                </>
-            ) : (
-                <>
-                    <strong style={{ color: 'var(--color-text-muted)', fontWeight: 700 }}>{gel(current)}</strong>
-                    <button onClick={() => setEditing(true)} style={{ ...btn, background: 'var(--color-bg-3)', color: 'var(--color-accent)' }}>{t.edit}</button>
-                </>
-            )}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, marginTop: 3, fontSize: '0.7rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={lbl}>{t.ofinColService}:</span>
+                <span style={{ color: 'var(--color-text-subtle)' }}>₾</span>
+                <input type="number" min="0" step="0.01" value={fee} autoFocus disabled={saving}
+                    onChange={e => onFeeChange(e.target.value)} onKeyDown={keys} style={input} />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={lbl}>{t.ofinPriceCod}:</span>
+                <span style={{ color: 'var(--color-text-subtle)' }}>₾</span>
+                <input type="number" min="0" step="0.01" value={cod} disabled={saving}
+                    onChange={e => { setCod(e.target.value); setCodTouched(true); }} onKeyDown={keys} style={input} />
+            </label>
+            {valid && <span style={{ color: 'var(--color-text-muted)', fontWeight: 700 }}>{t.ofinPriceTotal(gel(total))}</span>}
+            {warnCash && cash != null && <span style={warn}>{t.ofinPriceWarnCash(gel(cash), gel(total))}</span>}
+            {warnPaid && <span style={warn}>{t.ofinPriceWarnPaid(gel(line.codPaidToCustomerAmount ?? 0))}</span>}
+            <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => void save()} disabled={saving} style={{ ...btn, background: 'var(--color-accent)', color: '#fff', borderColor: 'var(--color-accent)' }}>{saving ? '…' : t.save}</button>
+                <button onClick={cancel} disabled={saving} style={{ ...btn, background: 'var(--color-bg-3)', color: 'var(--color-text-muted)' }}>✕</button>
+            </div>
         </div>
     );
 }
@@ -1123,8 +1173,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
                                         </td>
                                         {/* Company fee + inline edit, with who pays it. */}
                                         <td style={{ ...fcell, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                            <ServicePriceEditor orderId={o.orderId} current={o.companyServicePrice}
-                                                token={token} onError={onError} onSaved={onChanged} />
+                                            <PricesEditor line={o} token={token} onError={onError} onSaved={onChanged} />
                                             <div style={{ fontSize: '0.64rem', color: 'var(--color-text-subtle)', marginTop: 2 }}>
                                                 {isSenderPays ? t.ofinSenderPays : t.ofinRecipientPays}
                                             </div>

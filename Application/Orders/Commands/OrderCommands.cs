@@ -140,6 +140,13 @@ public sealed record SetCourierSalaryCommand(Guid OrderId, decimal Salary) : IRe
 /// <summary>Admin overrides the company service price for a specific order.</summary>
 public sealed record SetOrderCompanyServicePriceCommand(Guid OrderId, decimal Price) : IRequest;
 
+/// <summary>
+/// Admin sets an order's company service fee and its package COD together (Finance page).
+/// Unlike <see cref="SetOrderCompanyServicePriceCommand"/> nothing is re-split automatically:
+/// the admin decides both values. <paramref name="AmountToCollectForPackage"/> null = no COD.
+/// </summary>
+public sealed record SetOrderPricesCommand(Guid OrderId, decimal CompanyServicePrice, decimal? AmountToCollectForPackage) : IRequest;
+
 /// <summary>Admin sets (or updates) the default company service price for a district.</summary>
 public sealed record SetDistrictCompanyServicePriceCommand(Guid DistrictId, decimal? Price) : IRequest;
 

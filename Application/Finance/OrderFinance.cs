@@ -132,6 +132,16 @@ public static class OrderFinance
             : (o.AmountToCollectForPackage ?? 0m) + (RecipientPays(o) ? o.CompanyServicePrice : 0m);
 
     /// <summary>
+    /// The cash recorded as collected for an already-delivered order, re-derived from its current
+    /// fee and COD after an admin edit: recipient-pays bundles the fee into the cash, sender-pays
+    /// is the package COD only. The same formula the delivery handlers apply at delivery time.
+    /// </summary>
+    public static decimal? DeliveredCashCollected(Order o) =>
+        o.WhoPaysForCompanyService == ServicePayer.Recipient
+            ? (o.AmountToCollectForPackage ?? 0m) + o.CompanyServicePrice
+            : o.AmountToCollectForPackage;
+
+    /// <summary>
     /// Package COD the company still owes the customer for this order. A billable failed delivery
     /// collected no COD (the parcel was never handed over), so nothing is owed back.
     /// </summary>

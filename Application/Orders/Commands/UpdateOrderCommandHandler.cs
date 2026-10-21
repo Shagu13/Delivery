@@ -123,9 +123,7 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
                                        or OrderStatus.ReturnedToSender;
         if (isDelivered && !Application.Finance.OrderFinance.IsBillableFailedDelivery(order))
         {
-            order.AmountOfCashCollected = order.WhoPaysForCompanyService == ServicePayer.Recipient
-                ? (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice
-                : order.AmountToCollectForPackage;
+            order.AmountOfCashCollected = Application.Finance.OrderFinance.DeliveredCashCollected(order);
         }
 
         // Before delivery an edited price is still the original; after it, the original is frozen

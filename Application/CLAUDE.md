@@ -114,6 +114,7 @@ Key entry points:
 | `ExpectedCourierCash(o)` / `OutstandingCourierRemittance(o)` | What the courier collected vs. still owes the company. |
 | `CodOwedToCustomer(o)` / `ServiceOwedBySender(o)` | The two opposite receivables. |
 | `Is*Paid(o)` / `HasCourierTransferedAmount(o)` | Settled checks, with a 0.005 epsilon. |
+| `DeliveredCashCollected(o)` | Cash recorded as collected for an already-delivered order after an admin edits its fee/COD (recipient-pays: COD + fee; sender-pays: COD). Used by the edit, re-price and `SetOrderPrices` handlers. |
 
 Two conventions make the four business cases (product Paid/Unpaid × fee paid by
 Sender/Recipient) collapse to one formula — the XML docs on the class spell them out:
