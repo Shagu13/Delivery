@@ -14,6 +14,6 @@ public sealed record CourierSettlementItemDto(
     decimal TotalCompanyServiceRevenue,      // Σ CompanyServicePrice
     decimal TotalCourierSalary,              // Σ CourierSalary (earned)
     decimal TotalCourierSalaryPaid,          // Σ CourierSalaryPaidAmount (credited)
-    decimal TotalCourierTransferToCompany,   // Σ CodTransferedToCompanyByCourier (handed over)
-    decimal TotalCompanyNetIncome            // Σ OrderFinance.CompanyNetCash
+    decimal TotalCourierTransferToCompany,   // Σ (handed over + OrderFinance.CourierCodTransferOutstanding) = cash due to the company
+    decimal TotalCompanyNetIncome            // Σ OrderFinance.CompanyRevenue (fees − salary)
 );

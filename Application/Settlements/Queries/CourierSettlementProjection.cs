@@ -107,8 +107,10 @@ internal static class CourierSettlementProjection
                 TotalCompanyServiceRevenue:    orders.Sum(x => x.CompanyServicePrice),
                 TotalCourierSalary:            orders.Sum(x => x.CourierSalary ?? 0m),
                 TotalCourierSalaryPaid:        orders.Sum(x => x.CourierSalaryPaidAmount ?? 0m),
-                TotalCourierTransferToCompany: orders.Sum(x => x.CodTransferedToCompanyByCourier ?? 0m),
-                TotalCompanyNetIncome:         orders.Sum(OrderFinance.CompanyNetCash)));
+                // Due = already handed over + still outstanding (collected cash − salary kept out of it).
+                TotalCourierTransferToCompany: orders.Sum(x => (x.CodTransferedToCompanyByCourier ?? 0m) + OrderFinance.CourierCodTransferOutstanding(x)),
+                // Income = fees earned − courier salary; CompanyNetCash is a payout-timing-dependent cash position.
+                TotalCompanyNetIncome:         orders.Sum(OrderFinance.CompanyRevenue)));
         }
 
         return result;
