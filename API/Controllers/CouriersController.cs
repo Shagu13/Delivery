@@ -251,7 +251,7 @@ public sealed class CouriersController : BaseController
     /// day — same day filter as <see cref="GetAssignedForDay"/> (by
     /// <see cref="Order.AssignedToCourierAt"/>) and the same column layout as the Packages
     /// page's export (<c>GroupOrdersController.ExportExcel</c>): Date, Sender, City,
-    /// Address, Recipient, Description, Phone, COD, Service Fee.
+    /// District, Address, Recipient, Description, Phone, COD, Service Fee.
     /// </summary>
     [HttpGet("assigned/export")]
     [Authorize(Roles = "Admin,Operator")]
@@ -293,12 +293,22 @@ public sealed class CouriersController : BaseController
                 .GroupBy(c => c.CityName).ToDictionary(g => g.Key, g => g.First().CityNameGeo)
             : new Dictionary<string, string?>();
 
+        // District names repeat across cities, so key by (city, district name).
+        var districtGeo = isGeo
+            ? (await _context.Districts.AsNoTracking()
+                    .Where(d => d.DateDeleted == null)
+                    .Select(d => new { d.DistrictName, City = d.City.CityName, d.DistrictNameGeo })
+                    .ToListAsync(ct))
+                .GroupBy(d => (d.City, d.DistrictName))
+                .ToDictionary(g => g.Key, g => g.First().DistrictNameGeo)
+            : new Dictionary<(string, string), string?>();
+
         using var workbook = new XLWorkbook();
         var ws = workbook.Worksheets.Add(isGeo ? "ამანათები" : "Packages");
 
         string[] headers = isGeo
-            ? new[] { "თარიღი", "გამგზავნი", "ქალაქი", "მისამართი", "მიმღები", "აღწერა/კომენტარი", "საკონტაქტო", "ასაღები თანხა", "საკურიერო" }
-            : new[] { "Date", "Sender", "City", "Address", "Recipient", "Description/Comment", "Phone", "COD", "Service Fee" };
+            ? new[] { "თარიღი", "გამგზავნი", "ქალაქი", "სოფელი/უბანი", "მისამართი", "მიმღები", "აღწერა/კომენტარი", "საკონტაქტო", "ასაღები თანხა", "საკურიერო" }
+            : new[] { "Date", "Sender", "City", "District", "Address", "Recipient", "Description/Comment", "Phone", "COD", "Service Fee" };
 
         for (int c = 0; c < headers.Length; c++)
             ws.Cell(1, c + 1).Value = headers[c];
@@ -318,15 +328,16 @@ public sealed class CouriersController : BaseController
             ws.Cell(row, 1).Style.DateFormat.Format = "dd.mm";
             ws.Cell(row, 2).Value = senderName;
             ws.Cell(row, 3).Value = isGeo ? (cityGeo.GetValueOrDefault(o.RecipientCity) ?? o.RecipientCity) : o.RecipientCity;
-            ws.Cell(row, 4).Value = o.RecipientAddress;
-            ws.Cell(row, 5).Value = o.RecipientName;
-            ws.Cell(row, 6).Value = o.Description ?? string.Empty;
-            ws.Cell(row, 7).Value = o.RecipientPhone;
+            ws.Cell(row, 4).Value = isGeo ? (districtGeo.GetValueOrDefault((o.RecipientCity, o.RecipientDistrict)) ?? o.RecipientDistrict) : o.RecipientDistrict;
+            ws.Cell(row, 5).Value = o.RecipientAddress;
+            ws.Cell(row, 6).Value = o.RecipientName;
+            ws.Cell(row, 7).Value = o.Description ?? string.Empty;
+            ws.Cell(row, 8).Value = o.RecipientPhone;
             // Same COD convention as the Packages export: package COD plus, when the
             // recipient pays the company service fee at delivery, that fee too.
             var expectedCash = OrderFinance.ExpectedCourierCash(o);
-            if (expectedCash > 0m) ws.Cell(row, 8).Value = expectedCash;
-            ws.Cell(row, 9).Value = o.CompanyServicePrice;
+            if (expectedCash > 0m) ws.Cell(row, 9).Value = expectedCash;
+            ws.Cell(row, 10).Value = o.CompanyServicePrice;
             row++;
         }
 
