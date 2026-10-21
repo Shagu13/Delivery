@@ -1,6 +1,7 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
 using Application.Couriers.DTOs;
+using Application.Finance;
 using Application.GroupOrders.DTOs;
 using Domain.Enums;
 using MediatR;
@@ -195,7 +196,11 @@ internal static class CourierOrderMapping
         ProductPaymentStatus:    o.ProductPaymentStatus,
         WhoPaysForCompanyService: o.WhoPaysForCompanyService,
         AmountToCollectForPackage: o.AmountToCollectForPackage,
-        CompanyServicePrice:     o.CompanyServicePrice,
+        // The courier only needs the part of the fee the recipient hands over at the door — a
+        // customer surcharge (owed by the sender) is not cash for the courier to collect.
+        CompanyServicePrice:     o.WhoPaysForCompanyService == ServicePayer.Recipient
+                                     ? OrderFinance.RecipientFeePortion(o)
+                                     : o.CompanyServicePrice,
         CreatedAt:               o.CreatedAt,
         AssignedToCourierAt:     o.AssignedToCourierAt,
         PickedUpFromWarehouseAt: o.PickedUpFromWarehouseAt,

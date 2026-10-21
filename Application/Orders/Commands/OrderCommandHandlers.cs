@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Finance;
 using Application.Settlements;
 using Domain.Enums;
 using MediatR;
@@ -346,16 +347,16 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
             {
                 // A null COD (NotPaid with no amount set) still leaves the fee as cash to collect.
                 order.AmountOfCashCollected = (order.AmountToCollectForPackage ?? 0m)
-                                            + order.CompanyServicePrice;
+                                            + OrderFinance.RecipientFeePortion(order);
             }
             else if (!wasNotPaid)
             {
-                order.AmountOfCashCollected = order.CompanyServicePrice;
+                order.AmountOfCashCollected = OrderFinance.RecipientFeePortion(order);
             }
 
-            // Courier collected the service fee in cash from the recipient at the door.
-            // Mark it as paid immediately for Recipient-payer orders.
-            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+            // Courier collected the recipient's portion of the service fee in cash at the door:
+            // Paid, unless a customer surcharge is still owed by the sender.
+            order.CompanyServicePaymentStatus = OrderFinance.ServicePaymentStatus(order);
         }
         else if (order.WhoPaysForCompanyService == ServicePayer.Sender
               && order.AmountToCollectForPackage.HasValue
@@ -410,14 +411,15 @@ public sealed class MarkOrderDeliveredPaidToSenderCommandHandler
                 // The recipient gave the fee to the sender too → the sender now owes the
                 // company the fee (a customer receivable). No cash through the courier.
                 order.WhoPaysForCompanyService    = ServicePayer.Sender;
+                order.CustomerSurcharge           = 0m;   // the sender now owes the whole fee
                 order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Unpaid;
                 order.AmountOfCashCollected       = 0;
             }
             else
             {
                 // Recipient still handed the service fee to the courier in cash.
-                order.AmountOfCashCollected       = order.CompanyServicePrice;
-                order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+                order.AmountOfCashCollected       = OrderFinance.RecipientFeePortion(order);
+                order.CompanyServicePaymentStatus = OrderFinance.ServicePaymentStatus(order);
             }
         }
         else
@@ -1003,6 +1005,8 @@ public sealed class SetOrderCompanyServicePriceCommandHandler : IRequestHandler<
         }
 
         order.CompanyServicePrice = request.Price;
+        // The sender's surcharge can never exceed the fee (a lowered fee trims it).
+        order.CustomerSurcharge   = Math.Min(order.CustomerSurcharge, order.CompanyServicePrice);
 
         // Recalculate revenue if courier salary already set
         if (order.CourierSalary.HasValue)
@@ -1127,11 +1131,11 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
         if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
         {
             if (wasNotPaid)
-                order.AmountOfCashCollected = (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice;
+                order.AmountOfCashCollected = (order.AmountToCollectForPackage ?? 0m) + OrderFinance.RecipientFeePortion(order);
             else
-                order.AmountOfCashCollected = order.CompanyServicePrice;
+                order.AmountOfCashCollected = OrderFinance.RecipientFeePortion(order);
 
-            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+            order.CompanyServicePaymentStatus = OrderFinance.ServicePaymentStatus(order);
         }
         else if (order.WhoPaysForCompanyService == ServicePayer.Sender
               && order.AmountToCollectForPackage.HasValue
@@ -1184,8 +1188,8 @@ public sealed class AdminMarkReturnDeliveredToWarehouseCommandHandler
         // Mirror MarkReturnDeliveredToWarehouse so the cash position reconciles.
         if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
         {
-            order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice;
-            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+            order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + OrderFinance.RecipientFeePortion(order);
+            order.CompanyServicePaymentStatus = OrderFinance.ServicePaymentStatus(order);
         }
 
         await _context.SaveChangesAsync(cancellationToken);

@@ -58,6 +58,10 @@ public sealed class GetSettlementInvoiceDataQueryHandler
     public GetSettlementInvoiceDataQueryHandler(IAppDbContext context) =>
         _context = context;
 
+    /// <summary>A recipient-pays order whose sender still owes a surcharge (not a billable failure, which owes it all).</summary>
+    private static bool IsSurchargeOnly(Domain.Order o) =>
+        !OrderFinance.SenderOwesService(o) && OrderFinance.SenderServiceShare(o) > 0m;
+
     public async Task<SettlementInvoiceData> Handle(
         GetSettlementInvoiceDataQuery request,
         CancellationToken             cancellationToken)
@@ -114,8 +118,10 @@ public sealed class GetSettlementInvoiceDataQueryHandler
                 Status:               o.Status.ToString(),
                 ProductPaymentStatus: o.ProductPaymentStatus.ToString(),
                 CodAmount:            o.AmountToCollectForPackage,
-                ServiceFee:           o.CompanyServicePrice,
-                WhoPaysServiceFee:    o.WhoPaysForCompanyService.ToString(),
+                // A recipient-pays order with a surcharge shows only the part the sender owes, as
+                // "Sender", so the column adds up to the invoice total.
+                ServiceFee:           IsSurchargeOnly(o) ? OrderFinance.SenderServiceShare(o) : o.CompanyServicePrice,
+                WhoPaysServiceFee:    IsSurchargeOnly(o) ? nameof(ServicePayer.Sender) : o.WhoPaysForCompanyService.ToString(),
                 DeliveredAt:          (o.DeliveredAt ?? o.DeliveredToWarehouseAt)?.ToString("yyyy-MM-dd")
             ))
             .ToList();
@@ -125,8 +131,9 @@ public sealed class GetSettlementInvoiceDataQueryHandler
                                            .Sum(o => o.AmountToCollectForPackage ?? 0m);
         decimal codPaid      = activeOrders.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
 
-        var senderPays       = activeOrders.Where(OrderFinance.SenderOwesService).ToList();
-        decimal totalService = senderPays.Sum(o => o.CompanyServicePrice);
+        // Sender's share of the fee: whole fee on sender-pays orders, only the surcharge on recipient-pays ones.
+        var senderPays       = activeOrders.Where(o => OrderFinance.SenderOwesService(o) || OrderFinance.SenderServiceShare(o) > 0m).ToList();
+        decimal totalService = senderPays.Sum(OrderFinance.SenderServiceShare);
         decimal servicePaid  = senderPays.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
 
         return new SettlementInvoiceData(

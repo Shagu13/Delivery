@@ -72,24 +72,48 @@ public static class OrderFinance
     private static bool RecipientPays(Order o) =>
         o.WhoPaysForCompanyService == ServicePayer.Recipient && !IsBillableFailedDelivery(o);
 
-    /// <summary>True when the sender owes the company the service fee for this order.</summary>
+    /// <summary>
+    /// True when the sender owes the company the WHOLE service fee for this order (sender-pays, or a
+    /// billable failed delivery). A recipient-pays order carrying a <see cref="Order.CustomerSurcharge"/>
+    /// still has the recipient paying most of the fee — its sender share is <see cref="SenderServiceShare"/>.
+    /// </summary>
     public static bool SenderOwesService(Order o) => !RecipientPays(o);
 
     /// <summary>
+    /// The part of the service fee collected from the recipient in cash at the door: the fee minus
+    /// the <see cref="Order.CustomerSurcharge"/> the sender owes separately. Only meaningful for a
+    /// recipient-pays order; callers decide whether the recipient pays at all.
+    /// </summary>
+    public static decimal RecipientFeePortion(Order o) =>
+        Math.Max(0m, o.CompanyServicePrice - o.CustomerSurcharge);
+
+    /// <summary>
+    /// The part of the service fee the SENDER owes the company: the whole fee when the sender pays
+    /// (or the delivery failed and is billable), only the <see cref="Order.CustomerSurcharge"/> when
+    /// the recipient pays the rest. Zero for an ordinary recipient-pays order.
+    /// </summary>
+    public static decimal SenderServiceShare(Order o) =>
+        RecipientPays(o)
+            ? Math.Min(Math.Max(0m, o.CustomerSurcharge), o.CompanyServicePrice)
+            : o.CompanyServicePrice;
+
+    /// <summary>
     /// Service-fee value the company keeps for this order (i.e. not already inside the
-    /// courier's cash handover):
-    ///   • Recipient pays      → collected as cash by the courier, already counted inside
-    ///                            <see cref="Order.CodTransferedToCompanyByCourier"/> → 0 here.
-    ///   • Sender pays, netted  → the company retained the fee out of the COD it paid the
+    /// courier's cash handover) — the sender's share of the fee only:
+    ///   • Recipient pays      → the recipient's portion is collected as cash by the courier and is
+    ///                            already counted inside <see cref="Order.CodTransferedToCompanyByCourier"/>
+    ///                            → 0 here (only a surcharge the sender owes counts, as below).
+    ///   • Netted               → the company retained the sender's share out of the COD it paid the
     ///                            customer (<see cref="Order.IsCompanyServicePriceIncludedSpecialCase"/>);
     ///                            the COD payout is stored at the full obligation, so the
-    ///                            retained fee is counted back here → CompanyServicePrice.
-    ///   • Sender pays, direct  → whatever the customer has actually paid the company.
+    ///                            retained share is counted back here.
+    ///   • Direct               → whatever the customer has actually paid the company.
     /// </summary>
     public static decimal ServiceInflow(Order o)
     {
-        if (RecipientPays(o)) return 0m;
-        if (o.IsCompanyServicePriceIncludedSpecialCase) return o.CompanyServicePrice;
+        decimal share = SenderServiceShare(o);
+        if (share <= 0m) return 0m;
+        if (o.IsCompanyServicePriceIncludedSpecialCase) return share;
         return o.ServicePaidByCustomerAmount ?? 0m;
     }
 
@@ -123,22 +147,24 @@ public static class OrderFinance
 
     /// <summary>
     /// Total cash the courier collected from the recipient and must account for: package COD
-    /// plus, for recipient-pays orders, the service fee collected at delivery. A billable failed
+    /// plus, for recipient-pays orders, the recipient's portion of the service fee collected at
+    /// delivery (the fee minus any surcharge the sender owes separately). A billable failed
     /// delivery collected nothing (the recipient declined the parcel), so it is zero.
     /// </summary>
     public static decimal ExpectedCourierCash(Order o) =>
         IsBillableFailedDelivery(o)
             ? 0m
-            : (o.AmountToCollectForPackage ?? 0m) + (RecipientPays(o) ? o.CompanyServicePrice : 0m);
+            : (o.AmountToCollectForPackage ?? 0m) + (RecipientPays(o) ? RecipientFeePortion(o) : 0m);
 
     /// <summary>
     /// The cash recorded as collected for an already-delivered order, re-derived from its current
-    /// fee and COD after an admin edit: recipient-pays bundles the fee into the cash, sender-pays
-    /// is the package COD only. The same formula the delivery handlers apply at delivery time.
+    /// fee and COD after an admin edit: recipient-pays bundles the recipient's portion of the fee
+    /// into the cash, sender-pays is the package COD only. The same formula the delivery handlers
+    /// apply at delivery time.
     /// </summary>
     public static decimal? DeliveredCashCollected(Order o) =>
         o.WhoPaysForCompanyService == ServicePayer.Recipient
-            ? (o.AmountToCollectForPackage ?? 0m) + o.CompanyServicePrice
+            ? (o.AmountToCollectForPackage ?? 0m) + RecipientFeePortion(o)
             : o.AmountToCollectForPackage;
 
     /// <summary>
@@ -151,12 +177,13 @@ public static class OrderFinance
             : (o.AmountToCollectForPackage ?? 0m) - (o.CodPaidToCustomerAmount ?? 0m);
 
     /// <summary>
-    /// Company service fee the sender still owes for this order (0 when the recipient pays it
-    /// in cash at delivery). Counts the full fee on a billable failed delivery, less anything
-    /// the sender has already paid.
+    /// Company service fee the sender still owes for this order: their share of the fee
+    /// (<see cref="SenderServiceShare"/> — 0 when the recipient pays it all in cash at delivery, only
+    /// the surcharge when the recipient pays the rest, the full fee on a billable failed delivery),
+    /// less anything the sender has already paid.
     /// </summary>
     public static decimal ServiceOwedBySender(Order o) =>
-        RecipientPays(o) ? 0m : o.CompanyServicePrice - (o.ServicePaidByCustomerAmount ?? 0m);
+        SenderServiceShare(o) - (o.ServicePaidByCustomerAmount ?? 0m);
 
     /// <summary>True once the courier has been credited their full salary for this order.</summary>
     public static bool IsCourierSalaryPaid(Order o) =>
@@ -179,13 +206,26 @@ public static class OrderFinance
     }
 
     /// <summary>
-    /// True once the company service fee is fully settled. Always true when the recipient
-    /// pays (collected in cash at delivery) or when it was netted out of the COD payout.
+    /// True once the sender's share of the service fee is fully settled. Always true when the
+    /// recipient pays it all (collected in cash at delivery) or when it was netted out of the COD payout.
     /// </summary>
-    public static bool IsCompanyServicePaid(Order o) =>
-        RecipientPays(o)
-        || o.IsCompanyServicePriceIncludedSpecialCase
-        || o.CompanyServicePrice - (o.ServicePaidByCustomerAmount ?? 0m) <= Epsilon;
+    public static bool IsCompanyServicePaid(Order o)
+    {
+        decimal share = SenderServiceShare(o);
+        return share <= Epsilon
+            || o.IsCompanyServicePriceIncludedSpecialCase
+            || share - (o.ServicePaidByCustomerAmount ?? 0m) <= Epsilon;
+    }
+
+    /// <summary>
+    /// The stored <see cref="Order.CompanyServicePaymentStatus"/> value that matches the live
+    /// figures: Paid once the sender's share of the fee is settled (always, for an ordinary
+    /// recipient-pays order), Pending once part of it is paid, otherwise Unpaid.
+    /// </summary>
+    public static CompanyServicePaymentStatus ServicePaymentStatus(Order o) =>
+        IsCompanyServicePaid(o)                         ? CompanyServicePaymentStatus.Paid
+        : (o.ServicePaidByCustomerAmount ?? 0m) > Epsilon ? CompanyServicePaymentStatus.Pending
+                                                          : CompanyServicePaymentStatus.Unpaid;
 
     /// <summary>True once the company has paid the customer back the full package COD.</summary>
     public static bool IsCodPaidToCustomer(Order o) =>

@@ -143,9 +143,12 @@ public sealed record SetOrderCompanyServicePriceCommand(Guid OrderId, decimal Pr
 /// <summary>
 /// Admin sets an order's company service fee and its package COD together (Finance page).
 /// Unlike <see cref="SetOrderCompanyServicePriceCommand"/> nothing is re-split automatically:
-/// the admin decides both values. <paramref name="AmountToCollectForPackage"/> null = no COD.
+/// the admin decides all values. <paramref name="AmountToCollectForPackage"/> null = no COD.
+/// <paramref name="CustomerSurcharge"/> is the part of the fee the sender owes on top of what the
+/// recipient pays (recipient-pays orders only; 0 otherwise).
 /// </summary>
-public sealed record SetOrderPricesCommand(Guid OrderId, decimal CompanyServicePrice, decimal? AmountToCollectForPackage) : IRequest;
+public sealed record SetOrderPricesCommand(
+    Guid OrderId, decimal CompanyServicePrice, decimal? AmountToCollectForPackage, decimal CustomerSurcharge = 0m) : IRequest;
 
 /// <summary>Admin sets (or updates) the default company service price for a district.</summary>
 public sealed record SetDistrictCompanyServicePriceCommand(Guid DistrictId, decimal? Price) : IRequest;

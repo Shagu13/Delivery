@@ -37,7 +37,8 @@ public sealed record CourierOrderDto(
     /// </summary>
     decimal? AmountToCollectForPackage,
     /// <summary>
-    /// The company's courier service fee for this order.
+    /// The company's courier service fee for this order — for a recipient-pays order, only the part
+    /// the recipient hands over at the door (the fee minus any customer surcharge the sender owes).
     /// Needed so the courier knows how much to collect when WhoPaysForCompanyService == Recipient.
     /// </summary>
     decimal CompanyServicePrice,

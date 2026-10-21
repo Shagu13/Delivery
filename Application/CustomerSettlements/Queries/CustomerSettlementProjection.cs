@@ -101,7 +101,7 @@ internal static class CustomerSettlementProjection
         // Standalone orders — one row each; only those whose sender owes the company a fee
         // (sender-pays returns, or a billable failed delivery) carry a company↔customer invoice.
         foreach (var ret in active.Where(o => o.GroupOrderId == null
-                                           && OrderFinance.SenderOwesService(o)))
+                                           && (OrderFinance.SenderOwesService(o) || OrderFinance.SenderServiceShare(o) > 0m)))
         {
             rows.Add(BuildRow(
                 id: ret.Id, customerId, businessName,
@@ -128,8 +128,10 @@ internal static class CustomerSettlementProjection
                                    .Sum(o => o.AmountToCollectForPackage ?? 0m);
         decimal codPaid    = orders.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
 
-        var senderOwes     = orders.Where(OrderFinance.SenderOwesService).ToList();
-        decimal service    = senderOwes.Sum(o => o.CompanyServicePrice);
+        // The sender's share of the fee: the whole fee on sender-pays orders, only the surcharge on
+        // recipient-pays ones (0 for an ordinary recipient-pays order, so it contributes nothing).
+        var senderOwes     = orders.Where(o => OrderFinance.SenderOwesService(o) || OrderFinance.SenderServiceShare(o) > 0m).ToList();
+        decimal service    = senderOwes.Sum(OrderFinance.SenderServiceShare);
         decimal servicePaid = senderOwes.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
 
         DateTime? updated = orders

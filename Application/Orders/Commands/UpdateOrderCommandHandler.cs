@@ -36,6 +36,10 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
         // ── Financials ───────────────────────────────────────────────────────
         order.CompanyServicePrice            = request.CompanyServicePrice;
         order.IsCompanyServicePriceIncluded  = request.IsCompanyServicePriceIncluded;
+        // A surcharge only exists on recipient-pays orders and never exceeds the fee.
+        order.CustomerSurcharge = request.WhoPaysForCompanyService == ServicePayer.Recipient
+            ? Math.Min(order.CustomerSurcharge, request.CompanyServicePrice)
+            : 0m;
 
         // When the service fee is bundled into the entered price, the supplied COD is the
         // all-in amount: subtract the fee so only the product portion is stored. Block

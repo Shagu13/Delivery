@@ -90,6 +90,15 @@ public class Order
     /// </summary>
     public decimal? OriginalPackagePrice { get; set; }
 
+    /// <summary>
+    /// Part of <see cref="CompanyServicePrice"/> the SENDER owes the company on top of what the
+    /// recipient pays, when <see cref="WhoPaysForCompanyService"/> is Recipient — e.g. fee 7: the
+    /// recipient pays 6 at the door and the customer owes the remaining 1 (netted off their COD
+    /// payout, or invoiced). Set per order by an admin in the Finance price editor; always 0 for
+    /// sender-pays orders and never above the fee.
+    /// </summary>
+    public decimal CustomerSurcharge { get; set; }
+
     // ── Payment tracking ─────────────────────────────────────────────────────
     public CompanyServicePaymentStatus CompanyServicePaymentStatus { get; set; }
         = CompanyServicePaymentStatus.Unpaid;

@@ -93,9 +93,11 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
 
         // Failed deliveries' fees are always invoiced to the sender (recipient paid nothing),
         // so they add to serviceRevenue but never to serviceCollectedFromRecipient.
+        // Only the recipient's portion: a customer surcharge on a recipient-pays order is invoiced
+        // to the sender (so it lands in serviceInvoicedToSenders below).
         var serviceCollectedFromRecipient = await delivered
             .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
-            .SumAsync(o => (decimal?)o.CompanyServicePrice, cancellationToken) ?? 0m;
+            .SumAsync(o => (decimal?)(o.CompanyServicePrice - o.CustomerSurcharge), cancellationToken) ?? 0m;
 
         var courierSalary = (await delivered
             .SumAsync(o => o.CourierSalary, cancellationToken) ?? 0m)
@@ -122,8 +124,6 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
                          && o.DeliveredToWarehouseAt < toDt))
             .Where(inArea)
             .ToListAsync(cancellationToken);
-
-        var senderUpTo = deliveredUpTo.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender).ToList();
 
         // Sender-paid service fees collected in ADVANCE on orders that are accepted but not
         // yet delivered (so absent from the delivered set above). Customers often pre-pay;
@@ -169,7 +169,11 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
                                      + billableFailedUpTo.Sum(o => o.CourierSalaryPaidAmount ?? 0m);
         var salaryEarned             = deliveredUpTo.Sum(o => o.CourierSalary ?? 0m)
                                      + billableFailedUpTo.Sum(o => o.CourierSalary ?? 0m);
-        var senderServicePaid        = senderUpTo.Sum(o => o.ServicePaidByCustomerAmount ?? 0m)
+        // Sender-side service payments on delivered orders: whole fees on sender-pays orders plus
+        // any customer surcharge paid on recipient-pays ones (an ordinary recipient-pays order has none).
+        // (Billable failed deliveries are counted once, in billableFailedUpTo, so they are excluded here.)
+        var senderServicePaid        = deliveredUpTo.Where(o => !OrderFinance.IsBillableFailedDelivery(o))
+                                                    .Sum(o => o.ServicePaidByCustomerAmount ?? 0m)
                                      + prepaidUndelivered.Sum(o => o.ServicePaidByCustomerAmount ?? 0m)
                                      + billableFailedUpTo.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
         var codPaidToCustomers       = deliveredUpTo.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
@@ -177,7 +181,8 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         // Include the prepaid orders' obligation too, so the receivable nets correctly
         // (a fully pre-paid undelivered order is owed == paid → contributes 0 outstanding).
         // Failed deliveries add their full fee as a sender receivable.
-        var serviceOwedByCustomers   = senderUpTo.Sum(o => o.CompanyServicePrice)
+        var serviceOwedByCustomers   = deliveredUpTo.Where(o => !OrderFinance.IsBillableFailedDelivery(o))
+                                                    .Sum(OrderFinance.SenderServiceShare)
                                      + prepaidUndelivered.Sum(o => o.CompanyServicePrice)
                                      + billableFailedUpTo.Sum(o => o.CompanyServicePrice);
         // What couriers still have to send in for delivered orders: cash they were expected to

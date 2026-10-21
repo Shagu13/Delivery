@@ -595,7 +595,8 @@ public sealed class OrdersController : BaseController
         [FromBody] SetOrderPricesRequest request,
         CancellationToken ct)
     {
-        await Sender.Send(new SetOrderPricesCommand(id, request.CompanyServicePrice, request.AmountToCollectForPackage), ct);
+        await Sender.Send(new SetOrderPricesCommand(
+            id, request.CompanyServicePrice, request.AmountToCollectForPackage, request.CustomerSurcharge), ct);
         return NoContent();
     }
 
@@ -758,7 +759,7 @@ public sealed record SetCourierSalaryRequest(decimal Salary);
 /// <summary>Optional body for admin-mark-delivered: assign a courier when unassigned and/or set salary.</summary>
 public sealed record AdminMarkDeliveredRequest(Guid? CourierId, decimal? Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
-public sealed record SetOrderPricesRequest(decimal CompanyServicePrice, decimal? AmountToCollectForPackage);
+public sealed record SetOrderPricesRequest(decimal CompanyServicePrice, decimal? AmountToCollectForPackage, decimal CustomerSurcharge = 0m);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason, string? Comment = null);
 /// <summary>Optional correction to the parcel COD amount, applied atomically with delivery.</summary>
 public sealed record MarkDeliveredRequest(decimal? UpdatedCodAmount);

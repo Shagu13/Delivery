@@ -124,14 +124,15 @@ public sealed class PayCustomerOrdersCommandHandler
 
     private static void ApplyService(Domain.Order order, decimal amount, DateTime now)
     {
-        // A billable failed delivery owes the fee to the SENDER even when the order was originally
-        // recipient-pays (the recipient never received it / paid nothing), so allow it here too —
-        // the derive-live model never mutates WhoPaysForCompanyService. Mirrors OrderFinance.SenderOwesService.
-        if (order.WhoPaysForCompanyService != ServicePayer.Sender && !OrderFinance.IsBillableFailedDelivery(order))
+        // The sender owes their share of the fee (OrderFinance.SenderServiceShare): the whole fee for
+        // a sender-pays order or a billable failed delivery (the recipient paid nothing), only the
+        // customer surcharge when the recipient pays the rest in cash. An ordinary recipient-pays
+        // order owes nothing here — the derive-live model never mutates WhoPaysForCompanyService.
+        decimal owed = OrderFinance.SenderServiceShare(order);
+        if (order.WhoPaysForCompanyService != ServicePayer.Sender && owed <= 0m)
             throw new ConflictException(
                 $"The service fee for order {order.TrackingNumber} is collected from the recipient, not invoiced to the sender.");
 
-        decimal owed        = order.CompanyServicePrice;
         decimal already     = order.ServicePaidByCustomerAmount ?? 0m;
         decimal outstanding = owed - already;
 

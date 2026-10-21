@@ -762,6 +762,9 @@ namespace Persistence.Migrations
                     b.Property<Guid?>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("CustomerSurcharge")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("DateDeleted")
                         .HasColumnType("datetime2");
 

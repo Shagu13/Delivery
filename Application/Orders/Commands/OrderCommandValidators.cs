@@ -129,6 +129,9 @@ public sealed class SetOrderPricesCommandValidator : AbstractValidator<SetOrderP
         RuleFor(x => x.AmountToCollectForPackage!.Value)
             .GreaterThanOrEqualTo(0m).When(x => x.AmountToCollectForPackage.HasValue)
             .WithMessage("COD must be zero or more.");
+        RuleFor(x => x.CustomerSurcharge)
+            .GreaterThanOrEqualTo(0m).WithMessage("Customer surcharge must be zero or more.")
+            .LessThanOrEqualTo(x => x.CompanyServicePrice).WithMessage("Customer surcharge cannot exceed the service price.");
     }
 }
 

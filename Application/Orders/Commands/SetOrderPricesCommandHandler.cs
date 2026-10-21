@@ -18,8 +18,14 @@ public sealed class SetOrderPricesCommandHandler : IRequestHandler<SetOrderPrice
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order", request.OrderId);
 
+        // A surcharge is the sender's share of a fee the recipient mostly pays — meaningless when
+        // the sender pays it all.
+        if (request.CustomerSurcharge > 0m && order.WhoPaysForCompanyService != ServicePayer.Recipient)
+            throw new ConflictException("A customer surcharge only applies when the recipient pays the service fee.");
+
         order.CompanyServicePrice       = request.CompanyServicePrice;
         order.AmountToCollectForPackage = request.AmountToCollectForPackage;
+        order.CustomerSurcharge         = request.CustomerSurcharge;
 
         if (order.CourierSalary.HasValue)
             order.CompanyRevenue = order.CompanyServicePrice - order.CourierSalary.Value;
@@ -39,6 +45,11 @@ public sealed class SetOrderPricesCommandHandler : IRequestHandler<SetOrderPrice
             // settlement shows any difference between the new total and what was physically handed over.
             order.AmountOfCashCollected = OrderFinance.DeliveredCashCollected(order);
         }
+
+        // A recipient-pays fee is "Paid" at the door except for a surcharge still owed by the sender.
+        // (Sender-pays payment status is driven by their payments, not by this edit.)
+        if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
+            order.CompanyServicePaymentStatus = OrderFinance.ServicePaymentStatus(order);
 
         await _context.SaveChangesAsync(cancellationToken);
     }

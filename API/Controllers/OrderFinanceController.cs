@@ -75,7 +75,15 @@ public sealed class OrderFinanceController : BaseController
     {
         var result = await Sender.Send(
             new GetMyOrderFinanceLinesQuery(CurrentUserId, date, paymentsMode, monthly, from, to), ct);
-        var invoiceLines = result.Where(l => l.SenderOwesService).ToList();
+        // Sender-pays orders (and billable failures) invoice the whole fee. A recipient-pays order that
+        // carries a customer surcharge invoices only that surcharge, as "Sender", so the Service
+        // column adds up to what the customer actually owes.
+        var invoiceLines = result
+            .Where(l => l.SenderOwesService || l.CustomerSurcharge > 0m)
+            .Select(l => l.SenderOwesService
+                ? l
+                : l with { CompanyServicePrice = l.CustomerSurcharge, WhoPaysForCompanyService = "Sender" })
+            .ToList();
 
         var bankAccounts = await Sender.Send(new GetCompanyBankAccountsQuery(), ct);
         var bank = bankAccounts.FirstOrDefault(a => a.IsDefault) ?? bankAccounts.FirstOrDefault();

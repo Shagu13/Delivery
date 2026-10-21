@@ -105,11 +105,11 @@ public sealed class SetOrderSettlementPaymentCommandHandler
 
         if (request.ServicePaid is bool servicePaid)
         {
-            // The fee is invoiced to the sender for sender-pays orders and for billable failed
-            // deliveries (the recipient declined, so the fee shifts to the sender) — even when
-            // the order was originally recipient-pays.
-            if (order.WhoPaysForCompanyService != ServicePayer.Sender
-                && !OrderFinance.IsBillableFailedDelivery(order))
+            // The sender owes their share of the fee: the whole fee for sender-pays orders and for
+            // billable failed deliveries (the recipient declined, so the fee shifts to the sender),
+            // only the customer surcharge when the recipient pays the rest at delivery.
+            decimal senderShare = OrderFinance.SenderServiceShare(order);
+            if (order.WhoPaysForCompanyService != ServicePayer.Sender && senderShare <= 0m)
                 throw new ConflictException(
                     "The service fee for this order is collected from the recipient at delivery, not invoiced to the sender.");
 
@@ -118,7 +118,7 @@ public sealed class SetOrderSettlementPaymentCommandHandler
                 // Explicit direct payment — not a COD-netting special case.
                 order.IsCompanyServicePriceIncludedSpecialCase = false;
                 order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
-                order.ServicePaidByCustomerAmount = request.ServicePaidAmount ?? order.CompanyServicePrice;
+                order.ServicePaidByCustomerAmount = request.ServicePaidAmount ?? senderShare;
                 order.ServicePaidByCustomerAt     = now;
             }
             else

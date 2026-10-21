@@ -89,7 +89,7 @@ public sealed class GetSettlementPreviewQueryHandler
         // Used for display only — shows the breakdown of what is inside totalCash.
         var totalServiceFeesFromRecipients = orders
             .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
-            .Sum(o => o.CompanyServicePrice);
+            .Sum(OrderFinance.RecipientFeePortion);
 
         // Courier holds exactly what they collected. No double-counting.
         // totalCash = package COD + service fees from recipients (bundled by courier at delivery)

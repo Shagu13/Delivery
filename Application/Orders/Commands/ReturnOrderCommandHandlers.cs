@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Finance;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -110,8 +111,8 @@ public sealed class MarkReturnDeliveredToWarehouseCommandHandler
         // AmountToCollectForPackage fallback keeps the formula identical to deliveries.)
         if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
         {
-            order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice;
-            order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+            order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + OrderFinance.RecipientFeePortion(order);
+            order.CompanyServicePaymentStatus = OrderFinance.ServicePaymentStatus(order);
         }
 
         await _context.SaveChangesAsync(ct);
@@ -173,8 +174,8 @@ public sealed class AdminSetReturnOrderStatusCommandHandler
                 if (order.WhoPaysForCompanyService == ServicePayer.Recipient
                     && order.CompanyServicePaymentStatus != CompanyServicePaymentStatus.Paid)
                 {
-                    order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice;
-                    order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
+                    order.AmountOfCashCollected       = (order.AmountToCollectForPackage ?? 0m) + OrderFinance.RecipientFeePortion(order);
+                    order.CompanyServicePaymentStatus = OrderFinance.ServicePaymentStatus(order);
                 }
                 break;
 

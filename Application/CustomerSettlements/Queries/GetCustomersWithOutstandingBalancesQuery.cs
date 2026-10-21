@@ -59,6 +59,7 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
                 CodPaid     = o.CodPaidToCustomerAmount ?? 0m,
                 SenderPays  = o.WhoPaysForCompanyService == ServicePayer.Sender,
                 Service     = o.CompanyServicePrice,
+                Surcharge   = o.CustomerSurcharge,
                 ServicePaid = o.ServicePaidByCustomerAmount ?? 0m,
             })
             .ToListAsync(cancellationToken);
@@ -70,7 +71,9 @@ public sealed class GetCustomersWithOutstandingBalancesQueryHandler
             {
                 CustomerId         = g.Key,
                 OutstandingCod     = g.Sum(r => r.Billable ? 0m : r.Cod - r.CodPaid),
-                OutstandingService = g.Sum(r => (r.SenderPays || r.Billable) ? r.Service - r.ServicePaid : 0m),
+                // Sender's share of the fee (mirrors OrderFinance.SenderServiceShare, inlined here):
+                // the whole fee when the sender pays or the delivery failed, else only the surcharge.
+                OutstandingService = g.Sum(r => ((r.SenderPays || r.Billable) ? r.Service : Math.Min(r.Surcharge, r.Service)) - r.ServicePaid),
             })
             .Where(a => a.OutstandingCod > 0.005m || a.OutstandingService > 0.005m)
             .ToList();

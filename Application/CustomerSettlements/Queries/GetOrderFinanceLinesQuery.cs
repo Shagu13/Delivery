@@ -237,8 +237,8 @@ internal static class OrderFinanceQueries
     ///     warehouse acceptance and has a package COD amount — surfaced so a "not yet delivered,
     ///     expected COD" figure can be shown regardless of who pays the service fee.
     /// Then drops orders with no company↔customer settlement at all: the recipient pays the
-    /// service fee (nothing invoiced to the sender) and there is no package COD for the
-    /// company to pay back. Billable failed deliveries and cancelled orders are kept regardless.
+    /// service fee (nothing invoiced to the sender, no surcharge) and there is no package COD for
+    /// the company to pay back. Billable failed deliveries and cancelled orders are kept regardless.
     /// </summary>
     public static IQueryable<Order> ForFinanceReporting(IQueryable<Order> query, bool includeActiveLastMile = false)
     {
@@ -256,7 +256,8 @@ internal static class OrderFinanceQueries
             || o.Status == OrderStatus.DeliveryPostponed);
 
         return query.Where(o => !(o.WhoPaysForCompanyService == ServicePayer.Recipient
-                                && o.AmountToCollectForPackage == null)
+                                && o.AmountToCollectForPackage == null
+                                && o.CustomerSurcharge == 0m)   // a surcharge is a receivable even with no COD
                               || (o.OrderType != OrderType.Return
                                   && o.CancellationReason != null
                                   && o.CancellationReason != CancellationReason.WarehouseNotReceived
@@ -430,7 +431,9 @@ internal static class OrderFinanceQueries
             OrderNote:                    o.GroupOrder?.Note,
             Description:                  o.Description,
             CourierSalaryOutstanding:        OrderFinance.CourierSalaryOutstanding(o),
-            CourierCodTransferOutstanding:   OrderFinance.CourierCodTransferOutstanding(o)
+            CourierCodTransferOutstanding:   OrderFinance.CourierCodTransferOutstanding(o),
+            CustomerSurcharge:               o.CustomerSurcharge,
+            ServiceOwedBySender:             OrderFinance.ServiceOwedBySender(o)
         );
     }
 }

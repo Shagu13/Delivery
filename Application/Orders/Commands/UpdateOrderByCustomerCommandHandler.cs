@@ -45,6 +45,9 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
         order.WhoPaysForCompanyService = order.ProductPaymentStatus == PaymentStatus.NotPaid
             ? ServicePayer.Recipient
             : request.WhoPaysForCompanyService;
+        // A sender-pays order owes the whole fee, so an admin-set surcharge no longer applies.
+        if (order.WhoPaysForCompanyService == ServicePayer.Sender)
+            order.CustomerSurcharge = 0m;
 
         // COD only applies to unpaid parcels; ignore any value for already-paid products.
         if (order.ProductPaymentStatus != PaymentStatus.NotPaid)

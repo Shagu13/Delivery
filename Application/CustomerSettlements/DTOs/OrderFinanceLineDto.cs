@@ -90,5 +90,14 @@ public sealed record OrderFinanceLineDto(
     decimal  CourierSalaryOutstanding,
     /// <summary>Cash the courier may still record as handed over (OrderFinance.CourierCodTransferOutstanding)
     /// — the cap for a bulk COD hand-over on this order.</summary>
-    decimal  CourierCodTransferOutstanding
+    decimal  CourierCodTransferOutstanding,
+
+    /// <summary>The part of <see cref="CompanyServicePrice"/> the sender owes on top of what the
+    /// recipient pays (0 for an ordinary order). Reference only — use <see cref="ServiceOwedBySender"/>
+    /// for the amount to settle.</summary>
+    decimal  CustomerSurcharge,
+    /// <summary>What the sender still owes the company for the service fee (OrderFinance.ServiceOwedBySender):
+    /// the whole fee less payments on sender-pays orders and billable failures, only the unpaid
+    /// surcharge on a recipient-pays order, 0 otherwise. Can dip below 0 if overpaid.</summary>
+    decimal  ServiceOwedBySender
 );
