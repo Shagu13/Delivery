@@ -342,9 +342,10 @@ public sealed class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrder
         // Case 3 — Sender pays fee, product has COD: collect product amount only (no service fee in cash).
         if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
         {
-            if (wasNotPaid && order.AmountToCollectForPackage.HasValue)
+            if (wasNotPaid)
             {
-                order.AmountOfCashCollected = order.AmountToCollectForPackage.Value
+                // A null COD (NotPaid with no amount set) still leaves the fee as cash to collect.
+                order.AmountOfCashCollected = (order.AmountToCollectForPackage ?? 0m)
                                             + order.CompanyServicePrice;
             }
             else if (!wasNotPaid)
@@ -1123,9 +1124,9 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
 
         if (order.WhoPaysForCompanyService == ServicePayer.Recipient)
         {
-            if (wasNotPaid && order.AmountToCollectForPackage.HasValue)
-                order.AmountOfCashCollected = order.AmountToCollectForPackage.Value + order.CompanyServicePrice;
-            else if (!wasNotPaid)
+            if (wasNotPaid)
+                order.AmountOfCashCollected = (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice;
+            else
                 order.AmountOfCashCollected = order.CompanyServicePrice;
 
             order.CompanyServicePaymentStatus = CompanyServicePaymentStatus.Paid;
