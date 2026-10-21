@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Finance;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -67,6 +68,7 @@ public sealed class GetTenantFinanceOverviewQueryHandler
                 o.CodPaidToCustomerAmount,
                 o.WhoPaysForCompanyService,
                 o.CompanyServicePrice,
+                o.CustomerSurcharge,
                 o.ServicePaidByCustomerAmount,
                 o.CodPaidToTenantAmount,
                 o.ServicePaidByTenantAmount,
@@ -76,8 +78,13 @@ public sealed class GetTenantFinanceOverviewQueryHandler
         decimal grossCod           = rows.Sum(o => o.AmountToCollectForPackage ?? 0m);
         decimal codPaidToCustomers = rows.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
 
-        var senderPays = rows.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender).ToList();
-        decimal grossService          = senderPays.Sum(o => o.CompanyServicePrice);
+        // The sender's share of each fee: the whole fee on sender-pays orders, only the customer
+        // surcharge on recipient-pays ones (0 for an ordinary recipient-pays order).
+        var senderPays = rows
+            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender
+                     || OrderFinance.SenderServiceShareOf(o.WhoPaysForCompanyService, o.CompanyServicePrice, o.CustomerSurcharge) > 0m)
+            .ToList();
+        decimal grossService          = senderPays.Sum(o => OrderFinance.SenderServiceShareOf(o.WhoPaysForCompanyService, o.CompanyServicePrice, o.CustomerSurcharge));
         decimal servicePaidByCustomers = senderPays.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
 
         int ordersDelivered = rows.Count(o => Delivered.Contains(o.Status));

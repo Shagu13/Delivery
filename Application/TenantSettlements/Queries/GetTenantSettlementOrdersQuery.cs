@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Finance;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +21,12 @@ public sealed record TenantSettlementOrderDto(
     string  WhoPaysForCompanyService,   // "Sender" | "Recipient"
     decimal ServicePaidByTenant,
     string  CreatedAt,
-    string? DeliveredAt);
+    string? DeliveredAt,
+    /// <summary>The part of the fee the sender (so the tenant) owes on top of what the recipient pays.</summary>
+    decimal CustomerSurcharge = 0m,
+    /// <summary>What the tenant owes dilo for this order's fee: the whole fee on sender-pays orders,
+    /// only the surcharge on recipient-pays ones (OrderFinance.SenderServiceShareOf).</summary>
+    decimal ServiceOwed = 0m);
 
 public sealed record TenantSettlementOrdersResult(
     IReadOnlyList<TenantSettlementOrderDto> Orders,
@@ -98,13 +104,15 @@ public sealed class GetTenantSettlementOrdersQueryHandler
             WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
             ServicePaidByTenant:      o.ServicePaidByTenantAmount ?? 0m,
             CreatedAt:                o.CreatedAt.ToString("o"),
-            DeliveredAt:              (o.DeliveredAt ?? o.DeliveredToWarehouseAt)?.ToString("o")))
+            DeliveredAt:              (o.DeliveredAt ?? o.DeliveredToWarehouseAt)?.ToString("o"),
+            CustomerSurcharge:        o.CustomerSurcharge,
+            ServiceOwed:              OrderFinance.SenderServiceShareOf(o.WhoPaysForCompanyService, o.CompanyServicePrice, o.CustomerSurcharge)))
             .ToList();
 
         decimal totalCod         = items.Sum(i => i.Cod);
         decimal totalCodPaid     = items.Sum(i => i.CodPaidToTenant);
-        // Service the tenant owes dilo is only the sender-paid fees.
-        decimal totalService     = items.Where(i => i.WhoPaysForCompanyService == "Sender").Sum(i => i.CompanyServicePrice);
+        // Service the tenant owes dilo: the sender-paid fees plus any customer surcharge on recipient-pays orders.
+        decimal totalService     = items.Sum(i => i.ServiceOwed);
         decimal totalServicePaid = items.Sum(i => i.ServicePaidByTenant);
 
         return new TenantSettlementOrdersResult(items, totalCod, totalCodPaid, totalService, totalServicePaid);

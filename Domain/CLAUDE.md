@@ -93,8 +93,9 @@ Groups to know:
   correction of `AmountToCollectForPackage`; reference only — no finance formula reads it),
   `CustomerSurcharge` (per-order, admin-set: the part of a recipient-paid fee the *sender* owes on top —
   fee 7, recipient pays 6, customer owes 1; always 0 for sender-pays orders, never above the fee. Read it
-  only through `OrderFinance.RecipientFeePortion` / `SenderServiceShare`. Tenant-tier settlements
-  (`TenantSettlementService`, tenant finance overview) do **not** include it yet).
+  only through `OrderFinance.RecipientFeePortion` / `SenderServiceShare`; the tenant tier — which projects
+  columns instead of loading an `Order` — uses `SenderServiceShareOf(payer, fee, surcharge)`, so
+  the tenant owes dilo the surcharge too).
 - **Per-order settlement** — `CodPaidToCustomerAmount/At`, `ServicePaidByCustomerAmount/At`,
   `CourierSalaryPaidAmount/At`, `CodTransferedToCompanyByCourier/At`, and the two
   `*SpecialCase` booleans. **Never read these raw** — go through `Application.Finance.OrderFinance`,

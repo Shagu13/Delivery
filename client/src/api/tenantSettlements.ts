@@ -71,6 +71,10 @@ export interface TenantSettlementOrder {
   servicePaidByTenant: number;
   createdAt: string;
   deliveredAt: string | null;
+  /** The part of the fee the sender (so the tenant) owes on top of what the recipient pays. */
+  customerSurcharge: number;
+  /** What the tenant owes dilo for this order's fee: the whole fee on sender-pays orders, only the surcharge on recipient-pays ones. */
+  serviceOwed: number;
 }
 
 export interface TenantSettlementOrders {

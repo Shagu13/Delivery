@@ -184,13 +184,18 @@ export default function AdminTenantSettlementsPage({ token }: { token: string })
                             onClear={() => pay(o, { codPaid: false })} />
                         </td>
                         <td style={td}>
-                          <PayCell key={`svc:${o.orderId}:${o.servicePaidByTenant}`} amount={o.companyServicePrice} paid={o.servicePaidByTenant}
-                            disabled={!senderPays} busy={busy}
+                          <PayCell key={`svc:${o.orderId}:${o.servicePaidByTenant}`} amount={o.serviceOwed || (senderPays ? o.companyServicePrice : 0)} paid={o.servicePaidByTenant}
+                            disabled={!senderPays && o.serviceOwed <= 0.005} busy={busy}
                             onFull={() => pay(o, { servicePaid: true })}
                             onPartial={a => pay(o, { servicePaid: true, servicePaidAmount: a })}
                             onClear={() => pay(o, { servicePaid: false })} />
                         </td>
-                        <td style={{ ...td, color: 'var(--color-text-subtle)' }}>{o.whoPaysForCompanyService}</td>
+                        <td style={{ ...td, color: 'var(--color-text-subtle)' }}>
+                          {o.whoPaysForCompanyService}
+                          {!senderPays && o.customerSurcharge > 0.005 && (
+                            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#b45309' }}>+{gel(o.customerSurcharge)} owed by tenant</div>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

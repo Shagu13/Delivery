@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Finance;
 using Domain;
 using Domain.Enums;
 using MediatR;
@@ -61,13 +62,17 @@ public sealed class RecordTenantOrderPaymentCommandHandler
 
         if (request.ServicePaid is bool servicePaid)
         {
-            if (order.WhoPaysForCompanyService != ServicePayer.Sender)
+            // The tenant owes dilo the whole fee on a sender-pays order, only the customer surcharge
+            // when the recipient pays the rest at delivery.
+            decimal tenantShare = OrderFinance.SenderServiceShareOf(
+                order.WhoPaysForCompanyService, order.CompanyServicePrice, order.CustomerSurcharge);
+            if (order.WhoPaysForCompanyService != ServicePayer.Sender && tenantShare <= 0m)
                 throw new ConflictException(
                     "The service fee for this order was collected from the recipient at delivery, not owed by the tenant.");
 
             if (servicePaid)
             {
-                order.ServicePaidByTenantAmount = request.ServicePaidAmount ?? order.CompanyServicePrice;
+                order.ServicePaidByTenantAmount = request.ServicePaidAmount ?? tenantShare;
                 order.ServicePaidByTenantAt     = CustomTime.Now;
             }
             else

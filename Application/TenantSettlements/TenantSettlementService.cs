@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Finance;
 using Application.TenantSettlements.DTOs;
 using Domain;
 using Domain.Enums;
@@ -40,6 +41,7 @@ internal static class TenantSettlementService
                 o.AmountToCollectForPackage,
                 o.WhoPaysForCompanyService,
                 o.CompanyServicePrice,
+                o.CustomerSurcharge,
                 o.CodPaidToTenantAmount,
                 o.ServicePaidByTenantAmount,
                 o.DeliveredAt,
@@ -56,12 +58,17 @@ internal static class TenantSettlementService
             })
             .ToList();
 
-        decimal cod     = deliveredInMonth.Sum(o => o.AmountToCollectForPackage ?? 0m);
-        var senderPays  = deliveredInMonth.Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender).ToList();
-        decimal service = senderPays.Sum(o => o.CompanyServicePrice);
+        decimal cod = deliveredInMonth.Sum(o => o.AmountToCollectForPackage ?? 0m);
+        // The tenant owes dilo its share of each fee: the whole fee on sender-pays orders, only the
+        // customer surcharge on recipient-pays ones (0 for an ordinary recipient-pays order).
+        var senderOwes  = deliveredInMonth
+            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender
+                     || OrderFinance.SenderServiceShareOf(o.WhoPaysForCompanyService, o.CompanyServicePrice, o.CustomerSurcharge) > 0m)
+            .ToList();
+        decimal service = senderOwes.Sum(o => OrderFinance.SenderServiceShareOf(o.WhoPaysForCompanyService, o.CompanyServicePrice, o.CustomerSurcharge));
         // Payments derived from the per-order dilo↔tenant fields (admin settlement sheet).
         decimal codPaid     = deliveredInMonth.Sum(o => o.CodPaidToTenantAmount ?? 0m);
-        decimal servicePaid = senderPays.Sum(o => o.ServicePaidByTenantAmount ?? 0m);
+        decimal servicePaid = senderOwes.Sum(o => o.ServicePaidByTenantAmount ?? 0m);
 
         var settlement = await context.TenantSettlements
             .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Year == year && s.Month == month, ct);

@@ -93,9 +93,16 @@ public static class OrderFinance
     /// the recipient pays the rest. Zero for an ordinary recipient-pays order.
     /// </summary>
     public static decimal SenderServiceShare(Order o) =>
-        RecipientPays(o)
-            ? Math.Min(Math.Max(0m, o.CustomerSurcharge), o.CompanyServicePrice)
-            : o.CompanyServicePrice;
+        SenderServiceShareOf(
+            RecipientPays(o) ? ServicePayer.Recipient : ServicePayer.Sender, o.CompanyServicePrice, o.CustomerSurcharge);
+
+    /// <summary>
+    /// <see cref="SenderServiceShare"/> from raw figures, for queries (tenant settlements) that project
+    /// columns instead of loading an <see cref="Order"/>. Takes the payer as given — callers that include
+    /// billable failures must pass <see cref="ServicePayer.Sender"/> for them, as <see cref="SenderServiceShare"/> does.
+    /// </summary>
+    public static decimal SenderServiceShareOf(ServicePayer payer, decimal fee, decimal surcharge) =>
+        payer == ServicePayer.Sender ? fee : Math.Min(Math.Max(0m, surcharge), fee);
 
     /// <summary>
     /// Service-fee value the company keeps for this order (i.e. not already inside the

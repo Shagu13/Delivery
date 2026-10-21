@@ -102,6 +102,9 @@ export function TenantSettlementPanel() {
                   const hasCod = cod > 0.005;
                   const codPaid = line.isCollectedCodPaidToCustomer;
                   const senderPays = line.whoPaysForCompanyService === 'Sender';
+                  // A recipient-pays order can still carry a surcharge the customer owes on top of what
+                  // the recipient pays; it is settled with the same button as a sender-paid fee.
+                  const hasSurcharge = !senderPays && line.customerSurcharge > 0.005;
                   const servicePaid = line.companyServicePaymentStatus === 'Paid';
                   const busy = busyId === line.orderId;
                   return (
@@ -124,7 +127,7 @@ export function TenantSettlementPanel() {
                       <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                           <span style={{ fontWeight: 700 }}>{gel(line.companyServicePrice)}</span>
-                          {senderPays ? (
+                          {(senderPays || hasSurcharge) ? (
                             <button className="btn-ghost btn-ghost--sm" disabled={busy} onClick={() => toggle(line, 'service')}
                               style={{ color: servicePaid ? '#059669' : 'var(--color-accent)' }}>
                               {servicePaid ? `${t.ofinPaid} · ${t.tenantUndo}` : t.tenantMarkPaid}
@@ -133,6 +136,11 @@ export function TenantSettlementPanel() {
                             <span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)' }}>{t.ofinRecipientPays}</span>
                           )}
                         </div>
+                        {hasSurcharge && (
+                          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#b45309', marginTop: 2 }}>
+                            {t.ofinRecipientPays} · {t.ofinSurchargeAdmin(gel(line.customerSurcharge))}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
