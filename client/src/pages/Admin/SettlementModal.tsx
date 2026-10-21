@@ -150,7 +150,8 @@ export function SettlementModal({
     if (!open) return null;
 
     // ── Day totals (derived live from the order lines) ───────────────────────────
-    const delivered      = lines.length;
+    // Postponed orders are listed (they carry salary) but were not delivered, so they are not counted.
+    const delivered      = lines.filter(o => o.status !== 'DeliveryPostponed').length;
     const salaryEarned   = lines.reduce((s, o) => s + (o.courierSalary ?? 0), 0);
     const salaryPaid     = lines.reduce((s, o) => s + (o.courierSalaryPaidAmount ?? 0), 0);
     const cashCollected  = lines.reduce((s, o) => s + (o.amountOfCashCollected ?? 0), 0);
@@ -272,7 +273,7 @@ export function SettlementModal({
                             {/* ── Per-order rows: tick orders, edit amounts, pay in one click ──── */}
                             {lines.length > 0 ? (
                                 <fieldset className="modal__fieldset">
-                                    <legend className="modal__legend">{t.stlmDeliveredOrders(lines.length)}</legend>
+                                    <legend className="modal__legend">{t.stlmDeliveredOrders(delivered)}</legend>
                                     {/* Pay bars: salary (company → courier) left, COD hand-over (courier → company) right */}
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', marginBottom: 12 }}>
                                         <FlowBar f={salaryFlow} payLabel={t.stlmPaySalary} busy={busy} borderRight
