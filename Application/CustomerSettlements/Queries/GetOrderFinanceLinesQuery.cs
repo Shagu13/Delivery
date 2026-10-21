@@ -410,13 +410,9 @@ internal static class OrderFinanceQueries
             ServicePaidByCustomerAmount:  o.ServicePaidByCustomerAmount,
             ServicePaidByCustomerAt:      o.ServicePaidByCustomerAt?.ToString("o"),
             CourierSalary:                o.CourierSalary,
-            // Delivered orders derive the collected cash live (COD + recipient-paid fee) rather than
-            // trusting the stamped column, which can be null on rows delivered before the fee was set.
-            AmountOfCashCollected:        (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null
-                                              ? OrderFinance.ExpectedCourierCash(o)
-                                              : o.AmountOfCashCollected,
+            AmountOfCashCollected:        o.AmountOfCashCollected,
 
-            CourierSalaryPaidAmount:          o.CourierSalaryPaidAmount,
+            CourierSalaryPaidAmount:           o.CourierSalaryPaidAmount,
             CourierSalaryPaidAt:               o.CourierSalaryPaidAt?.ToString("o"),
             IsCourierSalaryPaid:               OrderFinance.IsCourierSalaryPaid(o),
             CodTransferedToCompanyByCourier:   o.CodTransferedToCompanyByCourier,

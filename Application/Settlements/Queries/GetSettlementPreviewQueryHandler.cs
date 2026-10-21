@@ -74,7 +74,7 @@ public sealed class GetSettlementPreviewQueryHandler
         // ── Financial totals ──────────────────────────────────────────────────
         // totalCash = AmountOfCashCollected already includes both the package COD
         // AND the service fee for Recipient-payer orders. Do NOT add service fees again.
-        var totalCash        = orders.Sum(OrderFinance.ExpectedCourierCash);
+        var totalCash        = orders.Sum(o => o.AmountOfCashCollected ?? 0m);
 
         // Pure parcel money only (no service fees) — used for the COD display row. A failed
         // delivery collected no COD, so it is excluded from this figure (it still earns salary).
@@ -114,7 +114,7 @@ public sealed class GetSettlementPreviewQueryHandler
             WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
             CourierSalary:         o.CourierSalary,
             CompanyRevenue:        o.CompanyRevenue,
-            AmountOfCashCollected: OrderFinance.ExpectedCourierCash(o),
+            AmountOfCashCollected: o.AmountOfCashCollected,
             DeliveredAt:           o.DeliveredAt ?? o.DeliveredToWarehouseAt
         )).ToList();
 
