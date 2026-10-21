@@ -201,6 +201,11 @@ public static class OrderFinance
     /// </summary>
     public static decimal CourierCodTransferOutstanding(Order o)
     {
+        // Nothing is collected — so nothing can be handed over — until the order is delivered. A
+        // postponed or in-progress order still has an *expected* cash figure (the scan flow shows it
+        // to the courier), but it must not count as cash the courier owes the company.
+        if (o.DeliveredAt is null && o.DeliveredToWarehouseAt is null) return 0m;
+
         decimal keptSalary = o.WhoPaysForCompanyService == ServicePayer.Recipient ? (o.CourierSalary ?? 0m) : 0m;
         return Math.Max(0m, ExpectedCourierCash(o) - keptSalary - (o.CodTransferedToCompanyByCourier ?? 0m));
     }
