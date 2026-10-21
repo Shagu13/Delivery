@@ -155,7 +155,12 @@ export function SettlementModal({
     const salaryPaid     = lines.reduce((s, o) => s + (o.courierSalaryPaidAmount ?? 0), 0);
     const cashCollected  = lines.reduce((s, o) => s + (o.amountOfCashCollected ?? 0), 0);
     const transferred    = lines.reduce((s, o) => s + (o.codTransferedToCompanyByCourier ?? 0), 0);
-    const netIncome      = lines.reduce((s, o) => s + o.companyNetCash, 0);
+    // Income = service fees earned minus courier salary (OrderFinance.CompanyRevenue per order).
+    // companyNetCash is a running cash position that swings with payout timing (COD paid out to
+    // customers, cash the courier hasn't handed over yet), so it understated income. A postponed
+    // order has earned no fee yet — it only costs its salary.
+    const netIncome      = lines.reduce(
+        (s, o) => s + (o.status === 'DeliveryPostponed' ? -(o.courierSalary ?? 0) : o.companyRevenue), 0);
     const salaryUnpaid   = salaryEarned - salaryPaid;
 
     return createPortal(
