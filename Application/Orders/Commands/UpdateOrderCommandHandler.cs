@@ -128,6 +128,11 @@ public sealed class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderComma
                 : order.AmountToCollectForPackage;
         }
 
+        // Before delivery an edited price is still the original; after it, the original is frozen
+        // so the admin can compare it with whatever the courier collected.
+        if (!isDelivered)
+            order.OriginalPackagePrice = order.AmountToCollectForPackage;
+
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

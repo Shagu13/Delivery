@@ -88,7 +88,9 @@ Groups to know:
 - **Addresses** — `Recipient*` plus optional `Latitude`/`Longitude` (set only when the sender
   picked a geocoded suggestion). `ReturnPickup*` is where the courier collects, Returns only.
 - **Pricing** — `CompanyServicePrice` (the fee), `CourierSalary`, `AmountToCollectForPackage`
-  (product COD), `WeightPriceTierId`, `IsCompanyServicePriceIncluded` (the entered price was all-in).
+  (product COD), `WeightPriceTierId`, `IsCompanyServicePriceIncluded` (the entered price was all-in),
+  `OriginalPackagePrice` (the pre-delivery COD, frozen at delivery so it survives a courier's door
+  correction of `AmountToCollectForPackage`; reference only — no finance formula reads it).
 - **Per-order settlement** — `CodPaidToCustomerAmount/At`, `ServicePaidByCustomerAmount/At`,
   `CourierSalaryPaidAmount/At`, `CodTransferedToCompanyByCourier/At`, and the two
   `*SpecialCase` booleans. **Never read these raw** — go through `Application.Finance.OrderFinance`,

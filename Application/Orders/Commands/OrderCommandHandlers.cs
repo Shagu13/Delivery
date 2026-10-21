@@ -1020,6 +1020,10 @@ public sealed class SetOrderCompanyServicePriceCommandHandler : IRequestHandler<
             order.AmountOfCashCollected = order.WhoPaysForCompanyService == ServicePayer.Recipient
                 ? (order.AmountToCollectForPackage ?? 0m) + order.CompanyServicePrice
                 : order.AmountToCollectForPackage;
+        else
+            // The all-in re-slice above can move the product price; before delivery that is
+            // still the original.
+            order.OriginalPackagePrice = order.AmountToCollectForPackage;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

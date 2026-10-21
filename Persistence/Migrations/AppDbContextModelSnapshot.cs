@@ -821,6 +821,9 @@ namespace Persistence.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(20)");
 
+                    b.Property<decimal?>("OriginalPackagePrice")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("PickedUpFromRecipientAt")
                         .HasColumnType("datetime2");
 

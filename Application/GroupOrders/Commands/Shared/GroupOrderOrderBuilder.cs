@@ -227,6 +227,7 @@ internal static class GroupOrderOrderBuilder
                 ProductPaymentStatus      = o.ProductPaymentStatus,
                 WhoPaysForCompanyService  = o.WhoPaysForCompanyService,
                 AmountToCollectForPackage = amountToCollect,
+                OriginalPackagePrice      = amountToCollect,
                 TrackingNumber            = trackingNumbers[i],
                 CompanyServicePrice       = companyServicePrice,
                 IsCompanyServicePriceIncluded = includeService,

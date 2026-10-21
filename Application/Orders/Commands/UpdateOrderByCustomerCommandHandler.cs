@@ -71,6 +71,9 @@ public sealed class UpdateOrderByCustomerCommandHandler : IRequestHandler<Update
             order.AmountToCollectForPackage = request.AmountToCollectForPackage;
         }
 
+        // The customer edits before delivery, so the edited price is still the original.
+        order.OriginalPackagePrice = order.AmountToCollectForPackage;
+
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

@@ -81,6 +81,15 @@ public class Order
     public ServicePayer WhoPaysForCompanyService { get; set; } = ServicePayer.Sender;
     public decimal? AmountToCollectForPackage { get; set; }
 
+    /// <summary>
+    /// The product price as it stood before delivery (the COD portion; the fee is excluded for
+    /// all-in orders). Kept in step with <see cref="AmountToCollectForPackage"/> until the
+    /// order is delivered, then frozen — a courier correction at the door overwrites
+    /// <see cref="AmountToCollectForPackage"/> but never this, so the admin can tell the
+    /// original price from the corrected one. Reference only; no finance formula reads it.
+    /// </summary>
+    public decimal? OriginalPackagePrice { get; set; }
+
     // ── Payment tracking ─────────────────────────────────────────────────────
     public CompanyServicePaymentStatus CompanyServicePaymentStatus { get; set; }
         = CompanyServicePaymentStatus.Unpaid;
