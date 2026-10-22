@@ -14,7 +14,8 @@ import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll } fr
 import type { Sel } from './FinanceAllocation';
 
 // Outstanding per order for each courier flow — server-computed (OrderFinance), never re-derived here.
-const salaryOut = (o: OrderFinanceLine) => o.courierSalaryOutstanding;
+// A postponed order was not delivered, so its salary can't be paid yet (same as its COD hand-over).
+const salaryOut = (o: OrderFinanceLine) => o.status === 'DeliveryPostponed' ? 0 : o.courierSalaryOutstanding;
 const codOut    = (o: OrderFinanceLine) => o.courierCodTransferOutstanding;
 
 interface Props {
@@ -150,22 +151,30 @@ export function SettlementModal({
     if (!open) return null;
 
     // ── Day totals (derived live from the order lines) ───────────────────────────
-    // Postponed orders are listed (they carry salary) but were not delivered, so they are not counted.
-    const delivered      = lines.filter(o => o.status !== 'DeliveryPostponed').length;
-    const salaryEarned   = lines.reduce((s, o) => s + (o.courierSalary ?? 0), 0);
-    const salaryPaid     = lines.reduce((s, o) => s + (o.courierSalaryPaidAmount ?? 0), 0);
-    const cashCollected  = lines.reduce((s, o) => s + (o.amountOfCashCollected ?? 0), 0);
+    // Postponed orders are listed for reference but were not delivered, so none of their figures
+    // (count, salary, income) enter the day totals; they count on the day they are finally delivered.
+    const counted        = lines.filter(o => o.status !== 'DeliveryPostponed');
+    const delivered      = counted.length;
+    const salaryEarned   = counted.reduce((s, o) => s + (o.courierSalary ?? 0), 0);
+    const salaryPaid     = counted.reduce((s, o) => s + (o.courierSalaryPaidAmount ?? 0), 0);
+    const cashCollected  = counted.reduce((s, o) => s + (o.amountOfCashCollected ?? 0), 0);
     // Cash the courier owes the company for the day: what they have already handed over plus what is
     // still outstanding (server-computed: collected cash − salary kept out of it − handed over).
     // Showing only the recorded hand-overs read 0 until the admin ticked them, hiding what is due.
     const toTransfer     = lines.reduce(
         (s, o) => s + (o.codTransferedToCompanyByCourier ?? 0) + o.courierCodTransferOutstanding, 0);
-    // Income = service fees minus courier salary (OrderFinance.CompanyRevenue per order) over EVERY order
-    // listed, postponed ones included — so it equals the Service column minus the Salary column as the
-    // admin sees them. (companyNetCash was a running cash position that swings with payout timing.)
-    // Note: a postponed order is listed again on the day it is finally delivered, so adding several
-    // days' figures together counts it twice.
-    const netIncome      = lines.reduce((s, o) => s + o.companyRevenue, 0);
+    // DISPLAY ONLY: the courier's net position for the day = all cash collected − all salary earned
+    // (so sender-pays salary, which the courier does not keep from cash, is deducted as well). The
+    // server-side cap/allocations still use `toTransfer` (per-order); the gap is the salary not
+    // netted from cash. A partial selection has no per-row share of that gap, so it is only
+    // deducted when every payable order is ticked.
+    const transferShown  = Math.max(0, round2(cashCollected - salaryEarned));
+    const salaryNotKept  = Math.max(0, round2(toTransfer - transferShown));
+    const codNetSelected = codFlow.allChecked ? Math.max(0, round2(codFlow.selTotal - salaryNotKept)) : codFlow.selTotal;
+    // Income = service fees minus courier salary (OrderFinance.CompanyRevenue per order) over the
+    // counted (non-postponed) orders. (companyNetCash was a running cash position that swings with
+    // payout timing.)
+    const netIncome      = counted.reduce((s, o) => s + o.companyRevenue, 0);
     const salaryUnpaid   = salaryEarned - salaryPaid;
 
     return createPortal(
@@ -259,7 +268,7 @@ export function SettlementModal({
                                     </div>
                                     <div className="stl-fin-row">
                                         <span className="stl-fin-label">{t.stlmCourierToCompany}</span>
-                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(toTransfer)}</span>
+                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(transferShown)}</span>
                                     </div>
                                     <div className="stl-fin-divider" />
                                     <div className="stl-fin-row">
@@ -278,7 +287,7 @@ export function SettlementModal({
                                         <FlowBar f={salaryFlow} payLabel={t.stlmPaySalary} busy={busy} borderRight
                                             onToggleAll={check => toggleAll(setSelSalary, salaryFlow.payable, salaryOut, check)}
                                             onPay={() => doPay('Salary')} />
-                                        <FlowBar f={codFlow} payLabel={t.stlmRecordCodTransfer} busy={busy}
+                                        <FlowBar f={codFlow} payLabel={t.stlmRecordCodTransfer} busy={busy} netTotal={codNetSelected}
                                             onToggleAll={check => toggleAll(setSelCod, codFlow.payable, codOut, check)}
                                             onPay={() => doPay('CodTransfer')} />
                                     </div>
@@ -335,7 +344,7 @@ export function SettlementModal({
                                                                 </span>
                                                             </td>
                                                             <td style={{ textAlign: 'right' }}>
-                                                                <AllocCell applicable={(o.courierSalary ?? 0) > 0} notApplicableLabel="—"
+                                                                <AllocCell applicable={(o.courierSalary ?? 0) > 0 && !postponed} notApplicableLabel="—"
                                                                     outstanding={salaryOut(o)} paidAt={o.courierSalaryPaidAt}
                                                                     total={o.courierSalary ?? 0} paid={o.courierSalaryPaidAmount ?? 0}
                                                                     checked={selSalary[o.orderId]?.checked ?? false} amount={amountOf(selSalary, o, salaryOut)}
