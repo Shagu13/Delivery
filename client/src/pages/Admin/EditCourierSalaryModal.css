@@ -1,0 +1,108 @@
+/* Couriers → Edit salary modal. The shared .ui-modal* classes ship with components/ui/Modal.css (imported by the modal). */
+
+.ui-modal.ecs-modal {
+    max-width: 760px;
+}
+
+.ecs-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+    margin: 14px 0 8px;
+}
+
+.ecs-selectall {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.ecs-scope {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.ecs-tablewrap {
+    max-height: 46vh;
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+}
+
+.ecs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.ecs-table th,
+.ecs-table td {
+    padding: 8px 10px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.ecs-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--color-bg-3);
+    color: var(--color-text-subtle);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.ecs-table .ecs-num {
+    text-align: right;
+}
+
+.ecs-row--bad {
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.ecs-arrow {
+    color: var(--color-accent);
+    font-weight: 700;
+}
+
+.ecs-paid {
+    margin-left: 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+}
+
+.ecs-neg {
+    color: #ef4444;
+    font-weight: 700;
+}
+
+.ecs-warning {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--color-warning-bg);
+    border: 1px solid rgba(180, 83, 9, 0.2);
+    border-radius: var(--radius-sm);
+    color: var(--color-warning);
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+/* Phone: inputs 16px so iOS Safari doesn't zoom on focus; checkboxes get a comfortable touch target. */
+@media (max-width: 600px) {
+    .ecs-tablewrap input[type="checkbox"],
+    .ecs-selectall input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+    }
+}

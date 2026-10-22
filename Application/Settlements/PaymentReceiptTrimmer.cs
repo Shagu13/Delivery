@@ -17,37 +17,45 @@ public static class PaymentReceiptTrimmer
 {
     private const decimal Epsilon = 0.005m;
 
-    public static async Task TrimAsync(
+    public static Task TrimAsync(
         IAppDbContext context,
         Guid orderId,
         IReadOnlyDictionary<PaymentReceiptFlow, decimal> excessByFlow,
+        CancellationToken ct) =>
+        TrimManyAsync(context, new Dictionary<Guid, IReadOnlyDictionary<PaymentReceiptFlow, decimal>> { [orderId] = excessByFlow }, ct);
+
+    /// <summary>Same rule for many orders at once: ONE allocation query for the whole set (no query per order).</summary>
+    public static async Task TrimManyAsync(
+        IAppDbContext context,
+        IReadOnlyDictionary<Guid, IReadOnlyDictionary<PaymentReceiptFlow, decimal>> excessByOrder,
         CancellationToken ct)
     {
-        List<PaymentReceiptFlow> flows = excessByFlow
-            .Where(kv => kv.Value > Epsilon)
-            .Select(kv => kv.Key)
-            .ToList();
-        if (flows.Count == 0) return;
+        Dictionary<Guid, Dictionary<PaymentReceiptFlow, decimal>> remaining = excessByOrder
+            .Select(o => (o.Key, Flows: o.Value.Where(kv => kv.Value > Epsilon).ToDictionary(kv => kv.Key, kv => kv.Value)))
+            .Where(x => x.Flows.Count > 0)
+            .ToDictionary(x => x.Key, x => x.Flows);
+        if (remaining.Count == 0) return;
 
-        // One query for every flow being trimmed on this order.
+        List<Guid> orderIds = remaining.Keys.ToList();
+        List<PaymentReceiptFlow> flows = remaining.Values.SelectMany(f => f.Keys).Distinct().ToList();
+
+        // Newest receipt first, so the most recent payment is the one reduced.
         List<PaymentReceiptAllocation> allocations = await context.PaymentReceiptAllocations
             .Include(a => a.PaymentReceipt)
-            .Where(a => a.OrderId == orderId && flows.Contains(a.PaymentReceipt!.Flow))
+            .Where(a => orderIds.Contains(a.OrderId) && flows.Contains(a.PaymentReceipt!.Flow))
             .OrderByDescending(a => a.PaymentReceipt!.PaidAt)
             .ToListAsync(ct);
-
-        Dictionary<PaymentReceiptFlow, decimal> remaining = flows.ToDictionary(f => f, f => excessByFlow[f]);
 
         foreach (PaymentReceiptAllocation alloc in allocations)
         {
             PaymentReceiptFlow flow = alloc.PaymentReceipt!.Flow;
-            decimal excess = remaining[flow];
-            if (excess <= Epsilon) continue;
+            if (!remaining.TryGetValue(alloc.OrderId, out Dictionary<PaymentReceiptFlow, decimal>? byFlow)
+                || !byFlow.TryGetValue(flow, out decimal excess) || excess <= Epsilon) continue;
 
             decimal cut = Math.Min(alloc.Amount, excess);
             alloc.Amount -= cut;
             alloc.PaymentReceipt.TotalAmount -= cut;
-            remaining[flow] = excess - cut;
+            byFlow[flow] = excess - cut;
 
             if (alloc.Amount <= Epsilon)
                 context.PaymentReceiptAllocations.Remove(alloc);

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import { useAuth } from '../../contexts/useAuth';
 import { CreateCourierModal } from './CreateCourierModal';
 import { EditCourierModal } from './EditCourierModal';
+import { EditCourierSalaryModal } from './EditCourierSalaryModal';
 import { AddPackageModal } from './AddPackageModal';
 import { AdminMonthlyStats } from './AdminMonthlyStats';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
@@ -660,7 +661,7 @@ export function AdminDashboard() {
           {activeView === 'delivery'  && <AdminOrdersPage token={token ?? ''} canManage={!isTenant} canSeeRevenue={!isOperator} />}
           {/* Packages: merged Pick-Up + Delivery list. Mirrors the same canManage/canAssignCourier gates. */}
           {activeView === 'packages' && <AdminPackagesPage key={`pkg-${qParam}`} canManage={!isTenant} canAssignCourier={!isTenant} canGroup={!isTenant} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
-          {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} canSeeRevenue={!isOperator} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
+          {activeView === 'couriers'  && <AdminCouriers couriers={couriers} token={token ?? ''} canSeeRevenue={!isOperator} canEditSalary={!isOperator && !isTenant} onAdd={() => setShowCreateCourier(true)} onEdit={setEditCourier} onActiveChanged={handleCourierActiveChanged} />}
           {/* Customers: tenant co-admin can view/create/edit, but not set company prices. */}
           {activeView === 'customers' && <AdminCustomersPage token={token ?? ''} canManage={!isTenant} />}
                   {activeView === 'cities' && <AdminCitiesPage token={token ?? ''} />}
@@ -2871,6 +2872,7 @@ function AdminCouriers({
   onEdit,
   onActiveChanged,
   canSeeRevenue = true,
+  canEditSalary = false,
 }: {
   couriers: Courier[];
   token: string;
@@ -2878,6 +2880,8 @@ function AdminCouriers({
   onEdit: (courier: Courier) => void;
   onActiveChanged: (courierId: string, isActive: boolean) => void;
   canSeeRevenue?: boolean;
+  /** Admin only — the bulk salary endpoint is Admin-only server-side. */
+  canEditSalary?: boolean;
 }) {
   const { t, lang } = useLanguage();
   // Free-text courier search (name / username / phone / assigned area) for this view.
@@ -3244,6 +3248,7 @@ function AdminCouriers({
                 courier={r.courier}
                 orders={r.items as CourierDayDelivery[]}
                 canSeeRevenue={canSeeRevenue}
+                canEditSalary={canEditSalary}
                 token={token}
                 couriers={couriers}
                 onChanged={reloadDeliveries}
@@ -3588,14 +3593,15 @@ function isCourierRowDeliverable(o: CourierOrder): boolean {
   return o.orderType !== 'Return' && COURIER_ROW_LAST_MILE_STATUSES.includes(o.status);
 }
 
-function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, onChanged, onError, selected, onToggleSelected, onSetManySelected, onExport, exporting }: {
-  courier: Courier; orders: CourierDayDelivery[]; canSeeRevenue?: boolean;
+function CourierRow({ courier, orders, canSeeRevenue = true, canEditSalary = false, token, couriers, onChanged, onError, selected, onToggleSelected, onSetManySelected, onExport, exporting }: {
+  courier: Courier; orders: CourierDayDelivery[]; canSeeRevenue?: boolean; canEditSalary?: boolean;
   token: string; couriers: Courier[]; onChanged: () => void; onError: (msg: string) => void;
   selected: Set<string>; onToggleSelected: (id: string) => void;
   onSetManySelected: (ids: string[], checked: boolean) => void;
   onExport: () => void; exporting: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [salaryOpen, setSalaryOpen] = useState(false);
   const { t } = useLanguage();
 
   const selectableIds = useMemo(
@@ -3661,6 +3667,17 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
           <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
             {courier.phoneNumber}
           </span>
+          {canEditSalary && (
+            <button
+              className="go-action-btn go-action-btn--ghost"
+              style={{ padding: '5px 11px', fontSize: '0.75rem', flexShrink: 0 }}
+              onClick={e => { e.stopPropagation(); setSalaryOpen(true); }}
+              disabled={orders.length === 0}
+              title={t.ecsEditBtnTitle}
+            >
+              {t.ecsEditBtn}
+            </button>
+          )}
           <button
             className="go-action-btn go-action-btn--ghost"
             style={{ padding: '5px 11px', fontSize: '0.75rem', flexShrink: 0 }}
@@ -3672,6 +3689,18 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
           </button>
         </div>
       </div>
+
+      {salaryOpen && (
+        <EditCourierSalaryModal
+          courierName={courier.fullName}
+          orders={orders}
+          token={token}
+          canSeeRevenue={canSeeRevenue}
+          renderStatus={status => <StatusBadge status={status} />}
+          onClose={() => setSalaryOpen(false)}
+          onSaved={() => { setSalaryOpen(false); onChanged(); }}
+        />
+      )}
 
       {/* Deliveries for the selected day */}
       {expanded && (

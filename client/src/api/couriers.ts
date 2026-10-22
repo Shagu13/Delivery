@@ -48,6 +48,8 @@ export interface CourierOrder {
     companyServicePrice: number;
     amountToCollectForPackage: number | null;
     courierSalary: number | null;
+    /** Salary already paid out to the courier for this order (assigned-day list only). */
+    courierSalaryPaidAmount?: number | null;
     companyRevenue: number | null;
     orderType: string;
     assignedToCourierAt: string | null;

@@ -5,6 +5,7 @@ using Application.Common.Models;
 using Application.Courier.Queries;
 using Application.Orders.Commands;
 using Application.Orders.Commands.ChangeOrderPayer;
+using Application.Orders.Commands.SetCourierSalaryBulk;
 using Application.Orders.Commands.SoftDeletePackage;
 using Application.Orders.DTOs;
 using Application.Orders.Queries.GetAllOrders;
@@ -575,6 +576,19 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── PUT /api/orders/courier-salary/bulk  (Admin) ──────────────────────────
+    // One salary for many orders (Couriers page → Edit salary). All-or-nothing; see the handler.
+    [HttpPut("courier-salary/bulk")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SetCourierSalaryBulk(
+        [FromBody] SetCourierSalaryBulkRequest request,
+        CancellationToken ct)
+    {
+        int updated = await Sender.Send(new SetCourierSalaryBulkCommand(request.OrderIds, request.Salary), ct);
+        return Ok(updated);
+    }
+
     // ── PUT /api/orders/{id}/company-service-price  (Admin/Operator) ──────────
     [HttpPut("{id:guid}/company-service-price")]
     [Authorize(Roles = "Admin,Operator")]
@@ -785,6 +799,7 @@ public sealed class OrdersController : BaseController
 
 // ── Request models ────────────────────────────────────────────────────────────
 public sealed record SetCourierSalaryRequest(decimal Salary);
+public sealed record SetCourierSalaryBulkRequest(IReadOnlyList<Guid> OrderIds, decimal Salary);
 /// <summary>Optional body for admin-mark-delivered: assign a courier when unassigned and/or set salary.</summary>
 public sealed record AdminMarkDeliveredRequest(Guid? CourierId, decimal? Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);

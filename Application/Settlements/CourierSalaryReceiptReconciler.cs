@@ -21,17 +21,28 @@ public static class CourierSalaryReceiptReconciler
     public static async Task ReconcileAsync(
         IAppDbContext context, Order order, decimal? newSalary, CancellationToken ct)
     {
-        decimal paid = order.CourierSalaryPaidAmount ?? 0m;
-        decimal cap  = newSalary ?? 0m;
-        decimal excess = paid - cap;
+        decimal excess = CapPaidAmount(order, newSalary);
         if (excess <= Epsilon) return;
-
-        order.CourierSalaryPaidAmount = cap > Epsilon ? cap : null;
-        if (order.CourierSalaryPaidAmount is null) order.CourierSalaryPaidAt = null;
 
         await PaymentReceiptTrimmer.TrimAsync(
             context, order.Id,
             new Dictionary<PaymentReceiptFlow, decimal> { [PaymentReceiptFlow.CourierSalary] = excess },
             ct);
+    }
+
+    /// <summary>
+    /// Caps the order's paid-salary fields at the new salary and returns the surplus (0 when nothing to trim).
+    /// The bulk edit calls this per order in memory, then trims all receipts in one batch.
+    /// </summary>
+    public static decimal CapPaidAmount(Order order, decimal? newSalary)
+    {
+        decimal paid = order.CourierSalaryPaidAmount ?? 0m;
+        decimal cap  = newSalary ?? 0m;
+        decimal excess = paid - cap;
+        if (excess <= Epsilon) return 0m;
+
+        order.CourierSalaryPaidAmount = cap > Epsilon ? cap : null;
+        if (order.CourierSalaryPaidAmount is null) order.CourierSalaryPaidAt = null;
+        return excess;
     }
 }

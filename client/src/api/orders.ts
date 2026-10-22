@@ -425,3 +425,17 @@ export async function fetchMyDeliveryHistory(token: string): Promise<CourierOrde
     if (!res.ok) throw new Error('Failed to fetch delivery history');
     return res.json();
 }
+
+/**
+ * Admin sets one courier salary on many orders (Couriers page → Edit salary). All-or-nothing: the server refuses the
+ * whole request if the salary exceeds the service fee of any listed order. Resolves to the number of orders updated.
+ */
+export async function setCourierSalaryBulk(token: string, orderIds: string[], salary: number): Promise<number> {
+    const res = await fetch(`${BASE}/courier-salary/bulk`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds, salary }),
+    });
+    if (!res.ok) throw await payerChangeError(res);
+    return res.json() as Promise<number>;
+}

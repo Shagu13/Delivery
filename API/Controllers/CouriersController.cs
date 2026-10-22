@@ -234,6 +234,7 @@ public sealed class CouriersController : BaseController
                 companyServicePrice     = o.CompanyServicePrice,
                 amountToCollectForPackage = o.AmountToCollectForPackage,
                 courierSalary           = o.CourierSalary,
+                courierSalaryPaidAmount = o.CourierSalaryPaidAmount,
                 // Company margin is internal — hidden from operators.
                 companyRevenue          = hideRevenue ? (decimal?)null : o.CompanyRevenue,
                 orderType               = o.OrderType.ToString(),
