@@ -192,9 +192,6 @@ export default function AdminTenantSettlementsPage({ token }: { token: string })
                         </td>
                         <td style={{ ...td, color: 'var(--color-text-subtle)' }}>
                           {o.whoPaysForCompanyService}
-                          {!senderPays && o.customerSurcharge > 0.005 && (
-                            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#b45309' }}>+{gel(o.customerSurcharge)} owed by tenant</div>
-                          )}
                         </td>
                       </tr>
                     );

@@ -126,7 +126,8 @@ export function TenantSettlementPanel() {
                       {/* Service fee — customer owes livo (sender-pays only) */}
                       <td style={{ padding: '8px 12px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                          <span style={{ fontWeight: 700 }}>{gel(line.companyServicePrice)}</span>
+                          {/* A surcharge order shows only what the customer owes (the surcharge), in the same slot as a sender-paid fee. */}
+                          <span style={{ fontWeight: 700 }}>{gel(hasSurcharge ? line.customerSurcharge : line.companyServicePrice)}</span>
                           {(senderPays || hasSurcharge) ? (
                             <button className="btn-ghost btn-ghost--sm" disabled={busy} onClick={() => toggle(line, 'service')}
                               style={{ color: servicePaid ? '#059669' : 'var(--color-accent)' }}>
@@ -136,11 +137,6 @@ export function TenantSettlementPanel() {
                             <span style={{ fontSize: '0.7rem', color: 'var(--color-text-subtle)' }}>{t.ofinRecipientPays}</span>
                           )}
                         </div>
-                        {hasSurcharge && (
-                          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#b45309', marginTop: 2 }}>
-                            {t.ofinRecipientPays} · {t.ofinSurchargeAdmin(gel(line.customerSurcharge))}
-                          </div>
-                        )}
                       </td>
                     </tr>
                   );
