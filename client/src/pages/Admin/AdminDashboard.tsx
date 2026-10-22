@@ -675,7 +675,7 @@ export function AdminDashboard() {
           {activeView === 'partners' && isSystemAdmin && token && <AdminPartnersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && isSystemAdmin && token && <AdminTenantSettlementsPage token={token} />}
-          {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} initialSearch={qParam} initialParty={partyParam} />}
+          {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} canEditPayer={!isOperator && !isTenant} initialSearch={qParam} initialParty={partyParam} />}
           {activeView === 'orderSearch' && !isTenant && token && (
             <AdminOrderSearchPage token={token} onGoTo={goToOrder} />
           )}

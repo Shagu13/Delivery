@@ -29,31 +29,9 @@ public static class CourierSalaryReceiptReconciler
         order.CourierSalaryPaidAmount = cap > Epsilon ? cap : null;
         if (order.CourierSalaryPaidAmount is null) order.CourierSalaryPaidAt = null;
 
-        List<PaymentReceiptAllocation> allocations = await context.PaymentReceiptAllocations
-            .Include(a => a.PaymentReceipt)
-            .Where(a => a.OrderId == order.Id
-                     && a.PaymentReceipt!.Flow == PaymentReceiptFlow.CourierSalary)
-            .OrderByDescending(a => a.PaymentReceipt!.PaidAt)
-            .ToListAsync(ct);
-
-        foreach (PaymentReceiptAllocation alloc in allocations)
-        {
-            if (excess <= Epsilon) break;
-
-            decimal cut = Math.Min(alloc.Amount, excess);
-            alloc.Amount -= cut;
-            alloc.PaymentReceipt!.TotalAmount -= cut;
-            excess -= cut;
-
-            if (alloc.Amount <= Epsilon)
-                context.PaymentReceiptAllocations.Remove(alloc);
-        }
-
-        // Drop receipts left with no allocations (their total is now zero).
-        foreach (PaymentReceipt receipt in allocations
-                     .Select(a => a.PaymentReceipt!)
-                     .Distinct()
-                     .Where(r => r.TotalAmount <= Epsilon))
-            context.PaymentReceipts.Remove(receipt);
+        await PaymentReceiptTrimmer.TrimAsync(
+            context, order.Id,
+            new Dictionary<PaymentReceiptFlow, decimal> { [PaymentReceiptFlow.CourierSalary] = excess },
+            ct);
     }
 }

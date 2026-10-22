@@ -1,0 +1,112 @@
+/* Styles for the History "change fee payer" modal. Co-located: the shared .ui-modal* classes ship with
+   components/ui/Modal.css, which the modal imports; only the payer-specific bits live here. */
+
+.ui-modal.pcm-modal {
+    max-width: 620px;
+}
+
+.pcm-swap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 16px 0 14px;
+    padding: 12px 14px;
+    background: var(--color-bg-3);
+    border-radius: var(--radius-sm);
+}
+
+.pcm-swap > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pcm-swap__label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+}
+
+.pcm-swap__arrow {
+    font-size: 1.2rem;
+    color: var(--color-accent);
+}
+
+.pcm-source {
+    margin: 6px 0 0;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.pcm-preview {
+    margin-top: 18px;
+}
+
+/* A refetch is in flight: keep the last result visible but dimmed so the layout doesn't jump. */
+.pcm-stale {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity var(--transition);
+}
+
+.pcm-lines,
+.pcm-warnings {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.pcm-line {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.85rem;
+}
+
+.pcm-line__field {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.pcm-line__values {
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+}
+
+.pcm-line__before {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+.pcm-line__after {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.pcm-warnings {
+    margin-top: 14px;
+    padding: 11px 14px;
+    background: var(--color-warning-bg);
+    border: 1px solid rgba(180, 83, 9, 0.2);
+    border-radius: var(--radius-sm);
+    color: var(--color-warning);
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+.pcm-warnings li + li {
+    margin-top: 8px;
+}
+
+.pcm-note {
+    margin: 12px 0 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--color-text-subtle);
+}

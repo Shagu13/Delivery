@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Finance;
 using Domain;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -130,32 +131,9 @@ internal static class GroupOrderOrderBuilder
             //   • customerZone    — the zone the customer's negotiated rates are read from.
             //                       Always the delivery location (the return pickup for
             //                       Returns), never the swapped-in batch pickup.
-            District? district;
-            District? customerZone;
-            if (o.OrderType == OrderType.Return)
-            {
-                var returnName = o.ReturnPickupDistrict ?? o.RecipientDistrict;
-                var returnCity = o.ReturnPickupDistrict is not null ? o.ReturnPickupCity : o.RecipientCity;
-                district = FindDistrict(districts, cityNames, returnCity, returnName);
-                customerZone = district;
-            }
-            else
-            {
-                customerZone = FindDistrict(districts, cityNames, o.RecipientCity, o.RecipientDistrict);
-
-                // Swap only for a non-capital pickup delivering INTO the capital. Non-capital
-                // → non-capital keeps the delivery district's own zone and default price.
-                bool swapToPickUp = pickUpCanSwapPricing && customerZone?.IsCapitalTerritory == true;
-
-                district = swapToPickUp ? pickUpDistrict : customerZone;
-            }
-
-            bool isCapital = district?.IsCapitalTerritory == true;
-            bool isCity    = district?.IsCityTerritory    == true;
-
-            // Customer-rate zone flags — the delivery location, unaffected by the swap.
-            bool custIsCapital = customerZone?.IsCapitalTerritory == true;
-            bool custIsCity    = customerZone?.IsCityTerritory    == true;
+            (District? district, District? customerZone) = ResolveZones(
+                districts, cityNames, o.OrderType, o.RecipientCity, o.RecipientDistrict,
+                o.ReturnPickupCity, o.ReturnPickupDistrict, pickUpDistrict, pickUpCanSwapPricing);
 
             decimal companyServicePrice;
 
@@ -168,22 +146,13 @@ internal static class GroupOrderOrderBuilder
             {
                 companyServicePrice = o.CompanyServicePrice.Value;
             }
-            // ── Step 2: weight tier zone price ────────────────────────────────
-            else if (o.WeightPriceTierId.HasValue
-                && weightTiers.FirstOrDefault(t => t.Id == o.WeightPriceTierId.Value) is { } tier)
-            {
-                decimal? zonePrice = isCapital ? tier.CapitalPrice
-                                   : isCity    ? tier.CityPrice
-                                               : tier.DistrictPrice;
-
-                companyServicePrice = zonePrice is > 0
-                    ? zonePrice.Value
-                    : ResolveStandardPrice(customer, district, customerZone, specialPrices, custIsCapital, custIsCity);
-            }
-            // ── Step 3: standard pricing (special price → customer negotiated → district fallback)
+            // ── Steps 2–3: weight tier zone price, else standard pricing ──────
             else
             {
-                companyServicePrice = ResolveStandardPrice(customer, district, customerZone, specialPrices, custIsCapital, custIsCity);
+                WeightPriceTier? tier = o.WeightPriceTierId.HasValue
+                    ? weightTiers.FirstOrDefault(t => t.Id == o.WeightPriceTierId.Value)
+                    : null;
+                companyServicePrice = ResolveCalculatedFee(tier, customer, district, customerZone, specialPrices).Price;
             }
 
             decimal? amountToCollect = null;
@@ -280,7 +249,7 @@ internal static class GroupOrderOrderBuilder
     /// (e.g. a Tbilisi district priced as a village). Falls back to a name-only match only
     /// when no candidate belongs to the given city (legacy/unknown city text).
     /// </summary>
-    private static District? FindDistrict(
+    internal static District? FindDistrict(
         IReadOnlyList<District> districts,
         IReadOnlyDictionary<Guid, string> cityNames,
         string? cityName,
@@ -302,36 +271,99 @@ internal static class GroupOrderOrderBuilder
     }
 
     /// <summary>
-    /// Special price → customer's negotiated rate for the delivery zone (<paramref name="custIsCapital"/> /
-    /// <paramref name="custIsCity"/> describe the DELIVERY district), falling back to
+    /// Special price → customer's negotiated rate for the delivery zone (capital / city / district, read
+    /// off <paramref name="customerZone"/>), falling back to
     /// <paramref name="fallbackDistrict"/>'s default price — which is the swapped pickup
     /// district when the swap applies. The special price, like the negotiated tier, is always
     /// read off <paramref name="customerZone"/> (the delivery location), never the swapped-in
-    /// pickup district.
+    /// pickup district. Also reports which rung of the waterfall produced the price.
     /// </summary>
-    private static decimal ResolveStandardPrice(
+    internal static (decimal Price, OrderFeeSource Source) ResolveStandardPrice(
         Customer? customer,
         District? fallbackDistrict,
         District? customerZone,
-        IReadOnlyDictionary<Guid, decimal> specialPrices,
-        bool custIsCapital,
-        bool custIsCity)
+        IReadOnlyDictionary<Guid, decimal> specialPrices)
     {
+        // Customer-rate zone flags — the delivery location, unaffected by the pickup swap.
+        bool custIsCapital = customerZone?.IsCapitalTerritory == true;
+        bool custIsCity    = customerZone?.IsCityTerritory    == true;
+
         if (customerZone is not null && specialPrices.TryGetValue(customerZone.Id, out var specialPrice))
-            return specialPrice;
+            return (specialPrice, OrderFeeSource.CustomerSpecialPrice);
 
         if (customer is not null)
         {
             if (custIsCapital && customer.CompanyServiceCapitalPrice is > 0)
-                return customer.CompanyServiceCapitalPrice!.Value;
+                return (customer.CompanyServiceCapitalPrice!.Value, OrderFeeSource.CustomerNegotiatedRate);
 
             if (custIsCity && customer.CompanyServiceCityPrice is > 0)
-                return customer.CompanyServiceCityPrice!.Value;
+                return (customer.CompanyServiceCityPrice!.Value, OrderFeeSource.CustomerNegotiatedRate);
 
             if (customer.CompanyServiceDistrictPrice is > 0)
-                return customer.CompanyServiceDistrictPrice!.Value;
+                return (customer.CompanyServiceDistrictPrice!.Value, OrderFeeSource.CustomerNegotiatedRate);
         }
 
-        return fallbackDistrict?.CompanyServicePrice ?? 0;
+        decimal fallback = fallbackDistrict?.CompanyServicePrice ?? 0;
+        return (fallback, fallback > 0 ? OrderFeeSource.DistrictDefault : OrderFeeSource.None);
+    }
+
+    /// <summary>
+    /// Waterfall steps 2–4: the weight tier's zone price when the order has a tier with a price for its
+    /// zone, otherwise <see cref="ResolveStandardPrice"/>. Shared by order creation and the admin
+    /// payer-change preview so both always agree on the fee.
+    /// </summary>
+    internal static (decimal Price, OrderFeeSource Source) ResolveCalculatedFee(
+        WeightPriceTier? tier,
+        Customer? customer,
+        District? pricingDistrict,
+        District? customerZone,
+        IReadOnlyDictionary<Guid, decimal> specialPrices)
+    {
+        if (tier is not null)
+        {
+            decimal? zonePrice = pricingDistrict?.IsCapitalTerritory == true ? tier.CapitalPrice
+                               : pricingDistrict?.IsCityTerritory    == true ? tier.CityPrice
+                                                                              : tier.DistrictPrice;
+            if (zonePrice is > 0)
+                return (zonePrice.Value, OrderFeeSource.WeightTier);
+        }
+
+        return ResolveStandardPrice(customer, pricingDistrict, customerZone, specialPrices);
+    }
+
+    /// <summary>
+    /// The two districts that drive an order's price:
+    ///   • pricing district — the *default* pricing zone: Returns price off their own pickup;
+    ///     Send/Exchange price off the recipient, swapping to the batch pickup only when the pickup isn't
+    ///     the capital and the delivery is.
+    ///   • customer zone — where the customer's negotiated rates are read from. Always the delivery
+    ///     location (the return pickup for Returns), never the swapped-in batch pickup.
+    /// </summary>
+    internal static (District? PricingDistrict, District? CustomerZone) ResolveZones(
+        IReadOnlyList<District> districts,
+        IReadOnlyDictionary<Guid, string> cityNames,
+        OrderType orderType,
+        string recipientCity,
+        string recipientDistrict,
+        string? returnPickupCity,
+        string? returnPickupDistrict,
+        District? pickUpDistrict,
+        bool pickUpCanSwapPricing)
+    {
+        if (orderType == OrderType.Return)
+        {
+            string returnName = returnPickupDistrict ?? recipientDistrict;
+            string? returnCity = returnPickupDistrict is not null ? returnPickupCity : recipientCity;
+            District? zone = FindDistrict(districts, cityNames, returnCity, returnName);
+            return (zone, zone);
+        }
+
+        District? customerZone = FindDistrict(districts, cityNames, recipientCity, recipientDistrict);
+
+        // Swap only for a non-capital pickup delivering INTO the capital. Non-capital
+        // → non-capital keeps the delivery district's own zone and default price.
+        bool swapToPickUp = pickUpCanSwapPricing && customerZone?.IsCapitalTerritory == true;
+
+        return (swapToPickUp ? pickUpDistrict : customerZone, customerZone);
     }
 }

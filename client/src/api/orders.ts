@@ -268,6 +268,61 @@ export const setCompanyServicePrice = (token: string, id: string, price: number)
 export const setOrderPrices = (
     token: string, id: string, companyServicePrice: number, amountToCollectForPackage: number | null, customerSurcharge: number,
 ) => orderAction(token, id, 'prices', { companyServicePrice, amountToCollectForPackage, customerSurcharge });
+// ── Admin: change who pays the service fee on a DELIVERED order ───────────────
+/** Which rung of the fee waterfall produced the suggested fee (mirrors the backend `OrderFeeSource`). */
+export type FeeSource = 'None' | 'WeightTier' | 'CustomerSpecialPrice' | 'CustomerNegotiatedRate' | 'DistrictDefault';
+
+/** One stored field the payer change will modify; values are invariant text ("12.50", "Paid", "true"). */
+export interface PayerChangeLine { field: string; before: string | null; after: string | null }
+
+/** A consequence to confirm before applying; `code` is mapped to translated copy by the UI. */
+export interface PayerChangeWarning { code: string; amount: number }
+
+export interface PayerChangePreview {
+    currentPayer: ServicePayer;
+    newPayer: ServicePayer;
+    /** Fee from the customer's special price → negotiated rate → district default; null when none exists. */
+    suggestedFee: number | null;
+    suggestedFeeSource: FeeSource;
+    /** The fee `lines` were computed with; null until the admin enters one when nothing could be suggested. */
+    appliedFee: number | null;
+    lines: PayerChangeLine[];
+    warnings: PayerChangeWarning[];
+}
+
+/** A 409 carries its reason as the title; a 422 carries the specifics under `errors` — prefer those. */
+async function payerChangeError(res: Response): Promise<Error> {
+    const err = await res.json().catch(() => ({ title: 'Unknown error' })) as
+        { title?: string; errors?: Record<string, string[]> };
+    const firstValidation = err.errors ? Object.values(err.errors).flat()[0] : undefined;
+    return new Error(firstValidation ?? err.title ?? 'Request failed');
+}
+
+/** Dry run of {@link changeOrderPayer}. Omit `fee` to use the suggested fee. Nothing is saved. */
+export async function fetchPayerChangePreview(
+    token: string, id: string, newPayer: ServicePayer, fee?: number,
+): Promise<PayerChangePreview> {
+    const qs = new URLSearchParams({ newPayer });
+    if (fee !== undefined) qs.set('fee', String(fee));
+    const res = await fetch(`${BASE}/${id}/payer-change-preview?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw await payerChangeError(res);
+    return res.json() as Promise<PayerChangePreview>;
+}
+
+/** Admin flips the fee payer of a delivered Send order; the server re-derives every dependent figure. */
+export async function changeOrderPayer(
+    token: string, id: string, newPayer: ServicePayer, companyServicePrice: number,
+): Promise<void> {
+    const res = await fetch(`${BASE}/${id}/payer`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPayer, companyServicePrice }),
+    });
+    if (!res.ok) throw await payerChangeError(res);
+}
+
 /** Admin postpones an assigned delivery (mirrors the courier action). Comment is only kept
  *  (and required by the UI) for the "Other" reason. */
 export const adminPostponeOrder = (token: string, id: string, reason: PostponeReason, comment?: string) =>

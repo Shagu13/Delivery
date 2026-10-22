@@ -16,6 +16,8 @@ import { getStatusMeta } from '../../utils/statusMeta';
 import { georgianToday, toDateKey, georgianDateKeyOf } from '../../utils/georgianTime';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { ViewOrderModal } from './ViewOrderModal';
+import { EditDeliveredPayerModal } from './EditDeliveredPayerModal';
+import type { PayerEditTarget } from './EditDeliveredPayerModal';
 import type { AdminOrderItem } from './AdminOrdersPage';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -280,7 +282,7 @@ function CustomerTypeahead({ token, value, onChange }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function AdminHistoryPage({ token, canSeeRevenue = true, initialSearch = '', initialParty = 'sender' }: { token: string; canSeeRevenue?: boolean; initialSearch?: string; initialParty?: 'sender' | 'recipient' }) {
+export default function AdminHistoryPage({ token, canSeeRevenue = true, canEditPayer = false, initialSearch = '', initialParty = 'sender' }: { token: string; canSeeRevenue?: boolean; canEditPayer?: boolean; initialSearch?: string; initialParty?: 'sender' | 'recipient' }) {
   const { t, lang } = useLanguage();
   const locCity     = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
   const locDistrict = (en: string, geo?: string | null) => lang === 'ka' && geo ? geo : en;
@@ -300,6 +302,8 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
   const [rangeFrom,     setRangeFrom]    = useState<Date | null>(() => initialSearch ? null : georgianToday());
   const [rangeTo,       setRangeTo]      = useState<Date | null>(null);
   const [viewingOrder,  setViewingOrder] = useState<AdminOrderItem | null>(null);
+  // Admin-only: the delivered order whose service-fee payer is being corrected.
+  const [payerTarget,   setPayerTarget]  = useState<PayerEditTarget | null>(null);
   const [page,          setPage]         = useState(1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -871,6 +875,15 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
                       >
                         {t.aopView}
                       </button>
+                      {canEditPayer && o.status === 'DeliveredToRecipient' && o.orderType === 'Send' && (
+                        <button
+                          type="button"
+                          className="hist-fix-btn"
+                          onClick={() => setPayerTarget({ id: o.id, trackingNumber: o.trackingNumber, payer: o.whoPaysForCompanyService })}
+                        >
+                          {t.edit}
+                        </button>
+                      )}
                       {correction && (
                         confirmId === o.id ? (
                           <span style={{ display: 'inline-flex', gap: 4 }}>
@@ -984,6 +997,21 @@ export default function AdminHistoryPage({ token, canSeeRevenue = true, initialS
       {/* Full order view — reused from the Delivery page, with cash-collected +
           cancellation reason/comment shown when present. */}
       <ViewOrderModal order={viewingOrder} open={!!viewingOrder} onClose={() => setViewingOrder(null)} showRevenue={canSeeRevenue} />
+
+      {/* Admin: correct who pays the service fee on a delivered order (keyed so the form resets per order). */}
+      {payerTarget && (
+        <EditDeliveredPayerModal
+          key={payerTarget.id}
+          target={payerTarget}
+          token={token}
+          onClose={() => setPayerTarget(null)}
+          onSaved={() => {
+            setPayerTarget(null);
+            // Money figures changed everywhere they are shown: History rows, Finance, settlements.
+            void queryClient.invalidateQueries({ queryKey: ['admin'] });
+          }}
+        />
+      )}
     </div>
   );
 }

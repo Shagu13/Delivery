@@ -4,12 +4,14 @@ using Application.Orders.Queries.ScanOrders;
 using Application.Common.Models;
 using Application.Courier.Queries;
 using Application.Orders.Commands;
+using Application.Orders.Commands.ChangeOrderPayer;
 using Application.Orders.Commands.SoftDeletePackage;
 using Application.Orders.DTOs;
 using Application.Orders.Queries.GetAllOrders;
 using Application.Orders.Queries.GetCourierDailyDeliveries;
 using Application.Orders.Queries.GetOrderByTrackingNumber;
 using Application.Orders.Queries.GetOrderLocations;
+using Application.Orders.Queries.GetOrderPayerChangePreview;
 using Application.Orders.Queries.SearchRecipientSuggestions;
 using Application.Orders.Queries;
 using ClosedXML.Excel;
@@ -600,6 +602,33 @@ public sealed class OrdersController : BaseController
         return NoContent();
     }
 
+    // ── GET /api/orders/{id}/payer-change-preview  (Admin) ────────────────────
+    // Dry run of the payer change below: the fee the customer's pricing resolves to and every
+    // field / receipt the change would touch. `fee` omitted = use the suggested fee.
+    [HttpGet("{id:guid}/payer-change-preview")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(PayerChangePreviewDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> PreviewPayerChange(
+        Guid id,
+        [FromQuery] ServicePayer newPayer,
+        [FromQuery] decimal? fee,
+        CancellationToken ct)
+        => Ok(await Sender.Send(new GetOrderPayerChangePreviewQuery(id, newPayer, fee), ct));
+
+    // ── PUT /api/orders/{id}/payer  (Admin) ───────────────────────────────────
+    // Corrects who pays the service fee on a DELIVERED Send order and re-derives all dependent money.
+    [HttpPut("{id:guid}/payer")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> ChangeOrderPayer(
+        Guid id,
+        [FromBody] ChangeOrderPayerRequest request,
+        CancellationToken ct)
+    {
+        await Sender.Send(new ChangeOrderPayerCommand(id, request.NewPayer, request.CompanyServicePrice), ct);
+        return NoContent();
+    }
+
     // ── GET /api/orders/courier/{courierId}/daily  (Admin) ────────────────────
     [HttpGet("courier/{courierId:guid}/daily")]
     [Authorize(Roles = "Admin")]
@@ -760,6 +789,7 @@ public sealed record SetCourierSalaryRequest(decimal Salary);
 public sealed record AdminMarkDeliveredRequest(Guid? CourierId, decimal? Salary);
 public sealed record SetCompanyServicePriceRequest(decimal Price);
 public sealed record SetOrderPricesRequest(decimal CompanyServicePrice, decimal? AmountToCollectForPackage, decimal CustomerSurcharge = 0m);
+public sealed record ChangeOrderPayerRequest(ServicePayer NewPayer, decimal CompanyServicePrice);
 public sealed record PostponeOrderRequest(Domain.Enums.PostponeReason Reason, string? Comment = null);
 /// <summary>Optional correction to the parcel COD amount, applied atomically with delivery.</summary>
 public sealed record MarkDeliveredRequest(decimal? UpdatedCodAmount);
