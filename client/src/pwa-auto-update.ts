@@ -7,6 +7,28 @@
 // is relaunched. This wires up the missing piece: reload the page once, the
 // moment the updated worker takes control, and proactively check for new builds
 // on launch / focus / periodically so the update is picked up promptly.
+//
+// Loop guard: `reloading` resets on every reload, so if the browser keeps seeing
+// the worker as "changed" (mid-deploy instance mismatch, unstable imported
+// script) the page would reload forever. The last auto-reload time is kept in
+// sessionStorage and a second reload within the cooldown is skipped — the new
+// worker still controls the page, it just isn't force-reloaded again.
+const RELOAD_KEY = 'pwa_last_auto_reload';
+const RELOAD_COOLDOWN_MS = 60 * 1000;
+
+function reloadedRecently(): boolean {
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_KEY));
+    return last > 0 && Date.now() - last < RELOAD_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
+
+function markReloaded(): void {
+  try { sessionStorage.setItem(RELOAD_KEY, Date.now().toString()); } catch { /* storage blocked */ }
+}
+
 export function setupPwaAutoUpdate(): void {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
@@ -19,7 +41,9 @@ export function setupPwaAutoUpdate(): void {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (reloading) return;
     if (!hadController) { hadController = true; return; }
+    if (reloadedRecently()) return;
     reloading = true;
+    markReloaded();
     window.location.reload();
   });
 
