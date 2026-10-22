@@ -148,6 +148,11 @@ export async function exportAssignedForCourierExcel(
         const body = await res.json().catch(() => null);
         throw new Error(body?.title ?? `Export failed (${res.status})`);
     }
+    await saveResponseAsFile(res, 'courier-orders.xlsx');
+}
+
+/// Saves a file response through the browser, taking the name from its Content-Disposition.
+async function saveResponseAsFile(res: Response, fallbackName: string): Promise<void> {
     const blob        = await res.blob();
     const url         = URL.createObjectURL(blob);
     const disposition = res.headers.get('content-disposition') ?? '';
@@ -159,7 +164,7 @@ export async function exportAssignedForCourierExcel(
     const plainMatch = /filename=(['"]?)([^;"'\n]*)\1/i.exec(disposition);
     const filename = starMatch
         ? decodeURIComponent(starMatch[1].trim())
-        : plainMatch?.[2]?.trim() || 'courier-orders.xlsx';
+        : plainMatch?.[2]?.trim() || fallbackName;
     const anchor      = document.createElement('a');
     anchor.href       = url;
     anchor.download   = filename;
@@ -194,6 +199,79 @@ export async function fetchAssignedPickupsForDay(
     });
     if (!res.ok) throw new Error('Failed to fetch assigned pickups');
     return res.json();
+}
+
+// ── Completed tab: what couriers finished between two Georgian days (inclusive) ──
+
+/// One order a courier finished on the last-mile leg. `TOrder` is the Delivery list's order shape
+/// (`AdminOrderItem` + `expectedCourierCash`) — kept generic so this file doesn't import from pages.
+export interface CompletedDelivery<TOrder> {
+    order: TOrder;
+    /// Delivery time, the failed-attempt time, or — for a standalone Return — the warehouse drop-off.
+    completedAt: string;
+    /// A billable failed delivery: not handed over, but the sender is still charged.
+    isFailed: boolean;
+    failureReason: string | null;
+    failureComment: string | null;
+}
+
+/// A pickup batch a courier brought to the warehouse.
+export interface CompletedPickup {
+    id: string;
+    courierId: string;
+    courierFullName: string;
+    senderBusinessName: string;
+    senderPhone: string;
+    pickUpCity: string;
+    pickUpDistrict: string;
+    pickUpAddress: string;
+    numberOfPackages: number;
+    status: string;
+    pickedUpAt: string | null;
+    deliveredToWarehouseAt: string;
+}
+
+export type CompletedLeg = 'deliveries' | 'pickups';
+
+function completedQuery(courierId: string, fromKey: string, toKey: string, extra: Record<string, string> = {}): string {
+    const qs = new URLSearchParams({ from: fromKey, to: toKey, ...extra });
+    if (courierId) qs.set('courierId', courierId);
+    return qs.toString();
+}
+
+/// `courierId` '' = every courier; `fromKey`/`toKey` are Georgian "YYYY-MM-DD" days (equal = a single day).
+export async function fetchCompletedDeliveries<TOrder>(
+    token: string, courierId: string, fromKey: string, toKey: string,
+): Promise<CompletedDelivery<TOrder>[]> {
+    const res = await fetch(`/api/couriers/completed/deliveries?${completedQuery(courierId, fromKey, toKey)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch completed deliveries');
+    return res.json();
+}
+
+export async function fetchCompletedPickups(
+    token: string, courierId: string, fromKey: string, toKey: string,
+): Promise<CompletedPickup[]> {
+    const res = await fetch(`/api/couriers/completed/pickups?${completedQuery(courierId, fromKey, toKey)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch completed pickups');
+    return res.json();
+}
+
+/// Downloads the same filtered list as an Excel file. Triggers a browser file save.
+export async function exportCompletedExcel(
+    token: string, leg: CompletedLeg, courierId: string, fromKey: string, toKey: string, lang: 'ka' | 'en',
+): Promise<void> {
+    const res = await fetch(`/api/couriers/completed/${leg}/export?${completedQuery(courierId, fromKey, toKey, { lang })}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.title ?? `Export failed (${res.status})`);
+    }
+    await saveResponseAsFile(res, `completed-${leg}.xlsx`);
 }
 
 export interface UpdateCourierRequest {

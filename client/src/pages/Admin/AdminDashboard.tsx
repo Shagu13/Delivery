@@ -32,6 +32,7 @@ import { georgianToday, georgianDateKeyOf } from '../../utils/georgianTime';
 import { resolveDateWindow } from '../../utils/dateWindow';
 import { isQueryFreshLive } from '../../utils/queryFreshness';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
+import { CompletedCouriersPanel } from './CompletedCouriers/CompletedCouriersPanel';
 
 // Every one of these is a whole separate admin sub-page (its own data fetching, its own
 // heavy dependencies) reachable from exactly one sidebar view. AdminDashboard itself is
@@ -2889,6 +2890,8 @@ function AdminCouriers({
   const [view, setView] = useState<'today' | 'all'>('today');
   // Which leg the day's assignments are shown for: last-mile delivery or warehouse pickup.
   const [mode, setMode] = useState<'delivery' | 'pickup'>('delivery');
+  // Third toggle: finished orders by courier + date. Shown instead of the day's assignments, which pause.
+  const [showCompleted, setShowCompleted] = useState(false);
   const [deliveries, setDeliveries] = useState<CourierDayDelivery[]>([]);
   const [pickups, setPickups] = useState<CourierDayPickup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2913,6 +2916,7 @@ function AdminCouriers({
 
   // Fetch the day's assignments (delivery or pickup leg) whenever day or mode changes.
   useEffect(() => {
+    if (showCompleted) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -2923,7 +2927,7 @@ function AdminCouriers({
       .catch(() => { if (!cancelled) setError(mode === 'pickup' ? 'Failed to load assigned pickups' : 'Failed to load assigned orders'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [dayKey, token, mode, todayOnly]);
+  }, [dayKey, token, mode, todayOnly, showCompleted]);
 
   // Silently re-fetch the day's deliveries after a per-row action (mark delivered/postpone/
   // cancel) mutates an order — no loading spinner, mirrors the Packages page's `loadSilent`.
@@ -3078,22 +3082,30 @@ function AdminCouriers({
       <div className="content-card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', flexWrap: 'wrap' }}>
           <div style={{ display: 'inline-flex', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 100, padding: 2 }}>
-            {(['delivery', 'pickup'] as const).map(m => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                style={{
-                  padding: '5px 14px', borderRadius: 100, border: 'none', cursor: 'pointer',
-                  fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--font-body)',
-                  background: mode === m ? 'var(--color-accent)' : 'transparent',
-                  color: mode === m ? '#fff' : 'var(--color-text-subtle)',
-                  transition: 'background 0.15s, color 0.15s',
-                }}
-              >
-                {m === 'delivery' ? t.crwModeDelivery : t.crwModePickup}
-              </button>
-            ))}
+            {(['delivery', 'pickup', 'completed'] as const).map(m => {
+              const active = m === 'completed' ? showCompleted : !showCompleted && mode === m;
+              return (
+                <button
+                  key={m}
+                  onClick={() => {
+                    if (m === 'completed') { setShowCompleted(true); return; }
+                    setMode(m);
+                    setShowCompleted(false);
+                  }}
+                  style={{
+                    padding: '5px 14px', borderRadius: 100, border: 'none', cursor: 'pointer',
+                    fontSize: '0.78rem', fontWeight: 700, fontFamily: 'var(--font-body)',
+                    background: active ? 'var(--color-accent)' : 'transparent',
+                    color: active ? '#fff' : 'var(--color-text-subtle)',
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                >
+                  {m === 'delivery' ? t.crwModeDelivery : m === 'pickup' ? t.crwModePickup : t.crwModeCompleted}
+                </button>
+              );
+            })}
           </div>
+          {!showCompleted && (<>
           <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-subtle)' }}>
             {mode === 'pickup'
               ? (isToday ? t.crwNavCurrentlyHeld : t.crwNavPickedUpOn)
@@ -3134,9 +3146,13 @@ function AdminCouriers({
               ? <>{totalAssigned} {t.crwModePickup.toLowerCase()} · {totalSingleOrders} {t.crwOrdersWord}</>
               : <>{totalAssigned} assigned</>}
           </span>
+          </>)}
         </div>
       </div>
 
+      {showCompleted ? (
+        <CompletedCouriersPanel token={token} couriers={couriers} canSeeRevenue={canSeeRevenue} />
+      ) : (<>
       {/* Bulk reassign bar — appears once at least one order/batch is selected below.
           Sticky so it stays reachable while scrolling a long courier list, mirroring
           AdminPackagesPage's .aop-bulk-bar (position/top/z-index). */}
@@ -3242,6 +3258,7 @@ function AdminCouriers({
           </div>
         )}
       </div>
+      </>)}
 
       {actionError && (
         <div className="action-toast action-toast--err" role="status">{actionError}</div>

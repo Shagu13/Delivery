@@ -1,5 +1,7 @@
+using API.Excel;
 using API.Models.Couriers;
 using Application.Couriers.Commands.CreateCourier;
+using Application.Couriers.Queries.CompletedByCourier;
 using Application.Couriers.Commands.UpdateCourier;
 using Application.Couriers.Commands.SetCourierActiveStatus;
 using Application.Couriers.DTOs;
@@ -411,6 +413,54 @@ public sealed class CouriersController : BaseController
             .ToListAsync(ct);
 
         return Ok(pickups);
+    }
+
+    // ── Completed tab: what couriers finished between two Georgian days (inclusive) ──
+    // courierId omitted = every courier. Operators get the same rows minus company margin.
+
+    // GET /api/couriers/completed/deliveries?courierId=&from=YYYY-MM-DD&to=YYYY-MM-DD
+    [HttpGet("completed/deliveries")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(IReadOnlyList<CompletedDeliveryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCompletedDeliveries(
+        [FromQuery] Guid? courierId, [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)
+        => Ok(await Sender.Send(new GetCompletedDeliveriesQuery(courierId, from, to, User.IsInRole("Operator")), ct));
+
+    // GET /api/couriers/completed/pickups?courierId=&from=&to=
+    [HttpGet("completed/pickups")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(IReadOnlyList<CompletedPickupDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCompletedPickups(
+        [FromQuery] Guid? courierId, [FromQuery] DateTime from, [FromQuery] DateTime to, CancellationToken ct)
+        => Ok(await Sender.Send(new GetCompletedPickupsQuery(courierId, from, to), ct));
+
+    private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    // GET /api/couriers/completed/deliveries/export?courierId=&from=&to=&lang=ka
+    [HttpGet("completed/deliveries/export")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportCompletedDeliveries(
+        [FromQuery] Guid? courierId, [FromQuery] DateTime from, [FromQuery] DateTime to,
+        [FromQuery] string lang = "ka", CancellationToken ct = default)
+    {
+        IReadOnlyList<CompletedDeliveryDto> items =
+            await Sender.Send(new GetCompletedDeliveriesQuery(courierId, from, to, User.IsInRole("Operator")), ct);
+        return File(CompletedCourierExcelBuilder.BuildDeliveries(items, lang), XlsxContentType,
+            $"completed-deliveries-{from:dd.MM}-{to:dd.MM}.xlsx");
+    }
+
+    // GET /api/couriers/completed/pickups/export?courierId=&from=&to=&lang=ka
+    [HttpGet("completed/pickups/export")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportCompletedPickups(
+        [FromQuery] Guid? courierId, [FromQuery] DateTime from, [FromQuery] DateTime to,
+        [FromQuery] string lang = "ka", CancellationToken ct = default)
+    {
+        IReadOnlyList<CompletedPickupDto> items = await Sender.Send(new GetCompletedPickupsQuery(courierId, from, to), ct);
+        return File(CompletedCourierExcelBuilder.BuildPickups(items, lang), XlsxContentType,
+            $"completed-pickups-{from:dd.MM}-{to:dd.MM}.xlsx");
     }
 
 }

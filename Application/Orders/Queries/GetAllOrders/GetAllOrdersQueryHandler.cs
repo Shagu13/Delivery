@@ -165,60 +165,12 @@ public sealed class GetAllOrdersQueryHandler
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);
 
-        // Build Georgian-name lookup dictionaries (active records only)
-        var cityGeo     = (await _context.Cities    .AsNoTracking().Where(c => c.DateDeleted == null).ToListAsync(cancellationToken))
-                            .GroupBy(c => c.CityName)    .ToDictionary(g => g.Key, g => g.First().CityNameGeo);
-        var districtGeo = (await _context.Districts .AsNoTracking().Where(d => d.DateDeleted == null).ToListAsync(cancellationToken))
-                            .GroupBy(d => d.DistrictName).ToDictionary(g => g.Key, g => g.First().DistrictNameGeo);
+        // Georgian-name lookups (active records only) + the shared entity→DTO mapping.
+        AdminOrderListMapper.GeoNames geo = await AdminOrderListMapper.LoadGeoNamesAsync(_context, cancellationToken);
+        bool hideRevenue = request.TenantId.HasValue || request.HideCompanyRevenue;
 
         var items = entities
-            .Select(o => new AdminOrderListDto(
-                Id:                       o.Id,
-                TrackingNumber:           o.TrackingNumber,
-                SenderBusinessName:       o.GroupOrder?.SenderBusinessName ?? o.Customer?.BusinessName ?? string.Empty,
-                SenderFirstName:          o.GroupOrder?.SenderFirstName    ?? o.Customer?.FirstName    ?? string.Empty,
-                SenderLastName:           o.GroupOrder?.SenderLastName     ?? o.Customer?.LastName     ?? string.Empty,
-                SenderPhone:              o.GroupOrder?.SenderPhone        ?? o.Customer?.PhoneNumber  ?? string.Empty,
-                AlternativeSenderPhone:   o.GroupOrder?.AlternativeSenderPhone,
-                GroupOrderId:             o.GroupOrderId,
-                PickUpCity:               o.GroupOrder?.PickUpCity     ?? o.Customer?.City     ?? string.Empty,
-                PickUpDistrict:           o.GroupOrder?.PickUpDistrict ?? o.Customer?.District ?? string.Empty,
-                PickUpAddress:            o.GroupOrder?.PickUpAddress  ?? o.Customer?.Address  ?? string.Empty,
-                // Batched orders carry the batch's stamped pin; standalone orders fall back
-                // to the owning customer's saved pin.
-                PickUpLatitude:           o.GroupOrder != null ? o.GroupOrder.PickUpLatitude  : o.Customer != null ? o.Customer.Latitude  : null,
-                PickUpLongitude:          o.GroupOrder != null ? o.GroupOrder.PickUpLongitude : o.Customer != null ? o.Customer.Longitude : null,
-                RecipientName:            o.RecipientName,
-                RecipientPhone:           o.RecipientPhone,
-                RecipientCity:            o.RecipientCity,
-                RecipientCityGeo:         cityGeo.GetValueOrDefault(o.RecipientCity),
-                RecipientDistrict:        o.RecipientDistrict,
-                RecipientDistrictGeo:     districtGeo.GetValueOrDefault(o.RecipientDistrict),
-                RecipientAddress:         o.RecipientAddress,
-                Description:              o.Description,
-                IsFragile:                o.IsFragile,
-                OrderType:                o.OrderType.ToString(),
-                Status:                   o.Status.ToString(),
-                ProductPaymentStatus:     o.ProductPaymentStatus.ToString(),
-                WhoPaysForCompanyService: o.WhoPaysForCompanyService.ToString(),
-                ReturnPickupAddress:      o.ReturnPickupAddress,
-                ReturnPickupCity:         o.ReturnPickupCity,
-                ReturnPickupDistrict:     o.ReturnPickupDistrict,
-                AmountToCollectForPackage:o.AmountToCollectForPackage,
-                CompanyServicePrice:      o.CompanyServicePrice,
-                IsCompanyServicePriceIncluded: o.IsCompanyServicePriceIncluded,
-                CustomerSurcharge:        o.CustomerSurcharge,
-                CourierSalary:            o.CourierSalary,
-                // Company margin is dilo-internal — never shown to a tenant co-admin or an operator.
-                CompanyRevenue:           request.TenantId.HasValue || request.HideCompanyRevenue ? null : o.CompanyRevenue,
-                CourierId:                o.CourierId,
-                CourierFullName:          o.Courier == null ? null : $"{o.Courier.FirstName} {o.Courier.LastName}".Trim(),
-                CreatedAt:                o.CreatedAt,
-                DeliveredAt:              o.DeliveredAt,
-                PostponeReason:           o.PostponeReason == null ? null : o.PostponeReason.Value.ToString(),
-                PostponeComment:          o.PostponeComment,
-                ExpectedCourierCash:      OrderFinance.ExpectedCourierCash(o)
-            ))
+            .Select(o => AdminOrderListMapper.ToDto(o, geo, hideRevenue))
             .ToList();
 
         return new PagedResult<AdminOrderListDto>(items, totalCount, request.Page, request.PageSize);

@@ -56,6 +56,8 @@ client/src/
 │   ├── Admin/            # ~41 files — 21 sidebar views. AdminDashboard.tsx is ~3,600 lines
 │   │                     #   (day selectors, batch grouping, courier bar) — a candidate for the
 │   │                     #   same page-local split AdminPackages/ got (§3.2); don't grow it further.
+│   │   ├── CompletedCouriers/  # Couriers → "Completed Orders" tab (3rd toggle beside Delivery/Pickup):
+│   │   │                       #   filters (leg · courier · day/range), grouped lists, Excel export — see §3.4
 │   │   └── AdminPackages/  #   AdminPackagesPage.tsx (packages)'s own hook + extracted
 │   │                       #   subcomponents (usePackageSelection, BulkFieldModal, PackageRow,
 │   │                       #   pickup-side modals) — see §3.2
@@ -136,6 +138,23 @@ these drafts from anywhere in the portal, using a custom `window` event to stay 
 modal within one tab (localStorage's own `storage` event doesn't fire in the tab that wrote it).
 Reuse this pattern for the next "don't lose an in-progress form" need rather than inventing
 another one-off.
+
+### 3.4 Couriers → Completed Orders (`pages/Admin/CompletedCouriers/`)
+
+The Couriers view's pill now has three toggles — Delivery · Pickup · **Completed Orders**. While Completed is
+on, `AdminCouriers` (in `AdminDashboard.tsx`) pauses its assigned-orders fetch (`showCompleted`) and renders
+`CompletedCouriersPanel` instead. The panel has its own Delivery/Pickup toggle, a courier select (default *All*),
+and a single-day **or** date-range picker (max 93 days — mirrors `CompletedRange.MaxDays` on the backend).
+
+- **Delivery leg** lists delivered orders, **billable failed** deliveries (red badge + cancellation reason) and
+  standalone **Returns** brought to the warehouse. Rows open `ViewOrderModal`. Salary shows per row/courier; the
+  Excel export deliberately omits it.
+- **Pickup leg** lists batches (GroupOrders) by `DeliveredToWarehouseAt`.
+- Data: `api/couriers.ts` (`fetchCompletedDeliveries/Pickups`, `exportCompletedExcel`). Backend:
+  `Application/Couriers/Queries/CompletedByCourier`. `CompletedDelivery<TOrder>` is generic so `api/` never imports
+  from `pages/`.
+- Styles live in `completed-couriers.css` next to the components (`.ccp-*`); the grouped rows still lean on
+  `go-*` / `status-badge*` classes, which `AdminDashboard` ships.
 
 ---
 
