@@ -3488,7 +3488,7 @@ function CourierPickupRow({ courier, pickups, selected, onToggleSelected, onSetM
       <div
         className="go-row-header"
         onClick={() => setExpanded(v => !v)}
-        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isDeleted ? 0.6 : 1 }}
+        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', opacity: courier.isDeleted ? 0.6 : 1 }}
       >
         <svg
           className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`}
@@ -3496,7 +3496,7 @@ function CourierPickupRow({ courier, pickups, selected, onToggleSelected, onSetM
         >
           <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 160 }}>
           <div className="courier-name">
             {courier.fullName}
             {courier.isDeleted && (
@@ -3505,7 +3505,7 @@ function CourierPickupRow({ courier, pickups, selected, onToggleSelected, onSetM
           </div>
           <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0, marginLeft: 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', border: '1px solid rgba(196,127,23,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
               {t.crwAssigned(pickups.length)}
@@ -3623,7 +3623,7 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
       <div
         className="go-row-header"
         onClick={() => setExpanded(v => !v)}
-        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, opacity: courier.isDeleted ? 0.6 : 1 }}
+        style={{ cursor: 'pointer', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', opacity: courier.isDeleted ? 0.6 : 1 }}
       >
         <svg
           className={`go-chevron ${expanded ? 'go-chevron--open' : ''}`}
@@ -3631,7 +3631,7 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
         >
           <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 160 }}>
           <div className="courier-name">
             {courier.fullName}
             {courier.isDeleted && (
@@ -3640,7 +3640,7 @@ function CourierRow({ courier, orders, canSeeRevenue = true, token, couriers, on
           </div>
           <div className="courier-username">@{courier.username} · {courier.assignedCity}, {courier.assignedDistrict}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0, marginLeft: 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', border: '1px solid rgba(196,127,23,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
               {t.crwAssigned(orders.length)}
