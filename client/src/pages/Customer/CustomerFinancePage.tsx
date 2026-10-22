@@ -178,19 +178,13 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                 ) : (
                     <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                            <span style={{ fontWeight: 700 }}>{gel(line.companyServicePrice)}</span>
-                            {isSenderPays
+                            {/* A surcharge order shows only what the customer owes (the surcharge), in the
+                                same slot and with the same Paid/Unpaid badge as a sender-paid fee. */}
+                            <span style={{ fontWeight: 700 }}>{gel(hasSurcharge ? line.customerSurcharge : line.companyServicePrice)}</span>
+                            {(isSenderPays || hasSurcharge)
                                 ? <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
                                 : <Badge text={t.ofinRecipientPays} tone="muted" />}
                         </div>
-                        {hasSurcharge && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', marginTop: 2 }}>
-                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#b45309' }}>
-                                    {t.ofinSurchargeCustomer(gel(line.customerSurcharge))}
-                                </span>
-                                <Badge text={servicePaid ? t.ofinPaid : t.ofinUnpaid} tone={servicePaid ? 'paid' : 'unpaid'} />
-                            </div>
-                        )}
                         {(isSenderPays || hasSurcharge) && (line.servicePaidByCustomerAmount ?? 0) > 0.005 && (
                             <div style={paidDateStyle}>
                                 {t.ofinPaid} {gel(line.servicePaidByCustomerAmount ?? 0)}
