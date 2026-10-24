@@ -107,8 +107,8 @@ internal static class CourierSettlementProjection
                 TotalCompanyServiceRevenue:    orders.Sum(x => x.CompanyServicePrice),
                 TotalCourierSalary:            orders.Sum(x => x.CourierSalary ?? 0m),
                 TotalCourierSalaryPaid:        orders.Sum(x => x.CourierSalaryPaidAmount ?? 0m),
-                // Due = already handed over + still outstanding (collected cash − salary kept out of it).
-                TotalCourierTransferToCompany: orders.Sum(x => (x.CodTransferedToCompanyByCourier ?? 0m) + OrderFinance.CourierCodTransferOutstanding(x)),
+                // Due = cash collected − all salary earned (incl. sender-pays), same as the admin settlement modal.
+                TotalCourierTransferToCompany: OrderFinance.CourierNetCashDue(orders),
                 // Income = fees earned − courier salary; CompanyNetCash is a payout-timing-dependent cash position.
                 TotalCompanyNetIncome:         orders.Sum(OrderFinance.CompanyRevenue)));
         }

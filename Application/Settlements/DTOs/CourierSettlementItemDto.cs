@@ -14,6 +14,6 @@ public sealed record CourierSettlementItemDto(
     decimal TotalCompanyServiceRevenue,      // Σ CompanyServicePrice
     decimal TotalCourierSalary,              // Σ CourierSalary (earned)
     decimal TotalCourierSalaryPaid,          // Σ CourierSalaryPaidAmount (credited)
-    decimal TotalCourierTransferToCompany,   // Σ (handed over + OrderFinance.CourierCodTransferOutstanding) = cash due to the company
+    decimal TotalCourierTransferToCompany,   // OrderFinance.CourierNetCashDue = cash collected − all salary earned (matches admin settlement modal)
     decimal TotalCompanyNetIncome            // Σ OrderFinance.CompanyRevenue (fees − salary)
 );

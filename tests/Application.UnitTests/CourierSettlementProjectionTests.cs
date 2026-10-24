@@ -77,4 +77,39 @@ public sealed class CourierSettlementProjectionTests
         Assert.Equal(96m, day.TotalCourierTransferToCompany);
         Assert.Equal(2m, day.TotalCompanyNetIncome);
     }
+
+    [Fact]
+    public async Task SenderPaysOrder_SalaryIsStillDeductedFromTransfer()
+    {
+        string db = $"proj-{Guid.NewGuid()}";
+        Guid courier = Guid.NewGuid();
+        using (AppDbContext ctx = Ctx(db))
+        {
+            ctx.Orders.Add(new Order
+            {
+                TrackingNumber            = $"TN-{Guid.NewGuid():N}"[..12],
+                RecipientName             = "Recipient",
+                RecipientPhone            = "555111222",
+                RecipientCity             = "City",
+                RecipientDistrict         = "District",
+                RecipientAddress          = "Some street 1",
+                OrderType                 = OrderType.Send,
+                Status                    = OrderStatus.DeliveredToRecipient,
+                CourierId                 = courier,
+                WhoPaysForCompanyService  = ServicePayer.Sender,
+                ProductPaymentStatus      = PaymentStatus.Paid,
+                AmountToCollectForPackage = 100m,
+                CompanyServicePrice       = 6m,
+                CourierSalary             = 4m,
+                AmountOfCashCollected     = 100m,
+                DeliveredAt               = CustomTime.Now,
+                CreatedAt                 = CustomTime.Now,
+            });
+            await ctx.SaveChangesAsync();
+        }
+
+        CourierSettlementItemDto day = await Day(db, courier);
+
+        Assert.Equal(96m, day.TotalCourierTransferToCompany);   // 100 cash − 4 salary, though sender pays the fee
+    }
 }

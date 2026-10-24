@@ -94,10 +94,8 @@ public sealed class GetSettlementPreviewQueryHandler
         // Courier holds exactly what they collected. No double-counting.
         // totalCash = package COD + service fees from recipients (bundled by courier at delivery)
         var totalCashCourierHolds    = totalCash;
-        // Same definition as the admin settlement modal / day summaries: already handed over + still
-        // outstanding (the courier keeps their salary out of recipient-paid cash only).
-        var totalTransferToCompany   = orders.Sum(o => (o.CodTransferedToCompanyByCourier ?? 0m)
-                                                     + OrderFinance.CourierCodTransferOutstanding(o));
+        // Same definition as the admin settlement modal / day summaries: cash collected − all salary earned.
+        var totalTransferToCompany   = OrderFinance.CourierNetCashDue(orders);
 
         // ── Flag orders missing required financial data ────────────────────────
         var incomplete = orders

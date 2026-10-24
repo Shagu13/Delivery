@@ -218,6 +218,16 @@ public static class OrderFinance
     }
 
     /// <summary>
+    /// A courier's net cash position for a set of orders (one day): all cash collected minus all salary
+    /// earned, floored at zero. Salary on sender-pays orders is deducted too, even though the courier
+    /// does not keep it out of that order's cash. This is the figure the admin settlement modal shows;
+    /// the courier's own settlements page and the settlement preview use it so the three cannot drift.
+    /// Per-order handover caps still use <see cref="CourierCodTransferOutstanding"/>.
+    /// </summary>
+    public static decimal CourierNetCashDue(IEnumerable<Order> orders) =>
+        Math.Max(0m, orders.Sum(o => o.AmountOfCashCollected ?? 0m) - orders.Sum(o => o.CourierSalary ?? 0m));
+
+    /// <summary>
     /// True once the sender's share of the service fee is fully settled. Always true when the
     /// recipient pays it all (collected in cash at delivery) or when it was netted out of the COD payout.
     /// </summary>
