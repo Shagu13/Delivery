@@ -120,6 +120,25 @@ This is **not** the §3.1 `features/` layer — nothing in `AdminPackages/` is i
 by `AdminOrdersPage.tsx` too, *that's* the moment to promote it into `features/` per §3.1 — don't
 treat its current location as already-shared.
 
+### 3.2a Courier settlement date basis
+
+Finance → Courier Settlements (`CourierSettlementsSection` → `SettlementModal`) groups a courier's orders by
+**delivery day** or **assignment day**. The server supplies each courier's default (`Courier.defaultDateBasis`,
+regional couriers → `'Assigned'`; rule lives in `Application/Couriers/CourierDateBasis.cs`, never re-derived
+here) and the modal has a toggle that overrides it via `fetchCourierOrderFinanceAdmin(..., basis)`. Assigned-date
+lists include open orders, so payability/totals gate on `isCourierLegComplete` (`utils/orderFinanceOutstanding.ts`,
+mirror of `OrderFinance.IsCourierLegComplete`). The courier's own screen (`CourierSettlementsPage`) follows its
+default automatically (no toggle) — label via `fetchCourierDateBasis`; day cards carry `dateBasis` /
+`totalOrdersAssigned`.
+
+### 3.2b Finance → Payments customer grid
+
+`CustomerInvoicesSection` (`AdminFinancePage.tsx`) shows `CustomerFinanceGrid mode="picker"` until a customer is
+picked. A `gridMode` toggle (`All` / `Delivered` / `To settle`) feeds `fetchCustomerFinanceGrid`; `To settle`
+ignores dates, so the date controls hide and `pickCustomer` clears the window. Picker-only columns: contact,
+phone, delivered, COD, default bank (+ "more" → `CustomerBankAccountsModal`). The Overview-tab `mode="expand"`
+grid is unchanged.
+
 ### 3.3 Resumable localStorage drafts — `useWalkInDrafts`
 
 `hooks/useWalkInDrafts.ts` is a fourth precedent for the per-user localStorage pattern

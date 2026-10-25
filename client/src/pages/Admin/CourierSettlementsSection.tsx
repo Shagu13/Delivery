@@ -17,8 +17,9 @@ const shiftIso = (iso: string, delta: number) => {
 
 /**
  * Courier daily-settlement management, hosted on the Admin Finance page.
- * Optionally filter by a delivery date: pick a date and only couriers who delivered
- * orders that day are listed; leave the date empty to list every courier.
+ * Optionally filter by a date: pick one and only couriers active that day are listed — regional
+ * couriers by orders assigned to them, Tbilisi/Rustavi couriers by orders delivered (the server
+ * applies each courier's default basis); leave the date empty to list every courier.
  * Pick a courier, then open the settlement manager (create/update for the date).
  */
 export function CourierSettlementsSection({ token, onSettled }: { token: string; onSettled?: () => void }) {
@@ -175,6 +176,7 @@ export function CourierSettlementsSection({ token, onSettled }: { token: string;
                     courierFullName={selected.fullName}
                     token={token}
                     initialDate={date || isoToday()}
+                    defaultBasis={selected.defaultDateBasis ?? 'Delivered'}
                 />
             )}
         </div>

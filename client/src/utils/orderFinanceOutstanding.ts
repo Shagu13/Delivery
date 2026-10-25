@@ -11,6 +11,11 @@ export const CANCELLED_STATUSES = new Set(['CancelledByAdmin', 'CancelledBySende
 export const isCancelledNonBillable = (o: OrderFinanceLine) =>
     CANCELLED_STATUSES.has(o.status) && !o.isBillableFailedDelivery;
 
+// True once the courier's leg produced money: delivered, or a billable failed delivery (mirrors
+// OrderFinance.IsCourierLegComplete). The assigned-date courier views also list open orders (not
+// delivered yet, postponed) — their salary and cash aren't payable or counted until the leg completes.
+export const isCourierLegComplete = (o: OrderFinanceLine) => o.deliveredAt != null || o.isBillableFailedDelivery;
+
 // Service fee still owed by the sender. Use the server's own figure (serviceOwedBySender =
 // OrderFinance.ServiceOwedBySender): the whole fee less payments on a sender-pays order or a
 // failed delivery (whose fee shifts to the sender even when originally recipient-pays), only the

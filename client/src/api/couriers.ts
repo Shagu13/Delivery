@@ -17,6 +17,9 @@ export interface CreateCourierResponse {
     fullName: string;
 }
 
+/** Which date a courier's settlement views group orders by (mirrors Application.Couriers.CourierDateBasis). */
+export type CourierDateBasis = 'Delivered' | 'Assigned';
+
 /// Full courier record as returned by GET /api/couriers
 export interface Courier {
     courierId: string;
@@ -32,6 +35,8 @@ export interface Courier {
     dateDeleted: string | null;
     /** Standard per-order delivery salary — only set for Tbilisi couriers; null elsewhere. */
     defaultSalary: number | null;
+    /** Settlement date basis this courier defaults to — regional (non-Tbilisi/Rustavi) couriers: 'Assigned'. */
+    defaultDateBasis: CourierDateBasis;
 }
 
 export interface CourierOrder {

@@ -6,16 +6,19 @@ import {
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine, CourierPaymentFlow } from '../../api/orderFinance';
+import type { CourierDateBasis } from '../../api/couriers';
 import { setCourierSalary } from '../../api/orders';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
-import { round2 } from '../../utils/orderFinanceOutstanding';
+import { round2, isCourierLegComplete } from '../../utils/orderFinanceOutstanding';
 import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll } from './FinanceAllocation';
 import type { Sel } from './FinanceAllocation';
 
+const isSettled = isCourierLegComplete;
+
 // Outstanding per order for each courier flow — server-computed (OrderFinance), never re-derived here.
-// A postponed order was not delivered, so its salary can't be paid yet (same as its COD hand-over).
-const salaryOut = (o: OrderFinanceLine) => o.status === 'DeliveryPostponed' ? 0 : o.courierSalaryOutstanding;
+// An open order was not delivered, so its salary can't be paid yet (same as its COD hand-over).
+const salaryOut = (o: OrderFinanceLine) => isSettled(o) ? o.courierSalaryOutstanding : 0;
 const codOut    = (o: OrderFinanceLine) => o.courierCodTransferOutstanding;
 
 interface Props {
@@ -28,6 +31,8 @@ interface Props {
     token: string;
     /** Date the modal should open on (YYYY-MM-DD). Defaults to today. */
     initialDate?: string;
+    /** Which date the courier's orders are grouped by on open — the server-provided per-courier default. */
+    defaultBasis?: CourierDateBasis;
 }
 
 function todayIso(): string {
@@ -50,9 +55,11 @@ export function SettlementModal({
     courierFullName,
     token,
     initialDate,
+    defaultBasis = 'Delivered',
 }: Props) {
     const { t } = useLanguage();
     const [date,    setDate]    = useState(initialDate ?? todayIso());
+    const [basis,   setBasis]   = useState<CourierDateBasis>(defaultBasis);
     const [lines,   setLines]   = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
     const [busy,    setBusy]    = useState(false);
@@ -69,11 +76,11 @@ export function SettlementModal({
     // `silent` refreshes the line data in place without flipping the full-screen spinner —
     // used after a per-order pay toggle so the table stays mounted and the modal keeps its
     // scroll position instead of collapsing to a spinner and jumping back to the top.
-    const load = useCallback(async (d: string, silent = false) => {
+    const load = useCallback(async (d: string, b: CourierDateBasis, silent = false) => {
         if (!silent) setLoading(true);
         setError(null);
         try {
-            const data = await fetchCourierOrderFinanceAdmin(courierId, token, d);
+            const data = await fetchCourierOrderFinanceAdmin(courierId, token, d, b);
             setLines(data);
         } catch (err) {
             setError(err instanceof OrderFinanceApiError ? err.message : 'Failed to load orders.');
@@ -87,7 +94,8 @@ export function SettlementModal({
         if (open) {
             const start = initialDate ?? todayIso();
             setDate(start);
-            load(start);
+            setBasis(defaultBasis);
+            load(start, defaultBasis);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
@@ -107,7 +115,7 @@ export function SettlementModal({
         setError(null);
         try {
             await setCourierSalary(token, orderId, round2(n));
-            await load(date, true);
+            await load(date, basis, true);
             onCreated();
             return true;
         } catch (err) {
@@ -116,7 +124,9 @@ export function SettlementModal({
         }
     };
 
-    const handleDateChange =(d: string) => { setDate(d); load(d); };
+    const handleDateChange =(d: string) => { setDate(d); load(d, basis); };
+    const handleBasisChange = (b: CourierDateBasis) => { if (b === basis) return; setBasis(b); load(date, b); };
+    const byAssigned = basis === 'Assigned';
 
     const salaryFlow = buildFlow(lines, selSalary, salaryOut, o => o.courierSalaryPaidAmount ?? 0);
     const codFlow    = buildFlow(lines, selCod,    codOut,    o => o.codTransferedToCompanyByCourier ?? 0);
@@ -139,7 +149,7 @@ export function SettlementModal({
         setError(null);
         try {
             await payCourierOrders(courierId, flow, allocations, token);
-            await load(date, true);   // silent — keep the table mounted & scroll position intact
+            await load(date, basis, true);   // silent — keep the table mounted & scroll position intact
             onCreated();
         } catch (err) {
             setError(err instanceof OrderFinanceApiError ? err.message : t.ofinErrAction);
@@ -151,9 +161,9 @@ export function SettlementModal({
     if (!open) return null;
 
     // ── Day totals (derived live from the order lines) ───────────────────────────
-    // Postponed orders are listed for reference but were not delivered, so none of their figures
-    // (count, salary, income) enter the day totals; they count on the day they are finally delivered.
-    const counted        = lines.filter(o => o.status !== 'DeliveryPostponed');
+    // Open orders (postponed, or assigned but not delivered yet) are listed for reference but earned
+    // nothing, so none of their figures (count, salary, income) enter the day totals.
+    const counted        = lines.filter(isSettled);
     const delivered      = counted.length;
     const salaryEarned   = counted.reduce((s, o) => s + (o.courierSalary ?? 0), 0);
     const salaryPaid     = counted.reduce((s, o) => s + (o.courierSalaryPaidAmount ?? 0), 0);
@@ -216,6 +226,17 @@ export function SettlementModal({
                                 </svg>
                             </button>
                         </div>
+                        {/* Which date the day's orders are grouped by — defaults per courier (regional → assigned) */}
+                        <div className="stl-basis" role="group" aria-label={t.stlmBasisLabel}>
+                            <span className="stl-basis__label">{t.stlmBasisLabel}</span>
+                            {(['Delivered', 'Assigned'] as const).map(b => (
+                                <button key={b} type="button" aria-pressed={basis === b}
+                                    className={`stl-basis__btn${basis === b ? ' stl-basis__btn--on' : ''}`}
+                                    onClick={() => handleBasisChange(b)}>
+                                    {b === 'Delivered' ? t.stlmBasisDelivered : t.stlmBasisAssigned}
+                                </button>
+                            ))}
+                        </div>
                     </fieldset>
 
                     {error && (
@@ -239,6 +260,12 @@ export function SettlementModal({
                         <>
                             {/* ── Counts ───────────────────────────────────── */}
                             <div className="stl-counts">
+                                {byAssigned && (
+                                    <div className="stl-count-card">
+                                        <span className="stl-count-label">{t.stlmAssigned}</span>
+                                        <span className="stl-count-value">{lines.length}</span>
+                                    </div>
+                                )}
                                 <div className="stl-count-card">
                                     <span className="stl-count-label">{t.stlmDelivered}</span>
                                     <span className="stl-count-value">{delivered}</span>
@@ -281,7 +308,9 @@ export function SettlementModal({
                             {/* ── Per-order rows: tick orders, edit amounts, pay in one click ──── */}
                             {lines.length > 0 ? (
                                 <fieldset className="modal__fieldset">
-                                    <legend className="modal__legend">{t.stlmDeliveredOrders(delivered)}</legend>
+                                    <legend className="modal__legend">
+                                        {byAssigned ? t.stlmAssignedOrders(lines.length, delivered) : t.stlmDeliveredOrders(delivered)}
+                                    </legend>
                                     {/* Pay bars: salary (company → courier) left, COD hand-over (courier → company) right */}
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', marginBottom: 12 }}>
                                         <FlowBar f={salaryFlow} payLabel={t.stlmPaySalary} busy={busy} borderRight
@@ -315,14 +344,19 @@ export function SettlementModal({
                                                 {lines.map(o => {
                                                     const postponed      = o.status === 'DeliveryPostponed';
                                                     const billableCancel = o.isBillableFailedDelivery;
-                                                    // Postponed / billable-cancelled orders carry salary only — no COD.
-                                                    const salaryOnly     = postponed || billableCancel;
+                                                    // Assigned-date view: not delivered yet (and not postponed — that has its own badge).
+                                                    const notYet         = !isSettled(o) && !postponed;
+                                                    // Open / billable-cancelled orders carry no COD (open ones: salary not payable yet either).
+                                                    const salaryOnly     = !isSettled(o) || billableCancel;
                                                     return (
                                                         <tr key={o.orderId}>
                                                             <td>
                                                                 {showTracking && <span className="tn-badge">{o.trackingNumber}</span>}
                                                                 {postponed && (
                                                                     <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#f97316' }}>{t.stlmBadgePostponed}</div>
+                                                                )}
+                                                                {notYet && (
+                                                                    <div style={{ fontSize: '0.66rem', fontWeight: 700, color: 'var(--color-text-subtle)' }}>{t.stlmBadgeNotDelivered}</div>
                                                                 )}
                                                                 {billableCancel && (
                                                                     <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#dc2626' }}>
@@ -344,7 +378,7 @@ export function SettlementModal({
                                                                 </span>
                                                             </td>
                                                             <td style={{ textAlign: 'right' }}>
-                                                                <AllocCell applicable={(o.courierSalary ?? 0) > 0 && !postponed} notApplicableLabel="—"
+                                                                <AllocCell applicable={(o.courierSalary ?? 0) > 0 && isSettled(o)} notApplicableLabel="—"
                                                                     outstanding={salaryOut(o)} paidAt={o.courierSalaryPaidAt}
                                                                     total={o.courierSalary ?? 0} paid={o.courierSalaryPaidAmount ?? 0}
                                                                     checked={selSalary[o.orderId]?.checked ?? false} amount={amountOf(selSalary, o, salaryOut)}
@@ -374,7 +408,7 @@ export function SettlementModal({
                                 </fieldset>
                             ) : (
                                 <p style={{ textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem', padding: '8px 0' }}>
-                                    {t.stlmNoOrders(date)}
+                                    {byAssigned ? t.stlmNoAssignedOrders(date) : t.stlmNoOrders(date)}
                                 </p>
                             )}
                         </>
@@ -417,6 +451,10 @@ export function SettlementModal({
                 .stl-date-arrow:disabled { opacity:0.35;cursor:not-allowed; }
                 .settlement-date-input { background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-size:0.875rem;padding:8px 12px;outline:none;font-family:var(--font-body);transition:border-color var(--transition); }
                 .settlement-date-input:focus { border-color:var(--color-accent); }
+                .stl-basis { display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:10px; }
+                .stl-basis__label { font-size:0.72rem;color:var(--color-text-subtle);margin-right:2px; }
+                .stl-basis__btn { padding:6px 12px;min-height:34px;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:100px;font-family:var(--font-body);font-size:0.78rem;font-weight:600;color:var(--color-text-muted);cursor:pointer;transition:background var(--transition),color var(--transition),border-color var(--transition); }
+                .stl-basis__btn--on { background:var(--color-accent);border-color:var(--color-accent);color:#fff; }
                 .settlement-orders-table { font-size:0.8rem; }
                 .settlement-orders-table th { font-size:0.62rem; }
 

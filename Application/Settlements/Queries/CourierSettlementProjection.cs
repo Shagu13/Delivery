@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Couriers;
 using Application.Finance;
 using Application.Settlements.DTOs;
 using Domain;
@@ -18,10 +19,16 @@ internal static class CourierSettlementProjection
     /// Day summaries for <paramref name="courierId"/> over [fromDt, toDt) (UTC). Days are
     /// keyed by the courier's delivery event (DeliveredAt ?? DeliveredToWarehouseAt); a day
     /// appears if anything happened on it (delivery, pickup, cancellation or postpone).
+    /// Regional couriers (<see cref="CourierDateBasisPolicy"/>) are keyed by the day orders were
+    /// assigned to them instead — see <see cref="BuildByAssignedDayAsync"/>.
     /// </summary>
     public static async Task<IReadOnlyList<CourierSettlementItemDto>> BuildAsync(
         IAppDbContext context, Guid courierId, DateTime fromDt, DateTime toDt, CancellationToken ct)
     {
+        // Regional couriers (CourierDateBasisPolicy) are summarised per assignment day instead.
+        if (await CourierDateBasisPolicy.ForCourierAsync(context, courierId, ct) == CourierDateBasis.Assigned)
+            return await BuildByAssignedDayAsync(context, courierId, fromDt, toDt, ct);
+
         // Delivered orders (drive the money figures), dated by the delivery event.
         var delivered = await context.Orders
             .AsNoTracking()
@@ -110,7 +117,63 @@ internal static class CourierSettlementProjection
                 // Due = cash collected − all salary earned (incl. sender-pays), same as the admin settlement modal.
                 TotalCourierTransferToCompany: OrderFinance.CourierNetCashDue(orders),
                 // Income = fees earned − courier salary; CompanyNetCash is a payout-timing-dependent cash position.
-                TotalCompanyNetIncome:         orders.Sum(OrderFinance.CompanyRevenue)));
+                TotalCompanyNetIncome:         orders.Sum(OrderFinance.CompanyRevenue),
+                DateBasis:                     nameof(CourierDateBasis.Delivered),
+                TotalOrdersAssigned:           0));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Assignment-dated summaries for regional couriers: a day holds every order assigned to the
+    /// courier that day (<c>AssignedToCourierAt</c>), so a batch stays together however long it takes
+    /// to deliver. Money figures and the delivered count cover only the orders whose leg is complete
+    /// (<see cref="OrderFinance.IsCourierLegComplete"/>); the rest are still open and count only in
+    /// <c>TotalOrdersAssigned</c> (or the cancelled / postponed counters).
+    /// </summary>
+    private static async Task<IReadOnlyList<CourierSettlementItemDto>> BuildByAssignedDayAsync(
+        IAppDbContext context, Guid courierId, DateTime fromDt, DateTime toDt, CancellationToken ct)
+    {
+        List<Order> assigned = await context.Orders
+            .AsNoTracking()
+            .Where(o => o.CourierId == courierId
+                     && o.AssignedToCourierAt >= fromDt && o.AssignedToCourierAt < toDt)
+            .ToListAsync(ct);
+
+        // Packages picked up per day (GroupOrder.PickedUpAt) — the pickup leg is not assignment-dated.
+        var pickedUp = await context.GroupOrders
+            .AsNoTracking()
+            .Where(g => g.CourierId == courierId && g.PickedUpAt >= fromDt && g.PickedUpAt < toDt)
+            .Select(g => new { g.PickedUpAt, g.NumberOfPackages })
+            .ToListAsync(ct);
+
+        var assignedByDay = assigned.GroupBy(o => DateOnly.FromDateTime(o.AssignedToCourierAt!.Value))
+                                    .ToDictionary(g => g.Key, g => g.ToList());
+        var pickedByDay   = pickedUp.GroupBy(p => DateOnly.FromDateTime(p.PickedUpAt!.Value))
+                                    .ToDictionary(g => g.Key, g => g.Sum(p => p.NumberOfPackages));
+
+        var days = assignedByDay.Keys.Union(pickedByDay.Keys).OrderByDescending(d => d);
+
+        var result = new List<CourierSettlementItemDto>();
+        foreach (var day in days)
+        {
+            List<Order> dayOrders = assignedByDay.TryGetValue(day, out var a) ? a : new List<Order>();
+            List<Order> orders    = dayOrders.Where(OrderFinance.IsCourierLegComplete).ToList();
+            result.Add(new CourierSettlementItemDto(
+                Date:                          day.ToString("yyyy-MM-dd"),
+                TotalOrdersPickedUp:           pickedByDay.TryGetValue(day, out var p) ? p : 0,
+                TotalOrdersDelivered:          orders.Count,
+                NumberOfOrdersCancelled:       dayOrders.Count(o => o.Status == OrderStatus.CancelledByAdmin),
+                NumberOfOrderPostponed:        dayOrders.Count(o => o.Status == OrderStatus.DeliveryPostponed),
+                TotalAmountOfCashCollected:    orders.Sum(x => x.AmountOfCashCollected ?? 0m),
+                TotalCompanyServiceRevenue:    orders.Sum(x => x.CompanyServicePrice),
+                TotalCourierSalary:            orders.Sum(x => x.CourierSalary ?? 0m),
+                TotalCourierSalaryPaid:        orders.Sum(x => x.CourierSalaryPaidAmount ?? 0m),
+                TotalCourierTransferToCompany: OrderFinance.CourierNetCashDue(orders),
+                TotalCompanyNetIncome:         orders.Sum(OrderFinance.CompanyRevenue),
+                DateBasis:                     nameof(CourierDateBasis.Assigned),
+                TotalOrdersAssigned:           dayOrders.Count));
         }
 
         return result;

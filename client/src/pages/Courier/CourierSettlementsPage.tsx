@@ -4,8 +4,10 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { fetchMySettlements } from '../../api/settlements';
 import type { CourierSettlementItem } from '../../api/settlements';
-import { fetchCourierOrderFinance } from '../../api/orderFinance';
+import { fetchCourierOrderFinance, fetchCourierDateBasis } from '../../api/orderFinance';
 import type { OrderFinanceLine } from '../../api/orderFinance';
+import type { CourierDateBasis } from '../../api/couriers';
+import { isCourierLegComplete } from '../../utils/orderFinanceOutstanding';
 import { CourierPaymentReceiptsPanel } from '../../components/ui/CourierPaymentReceiptsPanel';
 import '../../styles/dashboard.css';
 
@@ -52,7 +54,11 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
                         }
                     </div>
                     <div className="settle-card__meta">
-                        <span className="settle-card__meta-item">📦 {t.cdSettNDelivered(item.totalOrdersDelivered)}</span>
+                        <span className="settle-card__meta-item">
+                            📦 {item.dateBasis === 'Assigned'
+                                ? t.cdSettNAssignedDelivered(item.totalOrdersDelivered, item.totalOrdersAssigned)
+                                : t.cdSettNDelivered(item.totalOrdersDelivered)}
+                        </span>
                         <span className="settle-card__meta-item settle-card__meta-item--salary">{t.cdSettSalaryLine} ₾{item.totalCourierSalary.toFixed(2)}</span>
                         {item.totalAmountOfCashCollected > 0 && <span className="settle-card__meta-item">{t.cdSettCashLine} ₾{item.totalAmountOfCashCollected.toFixed(2)}</span>}
                     </div>
@@ -62,6 +68,9 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
 
             {expanded && (
                 <div className="settle-card__body">
+                    {item.dateBasis === 'Assigned' && (
+                        <div className="settle-transfer__hint" style={{ marginBottom: 8 }}>{t.cdSettAssignedDayHint}</div>
+                    )}
                     <div className="settle-stats">
                         {[
                             { label: t.cdSettLabelDeliveries, value: item.totalOrdersDelivered },
@@ -126,6 +135,13 @@ function CourierOrdersByDay({ token }: { token: string }) {
     const [lines, setLines] = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    // Which date this list is keyed by — regional couriers see orders by the day they were assigned.
+    const [basis, setBasis] = useState<CourierDateBasis>('Delivered');
+
+    useEffect(() => {
+        if (!token) return;
+        fetchCourierDateBasis(token).then(setBasis).catch(() => { /* keep the delivered-date label */ });
+    }, [token]);
 
     const load = useCallback(() => {
         if (!token) return;
@@ -145,12 +161,16 @@ function CourierOrdersByDay({ token }: { token: string }) {
     });
     const atToday = date !== '' && date >= todayStr;
 
-    const totalSalary = lines.reduce((s, i) => s + (i.courierSalary ?? 0), 0);
-    const totalCash   = lines.reduce((s, i) => s + (i.amountOfCashCollected ?? 0), 0);
+    // Assigned-date lists include orders not delivered yet — they earned nothing, so they stay out of the totals.
+    const earning     = lines.filter(isCourierLegComplete);
+    const totalSalary = earning.reduce((s, i) => s + (i.courierSalary ?? 0), 0);
+    const totalCash   = earning.reduce((s, i) => s + (i.amountOfCashCollected ?? 0), 0);
 
     return (
         <div style={{ marginTop: 28 }}>
-            <h3 className="dashboard__title" style={{ fontSize: '1rem' }}>{t.ofinFilterDelivered}</h3>
+            <h3 className="dashboard__title" style={{ fontSize: '1rem' }}>
+                {basis === 'Assigned' ? t.ofinFilterAssigned : t.ofinFilterDelivered}
+            </h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 16px', flexWrap: 'wrap' }}>
                 <button onClick={() => shiftDay(-1)} title={t.statPrevDay} className="btn-ghost btn-ghost--sm" style={{ fontSize: '0.95rem' }}>‹</button>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)}
@@ -169,7 +189,7 @@ function CourierOrdersByDay({ token }: { token: string }) {
                 <>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
                         {[
-                            { label: t.ofinSumOrders,   value: lines.length.toString() },
+                            { label: t.ofinSumOrders,   value: lines.length.toString() },   // assigned-date lists count open orders too
                             { label: t.ofinColSalary,   value: gel(totalSalary) },
                             { label: t.ofinColCash,     value: gel(totalCash) },
                         ].map(({ label, value }) => (
@@ -186,6 +206,9 @@ function CourierOrdersByDay({ token }: { token: string }) {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                         <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text)' }}>{line.trackingNumber}</span>
                                         <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 100, background: 'var(--color-bg-3)', color: 'var(--color-text-subtle)' }}>{line.orderType}</span>
+                                        {!isCourierLegComplete(line) && (
+                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-subtle)' }}>{t.stlmBadgeNotDelivered}</span>
+                                        )}
                                     </div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
                                         {recipientDisplayName(line.recipientName, t.recipientUnknown)} · {line.recipientCity}
@@ -193,11 +216,11 @@ function CourierOrdersByDay({ token }: { token: string }) {
                                 </div>
                                 <div style={{ textAlign: 'right', minWidth: 90 }}>
                                     <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ofinColSalary}</div>
-                                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text)' }}>{gel(line.courierSalary ?? 0)}</div>
+                                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text)' }}>{isCourierLegComplete(line) ? gel(line.courierSalary ?? 0) : '—'}</div>
                                 </div>
                                 <div style={{ textAlign: 'right', minWidth: 90 }}>
                                     <div style={{ fontSize: '0.62rem', color: 'var(--color-text-subtle)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ofinColCash}</div>
-                                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text)' }}>{gel(line.amountOfCashCollected ?? 0)}</div>
+                                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text)' }}>{isCourierLegComplete(line) ? gel(line.amountOfCashCollected ?? 0) : '—'}</div>
                                 </div>
                             </div>
                         ))}

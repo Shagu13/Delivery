@@ -12,11 +12,12 @@ import { CustomerBankAccountsModal } from './CustomerBankAccountsModal';
 import {
     fetchCustomerOrderFinance,
     fetchAllCustomersOrderFinance,
+    fetchCustomerFinanceGrid,
     downloadCustomerOrderFinanceExcel,
     payCustomerOrders,
     OrderFinanceApiError,
 } from '../../api/orderFinance';
-import type { OrderFinanceLine } from '../../api/orderFinance';
+import type { OrderFinanceLine, CustomerGridMode, CustomerGridContact } from '../../api/orderFinance';
 import { setOrderPrices, fetchOrderLocations } from '../../api/orders';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
@@ -409,15 +410,17 @@ interface CustomerGroup {
     lines: OrderFinanceLine[];
     serviceOwed: number;
     codOwed: number;
+    deliveredCount: number;
+    codTotal: number;
     unpaid: boolean;
 }
 
-function groupLinesByCustomer(lines: OrderFinanceLine[]): CustomerGroup[] {
+function groupLinesByCustomer(lines: OrderFinanceLine[], toSettle = false): CustomerGroup[] {
     const map = new Map<string, CustomerGroup>();
     for (const o of lines) {
         let g = map.get(o.customerId);
         if (!g) {
-            g = { customerId: o.customerId, businessName: o.customerBusinessName, lines: [], serviceOwed: 0, codOwed: 0, unpaid: false };
+            g = { customerId: o.customerId, businessName: o.customerBusinessName, lines: [], serviceOwed: 0, codOwed: 0, deliveredCount: 0, codTotal: 0, unpaid: false };
             map.set(o.customerId, g);
         }
         g.lines.push(o);
@@ -427,7 +430,14 @@ function groupLinesByCustomer(lines: OrderFinanceLine[]): CustomerGroup[] {
         g.codOwed     = round2(g.lines.reduce((s, o) => s + codOutstanding(o), 0));
         // Either flow outstanding on any order that day → the customer still has something
         // unsettled. No obligations at all (nothing owed either way) counts as settled.
-        g.unpaid = g.lines.some(isPendingLine);
+        g.deliveredCount = g.lines.filter(o => !!o.deliveredAt).length;
+        g.codTotal = round2(g.lines
+            .filter(o => !CANCELLED_STATUSES.has(o.status) && !o.isBillableFailedDelivery)
+            .reduce((s, o) => s + (o.codAmount ?? 0), 0));
+        // "To settle" lists customers by what is owed either way, so its badge follows the owed amounts.
+        g.unpaid = toSettle
+            ? g.serviceOwed > 0.005 || g.codOwed > 0.005
+            : g.lines.some(isPendingLine);
     }
     return [...map.values()].sort((a, b) => a.businessName.localeCompare(b.businessName));
 }
@@ -439,16 +449,23 @@ function PaidStatusBadge({ unpaid }: { unpaid: boolean }) {
         : <span title={t.finGridPaid}   style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(5,150,105,0.12)',  color: '#059669', fontWeight: 800, fontSize: '0.85rem', lineHeight: 1 }}>✓</span>;
 }
 
-function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
+function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading, contacts, toSettle }: {
     lines: OrderFinanceLine[];
     mode: 'picker' | 'expand';
     onSelectCustomer?: (customerId: string) => void;
     loading?: boolean;
+    /** Picker mode only: contact + default-bank details per customer. */
+    contacts?: CustomerGridContact[];
+    /** Picker mode only: the "To settle" grid, whose badge follows the owed amounts. */
+    toSettle?: boolean;
 }) {
     const { t, lang } = useLanguage();
     const { locCity, locDistrict } = usePlaceLocalizer();
     const [expandedId, setExpandedId] = useState<string | null>(null);
-    const groups = useMemo(() => groupLinesByCustomer(lines), [lines]);
+    const [accountsFor, setAccountsFor] = useState<{ id: string; businessName: string } | null>(null);
+    const groups = useMemo(() => groupLinesByCustomer(lines, toSettle), [lines, toSettle]);
+    const contactById = useMemo(() => new Map((contacts ?? []).map(c => [c.customerId, c])), [contacts]);
+    const picker = mode === 'picker';
 
     if (loading) {
         return <div className="content-card" style={{ padding: 40, textAlign: 'center' }}><div className="go-spinner" style={{ margin: '0 auto' }} /></div>;
@@ -461,13 +478,18 @@ function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
         <div className="content-card" style={{ padding: 0, overflow: 'hidden' }}>
             <style>{`.fin-grid-row:hover td { background: var(--color-bg-2); }`}</style>
             <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: picker ? 1100 : 620 }}>
                     <thead>
                         <tr>
                             <th style={fhead}>{t.finGridColBusiness}</th>
+                            {picker && <th style={fhead}>{t.finGridColContact}</th>}
+                            {picker && <th style={fhead}>{t.finGridColPhone}</th>}
                             <th style={{ ...fhead, textAlign: 'center' }}>{t.finGridColOrders}</th>
+                            {picker && <th style={{ ...fhead, textAlign: 'center' }}>{t.finGridColDelivered}</th>}
+                            {picker && <th style={{ ...fhead, textAlign: 'right' }}>{t.finGridColCod}</th>}
                             <th style={{ ...fhead, textAlign: 'right' }}>{t.finGridColServiceOwed}</th>
                             <th style={{ ...fhead, textAlign: 'right' }}>{t.finGridColCodOwed}</th>
+                            {picker && <th style={fhead}>{t.finGridColBank}</th>}
                             <th style={{ ...fhead, textAlign: 'center' }}>{t.finGridColStatus}</th>
                             <th style={{ ...fhead, width: 24 }} />
                         </tr>
@@ -475,6 +497,7 @@ function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
                     <tbody>
                         {groups.map(g => {
                             const isExpanded = mode === 'expand' && expandedId === g.customerId;
+                            const contact = contactById.get(g.customerId);
                             const toggle = () => mode === 'picker'
                                 ? onSelectCustomer?.(g.customerId)
                                 : setExpandedId(x => x === g.customerId ? null : g.customerId);
@@ -482,13 +505,33 @@ function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
                                 <Fragment key={g.customerId}>
                                     <tr onClick={toggle} className="fin-grid-row" style={{ cursor: 'pointer' }}>
                                         <td style={{ ...fcell, fontWeight: 700 }}>{g.businessName}</td>
+                                        {picker && <td style={fcell}>{contact ? `${contact.firstName} ${contact.lastName}`.trim() : '—'}</td>}
+                                        {picker && <td style={{ ...fcell, whiteSpace: 'nowrap' }}>{contact?.phoneNumber || '—'}</td>}
                                         <td style={{ ...fcell, textAlign: 'center' }}>{g.lines.length}</td>
+                                        {picker && <td style={{ ...fcell, textAlign: 'center' }}>{g.deliveredCount}</td>}
+                                        {picker && <td style={{ ...fcell, textAlign: 'right' }}>{g.codTotal > 0.005 ? gel(g.codTotal) : '—'}</td>}
                                         <td style={{ ...fcell, textAlign: 'right', fontWeight: 600, color: g.serviceOwed > 0.005 ? '#ef4444' : 'var(--color-text-subtle)' }}>
                                             {g.serviceOwed > 0.005 ? gel(g.serviceOwed) : '—'}
                                         </td>
                                         <td style={{ ...fcell, textAlign: 'right', fontWeight: 600, color: g.codOwed > 0.005 ? '#b45309' : 'var(--color-text-subtle)' }}>
                                             {g.codOwed > 0.005 ? gel(g.codOwed) : '—'}
                                         </td>
+                                        {picker && (
+                                            <td style={{ ...fcell, fontSize: '0.78rem' }}>
+                                                {contact?.defaultAccountNumber ? (
+                                                    <>
+                                                        <div style={{ fontWeight: 600 }}>{contact.defaultBankName}</div>
+                                                        <div style={{ color: 'var(--color-text-subtle)', fontFamily: 'monospace' }}>{contact.defaultAccountNumber}</div>
+                                                        {contact.bankAccountCount > 1 && (
+                                                            <button type="button" className="btn-ghost btn-ghost--sm"
+                                                                onClick={e => { e.stopPropagation(); setAccountsFor({ id: g.customerId, businessName: g.businessName }); }}>
+                                                                +{contact.bankAccountCount - 1} {t.finGridMoreAccounts}
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                ) : <span style={{ color: 'var(--color-text-subtle)' }}>{t.finGridNoBank}</span>}
+                                            </td>
+                                        )}
                                         <td style={{ ...fcell, textAlign: 'center' }}><PaidStatusBadge unpaid={g.unpaid} /></td>
                                         <td style={{ ...fcell, textAlign: 'center', color: 'var(--color-text-subtle)' }}>
                                             {mode === 'expand' ? (isExpanded ? '▾' : '▸') : '›'}
@@ -547,6 +590,9 @@ function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
                     </tbody>
                 </table>
             </div>
+            {accountsFor && (
+                <CustomerBankAccountsModal customer={accountsFor} onClose={() => setAccountsFor(null)} />
+            )}
         </div>
     );
 }
@@ -554,15 +600,20 @@ function CustomerFinanceGrid({ lines, mode, onSelectCustomer, loading }: {
 function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () => void }) {
     const { t } = useLanguage();
     const [customer, setCustomer] = useState<Customer | null>(null);
-    const pickCustomer = (customerId: string) => {
-        getCustomerById(customerId, token).then(setCustomer).catch(() => {});
-    };
+    // Which customers the picker grid lists: all in the window, delivered in it, or anything to settle.
+    const [gridMode, setGridMode] = useState<CustomerGridMode>('Effective');
     // Date filter modes: a single Day, a whole Month, or an inclusive custom Range.
     const [mode, setMode] = useState<'day' | 'month' | 'range'>('day');
     const [date, setDate] = useState(isoDate(new Date())); // day: a day; month: any day in the month; '' = all
     // Inclusive effective-date range (both blank = all dates). "23 to 26" includes the 26th.
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
+    const pickCustomer = (customerId: string) => {
+        // "To settle" ignores the date window; clear it so the detail view shows every outstanding order.
+        if (gridMode === 'ToSettle') { setDate(''); setFrom(''); setTo(''); }
+        getCustomerById(customerId, token).then(setCustomer).catch(() => {});
+    };
+    const showDateControls = !!customer || gridMode !== 'ToSettle';
     // Recipient-location narrowing, applied client-side over the loaded lines — any number
     // of cities and/or (once narrowed to a city) districts within them, plus a free-text
     // address contains-match.
@@ -615,12 +666,13 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     // Load the all-customers grid for the current date window whenever no customer is picked
     // yet — reuses the same day/month/range controls the per-customer view already exposes.
     const gridQuery = useQuery({
-        queryKey: ['admin', 'finance', 'customerGrid', mode, date, from, to] as const,
-        queryFn: () => fetchAllCustomersOrderFinance(token, dateOpts),
+        queryKey: ['admin', 'finance', 'customerGrid', gridMode, mode, date, from, to] as const,
+        queryFn: () => fetchCustomerFinanceGrid(token, gridMode, dateOpts),
         enabled: !!token && !customer,
         placeholderData: keepPreviousData,
     });
-    const gridLines   = gridQuery.data ?? [];
+    const gridLines    = gridQuery.data?.lines ?? [];
+    const gridContacts = gridQuery.data?.customers;
     const gridLoading = gridQuery.isPending;
 
     // City/district options offered by the picker — every distinct recipient location that
@@ -683,6 +735,15 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                         onClear={() => setCustomer(null)}
                     />
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                        {/* Grid mode: only while no customer is picked */}
+                        {!customer && (
+                            <div className="go-seg" style={{ display: 'inline-flex' }}>
+                                <button className={`go-seg__btn ${gridMode === 'Effective' ? 'go-seg__btn--active' : ''}`} onClick={() => setGridMode('Effective')}>{t.finGridModeAll}</button>
+                                <button className={`go-seg__btn ${gridMode === 'Delivered' ? 'go-seg__btn--active' : ''}`} onClick={() => setGridMode('Delivered')}>{t.finGridModeDelivered}</button>
+                                <button className={`go-seg__btn ${gridMode === 'ToSettle' ? 'go-seg__btn--active' : ''}`} onClick={() => setGridMode('ToSettle')}>{t.finGridModeToSettle}</button>
+                            </div>
+                        )}
+                        {showDateControls && (<>
                         {/* Day / Month / Range toggle */}
                         <div className="go-seg" style={{ display: 'inline-flex' }}>
                             <button className={`go-seg__btn ${mode === 'day' ? 'go-seg__btn--active' : ''}`} onClick={() => setMode('day')}>{t.ofinViewDaily}</button>
@@ -718,6 +779,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
                             <button onClick={() => { setDate(''); setFrom(''); setTo(''); }} title={t.finAllDates}
                                 style={{ background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-muted)', width: 28, height: 28, cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}>×</button>
                         )}
+                        </>)}
                         {customer && (
                             <>
                                 <button onClick={() => setShowBankAccounts(true)} className="btn-ghost btn-ghost--sm">
@@ -764,7 +826,8 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
             {!customer ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ fontSize: '0.8rem', color: 'var(--color-text-subtle)', padding: '0 2px' }}>{t.finGridPickHint}</div>
-                    <CustomerFinanceGrid lines={gridLines} loading={gridLoading} mode="picker" onSelectCustomer={pickCustomer} />
+                    <CustomerFinanceGrid lines={gridLines} loading={gridLoading} mode="picker" onSelectCustomer={pickCustomer}
+                        contacts={gridContacts} toSettle={gridMode === 'ToSettle'} />
                 </div>
             ) : loading ? (
                 <div className="content-card" style={{ padding: 40, textAlign: 'center' }}>

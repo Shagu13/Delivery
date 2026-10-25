@@ -196,6 +196,16 @@ public static class OrderFinance
     public static bool IsCourierSalaryPaid(Order o) =>
         (o.CourierSalary ?? 0m) - (o.CourierSalaryPaidAmount ?? 0m) <= Epsilon;
 
+    /// <summary>
+    /// True once the courier's leg of this order has produced money: it was delivered
+    /// (<c>DeliveredAt</c>, or <c>DeliveredToWarehouseAt</c> for a Return drop-off) or it is a billable
+    /// failed delivery. Assigned-but-not-yet-delivered and postponed orders are not — their salary
+    /// and cash are not payable yet. Used by the assignment-dated settlement views, which list those
+    /// open orders alongside the finished ones.
+    /// </summary>
+    public static bool IsCourierLegComplete(Order o) =>
+        (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null || IsBillableFailedDelivery(o);
+
     /// <summary>Salary the company still owes the courier for this order (never negative).</summary>
     public static decimal CourierSalaryOutstanding(Order o) =>
         Math.Max(0m, (o.CourierSalary ?? 0m) - (o.CourierSalaryPaidAmount ?? 0m));

@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Couriers;
 using Domain.Enums;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Application.Settlements.Queries;
 
 /// <summary>
-/// Returns the IDs of couriers who physically delivered at least one order on the
-/// given date. Used to narrow the admin's settlement courier list to those who were
-/// actually active that day. "Delivered" mirrors the settlement preview: a Send/Exchange
-/// reaching its terminal status (dated by DeliveredAt) or a Return reaching the
-/// warehouse (dated by DeliveredToWarehouseAt).
+/// Returns the IDs of couriers who were active on the given date, used to narrow the admin's
+/// settlement courier list. "Active" follows each courier's default basis
+/// (<see cref="CourierDateBasisPolicy"/>): regional couriers — orders assigned to them that day;
+/// Tbilisi/Rustavi couriers — physically delivered at least one order that day, which mirrors the
+/// settlement preview: a Send/Exchange reaching its terminal status (dated by DeliveredAt) or a
+/// Return reaching the warehouse (dated by DeliveredToWarehouseAt).
 /// </summary>
 public sealed record GetCouriersWithDeliveriesOnDateQuery(DateOnly Date)
     : IRequest<IReadOnlyList<Guid>>;
@@ -28,9 +30,32 @@ public sealed class GetCouriersWithDeliveriesOnDateQueryHandler
         var dayStart = request.Date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var dayEnd   = request.Date.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
-        return await _context.Orders
+        // Each courier is matched on their own default basis (CourierDateBasisPolicy): regional
+        // couriers by the day orders were assigned to them, Tbilisi/Rustavi by the delivery events
+        // below. One small roster read splits the two groups; no query runs per courier.
+        var roster = await _context.Couriers
+            .AsNoTracking()
+            .Select(c => new { c.Id, c.AssignedCity })
+            .ToListAsync(cancellationToken);
+        List<Guid> assignedBasisIds = roster
+            .Where(c => CourierDateBasisPolicy.DefaultFor(c.AssignedCity) == CourierDateBasis.Assigned)
+            .Select(c => c.Id)
+            .ToList();
+
+        List<Guid> assignedOnDay = await _context.Orders
             .AsNoTracking()
             .Where(o => o.CourierId != null
+                     && assignedBasisIds.Contains(o.CourierId.Value)
+                     && o.AssignedToCourierAt >= dayStart
+                     && o.AssignedToCourierAt <= dayEnd)
+            .Select(o => o.CourierId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        List<Guid> deliveredOnDay = await _context.Orders
+            .AsNoTracking()
+            .Where(o => o.CourierId != null
+                     && !assignedBasisIds.Contains(o.CourierId.Value)
                      && (((o.Status == OrderStatus.DeliveredToRecipient
                            || o.Status == OrderStatus.ExchangeCompleted
                            // An Exchange finalized as ReturnedToSender is still dated by its
@@ -59,5 +84,7 @@ public sealed class GetCouriersWithDeliveriesOnDateQueryHandler
             .Select(o => o.CourierId!.Value)
             .Distinct()
             .ToListAsync(cancellationToken);
+
+        return assignedOnDay.Concat(deliveredOnDay).Distinct().ToList();
     }
 }

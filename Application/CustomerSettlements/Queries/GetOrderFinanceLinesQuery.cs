@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Couriers;
 using Application.CustomerSettlements.DTOs;
 using Application.Finance;
 using Domain;
@@ -137,12 +138,8 @@ public sealed class GetAllCustomersOrderFinanceLinesQueryHandler
     public async Task<IReadOnlyList<OrderFinanceLineDto>> Handle(
         GetAllCustomersOrderFinanceLinesQuery request, CancellationToken ct)
     {
-        var query = OrderFinanceQueries.ForFinanceReporting(
-            OrderFinanceQueries.Base(_context, includeCancelled: true));
-
-        query = (request.From is not null || request.To is not null)
-            ? OrderFinanceQueries.FilterByEffectiveDateRange(query, request.From, request.To)
-            : OrderFinanceQueries.FilterByEffectiveDate(query, request.Date, request.Monthly);
+        var query = OrderFinanceQueries.AllCustomersByEffectiveDate(
+            _context, request.Date, request.Monthly, request.From, request.To);
         query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt);
 
         var orders = await query.ToListAsync(ct);
@@ -150,11 +147,15 @@ public sealed class GetAllCustomersOrderFinanceLinesQueryHandler
     }
 }
 
-// ── Courier: own delivered order lines, dated by delivery ─────────────────────────
+// ── Courier: order lines dated by delivery, or by the day they were assigned ──────
+// Basis null = the courier's default (CourierDateBasisPolicy: regional couriers by assignment day,
+// Tbilisi/Rustavi by delivery day). Assigned basis also lists orders not yet delivered — their
+// money is not payable until the leg completes (OrderFinance.IsCourierLegComplete).
 public sealed record GetCourierOrderFinanceLinesQuery(
-    Guid      CourierId,
-    DateOnly? Date,
-    bool      IncludePostponed = false
+    Guid              CourierId,
+    DateOnly?         Date,
+    bool              IncludePostponed = false,
+    CourierDateBasis? Basis = null
 ) : IRequest<IReadOnlyList<OrderFinanceLineDto>>;
 
 public sealed class GetCourierOrderFinanceLinesQueryHandler
@@ -166,10 +167,16 @@ public sealed class GetCourierOrderFinanceLinesQueryHandler
     public async Task<IReadOnlyList<OrderFinanceLineDto>> Handle(
         GetCourierOrderFinanceLinesQuery request, CancellationToken ct)
     {
+        CourierDateBasis basis = request.Basis
+            ?? await CourierDateBasisPolicy.ForCourierAsync(_context, request.CourierId, ct);
+
         var query = OrderFinanceQueries.Base(_context)
             .Where(o => o.CourierId == request.CourierId);
-        query = OrderFinanceQueries.FilterByDeliveredAt(query, request.Date, request.IncludePostponed)
-                                   .OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt);
+        query = basis == CourierDateBasis.Assigned
+            ? OrderFinanceQueries.FilterByAssignedAt(query, request.Date)
+                                 .OrderByDescending(o => o.AssignedToCourierAt)
+            : OrderFinanceQueries.FilterByDeliveredAt(query, request.Date, request.IncludePostponed)
+                                 .OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt);
 
         var orders = await query.ToListAsync(ct);
         return orders.Select(OrderFinanceQueries.ToDto).ToList();
@@ -222,6 +229,48 @@ internal static class OrderFinanceQueries
     /// (shown with "—" amounts in the finance lists for transparency).</summary>
     public static IQueryable<Order> ForCustomer(IAppDbContext context, Guid customerId) =>
         Base(context, includeCancelled: true).Where(o => o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId);
+
+    /// <summary>Every customer's finance-reportable orders (cancelled included), narrowed by the
+    /// effective-date rule — a from/to range wins over the single day/month.</summary>
+    public static IQueryable<Order> AllCustomersByEffectiveDate(
+        IAppDbContext context, DateOnly? date, bool monthly, DateOnly? from, DateOnly? to)
+    {
+        IQueryable<Order> query = ForFinanceReporting(Base(context, includeCancelled: true));
+        return (from is not null || to is not null)
+            ? FilterByEffectiveDateRange(query, from, to)
+            : FilterByEffectiveDate(query, date, monthly);
+    }
+
+    /// <summary>
+    /// Narrows to orders whose billing event falls in the window: delivered, or a billable failed
+    /// delivery (dated by CancelledAt). A from/to range wins over the single day/month; no window
+    /// at all → every such order.
+    /// </summary>
+    public static IQueryable<Order> FilterByDeliveredWindow(
+        IQueryable<Order> query, DateOnly? date, bool monthly, DateOnly? from, DateOnly? to)
+    {
+        query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) != null);
+
+        DateTime? start = null, end = null;
+        if (from is not null || to is not null)
+        {
+            if (from is DateOnly f) start = f.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            if (to   is DateOnly t) end   = t.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        }
+        else if (date is DateOnly d)
+        {
+            start = monthly
+                ? new DateTime(d.Year, d.Month, 1, 0, 0, 0, DateTimeKind.Utc)
+                : d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            end = monthly ? start.Value.AddMonths(1) : start.Value.AddDays(1);
+        }
+
+        if (start is DateTime s)
+            query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) >= s);
+        if (end is DateTime e)
+            query = query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) < e);
+        return query;
+    }
 
     /// <summary>
     /// Shapes an already-scoped order set (one customer, or every customer) down to what a
@@ -317,6 +366,21 @@ internal static class OrderFinanceQueries
                               && (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) <  end)
                              || (includePostponed && o.Status == OrderStatus.DeliveryPostponed
                                  && o.PostponedAt >= start && o.PostponedAt < end));
+    }
+
+    /// <summary>
+    /// Assignment-dated courier view: orders by the day the admin assigned them to the courier
+    /// (<c>AssignedToCourierAt</c>, the same column the Couriers page "Assigned on" day uses),
+    /// whatever their delivery state. No date → every assigned order.
+    /// </summary>
+    public static IQueryable<Order> FilterByAssignedAt(IQueryable<Order> query, DateOnly? date)
+    {
+        query = query.Where(o => o.AssignedToCourierAt != null);
+
+        if (date is not DateOnly d) return query;
+        var start = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var end   = start.AddDays(1);
+        return query.Where(o => o.AssignedToCourierAt >= start && o.AssignedToCourierAt < end);
     }
 
     /// <summary>

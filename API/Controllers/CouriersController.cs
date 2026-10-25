@@ -100,7 +100,15 @@ public sealed class CouriersController : BaseController
             })
             .ToListAsync(ct);
 
-        return Ok(couriers);
+        // The settlement date basis each courier defaults to (regional couriers: assignment day).
+        // Resolved here, from the rule in Application, so the client never re-derives it.
+        return Ok(couriers.Select(c => new
+        {
+            c.courierId, c.firstName, c.lastName, c.fullName, c.username,
+            c.assignedCity, c.assignedDistrict, c.phoneNumber, c.idNumber,
+            c.isDeleted, c.dateDeleted, c.defaultSalary,
+            defaultDateBasis = Application.Couriers.CourierDateBasisPolicy.DefaultFor(c.assignedCity).ToString(),
+        }));
     }
 
     [HttpGet("{id:guid}")]

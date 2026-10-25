@@ -330,8 +330,13 @@ function CourierLedger({ token }: { token: string }) {
                                     const settled = unpaid <= 0.005;
                                     return (
                                         <tr key={r.date}>
-                                            <TD bold>{r.date}</TD>
-                                            <TD>{r.totalOrdersDelivered}</TD>
+                                            <TD bold>
+                                                {r.date}
+                                                {r.dateBasis === 'Assigned' && (
+                                                    <span style={{ marginLeft: 6, fontSize: '0.66rem', fontWeight: 700, color: 'var(--color-text-subtle)' }}>{t.finHisAssignedTag}</span>
+                                                )}
+                                            </TD>
+                                            <TD>{r.dateBasis === 'Assigned' ? `${r.totalOrdersDelivered} / ${r.totalOrdersAssigned}` : r.totalOrdersDelivered}</TD>
                                             <TD>{gel(r.totalAmountOfCashCollected)}</TD>
                                             <TD>{gel(r.totalCourierSalary)}</TD>
                                             <TD color="#059669">{gel(r.totalCourierSalaryPaid)}</TD>

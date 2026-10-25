@@ -144,6 +144,20 @@ public sealed class OrderFinanceController : BaseController
         return Ok(result);
     }
 
+    // ── GET /api/orderfinance/customer-grid  (Admin) — the Payments grid: lines + customer contacts ──
+    // mode = Effective (all-customers behavior) | Delivered | ToSettle (ignores the date window).
+    [HttpGet("customer-grid")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CustomerFinanceGridDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCustomerGrid(
+        [FromQuery] CustomerGridMode mode, [FromQuery] DateOnly? date, [FromQuery] bool monthly,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        CancellationToken ct)
+    {
+        var result = await Sender.Send(new GetCustomerFinanceGridQuery(mode, date, monthly, from, to), ct);
+        return Ok(result);
+    }
+
     // ── GET /api/orderfinance/courier  (Courier) — own delivered orders, by delivery date ──
     [HttpGet("courier")]
     [Authorize(Roles = "Courier")]
@@ -154,14 +168,23 @@ public sealed class OrderFinanceController : BaseController
         return Ok(result);
     }
 
-    // ── GET /api/orderfinance/courier-lines  (Admin) — a courier's delivered orders ──
+    // ── GET /api/orderfinance/courier/date-basis  (Courier) — which date their list above is keyed by ──
+    [HttpGet("courier/date-basis")]
+    [Authorize(Roles = "Courier")]
+    [ProducesResponseType(typeof(Application.Couriers.CourierDateBasis), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMyDateBasis(CancellationToken ct) =>
+        Ok(await Sender.Send(new Application.Couriers.GetMyCourierDateBasisQuery(CurrentCourierId), ct));
+
+    // ── GET /api/orderfinance/courier-lines  (Admin) — a courier's orders for a day ──
+    // `basis` = Delivered | Assigned; omitted → the courier's default (regional couriers by assignment day).
     [HttpGet("courier-lines")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(IReadOnlyList<OrderFinanceLineDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetForCourierAdmin(
-        [FromQuery] Guid courierId, [FromQuery] DateOnly? date, CancellationToken ct)
+        [FromQuery] Guid courierId, [FromQuery] DateOnly? date, [FromQuery] Application.Couriers.CourierDateBasis? basis,
+        CancellationToken ct)
     {
-        var result = await Sender.Send(new GetCourierOrderFinanceLinesQuery(courierId, date, IncludePostponed: true), ct);
+        var result = await Sender.Send(new GetCourierOrderFinanceLinesQuery(courierId, date, IncludePostponed: true, Basis: basis), ct);
         return Ok(result);
     }
 

@@ -1,3 +1,5 @@
+import type { CourierDateBasis } from './couriers';
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface SettlementOrderLine {
@@ -48,7 +50,11 @@ export interface SettlementPreview {
  * admin "by courier" and courier "my" views. No stored row → no id / day-close flag.
  */
 export interface CourierSettlementItem {
-    date: string;                              // "YYYY-MM-DD" (delivery day)
+    date: string;                              // "YYYY-MM-DD" (delivery day, or assignment day when dateBasis is 'Assigned')
+    /** Which date `date` is — regional couriers are summarised per assignment day. */
+    dateBasis: CourierDateBasis;
+    /** Assigned basis only: every order assigned that day, delivered or not (0 on the delivered basis). */
+    totalOrdersAssigned: number;
     totalOrdersPickedUp: number;
     totalOrdersDelivered: number;
     numberOfOrdersCancelled: number;

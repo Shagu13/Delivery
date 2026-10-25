@@ -1,3 +1,5 @@
+import type { CourierDateBasis } from './couriers';
+
 // ── Types (mirror Application.CustomerSettlements.DTOs.OrderFinanceLineDto) ──────
 
 /** A single-order finance row for the reworked finance pages. */
@@ -230,6 +232,44 @@ export async function fetchAllCustomersOrderFinance(
     return handle<OrderFinanceLine[]>(res, 'Failed to load customers');
 }
 
+// ── Admin — Payments grid: lines + one contact row per customer, in one of three modes ──
+// Effective = every order in the window · Delivered = delivered/billable-failed in the window ·
+// ToSettle = anything unsettled either way on any date (the date window is ignored).
+export type CustomerGridMode = 'Effective' | 'Delivered' | 'ToSettle';
+
+export interface CustomerGridContact {
+    customerId: string;
+    firstName: string;
+    lastName: string;
+    businessName: string;
+    phoneNumber: string;
+    defaultBankName: string | null;
+    defaultAccountNumber: string | null;
+    defaultAccountHolder: string | null;
+    bankAccountCount: number;
+}
+
+export interface CustomerFinanceGrid {
+    lines: OrderFinanceLine[];
+    customers: CustomerGridContact[];
+}
+
+export async function fetchCustomerFinanceGrid(
+    token: string,
+    mode: CustomerGridMode,
+    opts: { date?: string; monthly?: boolean; from?: string; to?: string } = {},
+): Promise<CustomerFinanceGrid> {
+    const params = new URLSearchParams({ mode });
+    if (opts.date) params.set('date', opts.date);
+    if (opts.monthly) params.set('monthly', 'true');
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    const res = await fetch(`/api/orderfinance/customer-grid?${params}`, {
+        headers: authHeaders(token), cache: 'no-store',
+    });
+    return handle<CustomerFinanceGrid>(res, 'Failed to load customers');
+}
+
 // ── Courier (read-only) — own delivered orders by delivery date ──────────────────
 export async function fetchCourierOrderFinance(token: string, date?: string): Promise<OrderFinanceLine[]> {
     const q = date ? `?date=${date}` : '';
@@ -237,12 +277,20 @@ export async function fetchCourierOrderFinance(token: string, date?: string): Pr
     return handle<OrderFinanceLine[]>(res, 'Failed to load orders');
 }
 
-// ── Admin — a courier's delivered orders by delivery date ────────────────────────
+// ── Courier — which date their own per-order list above is keyed by (regional: assignment day) ──
+export async function fetchCourierDateBasis(token: string): Promise<CourierDateBasis> {
+    const res = await fetch('/api/orderfinance/courier/date-basis', { headers: authHeaders(token), cache: 'no-store' });
+    return handle<CourierDateBasis>(res, 'Failed to load date basis');
+}
+
+// ── Admin — a courier's orders for a day, by delivery date or by the day they were assigned ──
+// `basis` omitted → the server picks the courier's default (regional couriers: assignment day).
 export async function fetchCourierOrderFinanceAdmin(
-    courierId: string, token: string, date?: string,
+    courierId: string, token: string, date?: string, basis?: CourierDateBasis,
 ): Promise<OrderFinanceLine[]> {
     const params = new URLSearchParams({ courierId });
     if (date) params.set('date', date);
+    if (basis) params.set('basis', basis);
     const res = await fetch(`/api/orderfinance/courier-lines?${params}`, {
         headers: authHeaders(token), cache: 'no-store',
     });
