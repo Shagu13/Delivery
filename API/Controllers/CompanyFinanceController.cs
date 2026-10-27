@@ -1,3 +1,4 @@
+using API.Excel;
 using Application.CompanyFinance.DTOs;
 using Application.CompanyFinance.Queries;
 using Microsoft.AspNetCore.Authorization;
@@ -43,5 +44,28 @@ public sealed class CompanyFinanceController : BaseController
 
         var result = await Sender.Send(new GetCompanyFinanceOrdersQuery(from, to, cities, districts), ct);
         return Ok(result);
+    }
+
+    // ── GET /api/companyfinance/orders/export  (Admin) ────────────────────────
+    // The same list as Excel. No courier salary / margin columns — see CompanyFinanceOrdersExcelBuilder.
+    [HttpGet("orders/export")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportOrders(
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        [FromQuery] string? city,
+        [FromQuery] string? district,
+        [FromQuery] string lang = "ka",
+        CancellationToken ct = default)
+    {
+        var cities    = city?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var districts = district?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var result = await Sender.Send(new GetCompanyFinanceOrdersQuery(from, to, cities, districts), ct);
+        return File(
+            CompanyFinanceOrdersExcelBuilder.Build(result, lang),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"company-orders-{from:dd.MM}-{to:dd.MM}.xlsx");
     }
 }

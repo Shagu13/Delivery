@@ -41,6 +41,8 @@ API/
 ├── Excel/FinanceExcelBuilder.cs   # shared ClosedXML builder for the finance-export endpoints —
 │                                   #   reuse this (or CustomerSettlementsController's older
 │                                   #   BuildInvoiceExcel) rather than hand-rolling a new one
+├── Excel/CompanyFinanceOrdersExcelBuilder.cs  # Finance → Overview "View orders" export; reuses FinanceExcelBuilder's
+│                                   #   Georgian label maps; like it, never carries CourierSalary (or margin = fee − salary)
 └── wwwroot/                       # built frontend — produced by `npm run build` (CI builds it on deploy; don't commit rebuilds)
 ```
 

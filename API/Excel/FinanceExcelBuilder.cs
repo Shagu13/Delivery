@@ -15,7 +15,7 @@ internal static class FinanceExcelBuilder
     // CANCELLATION_REASON_LABELS, and the order-type labels on the customer finance table.
     // Duplicated here (not shared) because this is server-side .NET and that's TypeScript —
     // keep both in sync if a status/reason label changes.
-    private static readonly Dictionary<string, string> StatusKa = new()
+    internal static readonly Dictionary<string, string> StatusKa = new()
     {
         ["Pending"]                              = "მოლოდინში",
         ["AcceptedGroupOrder"]                   = "მიღებულია",
@@ -39,14 +39,14 @@ internal static class FinanceExcelBuilder
         ["ExchangeCompleted"]                    = "გაცვლა შედგა",
     };
 
-    private static readonly Dictionary<string, string> OrderTypeKa = new()
+    internal static readonly Dictionary<string, string> OrderTypeKa = new()
     {
         ["Send"]     = "გაგზავნა",
         ["Return"]   = "დაბრუნება",
         ["Exchange"] = "გაცვლა",
     };
 
-    private static readonly Dictionary<string, string> CancellationReasonKa = new()
+    internal static readonly Dictionary<string, string> CancellationReasonKa = new()
     {
         ["DidNotLike"]           = "არ მოეწონა",
         ["DidNotWant"]           = "აღარ სურდა",
@@ -55,7 +55,7 @@ internal static class FinanceExcelBuilder
         ["WarehouseNotReceived"] = "საწყობში ვერ მივიდა",
     };
 
-    private static readonly Dictionary<string, string> WhoPaysKa = new()
+    internal static readonly Dictionary<string, string> WhoPaysKa = new()
     {
         ["Sender"]    = "გამგზავნი",
         ["Recipient"] = "მიმღები",

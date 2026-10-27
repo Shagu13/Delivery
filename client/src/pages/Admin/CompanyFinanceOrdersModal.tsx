@@ -5,7 +5,7 @@ import { useLanguage } from '../../contexts/useLanguage';
 import { usePlaceLocalizer } from '../../utils/usePlaceLocalizer';
 import { getStatusMeta } from '../../utils/statusMeta';
 import { formatGeorgianDateTime } from '../../utils/georgianTime';
-import { fetchCompanyFinanceOrders, CompanyFinanceApiError } from '../../api/companyFinance';
+import { fetchCompanyFinanceOrders, exportCompanyFinanceOrdersExcel, CompanyFinanceApiError } from '../../api/companyFinance';
 import type { CompanyFinanceOrder, CompanyFinanceOrderGroup } from '../../api/companyFinance';
 
 const gel = (n: number) => `₾${n.toFixed(2)}`;
@@ -31,6 +31,20 @@ export function CompanyFinanceOrdersModal({ token, from, to, cities, districts, 
     const { t, lang } = useLanguage();
     const { locCity, locDistrict } = usePlaceLocalizer();
     const [group, setGroup] = useState<GroupFilter>('all');
+    const [exporting, setExporting] = useState(false);
+    const [exportError, setExportError] = useState<string | null>(null);
+
+    // Exports every order in the range (not just the open tab); the file has a Group column to filter by.
+    const handleExport = async () => {
+        setExporting(true); setExportError(null);
+        try {
+            await exportCompanyFinanceOrdersExcel(from, to, token, lang, cities, districts);
+        } catch (e) {
+            setExportError(e instanceof CompanyFinanceApiError ? e.message : t.finOrdExportFailed);
+        } finally {
+            setExporting(false);
+        }
+    };
 
     const query = useQuery({
         queryKey: ['admin', 'finance', 'overviewOrders', from, to, cities, districts] as const,
@@ -101,7 +115,21 @@ export function CompanyFinanceOrdersModal({ token, from, to, cities, districts, 
                             {tab.label} ({tab.count})
                         </button>
                     ))}
+                    <button
+                        onClick={handleExport}
+                        disabled={exporting || query.isPending || all.length === 0}
+                        style={{
+                            marginLeft: 'auto', minHeight: 36, padding: '0 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', fontWeight: 700,
+                            border: '1px solid var(--color-border)', background: 'var(--color-bg-3)', color: 'var(--color-accent)',
+                            cursor: exporting ? 'wait' : 'pointer', opacity: (exporting || query.isPending || all.length === 0) ? 0.5 : 1,
+                        }}
+                    >
+                        {exporting ? t.finOrdExporting : t.finOrdExport}
+                    </button>
                 </div>
+                {exportError && (
+                    <div style={{ padding: '6px 16px', color: RED, fontSize: '0.78rem', borderBottom: '1px solid var(--color-border)' }}>{exportError}</div>
+                )}
                 <div style={{ padding: '6px 16px', fontSize: '0.7rem', color: 'var(--color-text-subtle)', borderBottom: '1px solid var(--color-border)' }}>
                     {t.finOrdBillableHint}
                 </div>

@@ -159,7 +159,7 @@ export async function exportAssignedForCourierExcel(
 }
 
 /// Saves a file response through the browser, taking the name from its Content-Disposition.
-async function saveResponseAsFile(res: Response, fallbackName: string): Promise<void> {
+export async function saveResponseAsFile(res: Response, fallbackName: string): Promise<void> {
     const blob        = await res.blob();
     const url         = URL.createObjectURL(blob);
     const disposition = res.headers.get('content-disposition') ?? '';

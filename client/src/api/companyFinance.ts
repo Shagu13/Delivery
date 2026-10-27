@@ -1,3 +1,5 @@
+import { saveResponseAsFile } from './couriers';
+
 // ── Types (mirror Application.CompanyFinance.DTOs) ──────────────────────────────
 
 /** Company finance overview: profit (accrual) + cash position (actual money). */
@@ -83,6 +85,26 @@ export async function fetchCompanyFinanceOverview(
         throw new CompanyFinanceApiError(res.status, body?.title ?? `Failed to load overview (${res.status})`);
     }
     return res.json() as Promise<CompanyFinanceOverview>;
+}
+
+/** Downloads the order list as Excel (no courier salary / margin columns). Triggers a browser file save. */
+export async function exportCompanyFinanceOrdersExcel(
+    from: string, to: string, token: string, lang: 'ka' | 'en',
+    cities: string[] = [],
+    districts: string[] = [],
+): Promise<void> {
+    const qs = new URLSearchParams({ from, to, lang });
+    if (cities.length > 0)    qs.set('city', cities.join(','));
+    if (districts.length > 0) qs.set('district', districts.join(','));
+    const res = await fetch(
+        `/api/companyfinance/orders/export?${qs}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new CompanyFinanceApiError(res.status, body?.title ?? `Export failed (${res.status})`);
+    }
+    await saveResponseAsFile(res, `company-orders-${from}-${to}.xlsx`);
 }
 
 /** The orders behind the overview's profit figures — same range and area filter. */
