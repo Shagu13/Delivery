@@ -25,6 +25,7 @@ import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll } fr
 import type { FlowVM, Sel } from './FinanceAllocation';
 import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 import { OutstandingBalancesModal } from './OutstandingBalancesModal';
+import { CompanyFinanceOrdersModal } from './CompanyFinanceOrdersModal';
 import { MultiCityDistrictFilter } from '../../components/ui/MultiCityDistrictFilter';
 import type { CityDistrictOption } from '../../components/ui/MultiCityDistrictFilter';
 import { round2, CANCELLED_STATUSES, isCancelledNonBillable, serviceOutstanding, codOutstanding, senderServiceShare, recipientFeePortion } from '../../utils/orderFinanceOutstanding';
@@ -156,6 +157,8 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
     // cities and/or (once narrowed to a city) districts within them. Empty = all areas.
     const [filterCities, setFilterCities] = useState<string[]>([]);
     const [filterDistricts, setFilterDistricts] = useState<string[]>([]);
+    // Drill-down: the orders behind the figures above, for the same range and area filter.
+    const [showOrders, setShowOrders] = useState(false);
     // Recipient locations actually used in [from, to] — drives the city/district picker
     // options (only offers areas that would return results).
     const locationsQuery = useQuery({
@@ -268,6 +271,12 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
                         <span style={{ fontSize: '0.71rem', color: 'var(--color-text-subtle)' }}>
                             {t.finOvCod}: <strong style={{ color: 'var(--color-text-muted)' }}>{gel(data.codPassThrough)}</strong>
                         </span>
+                        <button
+                            onClick={() => setShowOrders(true)}
+                            style={{ marginLeft: 'auto', minHeight: 36, padding: '0 12px', background: 'var(--color-bg-3)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-accent)' }}
+                        >
+                            {t.finOvViewOrders}
+                        </button>
                     </div>
 
                     {/* ── Cash position ────────────────────────────────────────── */}
@@ -314,6 +323,13 @@ function CompanyOverviewCard({ token, refreshSignal }: { token: string; refreshS
                         <CustomerFinanceGrid lines={scopedGridLines} mode="expand" loading={gridLoading} />
                     </div>
                 </>
+            )}
+            {showOrders && (
+                <CompanyFinanceOrdersModal
+                    token={token} from={from} to={to}
+                    cities={filterCities} districts={filterDistricts}
+                    onClose={() => setShowOrders(false)}
+                />
             )}
         </div>
     );

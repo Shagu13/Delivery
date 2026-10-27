@@ -141,6 +141,16 @@ real fee plus `CustomerSurcharge`, and their `recipientAmountDue` helpers use `r
 `FilterByDeliveredWindow`), `ToSettle` (any date; SQL coarse prefilter, then `OrderFinance.CodOwedToCustomer` /
 `ServiceOwedBySender` decide). Returns lines plus one contact row per customer (default bank account first).
 
+**Company overview (`CompanyFinance/`).** Admin Finance → Overview (`GET /api/companyfinance/overview`) and its
+"View orders" drill-down (`GET /api/companyfinance/orders`) both select orders through
+`CompanyFinanceOrderSets` — `Delivered`, `BillableFailed`, `PrepaidUndelivered`, each narrowed by `InArea`
+(recipient city/district). Never re-inline those predicates in a handler: the totals and the list must agree.
+The sets are **disjoint** — `Delivered` excludes billable failed orders, because a Send/Exchange marked
+"Returned to Sender" has status `ReturnedToSender` plus `DeliveredAt` (a walk-in one also a warehouse stamp) and
+would otherwise match both and be counted twice. The SQL copy of the billable rule in that class mirrors
+`OrderFinance.IsBillableFailedDelivery`; change them together. The drill-down itemises the profit block only
+(Delivered + BillableFailed in range); the cash-position/outstanding figures are cumulative, so not listed.
+
 ### Where finance bugs actually come from
 
 `OrderFinance` itself is clean and rarely the culprit. The recurring double-count

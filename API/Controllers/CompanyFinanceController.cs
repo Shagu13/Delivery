@@ -25,4 +25,23 @@ public sealed class CompanyFinanceController : BaseController
         var result = await Sender.Send(new GetCompanyFinanceOverviewQuery(from, to, cities, districts), ct);
         return Ok(result);
     }
+
+    // ── GET /api/companyfinance/orders  (Admin) ───────────────────────────────
+    // The orders behind the overview's profit figures, same filters.
+    [HttpGet("orders")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CompanyFinanceOrdersDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOrders(
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        [FromQuery] string? city,
+        [FromQuery] string? district,
+        CancellationToken ct)
+    {
+        var cities    = city?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var districts = district?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var result = await Sender.Send(new GetCompanyFinanceOrdersQuery(from, to, cities, districts), ct);
+        return Ok(result);
+    }
 }

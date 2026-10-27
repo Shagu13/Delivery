@@ -47,42 +47,17 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         HashSet<string> districts = (request.Districts ?? Array.Empty<string>())
             .Where(d => !string.IsNullOrWhiteSpace(d)).Select(d => d.Trim()).ToHashSet();
 
-        System.Linq.Expressions.Expression<Func<Domain.Order, bool>> inArea = o =>
-            (cities.Count == 0 || cities.Contains(o.RecipientCity!))
-            && (districts.Count == 0 || districts.Contains(o.RecipientDistrict!));
-
-        // Delivered orders for the range — same definition as CourierSettlement:
-        // last-mile deliveries (DeliveredAt) and return drop-offs (DeliveredToWarehouseAt).
-        // Includes the admin-set final terminal statuses (ExchangeCompleted, ReturnedToSender)
-        // so finalized Exchange/Return orders stay counted, dated by the courier's delivery event.
+        // The three order sets live in CompanyFinanceOrderSets so the order drill-down uses the
+        // exact same definitions. Delivered and BillableFailed are disjoint.
         var delivered = _context.Orders
             .AsNoTracking()
-            .Where(o => ((o.Status == OrderStatus.DeliveredToRecipient
-                          || o.Status == OrderStatus.ExchangeCompleted
-                          // An Exchange finalized as ReturnedToSender is still dated by its
-                          // delivery event (it has no warehouse drop-off timestamp).
-                          || (o.OrderType == OrderType.Exchange && o.Status == OrderStatus.ReturnedToSender))
-                         && o.DeliveredAt >= fromDt && o.DeliveredAt < toDt)
-                     || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
-                          || o.Status == OrderStatus.ReturnedToSender)
-                         && o.DeliveredToWarehouseAt >= fromDt && o.DeliveredToWarehouseAt < toDt))
-            .Where(inArea);
+            .Delivered(fromDt, toDt)
+            .InArea(cities, districts);
 
-        // Billable failed deliveries in range (mirrors OrderFinance.IsBillableFailedDelivery;
-        // inlined because this runs in SQL). Dated by the billing event = DeliveredAt ?? CancelledAt.
-        // The signal is an explicit (non-warehouse) CancellationReason set by the courier/admin
-        // when they cancel-and-charge or return-to-sender. They earn the company service fee
-        // (shifted to the sender) and the courier their salary, though no COD or recipient cash
-        // changes hands — disjoint from the delivered set above.
         var billableFailed = _context.Orders
             .AsNoTracking()
-            .Where(o => o.OrderType != OrderType.Return
-                     && o.CancellationReason != null
-                     && o.CancellationReason != CancellationReason.WarehouseNotReceived
-                     && o.CancellationReason != CancellationReason.DidNotWant
-                     && (o.DeliveredAt ?? o.CancelledAt) >= fromDt
-                     && (o.DeliveredAt ?? o.CancelledAt) < toDt)
-            .Where(inArea);
+            .BillableFailed(fromDt, toDt)
+            .InArea(cities, districts);
 
         var ordersDelivered = await delivered.CountAsync(cancellationToken);
 
@@ -113,16 +88,8 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         // To, using the same delivered-set definition as above but with no lower bound.
         var deliveredUpTo = await _context.Orders
             .AsNoTracking()
-            .Where(o => ((o.Status == OrderStatus.DeliveredToRecipient
-                          || o.Status == OrderStatus.ExchangeCompleted
-                          // An Exchange finalized as ReturnedToSender is still dated by its
-                          // delivery event (it has no warehouse drop-off timestamp).
-                          || (o.OrderType == OrderType.Exchange && o.Status == OrderStatus.ReturnedToSender))
-                         && o.DeliveredAt < toDt)
-                     || ((o.Status == OrderStatus.DeliveredReturnOrderToWarehouse
-                          || o.Status == OrderStatus.ReturnedToSender)
-                         && o.DeliveredToWarehouseAt < toDt))
-            .Where(inArea)
+            .Delivered(null, toDt)
+            .InArea(cities, districts)
             .ToListAsync(cancellationToken);
 
         // Sender-paid service fees collected in ADVANCE on orders that are accepted but not
@@ -133,20 +100,8 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         // so only the service inflow / receivable is affected.
         var prepaidUndelivered = await _context.Orders
             .AsNoTracking()
-            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Sender
-                     && o.ServicePaidByCustomerAmount != null
-                     && o.ServicePaidByCustomerAt < toDt
-                     && o.Status != OrderStatus.Pending
-                     && o.Status != OrderStatus.CancelledByAdmin
-                     && o.Status != OrderStatus.CancelledBySender
-                     && o.Status != OrderStatus.OrderNotAccepted
-                     // Not yet delivered → disjoint from the delivered set above (no double
-                     // count), and its CompanyNetCash is purely the service inflow.
-                     && o.Status != OrderStatus.DeliveredToRecipient
-                     && o.Status != OrderStatus.ExchangeCompleted
-                     && o.Status != OrderStatus.DeliveredReturnOrderToWarehouse
-                     && o.Status != OrderStatus.ReturnedToSender)
-            .Where(inArea)
+            .PrepaidUndelivered(toDt)
+            .InArea(cities, districts)
             .ToListAsync(cancellationToken);
 
         // Billable failed deliveries cumulative to To (same definition as billableFailed, no
@@ -155,12 +110,8 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         // and prepaidUndelivered (their statuses are excluded from both).
         var billableFailedUpTo = await _context.Orders
             .AsNoTracking()
-            .Where(o => o.OrderType != OrderType.Return
-                     && o.CancellationReason != null
-                     && o.CancellationReason != CancellationReason.WarehouseNotReceived
-                     && o.CancellationReason != CancellationReason.DidNotWant
-                     && (o.DeliveredAt ?? o.CancelledAt) < toDt)
-            .Where(inArea)
+            .BillableFailed(null, toDt)
+            .InArea(cities, districts)
             .ToListAsync(cancellationToken);
 
         var cashInFromCouriers       = deliveredUpTo.Sum(o => o.CodTransferedToCompanyByCourier ?? 0m)
@@ -171,9 +122,8 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
                                      + billableFailedUpTo.Sum(o => o.CourierSalary ?? 0m);
         // Sender-side service payments on delivered orders: whole fees on sender-pays orders plus
         // any customer surcharge paid on recipient-pays ones (an ordinary recipient-pays order has none).
-        // (Billable failed deliveries are counted once, in billableFailedUpTo, so they are excluded here.)
-        var senderServicePaid        = deliveredUpTo.Where(o => !OrderFinance.IsBillableFailedDelivery(o))
-                                                    .Sum(o => o.ServicePaidByCustomerAmount ?? 0m)
+        // (Billable failed deliveries are counted once, in billableFailedUpTo — the sets are disjoint.)
+        var senderServicePaid        = deliveredUpTo.Sum(o => o.ServicePaidByCustomerAmount ?? 0m)
                                      + prepaidUndelivered.Sum(o => o.ServicePaidByCustomerAmount ?? 0m)
                                      + billableFailedUpTo.Sum(o => o.ServicePaidByCustomerAmount ?? 0m);
         var codPaidToCustomers       = deliveredUpTo.Sum(o => o.CodPaidToCustomerAmount ?? 0m);
@@ -181,8 +131,7 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
         // Include the prepaid orders' obligation too, so the receivable nets correctly
         // (a fully pre-paid undelivered order is owed == paid → contributes 0 outstanding).
         // Failed deliveries add their full fee as a sender receivable.
-        var serviceOwedByCustomers   = deliveredUpTo.Where(o => !OrderFinance.IsBillableFailedDelivery(o))
-                                                    .Sum(OrderFinance.SenderServiceShare)
+        var serviceOwedByCustomers   = deliveredUpTo.Sum(OrderFinance.SenderServiceShare)
                                      + prepaidUndelivered.Sum(o => o.CompanyServicePrice)
                                      + billableFailedUpTo.Sum(o => o.CompanyServicePrice);
         // What couriers still have to send in for delivered orders: cash they were expected to

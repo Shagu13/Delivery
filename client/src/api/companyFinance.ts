@@ -28,6 +28,35 @@ export interface CompanyFinanceOverview {
     outstandingCourierRemittance: number;  // couriers owe company (cash collected, not yet sent in)
 }
 
+/** Which profit-block bucket of the overview an order is counted in. */
+export type CompanyFinanceOrderGroup = 'Delivered' | 'BillableFailed';
+
+/** One order behind the overview's profit figures (mirror of CompanyFinanceOrderDto). */
+export interface CompanyFinanceOrder {
+    orderId: string;
+    trackingNumber: string;
+    group: CompanyFinanceOrderGroup;
+    orderType: string;
+    status: string;
+    cancellationReason: string | null;
+    eventAt: string | null;             // the date that put it in range
+    recipientCity: string;
+    recipientDistrict: string;
+    customerName: string | null;
+    courierName: string | null;
+    whoPaysForCompanyService: string;
+    serviceFee: number;                 // summed into serviceRevenue
+    courierSalary: number | null;       // summed into courierSalary
+    margin: number;                     // summed into netOperatingMargin
+    cod: number | null;                 // summed into codPassThrough (Delivered only)
+}
+
+export interface CompanyFinanceOrders {
+    from: string;
+    to: string;
+    orders: CompanyFinanceOrder[];
+}
+
 export class CompanyFinanceApiError extends Error {
     constructor(public readonly status: number, message: string) {
         super(message);
@@ -54,4 +83,24 @@ export async function fetchCompanyFinanceOverview(
         throw new CompanyFinanceApiError(res.status, body?.title ?? `Failed to load overview (${res.status})`);
     }
     return res.json() as Promise<CompanyFinanceOverview>;
+}
+
+/** The orders behind the overview's profit figures — same range and area filter. */
+export async function fetchCompanyFinanceOrders(
+    from: string, to: string, token: string,
+    cities: string[] = [],
+    districts: string[] = [],
+): Promise<CompanyFinanceOrders> {
+    const qs = new URLSearchParams({ from, to });
+    if (cities.length > 0)    qs.set('city', cities.join(','));
+    if (districts.length > 0) qs.set('district', districts.join(','));
+    const res = await fetch(
+        `/api/companyfinance/orders?${qs}`,
+        { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' },
+    );
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new CompanyFinanceApiError(res.status, body?.title ?? `Failed to load orders (${res.status})`);
+    }
+    return res.json() as Promise<CompanyFinanceOrders>;
 }

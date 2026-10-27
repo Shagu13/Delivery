@@ -9,12 +9,10 @@ namespace Application.CompanyFinance.DTOs;
 ///    vs. the sender-invoiced receivable. COD is pass-through (customer money) and
 ///    is reported for reconciliation only — never part of revenue.
 ///
-/// 2. Cash position (actual money) — derived from the settlement tables, which hold
-///    the real payment facts orders cannot know. This is the net cash from operations
-///    as of <see cref="To"/> (all settlements up to that date, so it is independent of
-///    <see cref="From"/>). Courier-side movements are dated by CourierSettlement.CreatedAt;
-///    customer-side movements are bucketed by the settlement's calendar month, so a
-///    partial end month is included whole.
+/// 2. Cash position (actual money) — derived live from the per-order payment facts on
+///    Order (the settlement tables no longer exist), via OrderFinance. This is the net cash
+///    from operations as of <see cref="To"/> (every qualifying order up to that date, so it
+///    is independent of <see cref="From"/>).
 /// </summary>
 public sealed record CompanyFinanceOverviewDto(
     string  From,                          // ISO date (inclusive) — scopes the profit block
