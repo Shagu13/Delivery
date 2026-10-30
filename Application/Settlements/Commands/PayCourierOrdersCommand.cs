@@ -106,8 +106,18 @@ public sealed class PayCourierOrdersCommandHandler
         if (amount > OrderFinance.CourierCodTransferOutstanding(order) + Epsilon)
             throw new ConflictException($"COD transfer for order {order.TrackingNumber} exceeds its outstanding balance.");
 
-        order.IsCourierSalaryIncludedSpecialCase = order.WhoPaysForCompanyService == ServicePayer.Recipient;
+        bool keepSalary = order.WhoPaysForCompanyService == ServicePayer.Recipient;
+        order.IsCourierSalaryIncludedSpecialCase = keepSalary;
         order.CodTransferedToCompanyByCourier    = (order.CodTransferedToCompanyByCourier ?? 0m) + amount;
         order.CodTransferedToCompanyByCourierAt   = now;
+
+        // The kept salary IS the courier's pay for this order — credit it, exactly as
+        // SetOrderCourierSettlementPaymentCommand does, so the Pay-salary bar does not offer it again.
+        decimal salary = order.CourierSalary ?? 0m;
+        if (keepSalary && (order.CourierSalaryPaidAmount ?? 0m) < salary)
+        {
+            order.CourierSalaryPaidAmount = salary;
+            order.CourierSalaryPaidAt     = now;
+        }
     }
 }

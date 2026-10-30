@@ -75,6 +75,38 @@ public sealed class CourierPaymentReceiptTests
     }
 
     [Fact]
+    public async Task RecipientPaysCodTransfer_CreditsKeptSalary_SoSalaryIsNotOfferedTwice()
+    {
+        string db = $"courier-receipts-{Guid.NewGuid()}";
+        Guid courierId = Guid.NewGuid();
+        Guid id;
+        using (AppDbContext seed = Ctx(db))
+        {
+            Order o = new()
+            {
+                TrackingNumber = "TN-KEEP-SAL", RecipientName = "R", RecipientPhone = "555111222",
+                RecipientCity = "City", RecipientDistrict = "District", RecipientAddress = "Street 1",
+                OrderType = OrderType.Send, Status = OrderStatus.DeliveredToRecipient,
+                DeliveredAt = CustomTime.Now, CourierId = courierId,
+                WhoPaysForCompanyService = ServicePayer.Recipient,
+                AmountToCollectForPackage = 94m, CompanyServicePrice = 6m, CourierSalary = 5m,
+                CreatedAt = CustomTime.Now,
+            };
+            seed.Orders.Add(o);
+            await seed.SaveChangesAsync();
+            id = o.Id;
+        }
+
+        await Pay(db, courierId, CourierPaymentFlow.CodTransfer, (id, 95m));   // 100 cash − 5 salary kept
+
+        using AppDbContext ctx = Ctx(db);
+        Order saved = await ctx.Orders.SingleAsync(o => o.Id == id);
+        Assert.Equal(5m, saved.CourierSalaryPaidAmount);
+        Assert.Equal(0m, Application.Finance.OrderFinance.CourierSalaryOutstanding(saved));
+        await Assert.ThrowsAsync<ConflictException>(() => Pay(db, courierId, CourierPaymentFlow.Salary, (id, 5m)));
+    }
+
+    [Fact]
     public async Task SecondPayment_AddsASecondReceipt_AndOverpaymentIsRejected()
     {
         string db = $"courier-receipts-{Guid.NewGuid()}";
