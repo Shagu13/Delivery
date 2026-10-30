@@ -171,16 +171,31 @@ export function SettlementModal({
     // Cash the courier owes the company for the day: what they have already handed over plus what is
     // still outstanding (server-computed: collected cash − salary kept out of it − handed over).
     // Showing only the recorded hand-overs read 0 until the admin ticked them, hiding what is due.
-    const toTransfer     = lines.reduce(
-        (s, o) => s + (o.codTransferedToCompanyByCourier ?? 0) + o.courierCodTransferOutstanding, 0);
-    // DISPLAY ONLY: the courier's net position for the day = all cash collected − all salary earned
-    // (so sender-pays salary, which the courier does not keep from cash, is deducted as well). The
-    // server-side cap/allocations still use `toTransfer` (per-order); the gap is the salary not
-    // netted from cash. A partial selection has no per-row share of that gap, so it is only
-    // deducted when every payable order is ticked.
-    const transferShown  = Math.max(0, round2(cashCollected - salaryEarned));
-    const salaryNotKept  = Math.max(0, round2(toTransfer - transferShown));
-    const codNetSelected = codFlow.allChecked ? Math.max(0, round2(codFlow.selTotal - salaryNotKept)) : codFlow.selTotal;
+    // DISPLAY ONLY — recording is unchanged (per-order, server-capped). The admin tells the courier
+    // "cash − ALL salary", so the salary the courier effectively keeps but the per-order outstanding
+    // does not net (sender-pays orders, which the admin pays separately) is deducted on screen.
+    // Per order: netted = cash − outstanding − handed over; the rest of the salary is "unnetted",
+    // less whatever the admin already paid out for it (never more than the unnetted part).
+    const unnettedOf = (o: OrderFinanceLine) => {
+        const salary = o.courierSalary ?? 0;
+        const netted = (o.amountOfCashCollected ?? 0) - o.courierCodTransferOutstanding - (o.codTransferedToCompanyByCourier ?? 0);
+        return Math.min(salary, Math.max(0, salary - netted));
+    };
+    const unnettedPaid = (o: OrderFinanceLine) => Math.min(o.courierSalaryPaidAmount ?? 0, unnettedOf(o));
+    const unnettedLeft = (o: OrderFinanceLine) => unnettedOf(o) - unnettedPaid(o);
+    // To Transfer COD = still-to-record hand-over minus the unnetted salary; shared by the summary
+    // (all settled orders) and the Select All bar (ticked orders) so the two can never disagree.
+    const toTransferOf = (outstanding: number, orders: OrderFinanceLine[]) =>
+        Math.max(0, round2(outstanding - orders.reduce((s, o) => s + unnettedLeft(o), 0)));
+    const toTransferShown = toTransferOf(counted.reduce((s, o) => s + o.courierCodTransferOutstanding, 0), counted);
+    // Transfered COD = recorded hand-overs minus salary the admin paid the courier separately
+    // (that cash was kept by the courier, not handed over).
+    const transferedShown = Math.max(0, round2(counted.reduce(
+        (s, o) => s + (o.codTransferedToCompanyByCourier ?? 0) - unnettedPaid(o), 0)));
+    // Every payable ticked ⇒ the whole day (incl. zero-cash orders whose salary is also kept).
+    const codNetSelected  = toTransferOf(
+        codFlow.selTotal,
+        codFlow.allChecked ? counted : codFlow.payable.filter(o => selCod[o.orderId]?.checked));
     // Income = service fees minus courier salary (OrderFinance.CompanyRevenue per order) over the
     // counted (non-postponed) orders. (companyNetCash was a running cash position that swings with
     // payout timing.)
@@ -294,8 +309,12 @@ export function SettlementModal({
                                         <span className="stl-fin-value">{fmt(cashCollected)}</span>
                                     </div>
                                     <div className="stl-fin-row">
-                                        <span className="stl-fin-label">{t.stlmCourierToCompany}</span>
-                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(transferShown)}</span>
+                                        <span className="stl-fin-label">{t.stlmToTransferCod}</span>
+                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(toTransferShown)}</span>
+                                    </div>
+                                    <div className="stl-fin-row">
+                                        <span className="stl-fin-label">{t.stlmTransferedCod}</span>
+                                        <span className="stl-fin-value stl-fin-value--income">{fmt(transferedShown)}</span>
                                     </div>
                                     <div className="stl-fin-divider" />
                                     <div className="stl-fin-row">
