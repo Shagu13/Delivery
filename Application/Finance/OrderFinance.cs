@@ -206,26 +206,61 @@ public static class OrderFinance
     public static bool IsCourierLegComplete(Order o) =>
         (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null || IsBillableFailedDelivery(o);
 
-    /// <summary>Salary the company still owes the courier for this order (never negative).</summary>
-    public static decimal CourierSalaryOutstanding(Order o) =>
-        Math.Max(0m, (o.CourierSalary ?? 0m) - (o.CourierSalaryPaidAmount ?? 0m));
+    /// <summary>
+    /// Cash the courier collected on this order and so holds: the stored
+    /// <see cref="Order.AmountOfCashCollected"/> (falling back to <see cref="ExpectedCourierCash"/> for a
+    /// delivery that never recorded it). Zero until the courier's leg is complete — a postponed or
+    /// in-progress order has an *expected* figure (the scan flow shows it) but nothing collected.
+    /// </summary>
+    public static decimal CourierCashHeld(Order o) =>
+        IsCourierLegComplete(o) ? o.AmountOfCashCollected ?? ExpectedCourierCash(o) : 0m;
 
     /// <summary>
-    /// Cash the courier may still record as handed over to the company for this order — the cap
-    /// <c>PayCourierOrdersCommand</c> enforces. Recipient-pays orders: the courier keeps their
-    /// salary out of the collected cash, so the handover is the collected total minus salary.
-    /// Never negative.
+    /// Salary that is (or, once the cash is handed over, will be) settled by netting it against the
+    /// hand-over instead of the company paying it out — for either payer. Zero when the company already
+    /// paid some of this salary separately (the courier then owes the whole cash). Never more than the
+    /// cash held: salary beyond that cannot be netted and stays payable.
     /// </summary>
-    public static decimal CourierCodTransferOutstanding(Order o)
+    public static decimal CourierNettableSalary(Order o)
     {
-        // Nothing is collected — so nothing can be handed over — until the order is delivered. A
-        // postponed or in-progress order still has an *expected* cash figure (the scan flow shows it
-        // to the courier), but it must not count as cash the courier owes the company.
-        if (o.DeliveredAt is null && o.DeliveredToWarehouseAt is null) return 0m;
-
-        decimal keptSalary = o.WhoPaysForCompanyService == ServicePayer.Recipient ? (o.CourierSalary ?? 0m) : 0m;
-        return Math.Max(0m, ExpectedCourierCash(o) - keptSalary - (o.CodTransferedToCompanyByCourier ?? 0m));
+        bool paidSeparately = (o.CourierSalaryPaidAmount ?? 0m) > Epsilon && !o.IsCourierSalaryIncludedSpecialCase;
+        return paidSeparately ? 0m : Math.Min(o.CourierSalary ?? 0m, CourierCashHeld(o));
     }
+
+    /// <summary>
+    /// Salary the courier has actually kept out of the cash: only once a hand-over was recorded
+    /// (<see cref="Order.IsCourierSalaryIncludedSpecialCase"/>), derived from the cash not handed over
+    /// so it also holds for rows recorded before netting credited the salary as paid.
+    /// </summary>
+    public static decimal CourierKeptSalary(Order o) =>
+        o.IsCourierSalaryIncludedSpecialCase
+            ? Math.Clamp(CourierCashHeld(o) - (o.CodTransferedToCompanyByCourier ?? 0m), 0m, o.CourierSalary ?? 0m)
+            : 0m;
+
+    /// <summary>Salary the company paid the courier in separate cash — paid salary minus the part the courier kept.</summary>
+    public static decimal CourierSeparateSalaryPaid(Order o) =>
+        Math.Max(0m, (o.CourierSalaryPaidAmount ?? 0m) - CourierKeptSalary(o));
+
+    /// <summary>Salary the company still owes the courier for this order (never negative); kept salary counts as settled.</summary>
+    public static decimal CourierSalaryOutstanding(Order o) =>
+        Math.Max(0m, (o.CourierSalary ?? 0m) - Math.Max(o.CourierSalaryPaidAmount ?? 0m, CourierKeptSalary(o)));
+
+    /// <summary>
+    /// "To transfer COD": cash the courier may still record as handed over for this order — the cap
+    /// <c>PayCourierOrdersCommand</c> enforces. The collected cash minus the salary netted out of it
+    /// (<see cref="CourierNettableSalary"/>, either payer) minus what was already handed over. Never negative.
+    /// </summary>
+    public static decimal CourierCodTransferOutstanding(Order o) =>
+        Math.Max(0m, CourierCashHeld(o) - CourierNettableSalary(o) - (o.CodTransferedToCompanyByCourier ?? 0m));
+
+    /// <summary>
+    /// "Transfered COD": cash handed over to the company, net of salary the company paid separately.
+    /// Salary the courier kept is already out of the hand-over, so it is not deducted a second time.
+    /// With <see cref="CourierCodTransferOutstanding"/> it partitions the courier's net position:
+    /// ToTransfer + Transfered = cash held − salary + salary that is neither netted nor paid.
+    /// </summary>
+    public static decimal CourierCodTransfered(Order o) =>
+        (o.CodTransferedToCompanyByCourier ?? 0m) - CourierSeparateSalaryPaid(o);
 
     /// <summary>
     /// A courier's net cash position for a set of orders (one day): all cash collected minus all salary

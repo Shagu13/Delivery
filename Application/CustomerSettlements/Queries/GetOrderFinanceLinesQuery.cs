@@ -496,6 +496,8 @@ internal static class OrderFinanceQueries
             Description:                  o.Description,
             CourierSalaryOutstanding:        OrderFinance.CourierSalaryOutstanding(o),
             CourierCodTransferOutstanding:   OrderFinance.CourierCodTransferOutstanding(o),
+            CourierCashHeld:                 OrderFinance.CourierCashHeld(o),
+            CourierCodTransfered:            OrderFinance.CourierCodTransfered(o),
             CustomerSurcharge:               o.CustomerSurcharge,
             ServiceOwedBySender:             OrderFinance.ServiceOwedBySender(o)
         );

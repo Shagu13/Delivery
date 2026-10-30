@@ -101,12 +101,21 @@ public sealed class PayCourierOrdersCommandHandler
 
     private static void ApplyCodTransfer(Order order, decimal amount, DateTime now)
     {
-        // Recipient-pays orders: the courier keeps their salary out of the collected cash,
-        // so the cash they owe the company is the collected total minus salary.
+        // The courier keeps the order's unpaid salary out of the collected cash (either payer), so the
+        // cash they owe the company is the collected total minus that salary.
         if (amount > OrderFinance.CourierCodTransferOutstanding(order) + Epsilon)
             throw new ConflictException($"COD transfer for order {order.TrackingNumber} exceeds its outstanding balance.");
 
-        order.IsCourierSalaryIncludedSpecialCase = order.WhoPaysForCompanyService == ServicePayer.Recipient;
+        // First hand-over on this order: the netted salary is settled by it, so credit it as paid —
+        // otherwise the salary flow would offer the same salary a second time.
+        decimal netted = OrderFinance.CourierNettableSalary(order);
+        if (!order.IsCourierSalaryIncludedSpecialCase && netted > Epsilon)
+        {
+            order.IsCourierSalaryIncludedSpecialCase = true;
+            order.CourierSalaryPaidAmount            = (order.CourierSalaryPaidAmount ?? 0m) + netted;
+            order.CourierSalaryPaidAt                = now;
+        }
+
         order.CodTransferedToCompanyByCourier    = (order.CodTransferedToCompanyByCourier ?? 0m) + amount;
         order.CodTransferedToCompanyByCourierAt   = now;
     }

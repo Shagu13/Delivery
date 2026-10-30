@@ -167,20 +167,13 @@ export function SettlementModal({
     const delivered      = counted.length;
     const salaryEarned   = counted.reduce((s, o) => s + (o.courierSalary ?? 0), 0);
     const salaryPaid     = counted.reduce((s, o) => s + (o.courierSalaryPaidAmount ?? 0), 0);
-    const cashCollected  = counted.reduce((s, o) => s + (o.amountOfCashCollected ?? 0), 0);
-    // Cash the courier owes the company for the day: what they have already handed over plus what is
-    // still outstanding (server-computed: collected cash − salary kept out of it − handed over).
-    // Showing only the recorded hand-overs read 0 until the admin ticked them, hiding what is due.
-    const toTransfer     = lines.reduce(
-        (s, o) => s + (o.codTransferedToCompanyByCourier ?? 0) + o.courierCodTransferOutstanding, 0);
-    // DISPLAY ONLY: the courier's net position for the day = all cash collected − all salary earned
-    // (so sender-pays salary, which the courier does not keep from cash, is deducted as well). The
-    // server-side cap/allocations still use `toTransfer` (per-order); the gap is the salary not
-    // netted from cash. A partial selection has no per-row share of that gap, so it is only
-    // deducted when every payable order is ticked.
-    const transferShown  = Math.max(0, round2(cashCollected - salaryEarned));
-    const salaryNotKept  = Math.max(0, round2(toTransfer - transferShown));
-    const codNetSelected = codFlow.allChecked ? Math.max(0, round2(codFlow.selTotal - salaryNotKept)) : codFlow.selTotal;
+    const cashCollected  = round2(lines.reduce((s, o) => s + o.courierCashHeld, 0));
+    // The courier's net position splits into the two server-computed halves: still to hand over
+    // (cash − salary netted out of it − already handed over) and already handed over (net of salary
+    // the company paid separately). Together they are cash − salary; the Select All bar records
+    // exactly the "to transfer" figure, so nothing here is re-derived on the client.
+    const toTransferCod  = round2(lines.reduce((s, o) => s + o.courierCodTransferOutstanding, 0));
+    const transferedCod  = round2(lines.reduce((s, o) => s + o.courierCodTransfered, 0));
     // Income = service fees minus courier salary (OrderFinance.CompanyRevenue per order) over the
     // counted (non-postponed) orders. (companyNetCash was a running cash position that swings with
     // payout timing.)
@@ -294,8 +287,12 @@ export function SettlementModal({
                                         <span className="stl-fin-value">{fmt(cashCollected)}</span>
                                     </div>
                                     <div className="stl-fin-row">
-                                        <span className="stl-fin-label">{t.stlmCourierToCompany}</span>
-                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(transferShown)}</span>
+                                        <span className="stl-fin-label">{t.stlmToTransferCod}</span>
+                                        <span className="stl-fin-value stl-fin-value--transfer">{fmt(toTransferCod)}</span>
+                                    </div>
+                                    <div className="stl-fin-row">
+                                        <span className="stl-fin-label">{t.stlmTransferedCod}</span>
+                                        <span className="stl-fin-value stl-fin-value--income">{fmt(transferedCod)}</span>
                                     </div>
                                     <div className="stl-fin-divider" />
                                     <div className="stl-fin-row">
@@ -316,7 +313,7 @@ export function SettlementModal({
                                         <FlowBar f={salaryFlow} payLabel={t.stlmPaySalary} busy={busy} borderRight
                                             onToggleAll={check => toggleAll(setSelSalary, salaryFlow.payable, salaryOut, check)}
                                             onPay={() => doPay('Salary')} />
-                                        <FlowBar f={codFlow} payLabel={t.stlmRecordCodTransfer} busy={busy} netTotal={codNetSelected}
+                                        <FlowBar f={codFlow} payLabel={t.stlmRecordCodTransfer} busy={busy}
                                             onToggleAll={check => toggleAll(setSelCod, codFlow.payable, codOut, check)}
                                             onPay={() => doPay('CodTransfer')} />
                                     </div>
@@ -337,7 +334,7 @@ export function SettlementModal({
                                                     <th>{t.stlmThPayer}</th>
                                                     <th style={{ textAlign: 'right' }}>{t.stlmThSalary}</th>
                                                     <th style={{ textAlign: 'right' }}>{t.stlmThCod}</th>
-                                                    <th style={{ textAlign: 'right' }}>{t.stlmCourierToCompany}</th>
+                                                    <th style={{ textAlign: 'right' }}>{t.stlmThHandover}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
