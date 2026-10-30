@@ -73,10 +73,6 @@ export interface OrderFinanceLine {
     /** Cash the courier may still record as handed over — the cap for a bulk COD hand-over
      *  (OrderFinance.CourierCodTransferOutstanding). */
     courierCodTransferOutstanding: number;
-    /** Cash the courier holds for this order — the day's "cash collected" input (OrderFinance.CourierCashHeld). */
-    courierCashHeld: number;
-    /** Cash handed to the company net of salary paid separately — the "Transfered COD" part (OrderFinance.CourierCodTransfered). */
-    courierCodTransfered: number;
 
     /** The part of the service fee the sender owes on top of what the recipient pays (0 for an ordinary order). */
     customerSurcharge: number;

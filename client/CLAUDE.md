@@ -125,8 +125,7 @@ treat its current location as already-shared.
 Finance → Courier Settlements (`CourierSettlementsSection` → `SettlementModal`) groups a courier's orders by
 **delivery day** or **assignment day**. The server supplies each courier's default (`Courier.defaultDateBasis`,
 regional couriers → `'Assigned'`; rule lives in `Application/Couriers/CourierDateBasis.cs`, never re-derived
-here) and the modal's Financial Summary shows **To Transfer COD / Transfered COD** as plain sums of the per-line
-`courierCodTransferOutstanding` / `courierCodTransfered` (no client-side netting; see Application/CLAUDE.md §4) and the modal has a toggle that overrides it via `fetchCourierOrderFinanceAdmin(..., basis)`. Assigned-date
+here) and the modal has a toggle that overrides it via `fetchCourierOrderFinanceAdmin(..., basis)`. Assigned-date
 lists include open orders, so payability/totals gate on `isCourierLegComplete` (`utils/orderFinanceOutstanding.ts`,
 mirror of `OrderFinance.IsCourierLegComplete`). The courier's own screen (`CourierSettlementsPage`) follows its
 default automatically (no toggle) — label via `fetchCourierDateBasis`; day cards carry `dateBasis` /

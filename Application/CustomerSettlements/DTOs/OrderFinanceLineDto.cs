@@ -91,10 +91,6 @@ public sealed record OrderFinanceLineDto(
     /// <summary>Cash the courier may still record as handed over (OrderFinance.CourierCodTransferOutstanding)
     /// — the cap for a bulk COD hand-over on this order.</summary>
     decimal  CourierCodTransferOutstanding,
-    /// <summary>Cash the courier holds for this order (OrderFinance.CourierCashHeld) — the day's "cash collected" input.</summary>
-    decimal  CourierCashHeld,
-    /// <summary>Cash handed to the company net of salary paid separately (OrderFinance.CourierCodTransfered) — the "Transfered COD" part.</summary>
-    decimal  CourierCodTransfered,
 
     /// <summary>The part of <see cref="CompanyServicePrice"/> the sender owes on top of what the
     /// recipient pays (0 for an ordinary order). Reference only — use <see cref="ServiceOwedBySender"/>
