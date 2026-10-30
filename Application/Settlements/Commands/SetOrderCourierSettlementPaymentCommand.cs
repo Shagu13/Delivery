@@ -47,7 +47,7 @@ public sealed class SetOrderCourierSettlementPaymentCommandHandler
         // Whether the courier keeps their salary out of the cash they collected. Auto-set
         // for recipient-pays orders (the courier holds the service-fee cash to draw from);
         // sender-pays salaries are paid out separately by the company.
-        bool keepSalary = order.WhoPaysForCompanyService == ServicePayer.Recipient;
+        bool keepSalary = OrderFinance.CourierKeepsSalaryFromCash(order);
 
         if (request.CodTransferred is bool transferred)
         {

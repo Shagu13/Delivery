@@ -106,7 +106,7 @@ public sealed class PayCourierOrdersCommandHandler
         if (amount > OrderFinance.CourierCodTransferOutstanding(order) + Epsilon)
             throw new ConflictException($"COD transfer for order {order.TrackingNumber} exceeds its outstanding balance.");
 
-        bool keepSalary = order.WhoPaysForCompanyService == ServicePayer.Recipient;
+        bool keepSalary = OrderFinance.CourierKeepsSalaryFromCash(order);
         order.IsCourierSalaryIncludedSpecialCase = keepSalary;
         order.CodTransferedToCompanyByCourier    = (order.CodTransferedToCompanyByCourier ?? 0m) + amount;
         order.CodTransferedToCompanyByCourierAt   = now;

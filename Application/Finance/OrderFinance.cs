@@ -223,9 +223,21 @@ public static class OrderFinance
         // to the courier), but it must not count as cash the courier owes the company.
         if (o.DeliveredAt is null && o.DeliveredToWarehouseAt is null) return 0m;
 
-        decimal keptSalary = o.WhoPaysForCompanyService == ServicePayer.Recipient ? (o.CourierSalary ?? 0m) : 0m;
+        decimal keptSalary = CourierKeepsSalaryFromCash(o) ? (o.CourierSalary ?? 0m) : 0m;
         return Math.Max(0m, ExpectedCourierCash(o) - keptSalary - (o.CodTransferedToCompanyByCourier ?? 0m));
     }
+
+    /// <summary>
+    /// Whether the courier's salary for this order comes out of the cash they collected: recipient-pays
+    /// orders only, and not once the company has already paid that salary separately (a payment made
+    /// before any hand-over, i.e. credited while <see cref="Order.IsCourierSalaryIncludedSpecialCase"/>
+    /// is still unset) — keeping it as well would pay the courier twice. Once the hand-over has been
+    /// recorded the flag is set and the credited salary is the kept one. The single rule behind both
+    /// <see cref="CourierCodTransferOutstanding"/> and the handlers that record a hand-over.
+    /// </summary>
+    public static bool CourierKeepsSalaryFromCash(Order o) =>
+        o.WhoPaysForCompanyService == ServicePayer.Recipient
+        && (o.IsCourierSalaryIncludedSpecialCase || (o.CourierSalaryPaidAmount ?? 0m) <= Epsilon);
 
     /// <summary>
     /// A courier's net cash position for a set of orders (one day): all cash collected minus all salary

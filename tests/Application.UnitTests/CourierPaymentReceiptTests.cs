@@ -107,6 +107,45 @@ public sealed class CourierPaymentReceiptTests
     }
 
     [Fact]
+    public async Task RecipientPays_SalaryPaidFirst_HandOverIsFullCash_AndSalaryIsNotKeptToo()
+    {
+        string db = $"courier-receipts-{Guid.NewGuid()}";
+        Guid courierId = Guid.NewGuid();
+        Guid id;
+        using (AppDbContext seed = Ctx(db))
+        {
+            Order o = new()
+            {
+                TrackingNumber = "TN-PAID-1ST", RecipientName = "R", RecipientPhone = "555111222",
+                RecipientCity = "City", RecipientDistrict = "District", RecipientAddress = "Street 1",
+                OrderType = OrderType.Send, Status = OrderStatus.DeliveredToRecipient,
+                DeliveredAt = CustomTime.Now, CourierId = courierId,
+                WhoPaysForCompanyService = ServicePayer.Recipient,
+                AmountToCollectForPackage = 94m, CompanyServicePrice = 6m, CourierSalary = 5m,
+                CreatedAt = CustomTime.Now,
+            };
+            seed.Orders.Add(o);
+            await seed.SaveChangesAsync();
+            id = o.Id;
+        }
+
+        await Pay(db, courierId, CourierPaymentFlow.Salary, (id, 5m));          // admin pays the salary first
+
+        using (AppDbContext ctx = Ctx(db))
+            Assert.Equal(100m, Application.Finance.OrderFinance.CourierCodTransferOutstanding(
+                await ctx.Orders.SingleAsync(o => o.Id == id)));                // full cash, nothing kept
+        await Assert.ThrowsAsync<ConflictException>(() => Pay(db, courierId, CourierPaymentFlow.CodTransfer, (id, 101m)));
+
+        await Pay(db, courierId, CourierPaymentFlow.CodTransfer, (id, 100m));
+
+        using AppDbContext after = Ctx(db);
+        Order saved = await after.Orders.SingleAsync(o => o.Id == id);
+        Assert.False(saved.IsCourierSalaryIncludedSpecialCase);
+        Assert.Equal(5m, saved.CourierSalaryPaidAmount);
+        Assert.Equal(0m, Application.Finance.OrderFinance.CourierCodTransferOutstanding(saved));
+    }
+
+    [Fact]
     public async Task SecondPayment_AddsASecondReceipt_AndOverpaymentIsRejected()
     {
         string db = $"courier-receipts-{Guid.NewGuid()}";
