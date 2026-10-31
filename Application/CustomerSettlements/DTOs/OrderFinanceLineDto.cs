@@ -101,6 +101,9 @@ public sealed record OrderFinanceLineDto(
     /// surcharge on a recipient-pays order, 0 otherwise. Can dip below 0 if overpaid.</summary>
     decimal  ServiceOwedBySender,
 
+    /// <summary>No courier salary entered (empty or 0) — OrderFinance.IsCourierSalaryMissing.</summary>
+    bool     IsCourierSalaryMissing,
+
     /// <summary>Part of the salary the hand-over cap does not net out of the cash
     /// (OrderFinance.CourierUnnettedSalary) that the admin has already paid the courier separately.</summary>
     decimal  CourierUnnettedSalaryPaid,

@@ -80,6 +80,8 @@ export interface OrderFinanceLine {
      *  the whole fee less payments on sender-pays orders and billable failures, only the unpaid
      *  surcharge on a recipient-pays order, 0 otherwise. */
     serviceOwedBySender: number;
+    /** No courier salary entered (empty or 0) — OrderFinance.IsCourierSalaryMissing. Optional: absent in query-cache JSON persisted before it existed. */
+    isCourierSalaryMissing?: boolean;
     /** Salary the hand-over cap doesn't net out of the cash (OrderFinance.CourierUnnettedSalary) that the admin already
      *  paid the courier separately. Optional: absent in query-cache JSON persisted before this field existed. */
     courierUnnettedSalaryPaid?: number;
@@ -292,10 +294,13 @@ export async function fetchCourierDateBasis(token: string): Promise<CourierDateB
 // `basis` omitted → the server picks the courier's default (regional couriers: assignment day).
 export async function fetchCourierOrderFinanceAdmin(
     courierId: string, token: string, date?: string, basis?: CourierDateBasis,
+    /** "All Unpaid": every order of any date with salary or cash still open; date / basis are ignored server-side. */
+    unsettled = false,
 ): Promise<OrderFinanceLine[]> {
     const params = new URLSearchParams({ courierId });
     if (date) params.set('date', date);
     if (basis) params.set('basis', basis);
+    if (unsettled) params.set('unsettled', 'true');
     const res = await fetch(`/api/orderfinance/courier-lines?${params}`, {
         headers: authHeaders(token), cache: 'no-store',
     });

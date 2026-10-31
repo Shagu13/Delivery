@@ -177,14 +177,16 @@ public sealed class OrderFinanceController : BaseController
 
     // ── GET /api/orderfinance/courier-lines  (Admin) — a courier's orders for a day ──
     // `basis` = Delivered | Assigned; omitted → the courier's default (regional couriers by assignment day).
+    // `unsettled=true` → "All Unpaid": every order of any date with salary or cash still open; date / basis are ignored.
     [HttpGet("courier-lines")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(IReadOnlyList<OrderFinanceLineDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetForCourierAdmin(
         [FromQuery] Guid courierId, [FromQuery] DateOnly? date, [FromQuery] Application.Couriers.CourierDateBasis? basis,
-        CancellationToken ct)
+        [FromQuery] bool unsettled, CancellationToken ct)
     {
-        var result = await Sender.Send(new GetCourierOrderFinanceLinesQuery(courierId, date, IncludePostponed: true, Basis: basis), ct);
+        var result = await Sender.Send(
+            new GetCourierOrderFinanceLinesQuery(courierId, date, IncludePostponed: true, Basis: basis, OnlyUnsettled: unsettled), ct);
         return Ok(result);
     }
 

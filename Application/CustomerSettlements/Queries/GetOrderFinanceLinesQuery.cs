@@ -155,7 +155,10 @@ public sealed record GetCourierOrderFinanceLinesQuery(
     Guid              CourierId,
     DateOnly?         Date,
     bool              IncludePostponed = false,
-    CourierDateBasis? Basis = null
+    CourierDateBasis? Basis = null,
+    // Admin "All Unpaid": every order of this courier, of ANY date, with salary or cash still open
+    // (OrderFinance.IsCourierUnsettled). Ignores Date / Basis / IncludePostponed.
+    bool              OnlyUnsettled = false
 ) : IRequest<IReadOnlyList<OrderFinanceLineDto>>;
 
 public sealed class GetCourierOrderFinanceLinesQueryHandler
@@ -167,6 +170,16 @@ public sealed class GetCourierOrderFinanceLinesQueryHandler
     public async Task<IReadOnlyList<OrderFinanceLineDto>> Handle(
         GetCourierOrderFinanceLinesQuery request, CancellationToken ct)
     {
+        if (request.OnlyUnsettled)
+        {
+            // SQL narrows to a superset (so a courier with years of history stays cheap), the exact rule decides.
+            var candidates = await OrderFinanceQueries.CourierUnsettledCandidates(
+                    OrderFinanceQueries.Base(_context).Where(o => o.CourierId == request.CourierId))
+                .OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt)
+                .ToListAsync(ct);
+            return candidates.Where(OrderFinance.IsCourierUnsettled).Select(OrderFinanceQueries.ToDto).ToList();
+        }
+
         CourierDateBasis basis = request.Basis
             ?? await CourierDateBasisPolicy.ForCourierAsync(_context, request.CourierId, ct);
 
@@ -224,6 +237,28 @@ internal static class OrderFinanceQueries
                          && o.CancellationReason != null
                          && o.CancellationReason != CancellationReason.WarehouseNotReceived
                          && o.CancellationReason != CancellationReason.DidNotWant));
+
+    /// <summary>
+    /// SQL prefilter for <see cref="OrderFinance.IsCourierUnsettled"/>: leg finished, and salary or cash possibly still
+    /// open. Always a SUPERSET of the exact rule — the cash test deliberately keeps whatever the in-memory
+    /// <c>CourierKeepsSalaryFromCash</c> / billable-failed rules might still exclude. Mirrors
+    /// <c>CourierCodTransferOutstanding</c>: expected cash − salary kept (when the flag is set) − handed over.
+    /// </summary>
+    public static IQueryable<Order> CourierUnsettledCandidates(IQueryable<Order> query) =>
+        // Leg finished: delivered, or a billable failure (mirrors OrderFinance.IsBillableFailedDelivery). The billable
+        // branch must not depend on a date — older cancellations predate CancelledAt, and they are still payable.
+        query.Where(o => (o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt) != null
+                      || (o.OrderType != OrderType.Return
+                          && o.CancellationReason != null
+                          && o.CancellationReason != CancellationReason.WarehouseNotReceived
+                          && o.CancellationReason != CancellationReason.DidNotWant))
+             .Where(o =>
+                 (o.CourierSalary ?? 0m) <= 0m   // no salary entered yet
+              || (o.CourierSalary ?? 0m) - (o.CourierSalaryPaidAmount ?? 0m) > 0.005m
+              || (o.AmountToCollectForPackage ?? 0m)
+                 + (o.WhoPaysForCompanyService == ServicePayer.Recipient ? o.CompanyServicePrice - o.CustomerSurcharge : 0m)
+                 - (o.WhoPaysForCompanyService == ServicePayer.Recipient && o.IsCourierSalaryIncludedSpecialCase ? (o.CourierSalary ?? 0m) : 0m)
+                 - (o.CodTransferedToCompanyByCourier ?? 0m) > 0.005m);
 
     /// <summary>Orders owned by a customer via either ownership path, including cancelled ones
     /// (shown with "—" amounts in the finance lists for transparency).</summary>
@@ -498,6 +533,7 @@ internal static class OrderFinanceQueries
             CourierCodTransferOutstanding:   OrderFinance.CourierCodTransferOutstanding(o),
             CustomerSurcharge:               o.CustomerSurcharge,
             ServiceOwedBySender:             OrderFinance.ServiceOwedBySender(o),
+            IsCourierSalaryMissing:          OrderFinance.IsCourierSalaryMissing(o),
             CourierUnnettedSalaryPaid:       Math.Min(o.CourierSalaryPaidAmount ?? 0m, OrderFinance.CourierUnnettedSalary(o)),
             CourierUnnettedSalaryLeft:       OrderFinance.CourierUnnettedSalary(o)
                                            - Math.Min(o.CourierSalaryPaidAmount ?? 0m, OrderFinance.CourierUnnettedSalary(o))

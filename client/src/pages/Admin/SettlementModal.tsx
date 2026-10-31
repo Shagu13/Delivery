@@ -61,6 +61,8 @@ export function SettlementModal({
     const { t } = useLanguage();
     const [date,    setDate]    = useState(initialDate ?? todayIso());
     const [basis,   setBasis]   = useState<CourierDateBasis>(defaultBasis);
+    // false = the day view (date picker, "Today"); true = "All Unpaid": every order of any date still open for this courier.
+    const [unpaid,  setUnpaid]  = useState(false);
     const [lines,   setLines]   = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
     const [busy,    setBusy]    = useState(false);
@@ -77,11 +79,11 @@ export function SettlementModal({
     // `silent` refreshes the line data in place without flipping the full-screen spinner —
     // used after a per-order pay toggle so the table stays mounted and the modal keeps its
     // scroll position instead of collapsing to a spinner and jumping back to the top.
-    const load = useCallback(async (d: string, b: CourierDateBasis, silent = false) => {
+    const load = useCallback(async (d: string, b: CourierDateBasis, silent = false, allUnpaid = false) => {
         if (!silent) setLoading(true);
         setError(null);
         try {
-            const data = await fetchCourierOrderFinanceAdmin(courierId, token, d, b);
+            const data = await fetchCourierOrderFinanceAdmin(courierId, token, d, b, allUnpaid);
             setLines(data);
         } catch (err) {
             setError(err instanceof OrderFinanceApiError ? err.message : 'Failed to load orders.');
@@ -96,6 +98,7 @@ export function SettlementModal({
             const start = initialDate ?? todayIso();
             setDate(start);
             setBasis(defaultBasis);
+            setUnpaid(false);
             load(start, defaultBasis);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,7 +119,7 @@ export function SettlementModal({
         setError(null);
         try {
             await setCourierSalary(token, orderId, round2(n));
-            await load(date, basis, true);
+            await load(date, basis, true, unpaid);
             onCreated();
             return true;
         } catch (err) {
@@ -127,7 +130,10 @@ export function SettlementModal({
 
     const handleDateChange =(d: string) => { setDate(d); load(d, basis); };
     const handleBasisChange = (b: CourierDateBasis) => { if (b === basis) return; setBasis(b); load(date, b); };
-    const byAssigned = basis === 'Assigned';
+    // "Today" returns to the day view on the current day (the default); "All Unpaid" ignores the date and basis entirely.
+    const showToday = () => { const d = todayIso(); setUnpaid(false); setDate(d); load(d, basis); };
+    const showAllUnpaid = () => { setUnpaid(true); load(date, basis, false, true); };
+    const byAssigned = !unpaid && basis === 'Assigned';
 
     const salaryFlow = buildFlow(lines, selSalary, salaryOut, o => o.courierSalaryPaidAmount ?? 0);
     const codFlow    = buildFlow(lines, selCod,    codOut,    o => o.codTransferedToCompanyByCourier ?? 0);
@@ -150,7 +156,7 @@ export function SettlementModal({
         setError(null);
         try {
             await payCourierOrders(courierId, flow, allocations, token);
-            await load(date, basis, true);   // silent — keep the table mounted & scroll position intact
+            await load(date, basis, true, unpaid);   // silent — keep the table mounted & scroll position intact
             onCreated();
         } catch (err) {
             setError(err instanceof OrderFinanceApiError ? err.message : t.ofinErrAction);
@@ -180,7 +186,7 @@ export function SettlementModal({
         setError(null);
         try {
             await settleCourierNet(courierId, salaryAllocs, codAllocs, token);
-            await load(date, basis, true);   // silent — keep the table mounted & scroll position intact
+            await load(date, basis, true, unpaid);   // silent — keep the table mounted & scroll position intact
             onCreated();
         } catch (err) {
             setError(err instanceof OrderFinanceApiError ? err.message : t.ofinErrAction);
@@ -255,32 +261,44 @@ export function SettlementModal({
                         <legend className="modal__legend">{t.stlmDateLegend}</legend>
                         <div className="stl-date-nav">
                             <button type="button" className="stl-date-arrow"
-                                onClick={() => handleDateChange(stepDay(date, -1))} aria-label="Previous day">
+                                onClick={() => handleDateChange(stepDay(date, -1))} disabled={unpaid} aria-label="Previous day">
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                     <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </button>
-                            <input type="date" value={date} max={todayIso()}
+                            <input type="date" value={date} max={todayIso()} disabled={unpaid}
                                 onChange={e => handleDateChange(e.target.value)} className="settlement-date-input" />
                             <button type="button" className="stl-date-arrow"
                                 onClick={() => handleDateChange(stepDay(date, 1))}
-                                disabled={date >= todayIso()} aria-label="Next day">
+                                disabled={unpaid || date >= todayIso()} aria-label="Next day">
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                     <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </button>
+                            {/* Day view (default, "Today") vs every still-unpaid order of this courier on any date */}
+                            <div className="stl-date-quick" role="group">
+                                <button type="button" aria-pressed={!unpaid && date === todayIso()}
+                                    className={`stl-basis__btn${!unpaid && date === todayIso() ? ' stl-basis__btn--on' : ''}`}
+                                    onClick={showToday}>{t.stlmToday}</button>
+                                <button type="button" aria-pressed={unpaid}
+                                    className={`stl-basis__btn${unpaid ? ' stl-basis__btn--on' : ''}`}
+                                    onClick={showAllUnpaid}>{t.stlmAllUnpaid}</button>
+                            </div>
                         </div>
-                        {/* Which date the day's orders are grouped by — defaults per courier (regional → assigned) */}
-                        <div className="stl-basis" role="group" aria-label={t.stlmBasisLabel}>
-                            <span className="stl-basis__label">{t.stlmBasisLabel}</span>
-                            {(['Delivered', 'Assigned'] as const).map(b => (
-                                <button key={b} type="button" aria-pressed={basis === b}
-                                    className={`stl-basis__btn${basis === b ? ' stl-basis__btn--on' : ''}`}
-                                    onClick={() => handleBasisChange(b)}>
-                                    {b === 'Delivered' ? t.stlmBasisDelivered : t.stlmBasisAssigned}
-                                </button>
-                            ))}
-                        </div>
+                        {/* Which date the day's orders are grouped by — defaults per courier (regional → assigned).
+                            Meaningless for All Unpaid, which ignores dates. */}
+                        {!unpaid && (
+                            <div className="stl-basis" role="group" aria-label={t.stlmBasisLabel}>
+                                <span className="stl-basis__label">{t.stlmBasisLabel}</span>
+                                {(['Delivered', 'Assigned'] as const).map(b => (
+                                    <button key={b} type="button" aria-pressed={basis === b}
+                                        className={`stl-basis__btn${basis === b ? ' stl-basis__btn--on' : ''}`}
+                                        onClick={() => handleBasisChange(b)}>
+                                        {b === 'Delivered' ? t.stlmBasisDelivered : t.stlmBasisAssigned}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </fieldset>
 
                     {error && (
@@ -357,7 +375,8 @@ export function SettlementModal({
                             {lines.length > 0 ? (
                                 <fieldset className="modal__fieldset">
                                     <legend className="modal__legend">
-                                        {byAssigned ? t.stlmAssignedOrders(lines.length, delivered) : t.stlmDeliveredOrders(delivered)}
+                                        {unpaid ? t.stlmUnpaidOrders(lines.length)
+                                            : byAssigned ? t.stlmAssignedOrders(lines.length, delivered) : t.stlmDeliveredOrders(delivered)}
                                     </legend>
                                     {/* Settle net: pays the ticked salary AND ticked COD hand-over orders together, atomically */}
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
@@ -383,6 +402,7 @@ export function SettlementModal({
                                                             {showTracking ? t.stlmThTracking : t.stlmShowTracking}
                                                         </label>
                                                     </th>
+                                                    {unpaid && <th>{t.stlmThDate}</th>}
                                                     <th>{t.stlmThSenderBusiness}</th>
                                                     <th>{t.stlmThRecipient}</th>
                                                     <th>{t.stlmThRecipientContact}</th>
@@ -410,12 +430,20 @@ export function SettlementModal({
                                                                 {notYet && (
                                                                     <div style={{ fontSize: '0.66rem', fontWeight: 700, color: 'var(--color-text-subtle)' }}>{t.stlmBadgeNotDelivered}</div>
                                                                 )}
+                                                                {unpaid && o.isCourierSalaryMissing && (
+                                                                    <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#b45309' }}>{t.stlmBadgeSalaryNotSet}</div>
+                                                                )}
                                                                 {billableCancel && (
                                                                     <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#dc2626' }}>
                                                                         {t.stlmBadgeBillableCancel}{o.cancellationReason ? ` (${o.cancellationReason})` : ''}
                                                                     </div>
                                                                 )}
                                                             </td>
+                                                            {unpaid && (
+                                                                <td style={{ whiteSpace: 'nowrap' }}>
+                                                                    {o.deliveredAt ? o.deliveredAt.slice(0, 10).split('-').reverse().join('.') : '—'}
+                                                                </td>
+                                                            )}
                                                             <td style={{ fontWeight: 600 }}>{o.customerBusinessName || '—'}</td>
                                                             <td style={{ fontWeight: 600 }}>{recipientDisplayName(o.recipientName, t.recipientUnknown)}</td>
                                                             <td>
@@ -460,7 +488,7 @@ export function SettlementModal({
                                 </fieldset>
                             ) : (
                                 <p style={{ textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem', padding: '8px 0' }}>
-                                    {byAssigned ? t.stlmNoAssignedOrders(date) : t.stlmNoOrders(date)}
+                                    {unpaid ? t.stlmNoUnpaidOrders : byAssigned ? t.stlmNoAssignedOrders(date) : t.stlmNoOrders(date)}
                                 </p>
                             )}
                         </>
@@ -497,7 +525,9 @@ export function SettlementModal({
                 @keyframes spin { to{transform:rotate(360deg)} }
 
                 .settlement-modal { width:min(1000px,calc(100vw - 32px));max-width:calc(100vw - 32px); }
-                .stl-date-nav { display:flex;align-items:center;gap:6px; }
+                .stl-date-nav { display:flex;align-items:center;flex-wrap:wrap;gap:6px; }
+                .stl-date-quick { display:flex;align-items:center;gap:6px;margin-left:8px; }
+                .settlement-date-input:disabled { opacity:0.45;cursor:not-allowed; }
                 .stl-date-arrow { display:flex;align-items:center;justify-content:center;width:30px;height:34px;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-muted);transition:background var(--transition),color var(--transition),border-color var(--transition);flex-shrink:0; }
                 .stl-date-arrow:hover:not(:disabled) { background:var(--color-border);color:var(--color-text); }
                 .stl-date-arrow:disabled { opacity:0.35;cursor:not-allowed; }

@@ -217,6 +217,24 @@ public static class OrderFinance
     public static bool IsCourierLegComplete(Order o) =>
         (o.DeliveredAt ?? o.DeliveredToWarehouseAt) != null || IsBillableFailedDelivery(o);
 
+    /// <summary>
+    /// The order has no courier salary entered (empty or zero) — the same "missing salary" notion the Packages
+    /// page already uses. Such an order owes the courier ₾0 on paper, but it still needs an admin to set one.
+    /// </summary>
+    public static bool IsCourierSalaryMissing(Order o) => (o.CourierSalary ?? 0m) <= 0m;
+
+    /// <summary>
+    /// True when the courier's leg of this order is done but something is still open between the company and the
+    /// courier: salary not fully paid, cash not fully handed over, or no salary entered yet. What the admin
+    /// settlement modal's "All Unpaid" view lists. The SQL prefilter <c>OrderFinanceQueries.CourierUnsettledCandidates</c>
+    /// is a deliberate superset of this — change them together.
+    /// </summary>
+    public static bool IsCourierUnsettled(Order o) =>
+        IsCourierLegComplete(o)
+        && (CourierSalaryOutstanding(o) > Epsilon
+            || CourierCodTransferOutstanding(o) > Epsilon
+            || IsCourierSalaryMissing(o));
+
     /// <summary>Salary the company still owes the courier for this order (never negative).</summary>
     public static decimal CourierSalaryOutstanding(Order o) =>
         Math.Max(0m, (o.CourierSalary ?? 0m) - (o.CourierSalaryPaidAmount ?? 0m));

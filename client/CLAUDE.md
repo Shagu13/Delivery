@@ -131,6 +131,12 @@ mirror of `OrderFinance.IsCourierLegComplete`). The courier's own screen (`Couri
 default automatically (no toggle) — label via `fetchCourierDateBasis`; day cards carry `dateBasis` /
 `totalOrdersAssigned`.
 
+The settlement modal's date row has two quick buttons: **Today** (the day view, default) and **All Unpaid**
+(`fetchCourierOrderFinanceAdmin(..., unsettled = true)` → `GetCourierOrderFinanceLinesQuery.OnlyUnsettled`): every order
+of the courier, of any date, with salary or cash still open (`OrderFinance.IsCourierUnsettled`, SQL-prefiltered by
+`OrderFinanceQueries.CourierUnsettledCandidates` — keep the two in step). It ignores date and basis, so those controls are
+dimmed/hidden, and the table gains a Delivered column. The pay bars and Settle net work unchanged on that list.
+
 **Every modal is border-resizable.** `components/ui/AutoResizeDialogs` is mounted once in `AppLayout`; it watches the DOM
 for `[role="dialog"][aria-modal="true"]` and gives each centred, non-full-screen one two drag strips on its left/right
 border (double-click resets; hidden below 720px wide). It sets an inline `width`/`max-width` on the dialog element, so a
