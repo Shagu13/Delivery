@@ -222,6 +222,22 @@ public sealed class OrderFinanceController : BaseController
         return Ok(new { paid });
     }
 
+    // ── POST /api/orderfinance/courier-settle-net  (Admin) — salary + COD hand-over in one atomic action ──
+    [HttpPost("courier-settle-net")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CourierSettleNet(
+        [FromBody] CourierSettleNetRequest request, CancellationToken ct)
+    {
+        var salary = request.SalaryAllocations.Select(a => new CourierOrderPaymentAllocation(a.OrderId, a.Amount)).ToList();
+        var cod    = request.CodTransferAllocations.Select(a => new CourierOrderPaymentAllocation(a.OrderId, a.Amount)).ToList();
+
+        var paid = await Sender.Send(new SettleCourierNetCommand(request.CourierId, salary, cod), ct);
+        return Ok(new { paid });
+    }
+
     // ── POST /api/orderfinance/payment  (Admin) — record/clear a per-order payment ──
     [HttpPost("payment")]
     [Authorize(Roles = "Admin")]
@@ -254,6 +270,22 @@ public sealed class OrderFinanceController : BaseController
 
         var paid = await Sender.Send(
             new PayCustomerOrdersCommand(request.CustomerId, request.Service, allocations), ct);
+        return Ok(new { paid });
+    }
+
+    // ── POST /api/orderfinance/settle-net  (Admin) — COD payouts + service fees in one atomic action ──
+    [HttpPost("settle-net")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SettleNet(
+        [FromBody] SettleNetRequest request, CancellationToken ct)
+    {
+        var cod = request.CodAllocations.Select(a => new OrderPaymentAllocation(a.OrderId, a.Amount)).ToList();
+        var svc = request.ServiceAllocations.Select(a => new OrderPaymentAllocation(a.OrderId, a.Amount)).ToList();
+
+        var paid = await Sender.Send(new SettleCustomerNetCommand(request.CustomerId, cod, svc), ct);
         return Ok(new { paid });
     }
 
@@ -314,6 +346,10 @@ public sealed class OrderFinanceController : BaseController
 
 public sealed record PayRequest(Guid CustomerId, bool Service, List<PayAllocationRequest> Allocations);
 public sealed record PayAllocationRequest(Guid OrderId, decimal Amount);
+public sealed record CourierSettleNetRequest(
+    Guid CourierId, List<PayAllocationRequest> SalaryAllocations, List<PayAllocationRequest> CodTransferAllocations);
+public sealed record SettleNetRequest(
+    Guid CustomerId, List<PayAllocationRequest> CodAllocations, List<PayAllocationRequest> ServiceAllocations);
 
 // ── Courier-side request models ─────────────────────────────────────────────────────
 public sealed record CourierPaymentRequest(

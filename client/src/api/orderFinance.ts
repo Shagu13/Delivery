@@ -80,6 +80,11 @@ export interface OrderFinanceLine {
      *  the whole fee less payments on sender-pays orders and billable failures, only the unpaid
      *  surcharge on a recipient-pays order, 0 otherwise. */
     serviceOwedBySender: number;
+    /** Salary the hand-over cap doesn't net out of the cash (OrderFinance.CourierUnnettedSalary) that the admin already
+     *  paid the courier separately. Optional: absent in query-cache JSON persisted before this field existed. */
+    courierUnnettedSalaryPaid?: number;
+    /** The rest of that unnetted salary — deducted from the day's remaining hand-over. Optional for the same reason. */
+    courierUnnettedSalaryLeft?: number;
 }
 
 export interface OrderPaymentRequest {
@@ -321,6 +326,17 @@ export async function payCustomerOrders(
     return handle<{ paid: number }>(res, 'Failed to record payment');
 }
 
+// ── Admin — "Settle net": COD payouts + service fees in ONE all-or-nothing request ──
+export async function settleCustomerNet(
+    customerId: string, codAllocations: OrderAllocation[], serviceAllocations: OrderAllocation[], token: string,
+): Promise<{ paid: number }> {
+    const res = await fetch('/api/orderfinance/settle-net', {
+        method: 'POST', headers: jsonHeaders(token),
+        body: JSON.stringify({ customerId, codAllocations, serviceAllocations }),
+    });
+    return handle<{ paid: number }>(res, 'Failed to record payment');
+}
+
 // ── Admin — courier side: record/clear a per-order courier payment ───────────────
 export interface CourierPaymentRequest {
     orderId: string;
@@ -352,6 +368,17 @@ export async function payCourierOrders(
     const res = await fetch('/api/orderfinance/courier-pay', {
         method: 'POST', headers: jsonHeaders(token),
         body: JSON.stringify({ courierId, flow, allocations }),
+    });
+    return handle<{ paid: number }>(res, 'Failed to record courier payment');
+}
+
+// ── Admin — courier "Settle net": salary + COD hand-over in ONE all-or-nothing request ──
+export async function settleCourierNet(
+    courierId: string, salaryAllocations: OrderAllocation[], codTransferAllocations: OrderAllocation[], token: string,
+): Promise<{ paid: number }> {
+    const res = await fetch('/api/orderfinance/courier-settle-net', {
+        method: 'POST', headers: jsonHeaders(token),
+        body: JSON.stringify({ courierId, salaryAllocations, codTransferAllocations }),
     });
     return handle<{ paid: number }>(res, 'Failed to record courier payment');
 }

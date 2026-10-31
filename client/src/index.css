@@ -10,6 +10,12 @@ html {
   scroll-behavior: smooth;
 }
 
+/* A <fieldset> defaults to min-inline-size: min-content, so one holding a wide table grows past its container
+   (and past a modal) instead of letting the table scroll in its own wrapper. Never want that here. */
+fieldset {
+  min-width: 0;
+}
+
 body {
   margin: 0;
   font-family: var(--font-body);

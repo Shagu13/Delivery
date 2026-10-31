@@ -41,7 +41,11 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
     // remaining == 0 → fully paid; remaining > 0 → still owed to the courier.
     const remainingSalary = item.totalCourierSalary - item.totalCourierSalaryPaid;
     const isPaid = remainingSalary <= 0;
-    const isDone = isPaid;
+    // Cash position is server-computed (OrderFinance.CourierPositionOf). Fall back to the old figure for
+    // cached items that predate the new fields.
+    const cashOwed    = item.totalCashStillOwedToCompany ?? Math.max(0, item.totalCourierTransferToCompany);
+    const companyOwes = item.totalCompanyOwesCourier ?? 0;
+    const transferDone = cashOwed <= 0.005;
     return (
         <div className="settle-card">
             <button onClick={() => setExpanded(e => !e)} className={`settle-card__head${expanded ? ' settle-card__head--open' : ''}`}>
@@ -85,17 +89,17 @@ function SettlementCard({ item }: { item: CourierSettlementItem }) {
                     <FinRow label={t.cdSettCashCollected} value={`₾${item.totalAmountOfCashCollected.toFixed(2)}`} />
                     <FinRow label={t.cdSettYourSalary}    value={`₾${item.totalCourierSalary.toFixed(2)}`} highlight />
                     <FinRow label={t.cdSettRemaining}     value={`₾${Math.max(0, remainingSalary).toFixed(2)}`} highlight={!isPaid} />
-                    {item.totalAmountOfCashCollected > 0 && item.totalCourierTransferToCompany >= 0 && (
-                        <div className={`settle-transfer ${isDone ? 'settle-transfer--done' : 'settle-transfer--pending'}`}>
-                            <div className="settle-transfer__label">{isDone ? t.cdSettTransferDone : t.cdSettTransferPending}</div>
-                            <div className="settle-transfer__value">₾{item.totalCourierTransferToCompany.toFixed(2)}</div>
+                    {item.totalAmountOfCashCollected > 0 && companyOwes <= 0 && (
+                        <div className={`settle-transfer ${transferDone ? 'settle-transfer--done' : 'settle-transfer--pending'}`}>
+                            <div className="settle-transfer__label">{transferDone ? t.cdSettTransferDone : t.cdSettTransferPending}</div>
+                            <div className="settle-transfer__value">₾{(transferDone ? (item.totalCashHandedOver ?? item.totalCourierTransferToCompany) : cashOwed).toFixed(2)}</div>
                             <div className="settle-transfer__hint">{t.cdSettTransferHint}</div>
                         </div>
                     )}
-                    {item.totalCourierTransferToCompany < 0 && (
+                    {companyOwes > 0 && (
                         <div className="settle-transfer settle-transfer--credit">
                             <div className="settle-transfer__label">{t.cdSettCompanyPaysTitle}</div>
-                            <div className="settle-transfer__value">₾{Math.abs(item.totalCourierTransferToCompany).toFixed(2)}</div>
+                            <div className="settle-transfer__value">₾{companyOwes.toFixed(2)}</div>
                             <div className="settle-transfer__hint">{t.cdSettCompanyPaysHint}</div>
                         </div>
                     )}

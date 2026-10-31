@@ -99,5 +99,11 @@ public sealed record OrderFinanceLineDto(
     /// <summary>What the sender still owes the company for the service fee (OrderFinance.ServiceOwedBySender):
     /// the whole fee less payments on sender-pays orders and billable failures, only the unpaid
     /// surcharge on a recipient-pays order, 0 otherwise. Can dip below 0 if overpaid.</summary>
-    decimal  ServiceOwedBySender
+    decimal  ServiceOwedBySender,
+
+    /// <summary>Part of the salary the hand-over cap does not net out of the cash
+    /// (OrderFinance.CourierUnnettedSalary) that the admin has already paid the courier separately.</summary>
+    decimal  CourierUnnettedSalaryPaid,
+    /// <summary>The rest of that unnetted salary — deducted from the day's remaining hand-over on screen.</summary>
+    decimal  CourierUnnettedSalaryLeft
 );

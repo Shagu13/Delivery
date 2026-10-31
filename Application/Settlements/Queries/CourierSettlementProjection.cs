@@ -104,6 +104,7 @@ internal static class CourierSettlementProjection
         foreach (var day in days)
         {
             var orders = deliveredByDay.TryGetValue(day, out var o) ? o : new List<Order>();
+            CourierPosition position = OrderFinance.CourierPositionOf(orders);
             result.Add(new CourierSettlementItemDto(
                 Date:                          day.ToString("yyyy-MM-dd"),
                 TotalOrdersPickedUp:           pickedByDay.TryGetValue(day, out var p) ? p : 0,
@@ -119,7 +120,11 @@ internal static class CourierSettlementProjection
                 // Income = fees earned − courier salary; CompanyNetCash is a payout-timing-dependent cash position.
                 TotalCompanyNetIncome:         orders.Sum(OrderFinance.CompanyRevenue),
                 DateBasis:                     nameof(CourierDateBasis.Delivered),
-                TotalOrdersAssigned:           0));
+                TotalOrdersAssigned:           0,
+                TotalCashHandedOver:           position.CashHandedOver,
+                TotalSalaryKeptFromCash:       position.SalaryKeptFromCash,
+                TotalCashStillOwedToCompany:   position.CashStillOwedToCompany,
+                TotalCompanyOwesCourier:       position.CompanyOwesCourier));
         }
 
         return result;
@@ -160,6 +165,7 @@ internal static class CourierSettlementProjection
         {
             List<Order> dayOrders = assignedByDay.TryGetValue(day, out var a) ? a : new List<Order>();
             List<Order> orders    = dayOrders.Where(OrderFinance.IsCourierLegComplete).ToList();
+            CourierPosition position = OrderFinance.CourierPositionOf(orders);
             result.Add(new CourierSettlementItemDto(
                 Date:                          day.ToString("yyyy-MM-dd"),
                 TotalOrdersPickedUp:           pickedByDay.TryGetValue(day, out var p) ? p : 0,
@@ -173,7 +179,11 @@ internal static class CourierSettlementProjection
                 TotalCourierTransferToCompany: OrderFinance.CourierNetCashDue(orders),
                 TotalCompanyNetIncome:         orders.Sum(OrderFinance.CompanyRevenue),
                 DateBasis:                     nameof(CourierDateBasis.Assigned),
-                TotalOrdersAssigned:           dayOrders.Count));
+                TotalOrdersAssigned:           dayOrders.Count,
+                TotalCashHandedOver:           position.CashHandedOver,
+                TotalSalaryKeptFromCash:       position.SalaryKeptFromCash,
+                TotalCashStillOwedToCompany:   position.CashStillOwedToCompany,
+                TotalCompanyOwesCourier:       position.CompanyOwesCourier));
         }
 
         return result;

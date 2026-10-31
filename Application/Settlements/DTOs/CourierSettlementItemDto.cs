@@ -19,5 +19,10 @@ public sealed record CourierSettlementItemDto(
     decimal TotalCourierTransferToCompany,   // OrderFinance.CourierNetCashDue = cash collected − all salary earned (matches admin settlement modal)
     decimal TotalCompanyNetIncome,           // Σ OrderFinance.CompanyRevenue (fees − salary)
     string  DateBasis,                       // "Delivered" | "Assigned" — which date `Date` is
-    int     TotalOrdersAssigned              // Assigned basis: every order assigned that day (delivered or not); 0 on Delivered basis
+    int     TotalOrdersAssigned,             // Assigned basis: every order assigned that day (delivered or not); 0 on Delivered basis
+    // OrderFinance.CourierPositionOf — the live cash/salary position the admin modal and courier page both show.
+    decimal TotalCashHandedOver,             // recorded hand-overs, net of salary paid to the courier separately
+    decimal TotalSalaryKeptFromCash,         // salary the courier netted out of collected cash
+    decimal TotalCashStillOwedToCompany,     // cash the courier still has to hand over after all salary is netted
+    decimal TotalCompanyOwesCourier          // > 0 when salary outweighs cash (replaces the old unreachable negative transfer)
 );

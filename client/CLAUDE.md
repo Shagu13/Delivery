@@ -131,6 +131,14 @@ mirror of `OrderFinance.IsCourierLegComplete`). The courier's own screen (`Couri
 default automatically (no toggle) — label via `fetchCourierDateBasis`; day cards carry `dateBasis` /
 `totalOrdersAssigned`.
 
+**Every modal is border-resizable.** `components/ui/AutoResizeDialogs` is mounted once in `AppLayout`; it watches the DOM
+for `[role="dialog"][aria-modal="true"]` and gives each centred, non-full-screen one two drag strips on its left/right
+border (double-click resets; hidden below 720px wide). It sets an inline `width`/`max-width` on the dialog element, so a
+new modal needs **no wiring** as long as the box itself carries `role="dialog" aria-modal="true"` (an overlay wrapper
+that carries the role instead is skipped — it covers the viewport). Options as attributes on the dialog: `data-no-resize`,
+`data-resize-min="640"`, `data-resize-key="k"` (remember the width per browser; `SettlementModal` uses it). The global
+`fieldset { min-width: 0 }` rule in `index.css` stops a fieldset holding a wide table from growing past its modal.
+
 ### 3.2b Finance → Payments customer grid
 
 `CustomerInvoicesSection` (`AdminFinancePage.tsx`) shows `CustomerFinanceGrid mode="picker"` until a customer is

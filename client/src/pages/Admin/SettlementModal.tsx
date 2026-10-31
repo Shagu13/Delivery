@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
     fetchCourierOrderFinanceAdmin,
     payCourierOrders,
+    settleCourierNet,
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine, CourierPaymentFlow } from '../../api/orderFinance';
@@ -158,6 +159,37 @@ export function SettlementModal({
         }
     };
 
+    // Settle net: pays the TICKED orders of both flows (salary ticks + COD hand-over ticks), each at its
+    // shown amount, in a single all-or-nothing request. The books still record each flow as its own receipt.
+    const settleNet = async () => {
+        const salaryChosen = salaryFlow.payable.filter(o => selSalary[o.orderId]?.checked);
+        const codChosen    = codFlow.payable.filter(o => selCod[o.orderId]?.checked);
+        if (salaryChosen.length === 0 && codChosen.length === 0) { setError(t.ofinErrSelectOrders); return; }
+        for (const o of salaryChosen) {
+            const a = Number(amountOf(selSalary, o, salaryOut));
+            if (isNaN(a) || a <= 0 || a > salaryOut(o) + 0.005) { setError(t.ofinErrAllocInvalid); return; }
+        }
+        for (const o of codChosen) {
+            const a = Number(amountOf(selCod, o, codOut));
+            if (isNaN(a) || a <= 0 || a > codOut(o) + 0.005) { setError(t.ofinErrAllocInvalid); return; }
+        }
+        const salaryAllocs = salaryChosen.map(o => ({ orderId: o.orderId, amount: round2(Number(amountOf(selSalary, o, salaryOut))) }));
+        const codAllocs    = codChosen.map(o => ({ orderId: o.orderId, amount: round2(Number(amountOf(selCod, o, codOut))) }));
+
+        setBusy(true);
+        setError(null);
+        try {
+            await settleCourierNet(courierId, salaryAllocs, codAllocs, token);
+            await load(date, basis, true);   // silent — keep the table mounted & scroll position intact
+            onCreated();
+        } catch (err) {
+            setError(err instanceof OrderFinanceApiError ? err.message : t.ofinErrAction);
+        } finally {
+            setBusy(false);
+        }
+    };
+    const hasSelection = salaryFlow.selCount > 0 || codFlow.selCount > 0;
+
     if (!open) return null;
 
     // ── Day totals (derived live from the order lines) ───────────────────────────
@@ -174,15 +206,10 @@ export function SettlementModal({
     // DISPLAY ONLY — recording is unchanged (per-order, server-capped). The admin tells the courier
     // "cash − ALL salary", so the salary the courier effectively keeps but the per-order outstanding
     // does not net (sender-pays orders, which the admin pays separately) is deducted on screen.
-    // Per order: netted = cash − outstanding − handed over; the rest of the salary is "unnetted",
-    // less whatever the admin already paid out for it (never more than the unnetted part).
-    const unnettedOf = (o: OrderFinanceLine) => {
-        const salary = o.courierSalary ?? 0;
-        const netted = (o.amountOfCashCollected ?? 0) - o.courierCodTransferOutstanding - (o.codTransferedToCompanyByCourier ?? 0);
-        return Math.min(salary, Math.max(0, salary - netted));
-    };
-    const unnettedPaid = (o: OrderFinanceLine) => Math.min(o.courierSalaryPaidAmount ?? 0, unnettedOf(o));
-    const unnettedLeft = (o: OrderFinanceLine) => unnettedOf(o) - unnettedPaid(o);
+    // The "unnetted" salary per order (and how much of it the admin already paid out) is server-computed:
+    // OrderFinance.CourierUnnettedSalary, the same rule behind the courier's own settlements page.
+    const unnettedPaid = (o: OrderFinanceLine) => o.courierUnnettedSalaryPaid ?? 0;
+    const unnettedLeft = (o: OrderFinanceLine) => o.courierUnnettedSalaryLeft ?? 0;
     // To Transfer COD = still-to-record hand-over minus the unnetted salary; shared by the summary
     // (all settled orders) and the Select All bar (ticked orders) so the two can never disagree.
     const toTransferOf = (outstanding: number, orders: OrderFinanceLine[]) =>
@@ -205,7 +232,9 @@ export function SettlementModal({
     return createPortal(
         <>
             <div className="modal-backdrop" onClick={onClose} />
-            <div className="modal settlement-modal" role="dialog" aria-modal="true" aria-labelledby="settlement-title">
+            {/* Border-draggable via AutoResizeDialogs; the chosen width is remembered per browser. */}
+            <div className="modal settlement-modal" role="dialog" aria-modal="true" aria-labelledby="settlement-title"
+                data-resize-key="settlement_modal_width" data-resize-min="640">
 
                 {/* ── Header ─────────────────────────────────────────────── */}
                 <div className="modal__header">
@@ -330,6 +359,10 @@ export function SettlementModal({
                                     <legend className="modal__legend">
                                         {byAssigned ? t.stlmAssignedOrders(lines.length, delivered) : t.stlmDeliveredOrders(delivered)}
                                     </legend>
+                                    {/* Settle net: pays the ticked salary AND ticked COD hand-over orders together, atomically */}
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                                        <button className="btn-primary" disabled={busy || !hasSelection} onClick={settleNet}>{t.ofinSettleNet}</button>
+                                    </div>
                                     {/* Pay bars: salary (company → courier) left, COD hand-over (courier → company) right */}
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', marginBottom: 12 }}>
                                         <FlowBar f={salaryFlow} payLabel={t.stlmPaySalary} busy={busy} borderRight
@@ -451,7 +484,7 @@ export function SettlementModal({
                 .modal__close { width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-muted);transition:background var(--transition),color var(--transition);flex-shrink:0; }
                 .modal__close:hover { background:var(--color-border);color:var(--color-text); }
                 .modal__body { padding:20px 24px;display:flex;flex-direction:column;gap:16px; }
-                .modal__fieldset { border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:14px 16px;margin:0; }
+                .modal__fieldset { border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:14px 16px;margin:0;min-width:0; }
                 .modal__legend { font-size:0.68rem;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--color-text-subtle);padding:0 6px; }
                 .modal__global-error { display:flex;align-items:center;gap:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:var(--radius-sm);color:#ef4444;font-size:0.825rem;padding:10px 14px; }
                 .modal__footer { display:flex;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid var(--color-border); }
@@ -463,7 +496,7 @@ export function SettlementModal({
                 @keyframes modal-slide-up { from{opacity:0;transform:translate(-50%,calc(-50% + 16px))} to{opacity:1;transform:translate(-50%,-50%)} }
                 @keyframes spin { to{transform:rotate(360deg)} }
 
-                .settlement-modal { width:min(1000px,calc(100vw - 32px)); }
+                .settlement-modal { width:min(1000px,calc(100vw - 32px));max-width:calc(100vw - 32px); }
                 .stl-date-nav { display:flex;align-items:center;gap:6px; }
                 .stl-date-arrow { display:flex;align-items:center;justify-content:center;width:30px;height:34px;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-muted);transition:background var(--transition),color var(--transition),border-color var(--transition);flex-shrink:0; }
                 .stl-date-arrow:hover:not(:disabled) { background:var(--color-border);color:var(--color-text); }

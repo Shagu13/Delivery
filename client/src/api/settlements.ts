@@ -71,6 +71,15 @@ export interface CourierSettlementItem {
     totalCourierTransferToCompany: number;
     /** Company net cash from the day's orders (Σ per-order net). */
     totalCompanyNetIncome: number;
+    // Server-computed position (OrderFinance.CourierPositionOf). Optional: absent in query-cache JSON persisted before these existed.
+    /** Recorded hand-overs, net of salary the admin paid the courier separately. */
+    totalCashHandedOver?: number;
+    /** Salary the courier netted out of the cash they collected. */
+    totalSalaryKeptFromCash?: number;
+    /** Cash the courier still has to hand over once all salary is netted. */
+    totalCashStillOwedToCompany?: number;
+    /** > 0 when the salary outweighs the cash: the company owes the courier this much. */
+    totalCompanyOwesCourier?: number;
 }
 
 /** Admin view is the same shape (figures are read-only on both sides). */

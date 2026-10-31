@@ -37,12 +37,7 @@ public sealed class PayCustomerOrdersCommandHandler
 
     public async Task<int> Handle(PayCustomerOrdersCommand request, CancellationToken ct)
     {
-        // Reconciliation: a tenant's sub-customers are settled by the tenant, not the company.
-        bool tenantOwned = await _context.Customers
-            .AnyAsync(c => c.Id == request.CustomerId && c.TenantId != null, ct);
-        if (tenantOwned)
-            throw new ConflictException(
-                "This customer belongs to a tenant and is settled by the tenant, not the company.");
+        await EnsureNotTenantOwnedAsync(_context, request.CustomerId, ct);
 
         var ids = request.Allocations.Select(a => a.OrderId).Distinct().ToList();
 
@@ -76,25 +71,40 @@ public sealed class PayCustomerOrdersCommandHandler
         // Order-level fields above are overwritten in place on the next payment and carry
         // no history on their own.
         if (applied.Count > 0)
-        {
-            var receipt = new PaymentReceipt
-            {
-                CustomerId  = request.CustomerId,
-                IsService   = request.Service,
-                Flow        = request.Service ? PaymentReceiptFlow.ServiceFee : PaymentReceiptFlow.CodPayout,
-                TotalAmount = applied.Sum(a => a.Amount),
-                PaidAt      = now,
-            };
-            foreach (var a in applied)
-                receipt.Allocations.Add(new PaymentReceiptAllocation { OrderId = a.OrderId, Amount = a.Amount });
-            _context.PaymentReceipts.Add(receipt);
-        }
+            _context.PaymentReceipts.Add(BuildReceipt(request.CustomerId, request.Service, applied, now));
 
         await _context.SaveChangesAsync(ct);
         return orders.Count;
     }
 
-    private static void ApplyCod(Domain.Order order, decimal amount, DateTime now)
+    /// <summary>A tenant's sub-customers are settled by the tenant, not the company. Shared with the net-settle handler.</summary>
+    internal static async Task EnsureNotTenantOwnedAsync(IAppDbContext context, Guid customerId, CancellationToken ct)
+    {
+        bool tenantOwned = await context.Customers
+            .AnyAsync(c => c.Id == customerId && c.TenantId != null, ct);
+        if (tenantOwned)
+            throw new ConflictException(
+                "This customer belongs to a tenant and is settled by the tenant, not the company.");
+    }
+
+    /// <summary>The immutable receipt of one pay action (one flow). Shared with the net-settle handler.</summary>
+    internal static PaymentReceipt BuildReceipt(
+        Guid customerId, bool service, IReadOnlyList<OrderPaymentAllocation> applied, DateTime now)
+    {
+        var receipt = new PaymentReceipt
+        {
+            CustomerId  = customerId,
+            IsService   = service,
+            Flow        = service ? PaymentReceiptFlow.ServiceFee : PaymentReceiptFlow.CodPayout,
+            TotalAmount = applied.Sum(a => a.Amount),
+            PaidAt      = now,
+        };
+        foreach (var a in applied)
+            receipt.Allocations.Add(new PaymentReceiptAllocation { OrderId = a.OrderId, Amount = a.Amount });
+        return receipt;
+    }
+
+    internal static void ApplyCod(Domain.Order order, decimal amount, DateTime now)
     {
         decimal owed        = order.AmountToCollectForPackage ?? 0m;
         decimal already     = order.CodPaidToCustomerAmount ?? 0m;
@@ -122,7 +132,7 @@ public sealed class PayCustomerOrdersCommandHandler
         }
     }
 
-    private static void ApplyService(Domain.Order order, decimal amount, DateTime now)
+    internal static void ApplyService(Domain.Order order, decimal amount, DateTime now)
     {
         // The sender owes their share of the fee (OrderFinance.SenderServiceShare): the whole fee for
         // a sender-pays order or a billable failed delivery (the recipient paid nothing), only the

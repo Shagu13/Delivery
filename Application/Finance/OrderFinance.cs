@@ -29,6 +29,17 @@ namespace Application.Finance;
 /// Sender/Recipient) collapse to ONE net-cash formula, which at full settlement always
 /// converges to <see cref="CompanyRevenue"/> (= CompanyServicePrice − CourierSalary).
 /// </summary>
+/// <summary>Result of <see cref="OrderFinance.CourierPositionOf"/>. Computed live; never persisted.</summary>
+public sealed record CourierPosition(
+    decimal SalaryEarned,
+    decimal SalaryPaid,
+    decimal SalaryOutstanding,
+    decimal CashCollected,
+    decimal CashHandedOver,           // recorded hand-overs, less salary the admin paid separately (that cash stayed with the courier)
+    decimal SalaryKeptFromCash,
+    decimal CashStillOwedToCompany,
+    decimal CompanyOwesCourier);
+
 public static class OrderFinance
 {
     /// <summary>Tolerance for decimal "fully settled" comparisons (sub-tetri).</summary>
@@ -248,6 +259,69 @@ public static class OrderFinance
     /// </summary>
     public static decimal CourierNetCashDue(IEnumerable<Order> orders) =>
         Math.Max(0m, orders.Sum(o => o.AmountOfCashCollected ?? 0m) - orders.Sum(o => o.CourierSalary ?? 0m));
+
+    /// <summary>
+    /// The part of an order's salary that the hand-over cap (<see cref="CourierCodTransferOutstanding"/>)
+    /// does not already net out of the collected cash — e.g. a sender-pays order, whose salary the company
+    /// pays separately, or a recipient-pays order whose cash is smaller than the salary. The courier
+    /// effectively keeps it, so it is deducted from the day's hand-over (less what was already paid out).
+    /// </summary>
+    public static decimal CourierUnnettedSalary(Order o)
+    {
+        decimal salary = o.CourierSalary ?? 0m;
+        decimal netted = (o.AmountOfCashCollected ?? 0m)
+                       - CourierCodTransferOutstanding(o)
+                       - (o.CodTransferedToCompanyByCourier ?? 0m);
+        return Math.Min(salary, Math.Max(0m, salary - netted));
+    }
+
+    /// <summary>
+    /// A courier's cash-and-salary position over a set of orders (one day), the single source for the
+    /// admin settlement modal and the courier's own settlements page. Pass only orders whose leg is
+    /// complete (<see cref="IsCourierLegComplete"/>) — open orders earned nothing yet.
+    /// <para>The company nets ALL salary against the cash the courier holds, sender-pays orders included.
+    /// Per order, the part of the salary the per-order hand-over cap does not already net out
+    /// ("unnetted") is deducted from the day's remaining hand-over, less whatever the admin already paid
+    /// out for it. A negative result means the salary outweighs the cash: the company owes the courier.</para>
+    /// </summary>
+    public static CourierPosition CourierPositionOf(IEnumerable<Order> counted)
+    {
+        decimal salaryEarned = 0m, salaryPaid = 0m, salaryKept = 0m;
+        decimal cashCollected = 0m, cashHandedOver = 0m;
+        decimal outstanding = 0m, unnettedLeft = 0m, unnettedPaidTotal = 0m;
+
+        foreach (Order o in counted)
+        {
+            decimal salary = o.CourierSalary ?? 0m;
+            decimal paid   = o.CourierSalaryPaidAmount ?? 0m;
+            decimal cash   = o.AmountOfCashCollected ?? 0m;
+            decimal handed = o.CodTransferedToCompanyByCourier ?? 0m;
+            decimal due    = CourierCodTransferOutstanding(o);
+
+            decimal unnetted     = CourierUnnettedSalary(o);
+            decimal unnettedPaid = Math.Min(paid, unnetted);
+
+            salaryEarned      += salary;
+            salaryPaid        += paid;
+            cashCollected     += cash;
+            cashHandedOver    += handed;
+            outstanding       += due;
+            unnettedLeft      += unnetted - unnettedPaid;
+            unnettedPaidTotal += unnettedPaid;
+            if (CourierKeptSalaryFromCash(o)) salaryKept += Math.Min(paid, salary);
+        }
+
+        decimal net = Math.Round(outstanding - unnettedLeft, 2);
+        return new CourierPosition(
+            SalaryEarned:           salaryEarned,
+            SalaryPaid:             salaryPaid,
+            SalaryOutstanding:      Math.Max(0m, salaryEarned - salaryPaid),
+            CashCollected:          cashCollected,
+            CashHandedOver:         Math.Round(Math.Max(0m, cashHandedOver - unnettedPaidTotal), 2),
+            SalaryKeptFromCash:     salaryKept,
+            CashStillOwedToCompany: Math.Max(0m, net),
+            CompanyOwesCourier:     Math.Max(0m, -net));
+    }
 
     /// <summary>
     /// True once the sender's share of the service fee is fully settled. Always true when the

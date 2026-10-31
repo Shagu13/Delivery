@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { PublicNav } from './PublicNav';
 import { StaffNav } from './StaffNav';
+import { AutoResizeDialogs } from '../ui/AutoResizeDialogs';
 import { isLivoHost } from '../../pages/Tenant/livoHost';
 import './layout.css';
 
@@ -55,6 +56,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <main className="app-layout__main">
                 {children}
             </main>
+            <AutoResizeDialogs />
         </div>
     );
 }

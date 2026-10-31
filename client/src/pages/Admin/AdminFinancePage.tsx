@@ -15,6 +15,7 @@ import {
     fetchCustomerFinanceGrid,
     downloadCustomerOrderFinanceExcel,
     payCustomerOrders,
+    settleCustomerNet,
     OrderFinanceApiError,
 } from '../../api/orderFinance';
 import type { OrderFinanceLine, CustomerGridMode, CustomerGridContact } from '../../api/orderFinance';
@@ -1105,7 +1106,8 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
 
     // Net settlement: the cash that physically changes hands is the COD the company owes
     // the customer minus the sender-paid service the customer owes the company. One click
-    // settles BOTH flows in full per order (the books still record each flow separately).
+    // settles the TICKED orders of both flows (COD ticks and service ticks), each at its shown
+    // amount, in a single all-or-nothing request. The books still record each flow as its own receipt.
     const bothSettled = cod.owed <= 0.005 && svc.owed <= 0.005;
 
     // The net bar reflects only the currently-ticked orders — Settle net settles exactly
@@ -1132,8 +1134,7 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
         const svcAllocs = svcChosen.map(o => ({ orderId: o.orderId, amount: round2(Number(amountOf(selSvc, o, svcOut))) }));
         setBusy(true);
         try {
-            if (codAllocs.length > 0) await payCustomerOrders(customerId, false, codAllocs, token);
-            if (svcAllocs.length > 0) await payCustomerOrders(customerId, true,  svcAllocs, token);
+            await settleCustomerNet(customerId, codAllocs, svcAllocs, token);
             setSelCod({}); setSelSvc({});
             onChanged();
         } catch (e) {

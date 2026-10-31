@@ -115,6 +115,7 @@ Key entry points:
 | `CodOwedToCustomer(o)` / `ServiceOwedBySender(o)` | The two opposite receivables. |
 | `Is*Paid(o)` / `HasCourierTransferedAmount(o)` | Settled checks, with a 0.005 epsilon. |
 | `CourierKeepsSalaryFromCash(o)` / `CourierCodTransferOutstanding(o)` | Recipient-pays: the courier keeps their salary out of the cash, unless the company already paid it separately before any hand-over (then the hand-over is the full cash — keeping it too would pay twice). `PayCourierOrders` and `SetOrderCourierSettlementPayment` both ask `CourierKeepsSalaryFromCash`; a kept-salary hand-over also credits `CourierSalaryPaidAmount`, so the Pay-salary bar never re-offers it. |
+| `CourierPositionOf(orders)` / `CourierUnnettedSalary(o)` | A courier's day position (`CourierPosition` record): salary earned/paid/outstanding, cash collected/handed over, salary kept from cash, `CashStillOwedToCompany`, and `CompanyOwesCourier` (> 0 when salary outweighs cash). The company nets **all** salary against cash, sender-pays included; `CourierUnnettedSalary` is the per-order part the hand-over cap doesn't net. Feeds the day cards (`CourierSettlementProjection` → `CourierSettlementItemDto`), the courier's own page, and — per order, via `OrderFinanceLineDto.CourierUnnettedSalaryPaid/Left` — the admin `SettlementModal`. Never re-derive it client-side. Pass only `IsCourierLegComplete` orders. The older `CourierNetCashDue` (floored, ignores hand-overs) still backs `TotalCourierTransferToCompany` for the Finance History tab and the unused preview. |
 | `RecipientFeePortion(o)` / `SenderServiceShare(o)` | The two halves of a fee that carries a `CustomerSurcharge` (fee 7, surcharge 1: recipient pays 6 in cash, the sender owes 1). `SenderServiceShare` is the whole fee for sender-pays orders and billable failures, only the surcharge for recipient-pays, 0 for an ordinary recipient-pays order. **Every "service owed by sender" sum uses it — never `CompanyServicePrice` — and every "cash the recipient hands over" uses `RecipientFeePortion`.** `ServiceInflow`, `ServiceOwedBySender`, `IsCompanyServicePaid`, `ExpectedCourierCash`, `DeliveredCashCollected` already do. The tenant tier (`TenantSettlementService`, `GetTenantSettlementOrdersQuery`, `RecordTenantOrderPaymentCommand`, `GetTenantFinanceOverviewQuery`) projects columns rather than loading an `Order`, so it calls `SenderServiceShareOf(payer, fee, surcharge)` — the same rule. |
 | `ServicePaymentStatus(o)` | The stored `CompanyServicePaymentStatus` that matches the live figures (Paid once the sender's share is settled). Delivery handlers use it instead of hard-coding `Paid`, so a surcharge stays Unpaid. |
 | `DeliveredCashCollected(o)` | Cash recorded as collected for an already-delivered order after an admin edits its fee/COD (recipient-pays: COD + fee; sender-pays: COD). Used by the edit, re-price and `SetOrderPrices` handlers. |
@@ -141,6 +142,15 @@ real fee plus `CustomerSurcharge`, and their `recipientAmountDue` helpers use `r
 `OrderFinanceQueries.AllCustomersByEffectiveDate`), `Delivered` (delivered or billable-failed in the window,
 `FilterByDeliveredWindow`), `ToSettle` (any date; SQL coarse prefilter, then `OrderFinance.CodOwedToCustomer` /
 `ServiceOwedBySender` decide). Returns lines plus one contact row per customer (default bank account first).
+
+**"Settle net" (both admin settlement screens).** `SettleCustomerNetCommand` (customer: ticked COD payouts + ticked
+service fees) and `SettleCourierNetCommand` (courier: ticked COD hand-overs + ticked salaries) apply both flows in one
+load and one `SaveChanges`, so a rejected amount in either flow records nothing. They reuse the single-flow handlers'
+`internal static` apply rules and `BuildReceipt` (`PayCustomerOrdersCommandHandler`, `PayCourierOrdersCommandHandler`) —
+change a rule there, never in the net handler. Still one receipt per flow. Courier order matters: hand-overs go first,
+because on a recipient-pays order the hand-over credits the kept salary; a salary allocation on that same order is then
+reduced to what is still outstanding (usually nothing), so the courier is never paid twice. Endpoints:
+`POST /api/orderfinance/settle-net` and `/courier-settle-net`.
 
 **Company overview (`CompanyFinance/`).** Admin Finance → Overview (`GET /api/companyfinance/overview`) and its
 "View orders" drill-down (`GET /api/companyfinance/orders`) both select orders through

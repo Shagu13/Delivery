@@ -497,7 +497,10 @@ internal static class OrderFinanceQueries
             CourierSalaryOutstanding:        OrderFinance.CourierSalaryOutstanding(o),
             CourierCodTransferOutstanding:   OrderFinance.CourierCodTransferOutstanding(o),
             CustomerSurcharge:               o.CustomerSurcharge,
-            ServiceOwedBySender:             OrderFinance.ServiceOwedBySender(o)
+            ServiceOwedBySender:             OrderFinance.ServiceOwedBySender(o),
+            CourierUnnettedSalaryPaid:       Math.Min(o.CourierSalaryPaidAmount ?? 0m, OrderFinance.CourierUnnettedSalary(o)),
+            CourierUnnettedSalaryLeft:       OrderFinance.CourierUnnettedSalary(o)
+                                           - Math.Min(o.CourierSalaryPaidAmount ?? 0m, OrderFinance.CourierUnnettedSalary(o))
         );
     }
 }
