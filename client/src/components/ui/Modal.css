@@ -79,6 +79,8 @@
 
 .ui-modal__body {
     padding: 22px;
+    /* Lets the body fill a dialog that has been expanded to full screen (the footer stays pinned below it). */
+    flex: 1 1 auto;
     overflow-y: auto;
     /* Defensive guard: modal content must never force horizontal scroll — anything
        genuinely wide (a table, a long unbreakable value) should wrap or truncate

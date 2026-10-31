@@ -142,7 +142,11 @@ for `[role="dialog"][aria-modal="true"]` and gives each centred, non-full-screen
 border (double-click resets; hidden below 720px wide). It sets an inline `width`/`max-width` on the dialog element, so a
 new modal needs **no wiring** as long as the box itself carries `role="dialog" aria-modal="true"` (an overlay wrapper
 that carries the role instead is skipped — it covers the viewport). Options as attributes on the dialog: `data-no-resize`,
-`data-resize-min="640"`, `data-resize-key="k"` (remember the width per browser; `SettlementModal` uses it). The global
+`data-resize-min="640"`, `data-resize-key="k"` (remember the width per browser; `SettlementModal` uses it). The same
+component adds an **expand / collapse button beside the dialog's X** (full screen and back): it locates the close button by
+class / accessible name / "✕" text in the dialog's top-right area, so a modal with no X (small confirm boxes) gets no expand
+button, and a new modal's close button should keep a `close`-ish class or aria-label to be found. `data-no-resize` turns off
+both. Expanding sets inline `width/height: 100vw/100dvh` and restores the previous inline values on collapse. The global
 `fieldset { min-width: 0 }` rule in `index.css` stops a fieldset holding a wide table from growing past its modal.
 
 ### 3.2b Finance → Payments customer grid
