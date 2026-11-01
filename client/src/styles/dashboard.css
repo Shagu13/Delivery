@@ -349,7 +349,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 20px;
-  animation: fade-up 0.4s ease both;
+  animation: fade-up 0.4s ease backwards;
 }
 
 .stat-card__label {
@@ -392,7 +392,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  animation: fade-up 0.4s ease both;
+  animation: fade-up 0.4s ease backwards;
 }
 
 .content-card__header {
@@ -758,7 +758,7 @@
     box-shadow: var(--shadow-sm);
     overflow: hidden;
     position: relative;
-    animation: fade-up 0.3s ease both;
+    animation: fade-up 0.3s ease backwards;
 }
 
 .courier-card__body {

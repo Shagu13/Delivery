@@ -263,10 +263,13 @@ a class from another component, verify its CSS actually ships with the component
 otherwise modals and fields render unstyled and off-page. When adding shared UI, co-locate the
 CSS with the component and import it there.
 
-**Portal every modal to `document.body`** (`createPortal(..., document.body)`, as `ViewOrderModal` and
-`EditDeliveredPayerModal` do). `.content-card` (`styles/dashboard.css`) runs `fade-up` with fill-mode
-`both`, which leaves a `transform` on it — a containing block for `position: fixed` — plus `overflow: hidden`.
-A modal rendered inside it sits relative to the card (pushed down the page) with its footer clipped.
+**Entrance animations on containers use fill-mode `backwards`, never `both`/`forwards`.** A retained
+`transform: translateY(0)` makes the element a containing block for `position: fixed`, so any modal rendered
+inside it sits relative to that element (pushed down the page) and, with `overflow: hidden` (`.content-card`),
+gets its footer clipped. `backwards` looks identical — the keyframes end at the natural state — but drops the
+transform once it finishes. Applies to `.content-card`, `.stat-card`, `.courier-card`, `.acp-card`, the
+create-order `.page__intro`/`.form-section`/`.success-view`, and `.ui-modal` itself (nested dialogs). New modals
+should still portal to `document.body` (`createPortal`, as `ViewOrderModal`/`EditDeliveredPayerModal` do).
 
 ---
 
