@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { FormField } from '../../components/ui/FormField';
 import { changeOrderPayer, fetchPayerChangePreview } from '../../api/orders';
@@ -81,7 +82,10 @@ export function EditDeliveredPayerModal({ target, token, onClose, onSaved }: Pro
   const payerLabel = (p: ServicePayer) => (p === 'Sender' ? t.pcmSender : t.pcmRecipient);
   const sourceText = data ? (t.pcmFeeSource as Record<string, string>)[data.suggestedFeeSource] : null;
 
-  return (
+  // Portalled to <body>: the History page renders inside `.content-card`, whose fade-up animation leaves a
+  // transform (a containing block for position:fixed) plus overflow:hidden — the overlay would otherwise
+  // sit relative to the card, off-screen, with the footer clipped.
+  return createPortal(
     <div className="ui-modal-overlay" onClick={saving ? undefined : onClose}>
       <div className="ui-modal pcm-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
         <div className="ui-modal__header">
@@ -132,6 +136,7 @@ export function EditDeliveredPayerModal({ target, token, onClose, onSaved }: Pro
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
