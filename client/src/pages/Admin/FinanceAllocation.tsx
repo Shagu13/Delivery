@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useLanguage } from '../../contexts/useLanguage';
 import { round2 } from '../../utils/orderFinanceOutstanding';
@@ -20,6 +21,36 @@ export interface FlowVM {
     selTotal: number;
     selCount: number;
     allChecked: boolean;
+}
+
+// One flow's tick/amount selection that survives background refetches. A ticked row freezes its
+// outstanding amount (so it can be hand-edited), so when fresh `lines` arrive a tick is kept only
+// if that order is still payable AND its outstanding is unchanged; otherwise it is dropped so a
+// stale amount is never submitted. Wiping every tick on each refresh (the old behaviour) lost the
+// admin's work whenever a realtime ping refetched the list mid-selection.
+export function usePersistentSel(lines: OrderFinanceLine[], out: (o: OrderFinanceLine) => number): [Sel, SetSel] {
+    const [sel, setSel] = useState<Sel>({});
+    const outRef = useRef<Map<string, number>>(new Map());
+    useEffect(() => {
+        const before = outRef.current;
+        const now = new Map(lines.map(o => [o.orderId, out(o)] as const));
+        outRef.current = now;
+        setSel(prev => {
+            let dropped = false;
+            const next: Sel = {};
+            for (const [id, s] of Object.entries(prev)) {
+                const cur = now.get(id);
+                const old = before.get(id);
+                if (cur === undefined || cur <= 0.005 || old === undefined || Math.abs(cur - old) > 0.005) {
+                    dropped = true;
+                    continue;
+                }
+                next[id] = s;
+            }
+            return dropped ? next : prev; // same reference → no re-render when nothing changed
+        });
+    }, [lines, out]);
+    return [sel, setSel];
 }
 
 // Displayed amount for a row (defaults to its full outstanding until edited).

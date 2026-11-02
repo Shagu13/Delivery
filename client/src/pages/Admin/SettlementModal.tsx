@@ -12,8 +12,7 @@ import { setCourierSalary } from '../../api/orders';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { round2, isCourierLegComplete } from '../../utils/orderFinanceOutstanding';
-import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll } from './FinanceAllocation';
-import type { Sel } from './FinanceAllocation';
+import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll, usePersistentSel } from './FinanceAllocation';
 
 const isSettled = isCourierLegComplete;
 
@@ -67,14 +66,11 @@ export function SettlementModal({
     const [loading, setLoading] = useState(false);
     const [busy,    setBusy]    = useState(false);
     const [error,   setError]   = useState<string | null>(null);
-    const [selSalary, setSelSalary] = useState<Sel>({});
-    const [selCod,    setSelCod]    = useState<Sel>({});
+    // Ticks survive a reload unless that order's outstanding changed (see usePersistentSel).
+    const [selSalary, setSelSalary] = usePersistentSel(lines, salaryOut);
+    const [selCod,    setSelCod]    = usePersistentSel(lines, codOut);
     // Tracking numbers stay hidden until the header switch is ticked.
     const [showTracking, setShowTracking] = useState(false);
-
-    // A ticked row freezes its outstanding amount so it can be hand-edited; drop the
-    // selection whenever fresh lines arrive so a stale amount is never submitted.
-    useEffect(() => { setSelSalary({}); setSelCod({}); }, [lines]);
 
     // `silent` refreshes the line data in place without flipping the full-screen spinner —
     // used after a per-order pay toggle so the table stays mounted and the modal keeps its

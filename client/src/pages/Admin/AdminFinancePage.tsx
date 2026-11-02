@@ -22,7 +22,7 @@ import type { OrderFinanceLine, CustomerGridMode, CustomerGridContact } from '..
 import { setOrderPrices, fetchOrderLocations } from '../../api/orders';
 import { fetchCompanyFinanceOverview, CompanyFinanceApiError } from '../../api/companyFinance';
 import { CourierSettlementsSection } from './CourierSettlementsSection';
-import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll } from './FinanceAllocation';
+import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll, usePersistentSel } from './FinanceAllocation';
 import type { FlowVM, Sel } from './FinanceAllocation';
 import { AdminFinanceHistoryTab } from './AdminFinanceHistoryTab';
 import { OutstandingBalancesModal } from './OutstandingBalancesModal';
@@ -707,10 +707,13 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
     }, [lines]);
 
     // Narrow the loaded lines to the chosen recipient city/district/address before counting/showing.
-    const scoped = lines.filter(l =>
+    // Memoized so a plain re-render (realtime badge ping, toast) hands CustomerSettleCard the same
+    // array reference — only a real data or filter change produces new `lines` for it.
+    const scoped = useMemo(() => lines.filter(l =>
         (filterCities.length === 0 || filterCities.includes(l.recipientCity))
         && (filterDistricts.length === 0 || filterDistricts.includes(l.recipientDistrict))
-        && (!address || (l.recipientAddress ?? '').toLowerCase().includes(address.trim().toLowerCase())));
+        && (!address || (l.recipientAddress ?? '').toLowerCase().includes(address.trim().toLowerCase()))),
+        [lines, filterCities, filterDistricts, address]);
 
     // Per-bucket counts (over the scoped set) + the filtered subset shown.
     const counts: Record<PayFilter, number> = {
@@ -718,7 +721,7 @@ function CustomerInvoicesSection({ token, onPaid }: { token: string; onPaid: () 
         pending: scoped.filter(isPendingLine).length,
         paid:    scoped.filter(isPaidLine).length,
     };
-    const visibleLines = filterLines(scoped, payFilter);
+    const visibleLines = useMemo(() => filterLines(scoped, payFilter), [scoped, payFilter]);
 
     const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3000); };
 
@@ -1062,20 +1065,16 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
     const { locCity, locDistrict } = usePlaceLocalizer();
     const [expanded, setExpanded] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [selCod, setSelCod] = useState<Sel>({});
-    const [selSvc, setSelSvc] = useState<Sel>({});
-
-    // A checked row freezes its outstanding amount into `sel` (so the admin can hand-edit
-    // it) — but that freeze goes stale the moment the underlying figures change, e.g. an
-    // admin corrects CompanyServicePrice from the fee editor further down this same card.
-    // Without this, the Net settlement bar and a Settle submission would silently keep
-    // using the pre-edit amount. Drop the selection whenever fresh lines come in so the
-    // admin re-ticks against the current outstanding.
-    useEffect(() => { setSelCod({}); setSelSvc({}); }, [lines]);
-
     // Outstanding per order for each flow (shared module helpers — see their definitions).
     const codOut = codOutstanding;
     const svcOut = serviceOutstanding;
+
+    // A checked row freezes its outstanding amount (so the admin can hand-edit it). On a
+    // refetch — a realtime ping, or a fee correction in the editor below — a tick is kept only
+    // while that order's outstanding is unchanged, so neither a stale amount is submitted nor
+    // the admin's ticks are lost to an unrelated refresh (see usePersistentSel).
+    const [selCod, setSelCod] = usePersistentSel(lines, codOut);
+    const [selSvc, setSelSvc] = usePersistentSel(lines, svcOut);
 
     const cod = buildFlow(lines, selCod, codOut, o => o.codPaidToCustomerAmount ?? 0);
     const svc = buildFlow(lines, selSvc, svcOut, o => o.servicePaidByCustomerAmount ?? 0);

@@ -10,7 +10,7 @@
 
 | # | Rule | Meaning in practice |
 |---|------|---------------------|
-| 1 | **Function components + hooks only** | No class components. React 19, with the React Compiler babel plugin enabled. |
+| 1 | **Function components + hooks only** | No class components. React 19. `babel-plugin-react-compiler` is in `package.json` but **not wired into `vite.config.ts`** — nothing is auto-memoized, so an array derived in render (`.filter(...)`) is a new reference every render. `useMemo` anything used as an effect dependency or passed to a child that resets state on it (the Finance settle card lost ticks this way). |
 | 2 | **Mobile-first** | Couriers work from a phone and customers place orders from one. Every page must work at ~360px. Native inputs need `font-size: 16px` on touch or iOS Safari zooms the page on focus. |
 | 3 | **Separation of concerns** | UI in components, fetching in `api/` + TanStack Query, rules in `utils/`. Never `fetch` inline in a component. |
 | 4 | **Type safety** | No `any` without a comment justifying it. Interfaces in `api/*.ts` mirror the backend DTOs. |
