@@ -22,13 +22,13 @@ using Application.GroupOrders.Queries.GetAdminMonthlyStats;
 using Application.GroupOrders.Queries.GetAdminOverviewStats;
 using Application.GroupOrders.Queries.GetAllGroupOrders;
 using Application.GroupOrders.Queries.GetCustomerGroupOrders;
+using Application.GroupOrders.Queries.ExcelLookups;
 using Application.GroupOrders.Queries.GetGroupOrderLocations;
 using Application.Orders.Queries.GetOrderLocations;
 using ClosedXML.Excel;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace API.Controllers;
@@ -760,32 +760,11 @@ public sealed class GroupOrdersController : BaseController
     {
         bool isGeo = string.Equals(lang, "ka", StringComparison.OrdinalIgnoreCase);
 
-        var db = HttpContext.RequestServices.GetRequiredService<IAppDbContext>();
-
-        // ── Load cities + districts from DB ───────────────────────────────────
-        var cities = await db.Cities
-            .AsNoTracking()
-            .Where(c => c.DateDeleted == null)
-            .OrderBy(c => c.CityName)
-            .Select(c => new
-            {
-                c.CityName,
-                c.CityNameGeo,
-                Districts = c.Districts
-                    .Where(d => d.DateDeleted == null)
-                    .OrderBy(d => d.DistrictName)
-                    .Select(d => new { d.DistrictName, d.DistrictNameGeo, d.IsCapitalTerritory })
-                    .ToList()
-            })
-            .ToListAsync(ct);
-
-        // Active weight-price tiers drive the optional "Weight tier" dropdown column.
-        var tiers = await db.WeightPriceTiers
-            .AsNoTracking()
-            .Where(t => t.DateDeleted == null)
-            .OrderBy(t => t.MinWeightKg).ThenBy(t => t.MaxWeightKg)
-            .Select(t => new { t.Label, t.MinWeightKg, t.MaxWeightKg })
-            .ToListAsync(ct);
+        // Cities + their districts, and the active weight tiers that drive the optional
+        // "Weight tier" dropdown column.
+        ExcelTemplateLookupsDto lookups = await Sender.Send(new GetExcelTemplateLookupsQuery(), ct);
+        var cities = lookups.Cities;
+        var tiers  = lookups.Tiers;
 
         using var workbook = new XLWorkbook();
 
@@ -1064,46 +1043,15 @@ public sealed class GroupOrdersController : BaseController
         if (ext != ".xlsx")
             return BadRequest(new { title = "Only .xlsx files are supported." });
 
-        // ── Load lookup tables from DB ────────────────────────────────────────
-        var db = HttpContext.RequestServices.GetRequiredService<IAppDbContext>();
-
-        // Build geo→English city map and geo→English district map
-        var cities = await db.Cities
-            .AsNoTracking()
-            .Where(c => c.DateDeleted == null)
-            .Select(c => new { c.CityName, c.CityNameGeo })
-            .ToListAsync(ct);
-
-        // cityGeoToEn: Georgian display name → English canonical name
-        var cityGeoToEn = new Dictionary<string, string>(StringComparer.Ordinal);
-        var cityEnSet   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var c in cities)
-        {
-            cityEnSet.Add(c.CityName);
-            if (!string.IsNullOrWhiteSpace(c.CityNameGeo))
-                cityGeoToEn[c.CityNameGeo!] = c.CityName;
-        }
-
-        var districts = await db.Districts
-            .AsNoTracking()
-            .Where(d => d.DateDeleted == null)
-            .Select(d => new { d.DistrictName, d.DistrictNameGeo })
-            .ToListAsync(ct);
-
-        var districtGeoToEn = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var d in districts)
-        {
-            if (!string.IsNullOrWhiteSpace(d.DistrictNameGeo))
-                districtGeoToEn[d.DistrictNameGeo!] = d.DistrictName;
-        }
+        // ── Load lookup tables ────────────────────────────────────────────────
+        // Georgian display name → English canonical name, for cities and districts.
+        ExcelImportLookupsDto lookups = await Sender.Send(new GetExcelImportLookupsQuery(), ct);
+        var cityGeoToEn     = lookups.CityGeoToEn;
+        var districtGeoToEn = lookups.DistrictGeoToEn;
 
         // Active weight tiers, indexed by their display label (both languages + bare
         // label) so a picked "Weight tier" cell maps back to the tier id on import.
-        var tiers = await db.WeightPriceTiers
-            .AsNoTracking()
-            .Where(t => t.DateDeleted == null)
-            .Select(t => new { t.Id, t.Label, t.MinWeightKg, t.MaxWeightKg })
-            .ToListAsync(ct);
+        var tiers = lookups.Tiers;
 
         var tierByDisplay = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         foreach (var tr in tiers)

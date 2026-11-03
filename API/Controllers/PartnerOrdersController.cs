@@ -1,17 +1,16 @@
 using System.Security.Claims;
 using API.Auth;
 using API.Models.Partner;
-using Application.Common.Interfaces;
 using Application.GroupOrders.Commands.CreateGroupOrder;
 using Application.GroupOrders.DTOs;
 using Application.PartnerOrders;
 using Application.PartnerOrders.DTOs;
+using Application.PartnerOrders.Queries.GetPartnerIntakeContext;
 using Application.PartnerOrders.Queries.GetPartnerOrder;
 using Application.PartnerOrders.Queries.GetPartnerOrders;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers;
 
@@ -39,15 +38,7 @@ public sealed class PartnerOrdersController : BaseController
         if (request.Orders is null || request.Orders.Count == 0)
             return UnprocessableEntity(new { title = "At least one order is required." });
 
-        var db = HttpContext.RequestServices.GetRequiredService<IAppDbContext>();
-
-        // ── Resolve the partner (Customer) for sender/pickup fallback ──────────
-        var customer = await db.Customers.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == customerId, ct);
-        if (customer is null)
-            return Unauthorized();
-
-        // ── De-duplicate by the partner's own order numbers ───────────────────
+        // The partner's own order numbers, for de-duplication against earlier submissions.
         var refs = request.Orders
             .Select(o => o.ExternalReference)
             .Where(r => !string.IsNullOrWhiteSpace(r))
@@ -55,25 +46,23 @@ public sealed class PartnerOrdersController : BaseController
             .Distinct()
             .ToList();
 
-        if (refs.Count > 0)
-        {
-            var existing = await db.Orders.AsNoTracking()
-                .Where(o => o.ExternalReference != null
-                    && refs.Contains(o.ExternalReference)
-                    && (o.GroupOrder!.CustomerId == customerId || o.CustomerId == customerId))
-                .Select(o => o.ExternalReference!)
-                .ToListAsync(ct);
+        // Partner profile → duplicate check → location maps, each read only if the previous passed.
+        PartnerIntakeContextDto context = await Sender.Send(new GetPartnerIntakeContextQuery(customerId, refs), ct);
 
-            if (existing.Count > 0)
-                return Conflict(new
-                {
-                    title = "Duplicate order number(s) — these have already been submitted.",
-                    duplicates = existing
-                });
-        }
+        // ── Resolve the partner (Customer) for sender/pickup fallback ──────────
+        if (context.Customer is not { } customer)
+            return Unauthorized();
+
+        // ── De-duplicate by the partner's own order numbers ───────────────────
+        if (context.DuplicateReferences.Count > 0)
+            return Conflict(new
+            {
+                title = "Duplicate order number(s) — these have already been submitted.",
+                duplicates = context.DuplicateReferences
+            });
 
         // ── City/district normalisation (accept Georgian or English names) ─────
-        var (cityGeoToEn, districtGeoToEn, capitalDistrictByCity) = await LoadLocationMapsAsync(db, ct);
+        var (cityGeoToEn, districtGeoToEn, capitalDistrictByCity) = context.Locations!;
 
         var orderDtos = request.Orders.Select(o =>
         {
@@ -172,39 +161,4 @@ public sealed class PartnerOrdersController : BaseController
 
     private static string Coalesce(string? value, string fallback) =>
         string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
-
-    private static async Task<(
-        Dictionary<string, string> CityGeoToEn,
-        Dictionary<string, string> DistrictGeoToEn,
-        Dictionary<string, string> CapitalDistrictByCity)>
-        LoadLocationMapsAsync(IAppDbContext db, CancellationToken ct)
-    {
-        var cities = await db.Cities.AsNoTracking()
-            .Where(c => c.DateDeleted == null)
-            .Select(c => new { c.CityName, c.CityNameGeo })
-            .ToListAsync(ct);
-
-        var cityGeoToEn = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var c in cities)
-            if (!string.IsNullOrWhiteSpace(c.CityNameGeo))
-                cityGeoToEn[c.CityNameGeo!] = c.CityName;
-
-        var districts = await db.Districts.AsNoTracking()
-            .Where(d => d.DateDeleted == null)
-            .Select(d => new { d.DistrictName, d.DistrictNameGeo })
-            .ToListAsync(ct);
-
-        var districtGeoToEn = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var d in districts)
-            if (!string.IsNullOrWhiteSpace(d.DistrictNameGeo))
-                districtGeoToEn[d.DistrictNameGeo!] = d.DistrictName;
-
-        var capitalDistrictByCity = await db.Districts.AsNoTracking()
-            .Where(d => d.DateDeleted == null && d.IsCapitalTerritory)
-            .GroupBy(d => d.City.CityName)
-            .Select(g => new { CityName = g.Key, DistrictName = g.Min(d => d.DistrictName) })
-            .ToDictionaryAsync(x => x.CityName, x => x.DistrictName!, StringComparer.OrdinalIgnoreCase, ct);
-
-        return (cityGeoToEn, districtGeoToEn, capitalDistrictByCity);
-    }
 }

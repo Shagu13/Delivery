@@ -198,6 +198,7 @@ would otherwise match both and be counted twice. The SQL copy of the billable ru
 | `Orders/Commands/SetCourierSalaryBulk` | Couriers page → Edit salary (Admin only): one salary on many orders, all-or-nothing (refused if it exceeds any order's service fee). One load, `CourierSalaryReceiptReconciler.CapPaidAmount` per order in memory, one `PaymentReceiptTrimmer.TrimManyAsync`, one save. The single-order `SetCourierSalaryCommand` keeps its own path. |
 | `Orders/Commands/CustomerOrderActionPolicy` | What a customer may still edit/cancel themselves. |
 | `Orders/Commands/ReturnAssignmentPolicy` | Courier assignment rules for Return orders. |
+| `Cities/GeoNameMaps` | Georgian → English name maps for active cities/districts, for input that may name a place in either language. Shared by the Excel import (`GroupOrders/Queries/ExcelLookups`) and the Partner API intake (`PartnerOrders/Queries/GetPartnerIntakeContext`). Reuse it rather than building the dictionaries again. |
 | `Tenants/TenantHost` | Host normalization (lowercase, strip port and `www.`). |
 
 ### Fee resolution order (in `GroupOrderOrderBuilder`)

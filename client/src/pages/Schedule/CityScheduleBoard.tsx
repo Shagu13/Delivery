@@ -31,7 +31,7 @@ const norm = (s: string) => s.toLowerCase();
 const matches = (q: string, en: string, geo?: string) => norm(en).includes(q) || (!!geo && norm(geo).includes(q));
 
 // The `all-districts` endpoint is already ordered by city name then district name (see
-// CitiesController.GetAllDistricts), so grouping by first-seen cityId preserves that order —
+// Application/Cities/Queries/GetAllDistricts), so grouping by first-seen cityId preserves that order —
 // no need to re-sort here.
 function groupByCity(entries: AllDistrictEntry[]): CityGroup[] {
   const map = new Map<string, CityGroup>();
