@@ -287,7 +287,7 @@ should still portal to `document.body` (`createPortal`, as `ViewOrderModal`/`Edi
   and the password policy (`PasswordRules.cs` ↔ `utils/passwordRules.ts`). Change together.
 - The company-service-fee waterfall (explicit override → weight-tier zone price → customer's
   per-district special price → customer negotiated capital/city/district tier → district
-  default) is authoritative in `GroupOrderOrderBuilder`/`CalculatorController`, but is also
+  default) is authoritative in `GroupOrderOrderBuilder`/`CalculatePriceQueryHandler`, but is also
   **reimplemented client-side three times** because the create-order pages need an instant
   preview without a round trip per keystroke: `PackageSidebarLayout.tsx`'s `computeFee`
   (customer create-order flow), `CreateGroupOrderPage.tsx`'s inline duplicate of the same

@@ -1,18 +1,14 @@
 using API.Excel;
 using API.Models.Couriers;
 using Application.Couriers.Commands.CreateCourier;
+using Application.Couriers.Queries.Admin;
 using Application.Couriers.Queries.CompletedByCourier;
 using Application.Couriers.Commands.UpdateCourier;
 using Application.Couriers.Commands.SetCourierActiveStatus;
 using Application.Couriers.DTOs;
-using Application.Common.Interfaces;
-using Application.Finance;
 using ClosedXML.Excel;
-using Domain;
-using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers;
 
@@ -22,22 +18,6 @@ namespace API.Controllers;
 // can't be loosened per-method (attributes combine with AND), so it lives per-action.
 public sealed class CouriersController : BaseController
 {
-    // A batch the pickup courier will never collect — excluded from "still out on".
-    private static readonly OrderStatus[] ClosedGroupOrderStatuses =
-    [
-        OrderStatus.CancelledByAdmin,
-        OrderStatus.CancelledBySender,
-        OrderStatus.OrderNotAccepted,
-        OrderStatus.AllDelivered,
-    ];
-
-    private readonly IAppDbContext _context;
-
-    public CouriersController(IAppDbContext context)
-    {
-        _context = context;
-    }
-
     [HttpPost]
     [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(CreateCourierResponse), StatusCodes.Status201Created)]
@@ -78,38 +58,7 @@ public sealed class CouriersController : BaseController
     [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
-    {
-        var couriers = await _context.Couriers
-            .AsNoTracking()
-            .OrderBy(c => c.AssignedCity)
-            .ThenBy(c => c.FirstName)
-            .Select(c => new
-            {
-                courierId = c.Id,
-                firstName = c.FirstName,
-                lastName = c.LastName,
-                fullName = $"{c.FirstName} {c.LastName}",
-                username = c.ApplicationUser.UserName,
-                assignedCity = c.AssignedCity,
-                assignedDistrict = c.AssignedDistrict,
-                phoneNumber = c.PhoneNumber,
-                idNumber = c.IdNumber,
-                isDeleted = c.DateDeleted != null,
-                dateDeleted = c.DateDeleted,
-                defaultSalary = c.DefaultSalary,
-            })
-            .ToListAsync(ct);
-
-        // The settlement date basis each courier defaults to (regional couriers: assignment day).
-        // Resolved here, from the rule in Application, so the client never re-derives it.
-        return Ok(couriers.Select(c => new
-        {
-            c.courierId, c.firstName, c.lastName, c.fullName, c.username,
-            c.assignedCity, c.assignedDistrict, c.phoneNumber, c.idNumber,
-            c.isDeleted, c.dateDeleted, c.defaultSalary,
-            defaultDateBasis = Application.Couriers.CourierDateBasisPolicy.DefaultFor(c.assignedCity).ToString(),
-        }));
-    }
+        => Ok(await Sender.Send(new GetCourierRosterQuery(), ct));
 
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin,Operator")]
@@ -147,45 +96,10 @@ public sealed class CouriersController : BaseController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCourierOrders(Guid id, CancellationToken ct)
     {
-        var exists = await _context.Couriers.AnyAsync(c => c.Id == id, ct);
-        if (!exists) return NotFound();
-
-        bool hideRevenue = User.IsInRole("Operator");
-        var orders = await _context.Orders
-            .AsNoTracking()
-            .Where(o => o.CourierId == id)
-            .OrderByDescending(o => o.CreatedAt)
-            .Select(o => new
-            {
-                id                      = o.Id,
-                trackingNumber          = o.TrackingNumber,
-                recipientName           = o.RecipientName,
-                recipientPhone          = o.RecipientPhone,
-                recipientCity           = o.RecipientCity,
-                recipientDistrict       = o.RecipientDistrict,
-                recipientAddress        = o.RecipientAddress,
-                status                  = o.Status.ToString(),
-                companyServicePrice     = o.CompanyServicePrice,
-                courierSalary           = o.CourierSalary,
-                // Company margin is internal — hidden from operators.
-                companyRevenue          = hideRevenue ? (decimal?)null : o.CompanyRevenue,
-                orderType               = o.OrderType.ToString(),
-                deliveredAt             = o.DeliveredAt,
-                deliveredToWarehouseAt  = o.DeliveredToWarehouseAt,
-                createdAt               = o.CreatedAt,
-            })
-            .ToListAsync(ct);
-
-        return Ok(orders);
+        // Company margin is internal — hidden from operators.
+        var orders = await Sender.Send(new GetAdminCourierOrdersQuery(id, User.IsInRole("Operator")), ct);
+        return orders is null ? NotFound() : Ok(orders);
     }
-
-    /// <summary>Open last-mile statuses: shown on today's assigned list even when assigned on an earlier day.</summary>
-    private static readonly OrderStatus[] CarryOverStatuses =
-    {
-        OrderStatus.CourierAssignedToDeliver,
-        OrderStatus.CourierDeliveringTheOrderToRecipient,
-        OrderStatus.DeliveryPostponed,
-    };
 
     // ── GET /api/couriers/assigned?date=YYYY-MM-DD  (Admin) ───────────────────
     /// <summary>
@@ -209,52 +123,11 @@ public sealed class CouriersController : BaseController
         [FromQuery] DateTime date,
         [FromQuery] bool includePrevious = true,
         CancellationToken ct = default)
-    {
-        DateTime day    = date.Date;
-        DateTime dayEnd = day.AddDays(1);
-
-        bool hideRevenue = User.IsInRole("Operator");
         // Today's view also carries over still-open deliveries assigned on earlier days,
         // unless the admin switched that off (includePrevious=false → strictly today's).
-        bool carryOver = includePrevious && day == CustomTime.Today;
-        var orders = await _context.Orders
-            .AsNoTracking()
-            .Where(o => o.CourierId != null
-                     && ((o.AssignedToCourierAt >= day && o.AssignedToCourierAt < dayEnd)
-                         || (carryOver && o.AssignedToCourierAt < day
-                             && CarryOverStatuses.Contains(o.Status))))
-            .OrderByDescending(o => o.AssignedToCourierAt)
-            .Select(o => new
-            {
-                courierId               = o.CourierId,
-                id                      = o.Id,
-                trackingNumber          = o.TrackingNumber,
-                // The owning store (sender) business name, via either ownership path.
-                senderBusinessName      = o.GroupOrder != null && o.GroupOrder.Customer != null
-                                            ? o.GroupOrder.Customer.BusinessName
-                                            : (o.Customer != null ? o.Customer.BusinessName : ""),
-                recipientName           = o.RecipientName,
-                recipientPhone          = o.RecipientPhone,
-                recipientCity           = o.RecipientCity,
-                recipientDistrict       = o.RecipientDistrict,
-                recipientAddress        = o.RecipientAddress,
-                status                  = o.Status.ToString(),
-                companyServicePrice     = o.CompanyServicePrice,
-                amountToCollectForPackage = o.AmountToCollectForPackage,
-                courierSalary           = o.CourierSalary,
-                courierSalaryPaidAmount = o.CourierSalaryPaidAmount,
-                // Company margin is internal — hidden from operators.
-                companyRevenue          = hideRevenue ? (decimal?)null : o.CompanyRevenue,
-                orderType               = o.OrderType.ToString(),
-                assignedToCourierAt     = o.AssignedToCourierAt,
-                deliveredAt             = o.DeliveredAt,
-                deliveredToWarehouseAt  = o.DeliveredToWarehouseAt,
-                createdAt               = o.CreatedAt,
-            })
-            .ToListAsync(ct);
-
-        return Ok(orders);
-    }
+        // Company margin is hidden from operators.
+        => Ok(await Sender.Send(
+            new GetAssignedOrdersForDayQuery(date, includePrevious, User.IsInRole("Operator")), ct));
 
     // ── GET /api/couriers/assigned/export  (Admin/Operator) ───────────────────
     /// <summary>
@@ -274,45 +147,12 @@ public sealed class CouriersController : BaseController
         [FromQuery] bool     includePrevious = true,
         CancellationToken ct = default)
     {
-        DateTime day    = date.Date;
-        DateTime dayEnd = day.AddDays(1);
-        bool carryOver  = includePrevious && day == CustomTime.Today;
-
-        var courierName = await _context.Couriers
-            .AsNoTracking()
-            .Where(c => c.Id == courierId)
-            .Select(c => c.FirstName + " " + c.LastName)
-            .FirstOrDefaultAsync(ct);
-
-        var orders = await _context.Orders
-            .AsNoTracking()
-            .Include(o => o.GroupOrder)!.ThenInclude(g => g!.Customer)
-            .Include(o => o.Customer)
-            .Where(o => o.CourierId == courierId
-                     && ((o.AssignedToCourierAt >= day && o.AssignedToCourierAt < dayEnd)
-                         || (carryOver && o.AssignedToCourierAt < day
-                             && CarryOverStatuses.Contains(o.Status))))
-            .OrderBy(o => o.CreatedAt)
-            .ToListAsync(ct);
-
+        DateTime day = date.Date;
         var isGeo = lang == "ka";
 
-        // Small, rarely-changing table — a plain lookup here rather than the cached
-        // Application-layer geo dictionary (internal to that assembly).
-        var cityGeo = isGeo
-            ? (await _context.Cities.AsNoTracking().Where(c => c.DateDeleted == null).ToListAsync(ct))
-                .GroupBy(c => c.CityName).ToDictionary(g => g.Key, g => g.First().CityNameGeo)
-            : new Dictionary<string, string?>();
-
-        // District names repeat across cities, so key by (city, district name).
-        var districtGeo = isGeo
-            ? (await _context.Districts.AsNoTracking()
-                    .Where(d => d.DateDeleted == null)
-                    .Select(d => new { d.DistrictName, City = d.City.CityName, d.DistrictNameGeo })
-                    .ToListAsync(ct))
-                .GroupBy(d => (d.City, d.DistrictName))
-                .ToDictionary(g => g.Key, g => g.First().DistrictNameGeo)
-            : new Dictionary<(string, string), string?>();
+        AssignedOrdersExportDto export = await Sender.Send(
+            new GetAssignedOrdersExportQuery(date, courierId, includePrevious, GeorgianNames: isGeo), ct);
+        var courierName = export.CourierName;
 
         using var workbook = new XLWorkbook();
         var ws = workbook.Worksheets.Add(isGeo ? "ამანათები" : "Packages");
@@ -326,29 +166,21 @@ public sealed class CouriersController : BaseController
         ws.Row(1).Style.Font.Bold = true;
 
         var row = 2;
-        foreach (var o in orders)
+        foreach (var r in export.Rows)
         {
-            var customer = o.GroupOrder?.Customer ?? o.Customer;
-            var senderName = customer == null
-                ? string.Empty
-                : string.IsNullOrWhiteSpace(customer.BusinessName)
-                    ? $"{customer.FirstName} {customer.LastName}".Trim()
-                    : customer.BusinessName;
-
-            ws.Cell(row, 1).Value = o.CreatedAt;
+            ws.Cell(row, 1).Value = r.CreatedAt;
             ws.Cell(row, 1).Style.DateFormat.Format = "dd.mm";
-            ws.Cell(row, 2).Value = senderName;
-            ws.Cell(row, 3).Value = isGeo ? (cityGeo.GetValueOrDefault(o.RecipientCity) ?? o.RecipientCity) : o.RecipientCity;
-            ws.Cell(row, 4).Value = isGeo ? (districtGeo.GetValueOrDefault((o.RecipientCity, o.RecipientDistrict)) ?? o.RecipientDistrict) : o.RecipientDistrict;
-            ws.Cell(row, 5).Value = o.RecipientAddress;
-            ws.Cell(row, 6).Value = o.RecipientName;
-            ws.Cell(row, 7).Value = o.Description ?? string.Empty;
-            ws.Cell(row, 8).Value = o.RecipientPhone;
-            // Same COD convention as the Packages export: package COD plus, when the
-            // recipient pays the company service fee at delivery, that fee too.
-            var expectedCash = OrderFinance.ExpectedCourierCash(o);
-            if (expectedCash > 0m) ws.Cell(row, 9).Value = expectedCash;
-            ws.Cell(row, 10).Value = o.CompanyServicePrice;
+            ws.Cell(row, 2).Value = r.SenderName;
+            ws.Cell(row, 3).Value = r.City;
+            ws.Cell(row, 4).Value = r.District;
+            ws.Cell(row, 5).Value = r.Address;
+            ws.Cell(row, 6).Value = r.RecipientName;
+            ws.Cell(row, 7).Value = r.Description;
+            ws.Cell(row, 8).Value = r.Phone;
+            // COD = OrderFinance.ExpectedCourierCash (package COD plus a recipient-paid fee);
+            // left blank when nothing is collected.
+            if (r.ExpectedCash > 0m) ws.Cell(row, 9).Value = r.ExpectedCash;
+            ws.Cell(row, 10).Value = r.CompanyServicePrice;
             row++;
         }
 
@@ -391,38 +223,7 @@ public sealed class CouriersController : BaseController
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAssignedPickupsForDay(
         [FromQuery] DateTime date, CancellationToken ct)
-    {
-        DateTime day    = date.Date;
-        DateTime dayEnd = day.AddDays(1);
-
-        IQueryable<GroupOrder> query = _context.GroupOrders
-            .AsNoTracking()
-            .Where(g => g.CourierId != null)
-            .Where(g => (g.PickedUpAt >= day && g.PickedUpAt < dayEnd)
-                     || (g.PickedUpAt == null && !ClosedGroupOrderStatuses.Contains(g.Status)
-                         && (g.WhenPackagePickedUpDate ?? g.CreatedAt) >= day
-                         && (g.WhenPackagePickedUpDate ?? g.CreatedAt) < dayEnd));
-
-        var pickups = await query
-            .OrderByDescending(g => g.PickedUpAt)
-            .Select(g => new
-            {
-                courierId          = g.CourierId,
-                id                 = g.Id,
-                senderBusinessName = g.SenderBusinessName,
-                senderPhone        = g.SenderPhone,
-                pickUpCity         = g.PickUpCity,
-                pickUpDistrict     = g.PickUpDistrict,
-                pickUpAddress      = g.PickUpAddress,
-                numberOfPackages   = g.NumberOfPackages,
-                status             = g.Status.ToString(),
-                pickedUpAt         = g.PickedUpAt,
-                createdAt          = g.CreatedAt,
-            })
-            .ToListAsync(ct);
-
-        return Ok(pickups);
-    }
+        => Ok(await Sender.Send(new GetAssignedPickupsForDayQuery(date), ct));
 
     // ── Completed tab: what couriers finished between two Georgian days (inclusive) ──
     // courierId omitted = every courier. Operators get the same rows minus company margin.

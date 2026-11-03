@@ -45,7 +45,7 @@ Application/
 │
 ├── Finance/OrderFinance.cs             # ★ single source of truth for per-order money
 │
-├── Auth/  Cities/  Couriers/  Customers/  CustomerStatistics/  Operators/
+├── Auth/  Calculator/  Cities/  Couriers/  Customers/  CustomerStatistics/  Operators/
 ├── GroupOrders/                        # the batch/pickup flow — largest slice
 ├── Orders/                             # last-mile + return flows
 ├── CompanyFinance/  CustomerSettlements/  Settlements/   # finance reads (derived live)
@@ -191,8 +191,9 @@ would otherwise match both and be counted twice. The SQL copy of the billable ru
 | `GroupOrders/Commands/Shared/GroupOrderOrderBuilder` | Builds `Order`s from DTOs and resolves the fee. `internal` — visible to the test projects via `InternalsVisibleTo`. |
 | `Orders/Queries/GetAllOrders/AdminOrderListMapper` | The one `Order` → `AdminOrderListDto` mapping (+ Georgian city/district lookup), shared by the Delivery/Packages list and `Couriers/Queries/CompletedByCourier` so both feed the same admin order view modal. Add a field here, not in a handler. |
 | `Couriers/Queries/CompletedByCourier` | Couriers → Completed tab reads. "Completed" on the delivery leg = delivered (`DeliveredAt`, no cancellation reason) **or** `OrderFinance.IsBillableFailedDelivery` (dated `CancelledAt ?? DeliveredAt` — the courier's attempt, not the admin's later return-to-sender stamp) **or** a standalone Return (`DeliveredToWarehouseAt`; a Send order's warehouse stamp is the pickup leg and does not count). Pickup leg = `GroupOrder.DeliveredToWarehouseAt`. |
+| `Couriers/Queries/Admin/AssignedDay` | Which orders sit on a courier's **assigned day** (`AssignedToCourierAt`, plus today's carry-over of still-open deliveries from earlier days). Shared by the Couriers-page list (`GET /api/couriers/assigned`) and its per-courier Excel export so the two always agree. |
 | `Couriers/CourierSalaryEligibility` | Cities where a courier gets a `DefaultSalary` (Tbilisi, Rustavi); elsewhere the admin prices each order. |
-| `Couriers/CourierDateBasis` (`CourierDateBasisPolicy`) | Which date a courier's **settlement** views group by. Regional couriers (`AssignedCity` not Tbilisi/Rustavi, i.e. `!CourierSalaryEligibility.IsEligible`) default to **Assigned** (`Order.AssignedToCourierAt` — the same day the Couriers page uses) so a batch stays together however long it takes to deliver; Tbilisi/Rustavi stay on **Delivered**. Resolved in one place (`DefaultFor` / `ForCourierAsync`) and read by: `GetCouriersWithDeliveriesOnDateQuery` (picker), `GetCourierOrderFinanceLinesQuery` (`Basis` override; admin only), `CourierSettlementProjection.BuildAsync` (day cards, no override), `GET /api/couriers` (`defaultDateBasis`). Assigned-date lists also contain open orders (undelivered/postponed) — their money is payable/counted only once `OrderFinance.IsCourierLegComplete`. A new settlement read that groups couriers' orders by day must go through this policy. The unused `GetSettlementPreviewQuery` is still delivery-dated. |
+| `Couriers/CourierDateBasis` (`CourierDateBasisPolicy`) | Which date a courier's **settlement** views group by. Regional couriers (`AssignedCity` not Tbilisi/Rustavi, i.e. `!CourierSalaryEligibility.IsEligible`) default to **Assigned** (`Order.AssignedToCourierAt` — the same day the Couriers page uses) so a batch stays together however long it takes to deliver; Tbilisi/Rustavi stay on **Delivered**. Resolved in one place (`DefaultFor` / `ForCourierAsync`) and read by: `GetCouriersWithDeliveriesOnDateQuery` (picker), `GetCourierOrderFinanceLinesQuery` (`Basis` override; admin only), `CourierSettlementProjection.BuildAsync` (day cards, no override), `GET /api/couriers` (`defaultDateBasis`, via `Couriers/Queries/Admin/GetCourierRosterQuery`). Assigned-date lists also contain open orders (undelivered/postponed) — their money is payable/counted only once `OrderFinance.IsCourierLegComplete`. A new settlement read that groups couriers' orders by day must go through this policy. The unused `GetSettlementPreviewQuery` is still delivery-dated. |
 | `Orders/Commands/ChangeOrderPayer/OrderPayerChangePolicy` | Admin History → Edit on a **delivered Send** order: flips `WhoPaysForCompanyService` and cascades every dependent field (fee, cash collected, service-paid / netting flag, COD payout, tenant payment, courier remittance + salary-kept flag), trimming `PaymentReceipt`s via `Settlements/PaymentReceiptTrimmer`. `ChangeOrderPayerCommand` and `GetOrderPayerChangePreviewQuery` both call `Apply`, so the preview can never differ from the save. Fee suggestion = `OrderServiceFeeResolver`, which reuses `GroupOrderOrderBuilder.ResolveZones/ResolveCalculatedFee`. Change finance rules in `OrderFinance`, not here. |
 | `Orders/Commands/SetCourierSalaryBulk` | Couriers page → Edit salary (Admin only): one salary on many orders, all-or-nothing (refused if it exceeds any order's service fee). One load, `CourierSalaryReceiptReconciler.CapPaidAmount` per order in memory, one `PaymentReceiptTrimmer.TrimManyAsync`, one save. The single-order `SetCourierSalaryCommand` keeps its own path. |
 | `Orders/Commands/CustomerOrderActionPolicy` | What a customer may still edit/cancel themselves. |
@@ -225,7 +226,8 @@ exception on top of the capital/city/district tiers — e.g. "this customer gets
 for Rustavi specifically" without changing their city-tier rate for every other non-capital
 city. Managed by admins via `PUT/DELETE /api/customers/{id}/special-prices`
 (`Customers/SpecialPrices/{Commands,Queries}`). Both `GroupOrderOrderBuilder` and
-`CalculatorController` (the pre-submit price preview) check it, and — because
+`Calculator/Queries/CalculatePrice/CalculatePriceQueryHandler` (the pre-submit price preview behind
+`GET /api/calculator`) check it, and — because
 `GroupOrderOrderBuilder`'s resolved price is threaded straight through as the DTO's
 `CompanyServicePrice` explicit-override field — so does every client-side reimplementation of
 this waterfall (see [client/CLAUDE.md §7](client/CLAUDE.md#7-known-duplication--check-both)).
@@ -234,7 +236,7 @@ this waterfall (see [client/CLAUDE.md §7](client/CLAUDE.md#7-known-duplication-
 cities (e.g. three "Central"s), and orders store only the name strings. `GroupOrderOrderBuilder.FindDistrict`
 prefers the row in the order's city (`RecipientCity` / `ReturnPickupCity` / the batch's `PickUpCity`);
 a name-only match is just the fallback. A name-only lookup priced a Tbilisi order as a village.
-`CalculatorController` is unaffected — it takes district IDs.
+`CalculatePriceQueryHandler` is unaffected — it takes district IDs.
 
 ### "Terminal status" sets — the un-DRYest thing in the codebase
 
