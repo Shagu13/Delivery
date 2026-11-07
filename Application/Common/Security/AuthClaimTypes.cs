@@ -12,4 +12,13 @@ public static class AuthClaimTypes
     /// longer matches the database was issued before the reset and must be rejected.
     /// </summary>
     public const string SecurityStamp = "sstamp";
+
+    /// <summary>
+    /// Version of the session rules the token was issued under. Operator tokens must carry
+    /// <see cref="CurrentSessionVersion"/>; bumping the constant signs every Operator out on
+    /// the next deploy (tokens issued earlier carry an older value, or none).
+    /// </summary>
+    public const string SessionVersion = "sver";
+
+    public const string CurrentSessionVersion = "1";
 }

@@ -34,6 +34,7 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
             new("firstName",                  user.FirstName),
             new("lastName",                   user.LastName),
             new(AuthClaimTypes.SecurityStamp, user.SecurityStamp ?? ""),
+            new(AuthClaimTypes.SessionVersion, AuthClaimTypes.CurrentSessionVersion),
         };
 
         if (courierId.HasValue)

@@ -69,13 +69,19 @@ try
     // ── Admin forced sign-out ──────────────────────────────────────────────────
     // Chained onto the JWT events configured in Infrastructure (PostConfigure runs after
     // them, so OnMessageReceived is kept). Rejects Admin tokens issued before a password
-    // reset — see AdminSecurityStampValidator.
+    // reset (AdminSecurityStampValidator) and Operator tokens of a deleted account or an
+    // older session version (OperatorSessionValidator).
     builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
         Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
         options =>
         {
             options.Events ??= new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents();
-            options.Events.OnTokenValidated = API.Auth.AdminSecurityStampValidator.ValidateAsync;
+            options.Events.OnTokenValidated = async context =>
+            {
+                await API.Auth.AdminSecurityStampValidator.ValidateAsync(context);
+                if (context.Result?.Failure is null)
+                    await API.Auth.OperatorSessionValidator.ValidateAsync(context);
+            };
         });
 
     // ── Authorization policies ─────────────────────────────────────────────────

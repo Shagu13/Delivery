@@ -72,7 +72,11 @@ events) compares the token's `sstamp` claim (`AuthClaimTypes.SecurityStamp`) wit
 current Identity `SecurityStamp` — **for Admin-role tokens only**, one PK lookup per request. A
 password reset rotates the stamp, so the reset Admin's old tokens get 401 and the client signs
 them out. An Admin token with no `sstamp` claim (issued before this check) is rejected once.
-Other roles are deliberately not checked: Identity also rotates the stamp on self-service
+**Operators** get a lighter check (`OperatorSessionValidator`): the account must still exist
+(deleting an operator ends their open sessions) and the token must carry
+`AuthClaimTypes.CurrentSessionVersion` in its `sver` claim — bump that constant to sign every
+Operator out on the next deploy. Operators are not stamp-checked, so renames and password edits
+by an Admin don't end their session. Other roles are deliberately not checked: Identity also rotates the stamp on self-service
 password change, rename and email change, which must not log customers/couriers out.
 
 ### Operator vs Admin

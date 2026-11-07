@@ -49,7 +49,8 @@ here and is the application default. Validation: issuer, audience, lifetime, sig
 **JWT claims** issued by `JwtTokenGenerator`: the standard subject/name/role plus
 `courierId`, `customerId`, and `tenantId` where applicable, plus `sstamp` (the user's Identity
 `SecurityStamp`, `AuthClaimTypes.SecurityStamp`) which `API/Auth/AdminSecurityStampValidator`
-checks on Admin tokens to force a sign-out after a password reset. `BaseController` reads them.
+checks on Admin tokens to force a sign-out after a password reset, and `sver` (session version)
+which `OperatorSessionValidator` requires on Operator tokens. `BaseController` reads them.
 
 > **The one sanctioned `DateTime.UtcNow`.** `JwtTokenGenerator.cs` sets the token `nbf`/`exp`
 > from `DateTime.UtcNow` (not `CustomTime.Now`). This is correct — JWT timestamps are UTC by
