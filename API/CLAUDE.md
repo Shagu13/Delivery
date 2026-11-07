@@ -26,7 +26,8 @@
 API/
 ├── Program.cs                     # composition root: Serilog, CORS, layers, auth, SignalR, Swagger, pipeline
 ├── Auth/ApiKeyAuthenticationHandler.cs
-├── Controllers/                   # 27 controllers, all : BaseController
+├── Auth/AdminSecurityStampValidator.cs   # JWT OnTokenValidated hook: rejects Admin tokens issued before a password reset
+├── Controllers/                   # 28 controllers, all : BaseController
 ├── Models/                        # request/response shapes, grouped by area
 ├── Middleware/ExceptionHandlingMiddleware.cs
 ├── Realtime/
@@ -61,8 +62,18 @@ API/
 **Roles:** `Admin`, `Operator`, `Courier`, `Customer`, `TenantAdmin`.
 
 **`SystemAdmin` policy** = `Admin` role **and** `ClaimTypes.Name == "systemadmin"`. Guards
-Tenants (create/edit), Partner API keys, Partner webhooks, and Tenant Settlements. Ordinary
+Tenants (create/edit), Partner API keys, Partner webhooks, Tenant Settlements, and
+`AdminAccountsController` (list other Admins, force-reset their password). Ordinary
 admins can still `GET /api/tenants` — that read powers the customer-assignment dropdown.
+
+**Forced sign-out of a reset Admin.** JWTs are stateless, so `AdminSecurityStampValidator`
+(wired in `Program.cs` via `PostConfigure<JwtBearerOptions>`, chained after the Infrastructure
+events) compares the token's `sstamp` claim (`AuthClaimTypes.SecurityStamp`) with the user's
+current Identity `SecurityStamp` — **for Admin-role tokens only**, one PK lookup per request. A
+password reset rotates the stamp, so the reset Admin's old tokens get 401 and the client signs
+them out. An Admin token with no `sstamp` claim (issued before this check) is rejected once.
+Other roles are deliberately not checked: Identity also rotates the stamp on self-service
+password change, rename and email change, which must not log customers/couriers out.
 
 ### Operator vs Admin
 
@@ -77,7 +88,8 @@ The **only** thing hidden from an operator is **company revenue/margin**, and it
 `GroupOrdersController` / `CouriersController`). Keep both sides in sync.
 
 **Admin-only** (operators cannot open): company Finance overview, Operators management,
-Partner API, Weight Tiers, Tenants.
+Partner API, Weight Tiers, Tenants. **System-admin-only**: Tenants (write), Partner API,
+Tenant Settlements, Admin Accounts.
 
 **TenantAdmin** sees only its own tenant's data, scoped by the `tenantId` JWT claim —
 `TenantOrdersController`, `TenantFinanceController`, `TenantBrandingController`, plus

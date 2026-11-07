@@ -53,7 +53,7 @@ client/src/
 ├── pages/
 │   ├── Home/ Faq/ Contact/ Login/ Register/ ForgotPassword/ ResetPassword/   # public
 │   ├── CreateGroupOrder/  Cart/                                              # customer order flow
-│   ├── Admin/            # ~41 files — 21 sidebar views. AdminDashboard.tsx is ~3,600 lines
+│   ├── Admin/            # ~44 files — 22 sidebar views. AdminDashboard.tsx is ~3,600 lines
 │   │                     #   (day selectors, batch grouping, courier bar) — a candidate for the
 │   │                     #   same page-local split AdminPackages/ got (§3.2); don't grow it further.
 │   │   ├── CompletedCouriers/  # Couriers → "Completed Orders" tab (3rd toggle beside Delivery/Pickup):
@@ -207,7 +207,10 @@ and a single-day **or** date-range picker (max 93 days — mirrors `CompletedRan
   `App.tsx`, the idb-keyval storage).
 - **Auth:** token from `useAuth()`, passed as `Authorization: Bearer <token>` by each `api/*.ts`
   function. `AuthProvider` stores the user in `localStorage` under `delivery_auth` and, on
-  sign-out, clears both the in-memory and persisted caches (shared machines).
+  sign-out, clears both the in-memory and persisted caches (shared machines). `AuthProvider` also
+  wraps `window.fetch`: a `401` to an `/api/` call that carried the *current* session's bearer token
+  signs the user out (server-side revocation, e.g. an Admin whose password was reset). Don't add
+  per-call 401 handling.
 - **Realtime:** subscribe with `useOrdersChangedSignal(token, 'adminOrdersChanged' |
   'courierOrdersChanged', refetch)`. The ping carries no payload — refetch through the normal
   query. `useAdminPendingCounts` drives the nav badges.
@@ -225,9 +228,9 @@ and a single-day **or** date-range picker (max 93 days — mirrors `CompletedRan
 | `/customer/*` | `Customer` | |
 | `/tenant/*` | `TenantAdmin` | minimal dashboard; the co-admin's real workspace is `/admin` |
 
-`AdminDashboard` gates its sidebar by role: `ADMIN_VIEWS` (21) / `OPERATOR_VIEWS` (12) /
+`AdminDashboard` gates its sidebar by role: `ADMIN_VIEWS` (22) / `OPERATOR_VIEWS` (12) /
 `TENANT_VIEWS` (6), and `systemadmin` additionally unlocks `tenants`, `partners`,
-`tenantSettlements`. **Guarding in the UI is not enough** — the backend attribute is the real
+`tenantSettlements`, `adminAccounts` (reset another Admin's password). **Guarding in the UI is not enough** — the backend attribute is the real
 boundary; keep them in step.
 
 ### Admin page naming is offset from its routes

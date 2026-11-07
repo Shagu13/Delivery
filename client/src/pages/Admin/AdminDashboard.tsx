@@ -58,6 +58,7 @@ const AdminOrderSearchPage       = lazy(() => import('./AdminOrderSearchPage'));
 const AdminRecipientsPage        = lazy(() => import('./AdminRecipientsPage'));
 const AdminDeletePackagePage     = lazy(() => import('./AdminDeletePackagePage'));
 const AdminOperatorsPage         = lazy(() => import('./AdminOperatorsPage'));
+const AdminAccountsPage          = lazy(() => import('./AdminAccountsPage'));
 // Named exports, not default — lazy() needs a module whose default is the component.
 const TenantFinanceView    = lazy(() => import('../Tenant/TenantFinanceView').then(m => ({ default: m.TenantFinanceView })));
 const TenantHomepageEditor = lazy(() => import('../Tenant/TenantHomepageEditor').then(m => ({ default: m.TenantHomepageEditor })));
@@ -132,9 +133,9 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'homepage' | 'orderSearch' | 'recipients' | 'deletePackage' | 'scan';
+type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'adminAccounts' | 'homepage' | 'orderSearch' | 'recipients' | 'deletePackage' | 'scan';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'homepage', 'orderSearch', 'recipients', 'deletePackage', 'scan'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'adminAccounts', 'homepage', 'orderSearch', 'recipients', 'deletePackage', 'scan'];
 
 // Views an Operator (partial-admin role) may open. Operators now have full admin-level
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
@@ -184,8 +185,8 @@ export function AdminDashboard() {
     isTenant   && !TENANT_VIEWS.includes(requestedView)   ? 'orders'
     : isOperator && !OPERATOR_VIEWS.includes(requestedView) ? 'overview'
     // Block a non-systemadmin Admin from landing on the Tenants/Partner API/Tenant
-    // Settlements pages via the URL.
-    : (requestedView === 'tenants' || requestedView === 'partners' || requestedView === 'tenantSettlements') && !isSystemAdmin ? 'overview'
+    // Settlements/Admin Accounts pages via the URL.
+    : (requestedView === 'tenants' || requestedView === 'partners' || requestedView === 'tenantSettlements' || requestedView === 'adminAccounts') && !isSystemAdmin ? 'overview'
     // Global Order Search is Admin/Operator (tenants are clamped out).
     : requestedView === 'orderSearch' && isTenant ? 'overview'
     : requestedView;
@@ -454,6 +455,17 @@ export function AdminDashboard() {
             </svg>
             <span className="sidebar__link-text">Tenant Settlements</span>
           </button>
+          <button
+            className={`sidebar__link ${activeView === 'adminAccounts' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('adminAccounts')}
+            title={t.sidebarAdminAccounts}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            <span className="sidebar__link-text">{t.sidebarAdminAccounts}</span>
+          </button>
           </>)}
           </>)}
           {/* History — Admin + Operator. */}
@@ -620,6 +632,7 @@ export function AdminDashboard() {
             {activeView === 'partners' && 'Partner API'}
             {activeView === 'tenants' && 'Tenants'}
             {activeView === 'tenantSettlements' && 'Tenant Settlements'}
+            {activeView === 'adminAccounts' && t.topbarAdminAccounts}
             {activeView === 'history' && t.topbarHistory}
             {activeView === 'returnExchange' && t.navReturnExchange}
             {activeView === 'finance' && t.navFinance}
@@ -676,6 +689,7 @@ export function AdminDashboard() {
           {activeView === 'partners' && isSystemAdmin && token && <AdminPartnersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && isSystemAdmin && token && <AdminTenantSettlementsPage token={token} />}
+          {activeView === 'adminAccounts' && isSystemAdmin && token && <AdminAccountsPage token={token} />}
           {activeView === 'history' && <AdminHistoryPage key={`hist-${qParam}`} token={token ?? ''} canSeeRevenue={!isOperator} canEditPayer={!isOperator && !isTenant} initialSearch={qParam} initialParty={partyParam} />}
           {activeView === 'orderSearch' && !isTenant && token && (
             <AdminOrderSearchPage token={token} onGoTo={goToOrder} />

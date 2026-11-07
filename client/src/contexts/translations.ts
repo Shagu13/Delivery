@@ -1351,6 +1351,19 @@ const en = {
   cbaEmpty:                  'This customer has no saved bank accounts yet.',
   cbaLoadFail:               'Failed to load bank accounts.',
 
+  // ── Admin Accounts (system admin only: reset another Admin's password) ────
+  sidebarAdminAccounts:      'Admin Accounts',
+  topbarAdminAccounts:       'Admin Accounts',
+  aaaDesc:                   'Reset the password of another administrator. They are signed out immediately and must log in with the new password.',
+  aaaEmpty:                  'There are no other administrator accounts.',
+  aaaLoadFail:               'Could not load administrator accounts.',
+  aaaResetPassword:          'Reset password',
+  aaaResetTitle:             'Reset administrator password',
+  aaaResetFor:               (name: string, username: string) => `Set a new password for ${name} (@${username}). No current password is needed. They will be signed out everywhere and must log in with the new password.`,
+  aaaResetSave:              'Reset password',
+  aaaResetSuccess:           (name: string) => `Password reset for ${name}. They have been signed out.`,
+  aaaResetFail:              'Failed to reset the password.',
+
   // ── Admin Bank Accounts page (the company's own accounts) ────────────────
   sidebarBankAccounts:       'Bank Accounts',
   topbarBankAccounts:        'Bank Accounts',
@@ -3773,6 +3786,19 @@ const ka: typeof en = {
   cbaTitle:                  (name: string) => `საბანკო ანგარიშები — ${name}`,
   cbaEmpty:                  'ამ მომხმარებელს ჯერ არ აქვს შენახული საბანკო ანგარიში.',
   cbaLoadFail:               'საბანკო ანგარიშების ჩატვირთვა ვერ მოხერხდა.',
+
+  // ── Admin Accounts (system admin only: reset another Admin's password) ────
+  sidebarAdminAccounts:      'ადმინისტრატორები',
+  topbarAdminAccounts:       'ადმინისტრატორები',
+  aaaDesc:                   'შეცვალეთ სხვა ადმინისტრატორის პაროლი. ის დაუყოვნებლივ გამოვა სისტემიდან და ახალი პაროლით მოუწევს შესვლა.',
+  aaaEmpty:                  'სხვა ადმინისტრატორის ანგარიშები არ არის.',
+  aaaLoadFail:               'ადმინისტრატორების ჩატვირთვა ვერ მოხერხდა.',
+  aaaResetPassword:          'პაროლის შეცვლა',
+  aaaResetTitle:             'ადმინისტრატორის პაროლის შეცვლა',
+  aaaResetFor:               (name: string, username: string) => `დააყენეთ ახალი პაროლი მომხმარებლისთვის ${name} (@${username}). მიმდინარე პაროლი საჭირო არ არის. ის ყველა მოწყობილობიდან გამოვა სისტემიდან და ახალი პაროლით მოუწევს შესვლა.`,
+  aaaResetSave:              'პაროლის შეცვლა',
+  aaaResetSuccess:           (name: string) => `პაროლი შეიცვალა: ${name}. სესიები დასრულდა.`,
+  aaaResetFail:              'პაროლის შეცვლა ვერ მოხერხდა.',
 
   // ── Admin Bank Accounts page (the company's own accounts) ────────────────
   sidebarBankAccounts:       'საბანკო ანგარიშები',

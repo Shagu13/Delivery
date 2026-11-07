@@ -81,7 +81,7 @@ email-confirmation tokens only — JWT lifetime is configured separately in `Inf
 - `admin` — default full admin. Phone comes from config key `AdminSeed:PhoneNumber` so it can
   change without a deploy; empty just means admin SMS alerts don't fire.
 - `systemadmin` — a second Admin-role account that additionally owns Tenants / Partner API /
-  Tenant Settlements via the `SystemAdmin` policy. Its hash is set directly rather than through
+  Tenant Settlements / Admin Accounts (password reset) via the `SystemAdmin` policy. Its hash is set directly rather than through
   `CreateAsync(user, password)` so the requested credential is honoured verbatim.
 - `livo` — the demo `TenantAdmin` co-admin plus its `Tenant` (`livo.ge`). Idempotency keys off
   the **user**, not the host, so an admin can rename the tenant's host without the seed

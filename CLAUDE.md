@@ -196,7 +196,7 @@ Both share one `OrderStatus` enum.
 
 **Roles:** `Admin`, `Operator`, `Courier`, `Customer`, `TenantAdmin`. Plus a `SystemAdmin`
 authorization policy = Admin role *and* username `systemadmin` (owns Tenants, Partner API,
-Tenant Settlements). See [API/CLAUDE.md](API/CLAUDE.md) for the exact matrix.
+Tenant Settlements, and resetting other Admins' passwords). See [API/CLAUDE.md](API/CLAUDE.md) for the exact matrix.
 
 **Time:** every server timestamp comes from `Domain.CustomTime.Now` / `.Today`
 (Georgian Standard Time, UTC+4, no DST) — never `DateTime.Now`/`UtcNow`, the host runs in UTC.

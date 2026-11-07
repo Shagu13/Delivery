@@ -45,6 +45,7 @@ Application/
 │
 ├── Finance/OrderFinance.cs             # ★ single source of truth for per-order money
 │
+├── Admins/                             # system-admin-only: list other Admin accounts, force-reset a password
 ├── Auth/  Calculator/  Cities/  Couriers/  Customers/  CustomerStatistics/  Operators/
 ├── GroupOrders/                        # the batch/pickup flow — largest slice
 ├── Orders/                             # last-mile + return flows

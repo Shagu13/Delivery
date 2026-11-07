@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Common.Security;
 using Domain;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -32,6 +33,7 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
             new(ClaimTypes.Role,              role),
             new("firstName",                  user.FirstName),
             new("lastName",                   user.LastName),
+            new(AuthClaimTypes.SecurityStamp, user.SecurityStamp ?? ""),
         };
 
         if (courierId.HasValue)

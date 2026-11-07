@@ -66,6 +66,18 @@ try
         .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, API.Auth.ApiKeyAuthenticationHandler>(
             API.Auth.ApiKeyAuthenticationHandler.SchemeName, null);
 
+    // ── Admin forced sign-out ──────────────────────────────────────────────────
+    // Chained onto the JWT events configured in Infrastructure (PostConfigure runs after
+    // them, so OnMessageReceived is kept). Rejects Admin tokens issued before a password
+    // reset — see AdminSecurityStampValidator.
+    builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
+        Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
+        options =>
+        {
+            options.Events ??= new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents();
+            options.Events.OnTokenValidated = API.Auth.AdminSecurityStampValidator.ValidateAsync;
+        });
+
     // ── Authorization policies ─────────────────────────────────────────────────
     builder.Services.AddAuthorization(options =>
     {
