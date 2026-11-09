@@ -514,6 +514,7 @@ const en = {
   aopPageInfo:         (page: number, total: number) => `Page ${page} of ${total}`,
   // ── Delivery (Packages) page: bulk bar, modals, table actions, toasts ──
   aopAllDays:          'All days',
+  aopLast7Days:        'Last 7 days',
   aopShowAll:          'All',
   aopDateRangeFrom:    'From date',
   aopDateRangeTo:      'To date (optional — range end, inclusive)',
@@ -2951,6 +2952,7 @@ const ka: typeof en = {
   aopPageInfo:         (page: number, total: number) => `გვ. ${page} / ${total}`,
   // ── Delivery (Packages) page: bulk bar, modals, table actions, toasts ──
   aopAllDays:          'ყველა დღე',
+  aopLast7Days:        'ბოლო 7 დღე',
   aopShowAll:          'ყველა',
   aopDateRangeFrom:    'საწყისი თარიღი',
   aopDateRangeTo:      'საბოლოო თარიღი (არასავალდებულო — ჩათვლით)',

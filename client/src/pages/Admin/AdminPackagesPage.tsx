@@ -159,12 +159,16 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
   };
 
   // ── Data loading ────────────────────────────────────────────────────────────
-  // Default view (day navigator untouched) is all active orders — no date bound, scoped
-  // to non-terminal statuses via excludeCompleted below (completed orders live on the
-  // History page instead). An explicit day/range pick still browses that window.
-  const { date: pkgDate, dateTo: pkgDateTo } = dateTouched
-    ? resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd })
-    : {};
+  // Default view (day navigator untouched) is active orders from the last 7 days — scoped to
+  // non-terminal statuses via excludeCompleted below (completed orders live on History). An
+  // unbounded default made the server scan every batch ever created on each load. A search
+  // term or any real filter lifts the cap (so an older still-open package is always findable);
+  // an explicit day/range pick, or Show All, browses exactly that window.
+  const { date: pkgDate, dateTo: pkgDateTo } = resolveDateWindow({
+    dateTouched, search: debouncedSearch, selectedDate, rangeEnd,
+    otherFiltersActive: filterCities.length > 0 || filterDistricts.length > 0
+      || !!filterStatus || !!filterCourier || filterUnpriced,
+  });
 
   const pkgFilters = {
     search:    debouncedSearch || undefined,
@@ -551,6 +555,7 @@ export default function AdminPackagesPage({ canManage = true, canAssignCourier =
           to={rangeEnd}
           onChange={(f, to) => { setDateTouched(true); setSelectedDate(f); setRangeEnd(to); }}
           classPrefix="pickup-daynav"
+          rollingDefault={!dateTouched && !!pkgDate}
         />
         {(canManage || canGroup) && (
           <div className="pickup-modes">

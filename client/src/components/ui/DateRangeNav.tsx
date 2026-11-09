@@ -10,6 +10,9 @@ interface DateRangeNavProps {
   /** Existing per-page CSS class prefix so the control inherits each page's styling
    *  (e.g. 'aop-daynav' on the Delivery page, 'pickup-daynav' on the Pick-Up pages). */
   classPrefix: string;
+  /** The page is showing its untouched rolling last-7-days default (see utils/dateWindow.ts)
+   *  rather than all days: label it as such and offer "All" alongside "Today". */
+  rollingDefault?: boolean;
 }
 
 /**
@@ -17,7 +20,7 @@ interface DateRangeNavProps {
  * an inclusive custom range (pick a "to" date). Used by the Delivery and Pick-Up pages.
  * Range is inclusive of both ends — 24→26 means the 24th, 25th and 26th.
  */
-export function DateRangeNav({ from, to, onChange, classPrefix: p }: DateRangeNavProps) {
+export function DateRangeNav({ from, to, onChange, classPrefix: p, rollingDefault = false }: DateRangeNavProps) {
   const { t } = useLanguage();
   const todayKey = toDateKey(georgianToday());
   const fromKey  = from ? toDateKey(from) : '';
@@ -74,7 +77,7 @@ export function DateRangeNav({ from, to, onChange, classPrefix: p }: DateRangeNa
           }}
         />
         {!from
-          ? <span className={`${p}__today`}>{t.aopAllDays}</span>
+          ? <span className={`${p}__today`}>{rollingDefault ? t.aopLast7Days : t.aopAllDays}</span>
           : isSingleToday && <span className={`${p}__today`}>{t.pickupToday}</span>}
       </div>
 
@@ -85,9 +88,10 @@ export function DateRangeNav({ from, to, onChange, classPrefix: p }: DateRangeNa
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
       </button>
 
-      {from
-        ? <button className={`${p}__jump`} onClick={() => onChange(null, null)}>{t.aopShowAll}</button>
-        : <button className={`${p}__jump`} onClick={() => onChange(georgianToday(), null)}>{t.pickupToday}</button>}
+      {(from || rollingDefault) &&
+        <button className={`${p}__jump`} onClick={() => onChange(null, null)}>{t.aopShowAll}</button>}
+      {!from &&
+        <button className={`${p}__jump`} onClick={() => onChange(georgianToday(), null)}>{t.pickupToday}</button>}
     </div>
   );
 }

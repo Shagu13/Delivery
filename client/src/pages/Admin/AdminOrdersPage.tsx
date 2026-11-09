@@ -459,12 +459,15 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   });
   const couriers = couriersQuery.data ?? [];
 
-  // Default view (day navigator untouched) is all active orders — no date bound, scoped
-  // to non-terminal statuses via activeOnly below (completed orders live on the History
-  // page instead). An explicit day/range pick still browses that window.
-  const { date: pkgDate, dateTo: pkgDateTo } = dateTouched
-    ? resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd })
-    : {};
+  // Default view (day navigator untouched) is active orders from the last 7 days — scoped to
+  // non-terminal statuses via activeOnly below (completed orders live on History). A search
+  // term or any real filter lifts the cap (so an older still-open package is always findable);
+  // an explicit day/range pick, or Show All, browses exactly that window. Select-all and
+  // Export below reuse pkgDate/pkgDateTo so they always match the visible list.
+  const { date: pkgDate, dateTo: pkgDateTo } = resolveDateWindow({
+    dateTouched, search: debouncedSearch, selectedDate, rangeEnd,
+    otherFiltersActive: !!filterCity || !!filterDistrict || !!filterCourier || filterUnpriced,
+  });
 
   const packagesFilters = {
     city:      filterCity     || undefined,
@@ -663,9 +666,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     }
     setSelectAllBusy(true);
     try {
-      const { date, dateTo } = dateTouched
-        ? resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd })
-        : {};
+      const date = pkgDate, dateTo = pkgDateTo;
       const full = await fetchAllOrders(token, {
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
@@ -704,9 +705,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
   const handleExport = async () => {
     setExporting(true);
     try {
-      const { date, dateTo } = dateTouched
-        ? resolveDateWindow({ dateTouched, search: debouncedSearch, selectedDate, rangeEnd })
-        : {};
+      const date = pkgDate, dateTo = pkgDateTo;
       await exportOrdersExcel(token, {
         city:      filterCity || undefined,
         district:  filterDistrict || undefined,
@@ -1222,6 +1221,7 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
         to={rangeEnd}
         onChange={(f, to) => { setDateTouched(true); setSelectedDate(f); setRangeEnd(to); }}
         classPrefix="aop-daynav"
+        rollingDefault={!dateTouched && !!pkgDate}
       />
 
       {/* Pending Assign / Assigned tabs + column toggles */}

@@ -1835,6 +1835,7 @@ function AdminOrders({ initialStatus = '', canManage = true, canAssignCourier = 
           to={rangeEnd}
           onChange={(f, to) => { setDateTouched(true); setSelectedDate(f); setRangeEnd(to); }}
           classPrefix="pickup-daynav"
+          rollingDefault={!dateTouched && !!windowDate}
         />
         {(canManage || canGroup) && (
         <div className="pickup-modes">
