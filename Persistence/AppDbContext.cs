@@ -305,6 +305,16 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.HasIndex(o => o.CreatedAt)
              .HasDatabaseName("IX_Orders_CreatedAt_Active")
              .HasFilter("[DateDeleted] IS NULL");
+            // Delivery-event dates: the finance overview's period sums, the courier Completed tab and
+            // delivery-dated settlement reads filter on these with plain range predicates (an OR of
+            // the two, which SQL Server can serve with an index union). COALESCE(...) filters elsewhere
+            // are not sargable and won't use them.
+            e.HasIndex(o => o.DeliveredAt)
+             .HasDatabaseName("IX_Orders_DeliveredAt_Active")
+             .HasFilter("[DateDeleted] IS NULL");
+            e.HasIndex(o => o.DeliveredToWarehouseAt)
+             .HasDatabaseName("IX_Orders_DeliveredToWarehouseAt_Active")
+             .HasFilter("[DateDeleted] IS NULL");
             e.HasIndex(o => o.OrderType);
             e.HasIndex(o => new { o.RecipientCity, o.RecipientDistrict });
             e.HasIndex(o => o.GroupOrderId);

@@ -80,6 +80,48 @@ internal static class CompanyFinanceOrderSets
     }
 
     /// <summary>
+    /// Loads only the columns the cumulative cash-position figures need, as untracked slim
+    /// <see cref="Order"/> instances, so <c>OrderFinance</c> stays the single source of truth for the
+    /// formulas while the database ships ~15 narrow columns per row instead of the whole wide row
+    /// (addresses, notes, …). The overview reads every order delivered up to its end date, so row
+    /// width is what costs.
+    /// <para><b>Keep in step with <c>OrderFinance</c>:</b> the overview calls <c>CompanyNetCash</c>,
+    /// <c>SenderServiceShare</c> and <c>OutstandingCourierRemittance</c> (and through them
+    /// <c>ServiceInflow</c>, <c>ExpectedCourierCash</c>, <c>IsBillableFailedDelivery</c>,
+    /// <c>RecipientFeePortion</c>) plus raw sums of the settlement columns. If any of those starts
+    /// reading another <see cref="Order"/> field, add it here, or it silently reads its default.</para>
+    /// </summary>
+    public static IQueryable<Order> CashPositionFields(this IQueryable<Order> orders) =>
+        orders.Select(o => new Order
+        {
+            Id                                       = o.Id,
+            // Required members — not read by any finance formula.
+            TrackingNumber                           = string.Empty,
+            RecipientName                            = string.Empty,
+            RecipientPhone                           = string.Empty,
+            RecipientCity                            = string.Empty,
+            RecipientDistrict                        = string.Empty,
+            RecipientAddress                         = string.Empty,
+
+            OrderType                                = o.OrderType,
+            Status                                   = o.Status,
+            CancellationReason                       = o.CancellationReason,
+            DeliveredAt                              = o.DeliveredAt,
+            DeliveredToWarehouseAt                   = o.DeliveredToWarehouseAt,
+            WhoPaysForCompanyService                 = o.WhoPaysForCompanyService,
+            CompanyServicePrice                      = o.CompanyServicePrice,
+            CustomerSurcharge                        = o.CustomerSurcharge,
+            AmountToCollectForPackage                = o.AmountToCollectForPackage,
+            CourierSalary                            = o.CourierSalary,
+            CourierSalaryPaidAmount                  = o.CourierSalaryPaidAmount,
+            CodTransferedToCompanyByCourier          = o.CodTransferedToCompanyByCourier,
+            CodPaidToCustomerAmount                  = o.CodPaidToCustomerAmount,
+            ServicePaidByCustomerAmount              = o.ServicePaidByCustomerAmount,
+            IsCourierSalaryIncludedSpecialCase       = o.IsCourierSalaryIncludedSpecialCase,
+            IsCompanyServicePriceIncludedSpecialCase = o.IsCompanyServicePriceIncludedSpecialCase,
+        });
+
+    /// <summary>
     /// Sender-paid service fees collected in ADVANCE on accepted-but-undelivered orders — cash
     /// already in hand, so it counts toward the cash position (not the profit block).
     /// </summary>

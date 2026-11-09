@@ -66,7 +66,7 @@ public sealed class GetMyOrderFinanceLinesQueryHandler
             query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt);
         }
 
-        var orders = await query.ToListAsync(ct);
+        var orders = await query.LineFields().ToListAsync(ct);
         return orders.Select(OrderFinanceQueries.ToDto).ToList();
     }
 }
@@ -110,7 +110,7 @@ public sealed class GetCustomerOrderFinanceLinesQueryHandler
             : OrderFinanceQueries.FilterByEffectiveDate(query, request.Date, request.Monthly);
         query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt);
 
-        var orders = await query.ToListAsync(ct);
+        var orders = await query.LineFields().ToListAsync(ct);
         return orders.Select(OrderFinanceQueries.ToDto).ToList();
     }
 }
@@ -142,7 +142,7 @@ public sealed class GetAllCustomersOrderFinanceLinesQueryHandler
             _context, request.Date, request.Monthly, request.From, request.To);
         query = query.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CreatedAt);
 
-        var orders = await query.ToListAsync(ct);
+        var orders = await query.LineFields().ToListAsync(ct);
         return orders.Select(OrderFinanceQueries.ToDto).ToList();
     }
 }
@@ -176,6 +176,7 @@ public sealed class GetCourierOrderFinanceLinesQueryHandler
             var candidates = await OrderFinanceQueries.CourierUnsettledCandidates(
                     OrderFinanceQueries.Base(_context).Where(o => o.CourierId == request.CourierId))
                 .OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt)
+                .LineFields()
                 .ToListAsync(ct);
             return candidates.Where(OrderFinance.IsCourierUnsettled).Select(OrderFinanceQueries.ToDto).ToList();
         }
@@ -191,7 +192,7 @@ public sealed class GetCourierOrderFinanceLinesQueryHandler
             : OrderFinanceQueries.FilterByDeliveredAt(query, request.Date, request.IncludePostponed)
                                  .OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt);
 
-        var orders = await query.ToListAsync(ct);
+        var orders = await query.LineFields().ToListAsync(ct);
         return orders.Select(OrderFinanceQueries.ToDto).ToList();
     }
 }
@@ -477,6 +478,93 @@ internal static class OrderFinanceQueries
         }
         return query;
     }
+
+    /// <summary>
+    /// Loads only what <see cref="ToDto"/> (and the <c>OrderFinance</c> members it calls) read, as
+    /// untracked slim entities: ~45 columns instead of the whole Order + GroupOrder + two Customer rows
+    /// (~130). Apply it last, just before <c>ToListAsync</c> — it replaces <see cref="Base"/>'s Includes.
+    /// <para><b>Keep in step with <see cref="ToDto"/> and <c>OrderFinance</c>:</b> a field either of them
+    /// starts reading must be added here, or it silently reads its default.
+    /// <c>OrderFinanceLinesProjectionTests</c> guards this.</para>
+    /// </summary>
+    public static IQueryable<Order> LineFields(this IQueryable<Order> query) =>
+        query.Select(o => new Order
+        {
+            Id                                       = o.Id,
+            GroupOrderId                             = o.GroupOrderId,
+            CustomerId                               = o.CustomerId,
+            TrackingNumber                           = o.TrackingNumber,
+            RecipientName                            = o.RecipientName,
+            RecipientPhone                           = o.RecipientPhone,
+            RecipientCity                            = o.RecipientCity,
+            RecipientDistrict                        = o.RecipientDistrict,
+            RecipientAddress                         = o.RecipientAddress,
+            Description                              = o.Description,
+            OrderType                                = o.OrderType,
+            Status                                   = o.Status,
+            ProductPaymentStatus                     = o.ProductPaymentStatus,
+            CreatedAt                                = o.CreatedAt,
+            DeliveredAt                              = o.DeliveredAt,
+            DeliveredToWarehouseAt                   = o.DeliveredToWarehouseAt,
+            CancelledAt                              = o.CancelledAt,
+            CancellationReason                       = o.CancellationReason,
+            CancellationComment                      = o.CancellationComment,
+            PostponeComment                          = o.PostponeComment,
+            AmountToCollectForPackage                = o.AmountToCollectForPackage,
+            IsCollectedCodPaidToCustomer             = o.IsCollectedCodPaidToCustomer,
+            CodPaidToCustomerAmount                  = o.CodPaidToCustomerAmount,
+            CodPaidToCustomerAt                      = o.CodPaidToCustomerAt,
+            CompanyServicePrice                      = o.CompanyServicePrice,
+            CustomerSurcharge                        = o.CustomerSurcharge,
+            WhoPaysForCompanyService                 = o.WhoPaysForCompanyService,
+            CompanyServicePaymentStatus              = o.CompanyServicePaymentStatus,
+            ServicePaidByCustomerAmount              = o.ServicePaidByCustomerAmount,
+            ServicePaidByCustomerAt                  = o.ServicePaidByCustomerAt,
+            CourierSalary                            = o.CourierSalary,
+            CourierSalaryPaidAmount                  = o.CourierSalaryPaidAmount,
+            CourierSalaryPaidAt                      = o.CourierSalaryPaidAt,
+            AmountOfCashCollected                    = o.AmountOfCashCollected,
+            CodTransferedToCompanyByCourier          = o.CodTransferedToCompanyByCourier,
+            CodTransferedToCompanyByCourierAt        = o.CodTransferedToCompanyByCourierAt,
+            IsCourierSalaryIncludedSpecialCase       = o.IsCourierSalaryIncludedSpecialCase,
+            IsCompanyServicePriceIncludedSpecialCase = o.IsCompanyServicePriceIncludedSpecialCase,
+
+            GroupOrder = o.GroupOrder == null ? null : new GroupOrder
+            {
+                Id                 = o.GroupOrder.Id,
+                CustomerId         = o.GroupOrder.CustomerId,
+                Note               = o.GroupOrder.Note,
+                SenderFirstName    = string.Empty,
+                SenderLastName     = string.Empty,
+                SenderBusinessName = string.Empty,
+                SenderPhone        = string.Empty,
+                PickUpCity         = string.Empty,
+                PickUpDistrict     = string.Empty,
+                PickUpAddress      = string.Empty,
+                Customer = o.GroupOrder.Customer == null ? null : new Customer
+                {
+                    Id           = o.GroupOrder.Customer.Id,
+                    BusinessName = o.GroupOrder.Customer.BusinessName,
+                    FirstName    = string.Empty,
+                    LastName     = string.Empty,
+                    PhoneNumber  = string.Empty,
+                    City         = string.Empty,
+                    District     = string.Empty,
+                    Address      = string.Empty,
+                },
+            },
+            Customer = o.Customer == null ? null : new Customer
+            {
+                Id           = o.Customer.Id,
+                BusinessName = o.Customer.BusinessName,
+                FirstName    = string.Empty,
+                LastName     = string.Empty,
+                PhoneNumber  = string.Empty,
+                City         = string.Empty,
+                District     = string.Empty,
+                Address      = string.Empty,
+            },
+        });
 
     public static OrderFinanceLineDto ToDto(Order o)
     {

@@ -214,6 +214,10 @@ and a single-day **or** date-range picker (max 93 days — mirrors `CompletedRan
 - **Realtime:** subscribe with `useOrdersChangedSignal(token, 'adminOrdersChanged' |
   'courierOrdersChanged', refetch)`. The ping carries no payload — refetch through the normal
   query. `useAdminPendingCounts` drives the nav badges.
+  Admin pings are debounced (1.5 s trailing, 4 s max wait) and **skipped while the tab is hidden**
+  — a hidden tab refetches once when it becomes visible again. Every admin refetch is several heavy
+  queries × every open admin tab, which is what drove the Azure SQL tier to 100% DTU; don't shorten
+  these or add a second, undebounced refetch path. Courier pings stay immediate.
 
 ---
 

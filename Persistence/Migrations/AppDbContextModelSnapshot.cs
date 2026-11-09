@@ -932,6 +932,14 @@ namespace Persistence.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("DeliveredAt")
+                        .HasDatabaseName("IX_Orders_DeliveredAt_Active")
+                        .HasFilter("[DateDeleted] IS NULL");
+
+                    b.HasIndex("DeliveredToWarehouseAt")
+                        .HasDatabaseName("IX_Orders_DeliveredToWarehouseAt_Active")
+                        .HasFilter("[DateDeleted] IS NULL");
+
                     b.HasIndex("ExternalReference");
 
                     b.HasIndex("GroupOrderId");

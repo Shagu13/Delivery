@@ -60,12 +60,14 @@ public sealed class GetCustomerFinanceGridQueryHandler
         {
             CustomerGridMode.Delivered => await OrderFinanceQueries
                 .FilterByDeliveredWindow(OrderFinanceQueries.Base(_context), request.Date, request.Monthly, request.From, request.To)
+                .LineFields()
                 .ToListAsync(ct),
 
             CustomerGridMode.ToSettle => await LoadToSettleAsync(ct),
 
             _ => await OrderFinanceQueries
                 .AllCustomersByEffectiveDate(_context, request.Date, request.Monthly, request.From, request.To)
+                .LineFields()
                 .ToListAsync(ct),
         };
 
@@ -87,6 +89,7 @@ public sealed class GetCustomerFinanceGridQueryHandler
             .FilterByDeliveredWindow(OrderFinanceQueries.Base(_context), null, false, null, null)
             .Where(o => (o.AmountToCollectForPackage ?? 0m) - (o.CodPaidToCustomerAmount ?? 0m) > Epsilon
                      || (o.ServicePaidByCustomerAmount ?? 0m) < o.CompanyServicePrice - Epsilon)
+            .LineFields()
             .ToListAsync(ct);
 
         return candidates

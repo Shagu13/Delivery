@@ -144,6 +144,12 @@ real fee plus `CustomerSurcharge`, and their `recipientAmountDue` helpers use `r
 `FilterByDeliveredWindow`), `ToSettle` (any date; SQL coarse prefilter, then `OrderFinance.CodOwedToCustomer` /
 `ServiceOwedBySender` decide). Returns lines plus one contact row per customer (default bank account first).
 
+**Finance-lines reads load slim orders.** Every read that maps rows through `OrderFinanceQueries.ToDto` (the
+customer/admin/all-customers/courier lines in `GetOrderFinanceLinesQuery.cs` and the grid) calls `.LineFields()`
+just before `ToListAsync`: ~45 columns instead of whole Order + GroupOrder + 2× Customer rows. **A field `ToDto` or
+an `OrderFinance` member it calls starts reading must be added to `LineFields`**, or it silently reads its default —
+`OrderFinanceLinesProjectionTests` compares the two paths with every field populated.
+
 **"Settle net" (both admin settlement screens).** `SettleCustomerNetCommand` (customer: ticked COD payouts + ticked
 service fees) and `SettleCourierNetCommand` (courier: ticked COD hand-overs + ticked salaries) apply both flows in one
 load and one `SaveChanges`, so a rejected amount in either flow records nothing. They reuse the single-flow handlers'
@@ -162,6 +168,11 @@ The sets are **disjoint** — `Delivered` excludes billable failed orders, becau
 would otherwise match both and be counted twice. The SQL copy of the billable rule in that class mirrors
 `OrderFinance.IsBillableFailedDelivery`; change them together. The drill-down itemises the profit block only
 (Delivered + BillableFailed in range); the cash-position/outstanding figures are cumulative, so not listed.
+The overview's period block is two `GroupBy(o => 1)` aggregate queries; the cumulative block loads every order up to
+`To` through `CompanyFinanceOrderSets.CashPositionFields()` (slim `Order`s, ~15 columns) and runs `OrderFinance` over
+them. **If an `OrderFinance` member the overview calls starts reading a new `Order` field, add it to that projection**
+— otherwise it silently reads the default. `CompanyFinanceOrdersTests.CashPosition_MatchesOrderFinanceOverFullEntities`
+guards this.
 
 ### Where finance bugs actually come from
 

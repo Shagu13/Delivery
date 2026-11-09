@@ -59,28 +59,39 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             .BillableFailed(fromDt, toDt)
             .InArea(cities, districts);
 
-        var ordersDelivered = await delivered.CountAsync(cancellationToken);
-
-        var serviceRevenue = (await delivered
-            .SumAsync(o => (decimal?)o.CompanyServicePrice, cancellationToken) ?? 0m)
-          + (await billableFailed
-            .SumAsync(o => (decimal?)o.CompanyServicePrice, cancellationToken) ?? 0m);
-
+        // One aggregate round trip per set (was seven separate COUNT/SUM scans).
         // Failed deliveries' fees are always invoiced to the sender (recipient paid nothing),
         // so they add to serviceRevenue but never to serviceCollectedFromRecipient.
         // Only the recipient's portion: a customer surcharge on a recipient-pays order is invoiced
         // to the sender (so it lands in serviceInvoicedToSenders below).
-        var serviceCollectedFromRecipient = await delivered
-            .Where(o => o.WhoPaysForCompanyService == ServicePayer.Recipient)
-            .SumAsync(o => (decimal?)(o.CompanyServicePrice - o.CustomerSurcharge), cancellationToken) ?? 0m;
+        var deliveredTotals = await delivered
+            .GroupBy(o => 1)
+            .Select(g => new
+            {
+                Count        = g.Count(),
+                Fee          = g.Sum(o => o.CompanyServicePrice),
+                RecipientFee = g.Sum(o => o.WhoPaysForCompanyService == ServicePayer.Recipient
+                                           ? o.CompanyServicePrice - o.CustomerSurcharge
+                                           : 0m),
+                Salary       = g.Sum(o => o.CourierSalary ?? 0m),
+                Cod          = g.Sum(o => o.AmountToCollectForPackage ?? 0m),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var courierSalary = (await delivered
-            .SumAsync(o => o.CourierSalary, cancellationToken) ?? 0m)
-          + (await billableFailed
-            .SumAsync(o => o.CourierSalary, cancellationToken) ?? 0m);
+        var failedTotals = await billableFailed
+            .GroupBy(o => 1)
+            .Select(g => new
+            {
+                Fee    = g.Sum(o => o.CompanyServicePrice),
+                Salary = g.Sum(o => o.CourierSalary ?? 0m),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var codPassThrough = await delivered
-            .SumAsync(o => o.AmountToCollectForPackage, cancellationToken) ?? 0m;
+        var ordersDelivered               = deliveredTotals?.Count ?? 0;
+        var serviceRevenue                = (deliveredTotals?.Fee ?? 0m) + (failedTotals?.Fee ?? 0m);
+        var serviceCollectedFromRecipient = deliveredTotals?.RecipientFee ?? 0m;
+        var courierSalary                 = (deliveredTotals?.Salary ?? 0m) + (failedTotals?.Salary ?? 0m);
+        var codPassThrough                = deliveredTotals?.Cod ?? 0m;
 
         // ── Cash position (actual money) as of To, derived live from delivered orders ──
         // The per-order settlement fields are the source of truth (the CourierSettlement /
@@ -90,6 +101,7 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             .AsNoTracking()
             .Delivered(null, toDt)
             .InArea(cities, districts)
+            .CashPositionFields()
             .ToListAsync(cancellationToken);
 
         // Sender-paid service fees collected in ADVANCE on orders that are accepted but not
@@ -102,6 +114,7 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             .AsNoTracking()
             .PrepaidUndelivered(toDt)
             .InArea(cities, districts)
+            .CashPositionFields()
             .ToListAsync(cancellationToken);
 
         // Billable failed deliveries cumulative to To (same definition as billableFailed, no
@@ -112,6 +125,7 @@ public sealed class GetCompanyFinanceOverviewQueryHandler
             .AsNoTracking()
             .BillableFailed(null, toDt)
             .InArea(cities, districts)
+            .CashPositionFields()
             .ToListAsync(cancellationToken);
 
         var cashInFromCouriers       = deliveredUpTo.Sum(o => o.CodTransferedToCompanyByCourier ?? 0m)

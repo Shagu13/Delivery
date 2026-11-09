@@ -109,6 +109,71 @@ public sealed class CompanyFinanceOrdersTests
             list.Orders.Single(x => x.TrackingNumber == "TN-RTS").Group);
     }
 
+    /// <summary>
+    /// The overview loads only <c>CashPositionFields</c> for its cumulative figures. Seed orders with
+    /// every money/flag column set, then check the overview against <c>OrderFinance</c> run over the
+    /// full entities — a column dropped from the projection would make these drift.
+    /// </summary>
+    [Fact]
+    public async Task CashPosition_MatchesOrderFinanceOverFullEntities()
+    {
+        string db = Guid.NewGuid().ToString();
+        DateTime now = CustomTime.Now;
+
+        Order recipientPays = Make(OrderStatus.DeliveredToRecipient, 7m, 3m, "TN-RP");
+        recipientPays.DeliveredAt                        = now;
+        recipientPays.WhoPaysForCompanyService           = ServicePayer.Recipient;
+        recipientPays.CustomerSurcharge                  = 1m;
+        recipientPays.AmountToCollectForPackage          = 50m;
+        recipientPays.CodTransferedToCompanyByCourier    = 50m;
+        recipientPays.CourierSalaryPaidAmount            = 3m;
+        recipientPays.IsCourierSalaryIncludedSpecialCase = true;
+        recipientPays.CodPaidToCustomerAmount            = 20m;
+        recipientPays.ServicePaidByCustomerAmount        = 1m;
+
+        Order senderNetted = Make(OrderStatus.DeliveredToRecipient, 5m, 2m, "TN-SN");
+        senderNetted.DeliveredAt                              = now;
+        senderNetted.AmountToCollectForPackage                = 80m;
+        senderNetted.CodTransferedToCompanyByCourier          = 60m;
+        senderNetted.CodPaidToCustomerAmount                  = 75m;
+        senderNetted.CourierSalaryPaidAmount                  = 1m;
+        senderNetted.IsCompanyServicePriceIncludedSpecialCase = true;
+
+        Order failed = Make(OrderStatus.CancelledByAdmin, 6m, 2m, "TN-FAIL");
+        failed.WhoPaysForCompanyService           = ServicePayer.Recipient;
+        failed.CancellationReason                 = CancellationReason.Other;
+        failed.CancelledAt                        = now;
+        failed.IsCourierSalaryIncludedSpecialCase = true;
+        failed.CourierSalaryPaidAmount            = 2m;
+        failed.ServicePaidByCustomerAmount        = 4m;
+
+        Order prepaid = Make(OrderStatus.CourierAssignedToDeliver, 9m, null, "TN-PRE");
+        prepaid.ServicePaidByCustomerAmount = 9m;
+        prepaid.ServicePaidByCustomerAt     = now;
+
+        Order[] all = { recipientPays, senderNetted, failed, prepaid };
+        using (AppDbContext seed = Ctx(db))
+        {
+            seed.Orders.AddRange(all);
+            await seed.SaveChangesAsync();
+        }
+
+        using AppDbContext ctx = Ctx(db);
+        CompanyFinanceOverviewDto o = await new GetCompanyFinanceOverviewQueryHandler(ctx)
+            .Handle(new GetCompanyFinanceOverviewQuery(Today, Today), CancellationToken.None);
+
+        Order[] delivered = { recipientPays, senderNetted };
+        Assert.Equal(all.Sum(Application.Finance.OrderFinance.CompanyNetCash), o.NetCashPosition);
+        Assert.Equal(delivered.Sum(Application.Finance.OrderFinance.OutstandingCourierRemittance),
+                     o.OutstandingCourierRemittance);
+        Assert.Equal(delivered.Sum(Application.Finance.OrderFinance.SenderServiceShare) + 9m + 6m
+                   - all.Sum(x => x.ServicePaidByCustomerAmount ?? 0m),
+                     o.OutstandingServiceReceivable);
+        Assert.Equal(130m - 95m, o.OutstandingCodOwedToCustomers);
+        Assert.Equal((3m + 2m + 2m) - (3m + 1m + 2m), o.OutstandingSalaryOwed);
+        Assert.Equal(7m - 1m, o.ServiceCollectedFromRecipient);
+    }
+
     [Fact]
     public async Task CityFilter_NarrowsTheList()
     {
