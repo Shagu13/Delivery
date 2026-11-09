@@ -1333,6 +1333,9 @@ function CustomerSettleCard({ customerId, lines, token, onError, onChanged }: {
 
 // ── Main page ────────────────────────────────────────────────────────────────────
 
+/** Finance refreshes from other admins' activity at most this often (see AdminFinancePage). */
+const FINANCE_PING_REFRESH_MS = 60_000;
+
 export default function AdminFinancePage({ token }: { token: string }) {
     const { t } = useLanguage();
     // Primary toggle: Overview (company reports) ↔ Payments (settle a customer / courier).
@@ -1349,9 +1352,25 @@ export default function AdminFinancePage({ token }: { token: string }) {
     // Finance query so the currently-visible tab's data quietly refetches in the background
     // (they all use `placeholderData`/cached data, so this never flashes a spinner) while
     // inactive tabs simply refetch next time they're opened.
+    //
+    // Throttled to once per FINANCE_PING_REFRESH_MS: the overview re-sums the whole delivered history
+    // and the Payments grid re-reads every customer's lines, so following every ping (one every few
+    // seconds while someone works the Packages page) kept the database pinned at 100% DTU. A ping after
+    // a quiet minute refreshes at once; pings inside the window collapse into one refresh at its end, so
+    // the latest change still lands. This admin's own payments refresh through their mutations, not this.
     const queryClient = useQueryClient();
+    const lastFinanceRefreshAt = useRef(0);
+    const financeRefreshTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    useEffect(() => () => clearTimeout(financeRefreshTimer.current), []);
     useOrdersChangedSignal(token, 'adminOrdersChanged', () => {
-        void queryClient.invalidateQueries({ queryKey: ['admin', 'finance'] });
+        const refresh = () => {
+            financeRefreshTimer.current = undefined;
+            lastFinanceRefreshAt.current = Date.now();
+            void queryClient.invalidateQueries({ queryKey: ['admin', 'finance'] });
+        };
+        const wait = lastFinanceRefreshAt.current + FINANCE_PING_REFRESH_MS - Date.now();
+        if (wait <= 0) { refresh(); return; }
+        financeRefreshTimer.current ??= setTimeout(refresh, wait);
     });
 
     return (

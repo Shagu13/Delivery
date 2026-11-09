@@ -218,6 +218,8 @@ and a single-day **or** date-range picker (max 93 days — mirrors `CompletedRan
   — a hidden tab refetches once when it becomes visible again. Every admin refetch is several heavy
   queries × every open admin tab, which is what drove the Azure SQL tier to 100% DTU; don't shorten
   these or add a second, undebounced refetch path. Courier pings stay immediate.
+  `AdminFinancePage` throttles further: other admins' activity refreshes Finance at most once a minute
+  (`FINANCE_PING_REFRESH_MS`) — the overview re-sums the whole delivered history on every refetch.
 
 ---
 
