@@ -210,6 +210,7 @@ guards this.
 | `Orders/Commands/SetCourierSalaryBulk` | Couriers page → Edit salary (Admin only): one salary on many orders, all-or-nothing (refused if it exceeds any order's service fee). One load, `CourierSalaryReceiptReconciler.CapPaidAmount` per order in memory, one `PaymentReceiptTrimmer.TrimManyAsync`, one save. The single-order `SetCourierSalaryCommand` keeps its own path. |
 | `Orders/Commands/CustomerOrderActionPolicy` | What a customer may still edit/cancel themselves. |
 | `Orders/Commands/ReturnAssignmentPolicy` | Courier assignment rules for Return orders. |
+| `GroupOrders/Queries/GetAllGroupOrders/GroupOrderSearch` | The Packages/History free-text search, as a `UNION ALL` of single-column prefix (`StartsWith`) id lookups that the handler narrows with `Id IN (…)`. One `OR` across GroupOrders + Orders + Customers made SQL Server scan the whole history (2–6 s per search); keep each searched column its own branch, and add a new searchable column here as a new branch with its own index. `GroupOrderSearchTests` pins the matching rules. |
 | `Cities/GeoNameMaps` | Georgian → English name maps for active cities/districts, for input that may name a place in either language. Shared by the Excel import (`GroupOrders/Queries/ExcelLookups`) and the Partner API intake (`PartnerOrders/Queries/GetPartnerIntakeContext`). Reuse it rather than building the dictionaries again. |
 | `Tenants/TenantHost` | Host normalization (lowercase, strip port and `www.`). |
 

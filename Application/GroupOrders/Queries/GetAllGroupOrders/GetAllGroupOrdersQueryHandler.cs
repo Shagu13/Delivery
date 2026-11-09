@@ -1,4 +1,3 @@
-using Application.Common.Search;
 using System.Diagnostics;
 using Application.Common.Interfaces;
 using Application.Common.Models;
@@ -51,11 +50,11 @@ public sealed class GetAllGroupOrdersQueryHandler
         OrderStatus.CancelledByAdmin,
     };
 
-    // The Packages page runs this query twice per refresh with identical filters and only
-    // Page/PageSize differing (a paginated view + an up-to-500-row "window scoped" view used
-    // to detect same-day merge candidates). "Phase 1" below — the free-text search scan — has
-    // no Skip/Take, so both calls pay its full cost. Cache the id list it produces (keyed on
-    // every filter except Page/PageSize) for a few seconds so the second call reuses it.
+    // "Phase 1" below (the filtered id scan) has no Skip/Take, so every page of the same
+    // filter set pays its full cost. Cache the id list it produces (keyed on every filter
+    // except Page/PageSize) for a few seconds so paging and back-to-back refetches of the same
+    // list reuse it. Note the Packages page's two calls (paged list + day-scoped merge window)
+    // no longer share a key — the window sends a date and the list usually doesn't.
     private sealed record Phase1Row(Guid Id, DateTime CreatedAt);
     private sealed record Phase1Result(List<Phase1Row> GoRows, List<Phase1Row> SoRows);
     private static readonly TimeSpan Phase1CacheDuration = TimeSpan.FromSeconds(5);
@@ -113,62 +112,23 @@ public sealed class GetAllGroupOrdersQueryHandler
         {
             // Prefix match, not "contains anywhere": the DB's collation
             // (SQL_Latin1_General_CP1_CI_AS, verified — case-insensitive, so no .ToLower()
-            // needed) lets StartsWith translate to a sargable LIKE 'term%', which every field
-            // below now has an index for. A single non-sargable Contains() branch anywhere in
-            // this OR chain would force a full scan of the whole predicate regardless of how
-            // many other branches are indexed, so every branch has to make the same switch.
-            var term = request.SearchTerm.Trim();
-            var bn   = BusinessNameSearch.Variants(term); // shop names may be stored as "Name"
+            // needed) lets StartsWith translate to a sargable LIKE 'term%', which every searched
+            // column has an index for. GroupOrderSearch turns the per-column matches into a
+            // UNION ALL of index seeks — one big OR across tables made SQL Server scan instead.
             // Party = "recipient" restricts the search to each order's own recipient fields
             // (name/phone/address/city/district) — sender/pickup fields are excluded so a
             // recipient-side search never matches on the sender's name. Party = "sender"
             // restricts to sender/pickup fields. Otherwise (null) it matches either side.
             // The tracking number is a unique identifier, so it always matches regardless of
             // the party scope (this is what lets a deep-link/"Go To" find an order by TN).
+            var term             = request.SearchTerm.Trim();
             var matchesSender    = request.Party != "recipient";
             var matchesRecipient = request.Party != "sender";
 
-            goQuery = goQuery.Where(go =>
-                (matchesSender &&
-                    (go.SenderFirstName.StartsWith(term) ||
-                     go.SenderLastName.StartsWith(term) ||
-                     (go.SenderBusinessName.StartsWith(bn[0]) || go.SenderBusinessName.StartsWith(bn[1]) || go.SenderBusinessName.StartsWith(bn[2]) || go.SenderBusinessName.StartsWith(bn[3]) || go.SenderBusinessName.StartsWith(bn[4]) || go.SenderBusinessName.StartsWith(bn[5]) || go.SenderBusinessName.StartsWith(bn[6])) ||
-                     go.SenderPhone.StartsWith(term) ||
-                     (go.AlternativeSenderPhone != null && go.AlternativeSenderPhone.StartsWith(term)) ||
-                     go.PickUpCity.StartsWith(term) ||
-                     go.PickUpDistrict.StartsWith(term) ||
-                     go.PickUpAddress.StartsWith(term)))
-                ||
-                (matchesRecipient &&
-                    go.Orders.Any(o =>
-                        o.RecipientName.StartsWith(term) ||
-                        o.RecipientPhone.StartsWith(term) ||
-                        o.RecipientCity.StartsWith(term) ||
-                        o.RecipientDistrict.StartsWith(term) ||
-                        o.RecipientAddress.StartsWith(term)))
-                ||
-                go.Orders.Any(o => o.TrackingNumber.StartsWith(term))
-            );
-
-            soQuery = soQuery.Where(o =>
-                (matchesRecipient &&
-                    (o.RecipientName.StartsWith(term) ||
-                     o.RecipientPhone.StartsWith(term) ||
-                     o.RecipientCity.StartsWith(term) ||
-                     o.RecipientDistrict.StartsWith(term) ||
-                     o.RecipientAddress.StartsWith(term)))
-                ||
-                (matchesSender && o.Customer != null &&
-                    ((o.Customer.BusinessName.StartsWith(bn[0]) || o.Customer.BusinessName.StartsWith(bn[1]) || o.Customer.BusinessName.StartsWith(bn[2]) || o.Customer.BusinessName.StartsWith(bn[3]) || o.Customer.BusinessName.StartsWith(bn[4]) || o.Customer.BusinessName.StartsWith(bn[5]) || o.Customer.BusinessName.StartsWith(bn[6])) ||
-                     o.Customer.FirstName.StartsWith(term) ||
-                     o.Customer.LastName.StartsWith(term) ||
-                     o.Customer.PhoneNumber.StartsWith(term) ||
-                     o.Customer.City.StartsWith(term) ||
-                     o.Customer.District.StartsWith(term) ||
-                     o.Customer.Address.StartsWith(term)))
-                ||
-                o.TrackingNumber.StartsWith(term)
-            );
+            IQueryable<Guid> goIds = GroupOrderSearch.MatchingGroupOrderIds(_context, term, matchesSender, matchesRecipient);
+            IQueryable<Guid> soIds = GroupOrderSearch.MatchingStandaloneIds(_context, term, matchesSender, matchesRecipient);
+            goQuery = goQuery.Where(go => goIds.Contains(go.Id));
+            soQuery = soQuery.Where(o  => soIds.Contains(o.Id));
         }
 
         // ── Date window (sargable — same style as the Packages/Orders fix) ────────
@@ -246,9 +206,6 @@ public sealed class GetAllGroupOrdersQueryHandler
         // goQuery/soQuery are unpaginated and share the exact predicates used above, so
         // the row counts double as the totals — no need for two extra CountAsync round
         // trips against the same (non-concurrent-safe) DbContext.
-        // This is the expensive step when a free-text search is active (the Contains() scan
-        // above can't use an index) — cache it briefly so the paginated + window-scoped calls
-        // the Packages page fires for the same filters don't each pay for it separately.
         // Per-stage timings (logged once at the end) to show where a slow list request spends
         // its time: id scan, page hydration, geo lookups, or in-memory mapping.
         long t0 = Stopwatch.GetTimestamp();
