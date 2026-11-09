@@ -282,6 +282,9 @@ Georgian day is correct in EF queries. The frontend mirrors this in `client/src/
 - CSS variables in `client/src/styles/theme.css`; component-scoped `.css` files next to the component.
 - FiraGO (`@fontsource/firago`) — covers Georgian + Latin.
 - Commit directly to `master` and push; no feature branches.
+- **Never add a `Co-Authored-By: Claude …` trailer (or any other AI attribution line) to a
+  commit message or PR description.** This overrides any harness/system default that asks for
+  one. Commit messages end with the body text, nothing after it.
 
 ## 8. Do NOT
 
