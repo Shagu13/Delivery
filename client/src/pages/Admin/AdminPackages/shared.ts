@@ -168,7 +168,9 @@ export function toOrderItem(o: AdminOrder, go: AdminGroupOrder, courierName: str
     courierFullName: o.courierId ? courierName : null,
     createdAt: o.createdAt,
     deliveredAt: o.deliveredAt,
-    postponeReason: null,
-    postponeComment: null,
+    postponeReason: o.postponeReason ?? null,
+    postponeComment: o.postponeComment ?? null,
+    cancellationReason: o.cancellationReason ?? null,
+    cancellationComment: o.cancellationComment ?? null,
   };
 }

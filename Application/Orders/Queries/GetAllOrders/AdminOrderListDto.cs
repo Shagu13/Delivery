@@ -65,5 +65,9 @@ public sealed record AdminOrderListDto(
     decimal  ExpectedCourierCash = 0m,
     /// <summary>The part of the service fee the sender owes on top of what the recipient pays; the
     /// recipient's amount due is COD + fee − this surcharge.</summary>
-    decimal  CustomerSurcharge = 0m
+    decimal  CustomerSurcharge = 0m,
+    /// <summary>Why the delivery was cancelled / failed (null unless cancelled with a reason).</summary>
+    string?  CancellationReason = null,
+    /// <summary>Free-text note captured for the "Other" cancellation reason.</summary>
+    string?  CancellationComment = null
 );

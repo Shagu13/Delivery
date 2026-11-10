@@ -70,6 +70,8 @@ internal static class AdminOrderListMapper
         DeliveredAt:              o.DeliveredAt,
         PostponeReason:           o.PostponeReason == null ? null : o.PostponeReason.Value.ToString(),
         PostponeComment:          o.PostponeComment,
-        ExpectedCourierCash:      OrderFinance.ExpectedCourierCash(o)
+        ExpectedCourierCash:      OrderFinance.ExpectedCourierCash(o),
+        CancellationReason:       o.CancellationReason == null ? null : o.CancellationReason.Value.ToString(),
+        CancellationComment:      o.CancellationComment
     );
 }

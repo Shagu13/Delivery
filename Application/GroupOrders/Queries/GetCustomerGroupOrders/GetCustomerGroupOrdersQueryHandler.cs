@@ -87,7 +87,10 @@ public sealed class GetCustomerGroupOrdersQueryHandler
             CancellationReason:               o.CancellationReason,
             CancellationComment:              o.CancellationComment,
             CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt,
-            ExpectedCourierCash:              OrderFinance.ExpectedCourierCash(o));
+            ExpectedCourierCash:              OrderFinance.ExpectedCourierCash(o),
+            PostponeReason:                   o.PostponeReason,
+            PostponeComment:                  o.PostponeComment,
+            PostponedAt:                      o.PostponedAt);
 
         var groupCards = groupOrders.Select(go => new AdminGroupOrderDto(
             Id:                      go.Id,

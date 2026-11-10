@@ -876,9 +876,17 @@ function ShipmentsView({ orders, token, onRefresh, packageFilter, title, emptyTe
                             {t.custReturnedToSenderBadge} · {new Date(o.cancelledReturnedToSenderAt).toLocaleDateString()}
                           </span>
                         )}
-                        {CANCELLED_STATUSES.has(o.status) && o.cancellationReason && (
+                        {o.postponeReason && (
+                          <div style={{ marginTop: 4, fontSize: '0.72rem', color: '#d97706', maxWidth: 200, lineHeight: 1.35 }}>
+                            {t.custPostponeReasons[o.postponeReason]}
+                            {o.postponeComment ? `: ${o.postponeComment}` : ''}
+                            {o.postponedAt ? ` · ${new Date(o.postponedAt).toLocaleDateString()}` : ''}
+                          </div>
+                        )}
+                        {/* Any status: a failed delivery later marked Returned to Sender keeps its reason too. */}
+                        {o.cancellationReason && (
                           <div style={{ marginTop: 4, fontSize: '0.72rem', color: NON_BILLABLE_CANCEL_REASONS.has(o.cancellationReason) ? '#059669' : '#ef4444', maxWidth: 200, lineHeight: 1.35 }}>
-                            {t.cdCancelReasons[o.cancellationReason]}
+                            {t.custCancelReasons[o.cancellationReason]}
                             {o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : ''}
                           </div>
                         )}

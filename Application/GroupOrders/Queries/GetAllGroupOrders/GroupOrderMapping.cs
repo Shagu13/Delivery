@@ -79,7 +79,10 @@ internal static class GroupOrderMapping
         CancellationReason:               o.CancellationReason,
         CancellationComment:              o.CancellationComment,
         CancelledReturnedToSenderAt:      o.CancelledReturnedToSenderAt,
-        ExpectedCourierCash:              OrderFinance.ExpectedCourierCash(o));
+        ExpectedCourierCash:              OrderFinance.ExpectedCourierCash(o),
+        PostponeReason:                   o.PostponeReason,
+        PostponeComment:                  o.PostponeComment,
+        PostponedAt:                      o.PostponedAt);
 
     public static AdminGroupOrderDto MapGroupOrder(GroupOrder go, IReadOnlyDictionary<string, string?> cityGeo, IReadOnlyDictionary<string, string?> districtGeo) => new(
         Id:                      go.Id,

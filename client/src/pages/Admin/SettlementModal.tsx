@@ -431,7 +431,7 @@ export function SettlementModal({
                                                                 )}
                                                                 {billableCancel && (
                                                                     <div style={{ fontSize: '0.66rem', fontWeight: 700, color: '#dc2626' }}>
-                                                                        {t.stlmBadgeBillableCancel}{o.cancellationReason ? ` (${o.cancellationReason})` : ''}
+                                                                        {t.stlmBadgeBillableCancel}{o.cancellationReason ? ` (${t.cdCancelReasons[o.cancellationReason] ?? o.cancellationReason}${o.cancellationReason === 'Other' && o.cancellationComment ? `: ${o.cancellationComment}` : ''})` : ''}
                                                                     </div>
                                                                 )}
                                                             </td>

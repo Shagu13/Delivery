@@ -14,6 +14,7 @@ import { ViewOrderModal } from './ViewOrderModal';
 import { SalaryWarningModal } from './SalaryWarningModal';
 import { PriceWarningModal } from './PriceWarningModal';
 import { OrderRowActionsMenu } from './OrderRowActionsMenu';
+import { OrderReasonNote } from './OrderReasonNote';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { resolveDateWindow } from '../../utils/dateWindow';
@@ -1118,12 +1119,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
               {t.aopDeliveredAt} · {fmtDateTime(order.deliveredAt, lang)}
             </div>
           )}
-          {order.status === 'DeliveryPostponed' && order.postponeReason && (
-            <div style={{ fontSize: '0.7rem', color: '#f97316', marginTop: 2 }}>
-              {t.cdPostponeReasons[order.postponeReason]}
-              {order.postponeComment && ` — ${order.postponeComment}`}
-            </div>
-          )}
+          <OrderReasonNote
+            postponeReason={order.status === 'DeliveryPostponed' ? order.postponeReason : null}
+            postponeComment={order.postponeComment}
+            cancellationReason={order.cancellationReason} cancellationComment={order.cancellationComment} />
         </td>
         <td className="aop-td aop-td--num">
           {(() => {

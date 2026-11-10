@@ -156,6 +156,12 @@ export interface CustomerOrder {
   cancellationComment?: string | null;
   /** Set once an admin marked this cancelled order as physically returned to the sender. */
   cancelledReturnedToSenderAt?: string | null;
+  /** Why the current delivery attempt was postponed (null unless status is DeliveryPostponed). */
+  postponeReason?: 'RecipientDidNotAnswer' | 'WrongRecipientPhoneNumber' | 'RecipientNotAtAddress'
+    | 'RecipientRequestedReschedule' | 'AddressNotFound' | 'Other' | null;
+  /** Free-text note captured for the "Other" postpone reason. */
+  postponeComment?: string | null;
+  postponedAt?: string | null;
 }
 
 export interface CustomerGroupOrder {

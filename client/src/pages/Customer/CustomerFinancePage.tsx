@@ -135,7 +135,7 @@ function OrderTableRow({ line, index }: { line: OrderFinanceLine; index: number 
                 {/* Cancelled / failed: show the reason in red so it's clearly visible. */}
                 {line.cancellationReason && (
                     <div style={{ marginTop: 3, fontSize: '0.66rem', fontWeight: 600, color: '#dc2626' }}>
-                        {t.cdCancelReasons[line.cancellationReason]}
+                        {t.custCancelReasons[line.cancellationReason]}
                         {line.cancellationReason === 'Other' && line.cancellationComment ? `: ${line.cancellationComment}` : ''}
                     </div>
                 )}

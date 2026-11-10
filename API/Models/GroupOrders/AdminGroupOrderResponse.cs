@@ -90,5 +90,9 @@ public sealed record AdminOrderResponse(
     DateTime? CancelledReturnedToSenderAt = null,
     /// <summary>The part of <see cref="CompanyServicePrice"/> the sender owes on top of what the
     /// recipient pays; the recipient's amount due is COD + fee − this surcharge.</summary>
-    decimal CustomerSurcharge = 0m
+    decimal CustomerSurcharge = 0m,
+    // Why the current delivery attempt was postponed (null unless DeliveryPostponed) + "Other" note.
+    string?   PostponeReason = null,
+    string?   PostponeComment = null,
+    DateTime? PostponedAt = null
 );

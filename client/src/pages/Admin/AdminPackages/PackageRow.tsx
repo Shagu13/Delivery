@@ -17,6 +17,7 @@ import {
 } from './shared';
 import { StatusBadge, OrderTypeBadge } from './Badges';
 import { MoveOrderControl } from './MoveOrderControl';
+import { OrderReasonNote } from '../OrderReasonNote';
 
 export function PackageRow({
   o, go, moveDestinations, warehouseSelectable = false, showStore = false,
@@ -85,6 +86,8 @@ export function PackageRow({
       <td style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', maxWidth: 160 }}>{o.description ?? <span style={{ opacity: 0.4 }}>—</span>}</td>
       <td>
         <StatusBadge status={o.status} />
+        <OrderReasonNote postponeReason={o.postponeReason} postponeComment={o.postponeComment}
+          cancellationReason={o.cancellationReason} cancellationComment={o.cancellationComment} />
         <div style={{ marginTop: 4 }}>
           <OrderTypeBadge orderType={o.orderType} />
         </div>

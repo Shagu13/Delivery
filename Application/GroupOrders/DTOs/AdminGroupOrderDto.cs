@@ -107,5 +107,11 @@ public sealed record AdminOrderDto(
     /// <summary>The part of <see cref="CompanyServicePrice"/> the sender owes on top of what the
     /// recipient pays (see <see cref="Domain.Order.CustomerSurcharge"/>). The amount due from the
     /// recipient is COD + fee − this surcharge.</summary>
-    decimal              CustomerSurcharge = 0m
+    decimal              CustomerSurcharge = 0m,
+    /// <summary>Why the current delivery attempt was postponed. Null unless the order is
+    /// <c>DeliveryPostponed</c> — retry / cancel / return-to-sender clear it.</summary>
+    PostponeReason?      PostponeReason = null,
+    /// <summary>Free-text note, kept only for the "Other" postpone reason.</summary>
+    string?              PostponeComment = null,
+    DateTime?            PostponedAt = null
 );
