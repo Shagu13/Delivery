@@ -122,6 +122,10 @@ export function DeliveriesPanel({ deliveries, loading, error, busyId, token, onA
                     )}
                 </div>
             </div>
+            {/* Active last-mile packages (assigned / out for delivery / postponed). Follows the search box. */}
+            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-text)', marginBottom: 10 }}>
+                {t.cdPackagesCount(sortedDeliveries.length)}
+            </div>
             {/* Scan the parcel's label at the door → confirm delivery in a popup. */}
             <ScanDeliveryFlow deliveries={deliveries} token={token} busyId={busyId} onAct={handleAct} />
             {/* Free-text search: store name, recipient/address, city/district, order type. */}
