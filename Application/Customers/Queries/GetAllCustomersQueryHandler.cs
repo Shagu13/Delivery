@@ -34,12 +34,18 @@ public sealed class GetAllCustomersQueryHandler
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var term = request.Search.Trim().ToLower();
+            // Phone typed as "599 12 34 56" / "+995 599…" still matches the stored digits.
+            string phoneDigits = new(term.Where(char.IsDigit).ToArray());
+            if (phoneDigits.StartsWith("995") && phoneDigits.Length > 9) phoneDigits = phoneDigits[3..];
+            bool searchPhoneDigits = phoneDigits.Length >= 3;
             query = query.Where(c =>
                 c.FirstName.ToLower().Contains(term)           ||
                 c.LastName.ToLower().Contains(term)            ||
+                (c.FirstName + " " + c.LastName).ToLower().Contains(term) ||
                 c.BusinessName.ToLower().Contains(term)        ||
                 c.City.ToLower().Contains(term)                ||
                 c.PhoneNumber.Contains(term)                   ||
+                (searchPhoneDigits && c.PhoneNumber.Contains(phoneDigits)) ||
                 (c.IdNumber != null && c.IdNumber.ToLower().Contains(term)) ||
                 (c.ApplicationUser != null && c.ApplicationUser.Email!.ToLower().Contains(term)));
         }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { getCustomers, type AdminCustomer } from '../../api/customers';
 import {
   type PartnerApiKey,
@@ -67,9 +68,10 @@ function CopyField({ label, value }: { label: string; value: string }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AdminPartnersPage({ token }: Props) {
-  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<AdminCustomer | null>(null);
+  const selectedCustomerId = selectedCustomer?.id ?? '';
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [keys, setKeys] = useState<PartnerApiKey[]>([]);
   const [webhooks, setWebhooks] = useState<PartnerWebhook[]>([]);
@@ -86,12 +88,10 @@ export default function AdminPartnersPage({ token }: Props) {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      getCustomers(token, 1, 200).then(r => r.items).catch(() => [] as AdminCustomer[]),
       getPartnerApiKeys(token).catch(() => [] as PartnerApiKey[]),
       getPartnerWebhooks(token).catch(() => [] as PartnerWebhook[]),
-    ]).then(([cs, ks, ws]) => {
+    ]).then(([ks, ws]) => {
       if (cancelled) return;
-      setCustomers(cs);
       setKeys(ks);
       setWebhooks(ws);
       setLoading(false);
@@ -99,13 +99,23 @@ export default function AdminPartnersPage({ token }: Props) {
     return () => { cancelled = true; };
   }, [token]);
 
-  const filteredCustomers = search.trim()
-    ? customers.filter(c => c.businessName.toLowerCase().includes(search.trim().toLowerCase()))
-    : customers;
+  // Server-side search over ALL customers (business name, first/last/full name, phone,
+  // ID number, email) — the old client-side filter only saw the first 200 customers.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  const customerSearch = useQuery({
+    queryKey: ['admin', 'partners', 'customer-search', debouncedSearch],
+    queryFn: () => getCustomers(token, 1, 50, debouncedSearch).then(r => r.items),
+    enabled: showDropdown,
+    placeholderData: keepPreviousData,
+  });
+  const filteredCustomers = customerSearch.data ?? [];
 
   const visibleKeys = selectedCustomerId ? keys.filter(k => k.customerId === selectedCustomerId) : keys;
   const visibleWebhooks = selectedCustomerId ? webhooks.filter(w => w.customerId === selectedCustomerId) : webhooks;
-  const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
 
   async function handleRevokeKey(id: string) {
     if (!window.confirm('Revoke this API key? The partner will immediately lose access.')) return;
@@ -129,39 +139,43 @@ export default function AdminPartnersPage({ token }: Props) {
         Issue API keys and webhooks so partner businesses can place orders into the system and receive status updates.
       </p>
 
-      {/* Partner selector — typable search by business name */}
+      {/* Partner selector — server-side search by business name, person name or phone */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-subtle)' }}>Partner (Customer):</label>
         <div style={{ position: 'relative', width: 320, maxWidth: '100%' }}>
           <input
             style={INPUT}
             value={search}
-            placeholder="Type a business name…"
+            placeholder="Business name, person name or phone…"
             onChange={e => {
               setSearch(e.target.value);
               setShowDropdown(true);
-              if (selectedCustomerId) setSelectedCustomerId('');
+              if (selectedCustomer) setSelectedCustomer(null);
             }}
             onFocus={() => setShowDropdown(true)}
             onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
           />
           {selectedCustomerId && (
             <button
-              onClick={() => { setSelectedCustomerId(''); setSearch(''); }}
+              onClick={() => { setSelectedCustomer(null); setSearch(''); }}
               title="Clear selection"
               style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-subtle)', fontSize: '0.9rem' }}
             >✕</button>
           )}
           {showDropdown && (
             <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 4, maxHeight: 260, overflowY: 'auto', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
-              <div onMouseDown={() => { setSelectedCustomerId(''); setSearch(''); setShowDropdown(false); }} style={DROPDOWN_ITEM}>
+              <div onMouseDown={() => { setSelectedCustomer(null); setSearch(''); setShowDropdown(false); }} style={DROPDOWN_ITEM}>
                 — All partners —
               </div>
-              {filteredCustomers.length === 0 ? (
+              {customerSearch.isError ? (
+                <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: '#991b1b' }}>Search failed — try again.</div>
+              ) : customerSearch.isPending || (customerSearch.isFetching && filteredCustomers.length === 0) ? (
+                <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: 'var(--color-text-subtle)' }}>Searching…</div>
+              ) : filteredCustomers.length === 0 ? (
                 <div style={{ padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: 'var(--color-text-subtle)' }}>No matches.</div>
               ) : filteredCustomers.map(c => (
-                <div key={c.id} onMouseDown={() => { setSelectedCustomerId(c.id); setSearch(c.businessName); setShowDropdown(false); }} style={DROPDOWN_ITEM}>
-                  {c.businessName} <span style={{ color: 'var(--color-text-subtle)' }}>— {c.firstName} {c.lastName}</span>
+                <div key={c.id} onMouseDown={() => { setSelectedCustomer(c); setSearch(c.businessName); setShowDropdown(false); }} style={DROPDOWN_ITEM}>
+                  {c.businessName} <span style={{ color: 'var(--color-text-subtle)' }}>— {c.firstName} {c.lastName} · {c.phoneNumber}</span>
                 </div>
               ))}
             </div>
