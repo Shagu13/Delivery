@@ -143,7 +143,7 @@ or a build break. Grep the field name across all layers before calling it done.
 
 ## 6. Partner API
 
-Docs for partners: `docs/PARTNER_API.md`.
+Docs for partners: `docs/api_guide.md` (webhooks are intentionally left out of it).
 
 - **Place/read** — `PartnerOrdersController` at `/api/partner/orders`, reusing
   `CreateGroupOrderCommand`. Partner orders then flow through the normal pipeline with no

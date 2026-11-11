@@ -5,12 +5,30 @@ Your backend pushes orders to us over HTTPS; our couriers pick up and deliver; y
 read status back by polling. You keep your own website/app — this is a server-to-server
 API, so it works with any backend language or framework.
 
-> **You have been given:** an **API key** (`pk_…`). Keep it on your backend only —
-> never expose it in browser/mobile client code, a public repo, or a frontend bundle.
+> **You need an API key** (`pk_…`) to use this API — see §0. Keep it on your backend
+> only — never expose it in browser/mobile client code, a public repo, or a frontend bundle.
 
-- **Base URL:** `https://dilo.ge` 
+- **Base URL:** `https://dilo.ge`
 - **Format:** JSON (`Content-Type: application/json`); all responses are JSON.
 - **Auth:** send your API key in the `X-Api-Key` header on every request.
+
+---
+
+## 0. Getting access
+
+This document alone is not enough to place orders — every request must carry an API
+key that we issue for you. To get started:
+
+1. **Contact us** and we set up a business (customer) account for you, if you don't
+   already have one. Your pickup address, sender details and negotiated delivery rates
+   live on that account; every order you push is created and billed under it.
+2. **We issue your API key** (`pk_…`) and send it to you over a private channel,
+   separately from this document.
+   - Store it on your **server only**.
+   - We cannot show the key again after issuing it. If you lose it, or suspect it has
+     leaked, tell us: we revoke it (it stops working immediately) and issue a new one.
+   - You can have more than one key (e.g. one per environment); each can be revoked on its own.
+3. **Test** by placing one order (§3) and reading it back (§4); then you're live.
 
 ---
 
@@ -103,7 +121,7 @@ destination's default rate) — you never need to send a price.
 ### Example
 
 ```bash
-curl -X POST https://<your-delivery-domain>/api/partner/orders \
+curl -X POST https://dilo.ge/api/partner/orders \
   -H "X-Api-Key: pk_your_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -127,12 +145,14 @@ curl -X POST https://<your-delivery-domain>/api/partner/orders \
 {
   "groupOrderId": "f0a1…",
   "orders": [
-    { "trackingNumber": "TN-00000042-A3F9", "externalReference": "YOUR-BUSINESS-1023", "recipientName": "ანა სმიტი" }
+    { "trackingNumber": "DL7K2QF", "externalReference": "YOUR-BUSINESS-1023", "recipientName": "ანა სმიტი" }
   ]
 }
 ```
 
-Store the `trackingNumber` against your `externalReference`.
+Store the `trackingNumber` against your `externalReference`. Tracking numbers are
+`DL` followed by 5 letters/digits (e.g. `DL7K2QF`) — treat them as opaque strings
+and don't validate their format beyond that.
 
 > **`groupOrderId` is a pickup batch, not a per-request id.** Orders you post during the
 > same day from the same pickup address join the batch already waiting for collection, so
@@ -161,7 +181,7 @@ Store the `trackingNumber` against your `externalReference`.
 {
   "total": 128, "page": 1, "pageSize": 50,
   "items": [{
-    "trackingNumber": "TN-00000042-A3F9",
+    "trackingNumber": "DL7K2QF",
     "externalReference": "YOUR-BUSINESS-1023",
     "status": "OutForDelivery", "statusCode": 6,
     "recipientName": "ანა სმიტი",
@@ -232,4 +252,4 @@ If unsure which combination fits your business, ask us — we'll confirm the rig
 | List orders | `GET /api/partner/orders` | `X-Api-Key` |
 | Get one order | `GET /api/partner/orders/{reference}` | `X-Api-Key` |
 
-All requests require the `X-Api-Key` header. Questions or credentials: contact us.
+All `/api/partner/*` requests require the `X-Api-Key` header (see §0 to get one). Questions or credentials: contact us.

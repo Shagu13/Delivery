@@ -56,7 +56,8 @@ git status", "what did we just change").
 | `API/` | Controllers, auth schemes, SignalR, webhook worker | [API/CLAUDE.md](API/CLAUDE.md) |
 | `client/` | React 19 + TypeScript SPA | [client/CLAUDE.md](client/CLAUDE.md) |
 
-Partner-facing API docs: `docs/PARTNER_API.md` (read when touching the Partner API).
+Partner-facing API docs: `docs/api_guide.md` (read when touching the Partner API; the one guide
+sent to partners — webhooks are deliberately not documented there).
 
 ### Project skills — check these too
 
@@ -162,7 +163,7 @@ Delivery.Tests.slnx        # the one to use for `dotnet test`
 ├── tests/
 │   ├── Application.UnitTests/     # xUnit + EF in-memory
 │   └── API.IntegrationTests/      # xUnit + EF in-memory
-└── docs/PARTNER_API.md
+└── docs/api_guide.md
 ```
 
 **Dependency rules** — `Domain` references nothing app-level; `Application` → `Domain`;
