@@ -3,6 +3,9 @@ using Application.Common.Interfaces;
 using Application.Common.Exceptions;
 using Application.GroupOrders.Commands.CreateGroupOrder;
 using Application.GroupOrders.DTOs;
+using Application.Common.Models;
+using Application.PartnerOrders.DTOs;
+using Application.PartnerOrders.Queries.GetAdminPartnerOrders;
 using Domain;
 using Domain.Enums;
 using MediatR;
@@ -149,5 +152,74 @@ public class CreateGroupOrderFlowTests
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             sender.Send(Command(Guid.NewGuid(), Send("Central", city: "Nowhere"))));
+    }
+
+    // ── Partner API source flag ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task Partner_api_command_flags_every_created_order()
+    {
+        string db = $"int-{Guid.NewGuid()}";
+        await using ServiceProvider sp = BuildServices(db);
+        using (IServiceScope seedScope = sp.CreateScope())
+            Seed(seedScope.ServiceProvider.GetRequiredService<AppDbContext>());
+
+        using (IServiceScope scope = sp.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ISender>()
+                .Send(Command(Guid.NewGuid(), Send("Central"), Send("Central")) with { ViaPartnerApi = true });
+
+        using IServiceScope verify = sp.CreateScope();
+        AppDbContext ctx = verify.ServiceProvider.GetRequiredService<AppDbContext>();
+        List<Order> orders = ctx.Orders.AsNoTracking().ToList();
+        Assert.Equal(2, orders.Count);
+        Assert.All(orders, o => Assert.True(o.IsPartnerApiOrder));
+    }
+
+    [Fact]
+    public async Task Web_command_does_not_flag_orders_as_partner_api()
+    {
+        string db = $"int-{Guid.NewGuid()}";
+        await using ServiceProvider sp = BuildServices(db);
+        using (IServiceScope seedScope = sp.CreateScope())
+            Seed(seedScope.ServiceProvider.GetRequiredService<AppDbContext>());
+
+        using (IServiceScope scope = sp.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ISender>()
+                .Send(Command(Guid.NewGuid(), Send("Central")));
+
+        using IServiceScope verify = sp.CreateScope();
+        Order order = Assert.Single(verify.ServiceProvider.GetRequiredService<AppDbContext>().Orders.AsNoTracking().ToList());
+        Assert.False(order.IsPartnerApiOrder);
+    }
+
+    [Fact]
+    public async Task Admin_partner_orders_query_lists_only_api_orders_and_filters_by_partner()
+    {
+        string db = $"int-{Guid.NewGuid()}";
+        await using ServiceProvider sp = BuildServices(db);
+        using (IServiceScope seedScope = sp.CreateScope())
+            Seed(seedScope.ServiceProvider.GetRequiredService<AppDbContext>());
+
+        Guid partnerA = Guid.NewGuid(), partnerB = Guid.NewGuid(), webCustomer = Guid.NewGuid();
+        using (IServiceScope scope = sp.CreateScope())
+        {
+            ISender sender = scope.ServiceProvider.GetRequiredService<ISender>();
+            await sender.Send(Command(partnerA, Send("Central"), Send("Central")) with { ViaPartnerApi = true });
+            await sender.Send(Command(partnerB, Send("Central")) with { ViaPartnerApi = true });
+            await sender.Send(Command(webCustomer, Send("Central")));
+        }
+
+        using IServiceScope q = sp.CreateScope();
+        ISender reader = q.ServiceProvider.GetRequiredService<ISender>();
+
+        PagedResult<AdminPartnerOrderDto> all = await reader.Send(
+            new GetAdminPartnerOrdersQuery(null, null, null, null, 1, 50));
+        Assert.Equal(3, all.TotalCount);
+        Assert.DoesNotContain(all.Items, o => o.CustomerId == webCustomer);
+
+        PagedResult<AdminPartnerOrderDto> onlyA = await reader.Send(
+            new GetAdminPartnerOrdersQuery(partnerA, null, null, null, 1, 50));
+        Assert.Equal(2, onlyA.TotalCount);
+        Assert.All(onlyA.Items, o => Assert.Equal(partnerA, o.CustomerId));
     }
 }

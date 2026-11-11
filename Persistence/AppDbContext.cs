@@ -345,6 +345,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(o => o.TrackingNumber).HasMaxLength(30).IsRequired();
             e.HasIndex(o => o.ExternalReference);
             e.Property(o => o.ExternalReference).HasMaxLength(100);
+            // Partner Orders page: only the (few) API orders, newest first.
+            e.HasIndex(o => new { o.IsPartnerApiOrder, o.CreatedAt })
+             .HasFilter("[IsPartnerApiOrder] = 1");
             e.Property(o => o.Description).HasMaxLength(500);
             e.Property(o => o.Status).HasConversion<string>().HasMaxLength(50).IsUnicode(false);
             e.Property(o => o.OrderType).HasConversion<string>().HasMaxLength(20).IsUnicode(false);

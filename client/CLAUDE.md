@@ -236,6 +236,7 @@ and a single-day **or** date-range picker (max 93 days — mirrors `CompletedRan
 
 `AdminDashboard` gates its sidebar by role: `ADMIN_VIEWS` (22) / `OPERATOR_VIEWS` (12) /
 `TENANT_VIEWS` (6), and `systemadmin` additionally unlocks `tenants`, `partners`,
+`partnerOrders` (orders placed through the Partner API — `AdminPartnerOrdersPage`),
 `tenantSettlements`, `adminAccounts` (reset another Admin's password). **Guarding in the UI is not enough** — the backend attribute is the real
 boundary; keep them in step.
 

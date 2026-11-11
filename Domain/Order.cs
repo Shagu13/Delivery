@@ -200,6 +200,13 @@ public class Order
     public string? ExternalReference { get; set; }
 
     /// <summary>
+    /// True when the order was created through the Partner API (<c>POST /api/partner/orders</c>)
+    /// rather than the web/admin UI. Set once at creation; orders created before this column
+    /// existed stay false. Read by the system-admin "Partner Orders" page.
+    /// </summary>
+    public bool IsPartnerApiOrder { get; set; } = false;
+
+    /// <summary>
     /// True when this order was created by staff through the admin "+ Add Package"
     /// walk-in flow rather than placed by the customer. The order is still fully real
     /// for admin, courier, and finance/settlement purposes — this flag only hides it

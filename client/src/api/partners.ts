@@ -1,5 +1,7 @@
 // Admin-facing API for managing partner API keys and webhooks.
 
+import type { PagedResult } from '../types/paging';
+
 // ── Types ───────────────────────────────────────────────────────────────────────
 
 export interface PartnerApiKey {
@@ -31,6 +33,37 @@ export interface PartnerWebhook {
   secret: string;
   isActive: boolean;
   createdAt: string;
+}
+
+/** One order created through the Partner API (system-admin "Partner Orders" page). */
+export interface AdminPartnerOrder {
+  id: string;
+  trackingNumber: string;
+  externalReference: string | null;
+  customerId: string | null;
+  partnerName: string;
+  /** Internal OrderStatus name (e.g. "DeliveredToRecipient"). */
+  status: string;
+  recipientName: string;
+  recipientPhone: string;
+  recipientCity: string;
+  recipientDistrict: string;
+  productPaymentStatus: 'Paid' | 'NotPaid';
+  whoPaysForCompanyService: 'Sender' | 'Recipient';
+  amountToCollectForPackage: number | null;
+  companyServicePrice: number;
+  createdAt: string;
+  deliveredAt: string | null;
+}
+
+export interface AdminPartnerOrderFilters {
+  customerId?: string;
+  search?: string;
+  /** yyyy-MM-dd, Georgian day, inclusive. */
+  from?: string;
+  to?: string;
+  page: number;
+  pageSize: number;
 }
 
 // ── Error handling (mirrors other api/*.ts files) ───────────────────────────────
@@ -98,6 +131,21 @@ export async function createPartnerWebhook(
 export async function deletePartnerWebhook(id: string, token: string): Promise<void> {
   return handleEmpty(await fetch(`/api/partnerwebhooks/${id}`, {
     method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  }));
+}
+
+// ── Partner orders (system admin) ──────────────────────────────────────────────
+
+export async function getAdminPartnerOrders(
+  token: string, f: AdminPartnerOrderFilters,
+): Promise<PagedResult<AdminPartnerOrder>> {
+  const p = new URLSearchParams({ page: String(f.page), pageSize: String(f.pageSize) });
+  if (f.customerId) p.set('customerId', f.customerId);
+  if (f.search)     p.set('search', f.search);
+  if (f.from)       p.set('from', f.from);
+  if (f.to)         p.set('to', f.to);
+  return handle(await fetch(`/api/admin/partner-orders?${p}`, {
     headers: { Authorization: `Bearer ${token}` },
   }));
 }

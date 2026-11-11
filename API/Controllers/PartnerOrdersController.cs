@@ -110,7 +110,7 @@ public sealed class PartnerOrdersController : BaseController
             Orders:                 orderDtos,
             CustomerId:             customerId);
 
-        var result = await Sender.Send(new CreateGroupOrderCommand(dto), ct);
+        var result = await Sender.Send(new CreateGroupOrderCommand(dto, ViaPartnerApi: true), ct);
 
         // Re-attach each partner reference by position (Send-only preserves order).
         var items = result.Orders

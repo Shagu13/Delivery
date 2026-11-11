@@ -49,6 +49,7 @@ const AdminPackagesPage          = lazy(() => import('./AdminPackagesPage'));
 const AdminWeightPriceTiersPage  = lazy(() => import('./AdminWeightPriceTiersPage'));
 const AdminBankAccountsPage      = lazy(() => import('./AdminBankAccountsPage'));
 const AdminPartnersPage          = lazy(() => import('./AdminPartnersPage'));
+const AdminPartnerOrdersPage     = lazy(() => import('./AdminPartnerOrdersPage'));
 const AdminTenantSettlementsPage = lazy(() => import('./AdminTenantSettlementsPage'));
 const AdminTenantsPage           = lazy(() => import('./AdminTenantsPage'));
 const AdminHistoryPage           = lazy(() => import('./AdminHistoryPage'));
@@ -133,9 +134,9 @@ const MERGEABLE_STATUSES = new Set(['Pending', 'AcceptedGroupOrder', 'CourierAss
 const customerGroupKey = (go: AdminGroupOrder) =>
   `${go.customerId ?? `p:${go.senderPhone}`}|${go.pickUpCity}|${go.pickUpDistrict}|${go.pickUpAddress}`;
 
-type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'adminAccounts' | 'homepage' | 'orderSearch' | 'recipients' | 'deletePackage' | 'scan';
+type AdminView = 'overview' | 'orders' | 'delivery' | 'packages' | 'couriers' | 'customers' | 'cities' | 'schedule' | 'weightTiers' | 'bankAccounts' | 'partners' | 'partnerOrders' | 'tenants' | 'tenantSettlements' | 'history' | 'returnExchange' | 'finance' | 'operators' | 'adminAccounts' | 'homepage' | 'orderSearch' | 'recipients' | 'deletePackage' | 'scan';
 
-const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'adminAccounts', 'homepage', 'orderSearch', 'recipients', 'deletePackage', 'scan'];
+const ADMIN_VIEWS: readonly AdminView[] = ['overview', 'orders', 'delivery', 'packages', 'couriers', 'customers', 'cities', 'schedule', 'weightTiers', 'bankAccounts', 'partners', 'partnerOrders', 'tenants', 'tenantSettlements', 'history', 'returnExchange', 'finance', 'operators', 'adminAccounts', 'homepage', 'orderSearch', 'recipients', 'deletePackage', 'scan'];
 
 // Views an Operator (partial-admin role) may open. Operators now have full admin-level
 // access to these pages (create/edit/assign/etc.); only company revenue/margin figures
@@ -184,9 +185,9 @@ export function AdminDashboard() {
   const activeView: AdminView =
     isTenant   && !TENANT_VIEWS.includes(requestedView)   ? 'orders'
     : isOperator && !OPERATOR_VIEWS.includes(requestedView) ? 'overview'
-    // Block a non-systemadmin Admin from landing on the Tenants/Partner API/Tenant
-    // Settlements/Admin Accounts pages via the URL.
-    : (requestedView === 'tenants' || requestedView === 'partners' || requestedView === 'tenantSettlements' || requestedView === 'adminAccounts') && !isSystemAdmin ? 'overview'
+    // Block a non-systemadmin Admin from landing on the Tenants/Partner API/Partner Orders/
+    // Tenant Settlements/Admin Accounts pages via the URL.
+    : (requestedView === 'tenants' || requestedView === 'partners' || requestedView === 'partnerOrders' || requestedView === 'tenantSettlements' || requestedView === 'adminAccounts') && !isSystemAdmin ? 'overview'
     // Global Order Search is Admin/Operator (tenants are clamped out).
     : requestedView === 'orderSearch' && isTenant ? 'overview'
     : requestedView;
@@ -434,6 +435,17 @@ export function AdminDashboard() {
             <span className="sidebar__link-text">Partner API</span>
           </button>
           <button
+            className={`sidebar__link ${activeView === 'partnerOrders' ? 'sidebar__link--active' : ''}`}
+            onClick={() => goTo('partnerOrders')}
+            title={t.sidebarPartnerOrders}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2.5 5L8 2l5.5 3v6L8 14l-5.5-3V5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+              <path d="M2.5 5L8 8l5.5-3M8 8v6" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+            </svg>
+            <span className="sidebar__link-text">{t.sidebarPartnerOrders}</span>
+          </button>
+          <button
             className={`sidebar__link ${activeView === 'tenants' ? 'sidebar__link--active' : ''}`}
             onClick={() => goTo('tenants')}
             title="Tenants"
@@ -630,6 +642,7 @@ export function AdminDashboard() {
             {activeView === 'weightTiers' && t.topbarWeightTiers}
             {activeView === 'bankAccounts' && t.topbarBankAccounts}
             {activeView === 'partners' && 'Partner API'}
+            {activeView === 'partnerOrders' && t.topbarPartnerOrders}
             {activeView === 'tenants' && 'Tenants'}
             {activeView === 'tenantSettlements' && 'Tenant Settlements'}
             {activeView === 'adminAccounts' && t.topbarAdminAccounts}
@@ -687,6 +700,7 @@ export function AdminDashboard() {
                       <AdminBankAccountsPage token={token} />
                   )}
           {activeView === 'partners' && isSystemAdmin && token && <AdminPartnersPage token={token} />}
+          {activeView === 'partnerOrders' && isSystemAdmin && token && <AdminPartnerOrdersPage token={token} />}
           {activeView === 'tenants' && isSystemAdmin && token && <AdminTenantsPage token={token} />}
           {activeView === 'tenantSettlements' && isSystemAdmin && token && <AdminTenantSettlementsPage token={token} />}
           {activeView === 'adminAccounts' && isSystemAdmin && token && <AdminAccountsPage token={token} />}

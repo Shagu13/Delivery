@@ -1,0 +1,179 @@
+/* System-admin "Partner Orders" page (AdminPartnerOrdersPage + AdminPartnerOrdersTable). */
+
+.apo { padding: 0 0 2rem; }
+
+.apo__desc {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-subtle);
+}
+
+/* ── Filters ─────────────────────────────────────────────────────────────── */
+.apo__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.apo__input {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.apo__input:focus { outline: none; border-color: var(--color-border-focus); }
+.apo__input--grow { flex: 1 1 260px; min-width: 0; }
+
+.apo__date {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-subtle);
+}
+
+.apo__btn {
+  min-height: 40px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-2);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.apo__btn:hover:not(:disabled) { border-color: var(--color-accent); }
+.apo__btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+.apo__msg {
+  padding: 3rem 1rem;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--color-text-subtle);
+}
+.apo__msg--error {
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  text-align: left;
+}
+
+.apo__spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: apo-spin 0.8s linear infinite;
+}
+@keyframes apo-spin { to { transform: rotate(360deg); } }
+
+.apo__meta {
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--color-text-subtle);
+  transition: opacity var(--transition, 0.2s);
+}
+.apo__meta--busy { opacity: 0.5; }
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+.apo__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.apo__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.apo__table th,
+.apo__table td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+.apo__table th {
+  background: var(--color-bg-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+}
+.apo__table tbody tr:last-child td { border-bottom: none; }
+.apo__table code { font-size: 0.8rem; }
+
+.apo__sub {
+  margin-top: 0.15rem;
+  font-size: 0.74rem;
+  color: var(--color-text-subtle);
+}
+
+.apo__status {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.apo__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 1rem;
+  font-size: 0.82rem;
+  color: var(--color-text-subtle);
+}
+
+/* ── Phone: rows become labelled cards ───────────────────────────────────── */
+@media (max-width: 720px) {
+  .apo__input { font-size: 16px; } /* stop iOS zoom on focus */
+  .apo__input--grow { flex-basis: 100%; }
+  .apo__date { flex: 1 1 40%; }
+
+  .apo__table-wrap { border: none; overflow: visible; }
+  .apo__table thead { display: none; }
+  .apo__table,
+  .apo__table tbody,
+  .apo__table tr,
+  .apo__table td { display: block; width: 100%; box-sizing: border-box; }
+  .apo__table tr {
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .apo__table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: right;
+  }
+  .apo__table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-text-subtle);
+    text-align: left;
+  }
+  .apo__table tbody tr:last-child td { border-bottom: 1px solid var(--color-border); }
+  .apo__table tr td:last-child { border-bottom: none; }
+}

@@ -62,7 +62,7 @@ API/
 **Roles:** `Admin`, `Operator`, `Courier`, `Customer`, `TenantAdmin`.
 
 **`SystemAdmin` policy** = `Admin` role **and** `ClaimTypes.Name == "systemadmin"`. Guards
-Tenants (create/edit), Partner API keys, Partner webhooks, Tenant Settlements, and
+Tenants (create/edit), Partner API keys, Partner webhooks, Partner Orders, Tenant Settlements, and
 `AdminAccountsController` (list other Admins, force-reset their password). Ordinary
 admins can still `GET /api/tenants` — that read powers the customer-assignment dropdown.
 
@@ -153,6 +153,12 @@ Docs for partners: `docs/api_guide.md` (webhooks are intentionally left out of i
   partner. Never expose the raw enum.
 - **`Order.ExternalReference`** carries the partner's own order number — used for dedup on
   retried submissions and for reconciliation.
+- **`Order.IsPartnerApiOrder`** marks orders created through the API. Set only via
+  `CreateGroupOrderCommand(dto, ViaPartnerApi: true)` from `PartnerOrdersController` — a command
+  parameter, not a DTO field, so a web client can't set it. Orders created before the column
+  existed stay `false`. Read by the system-admin **Partner Orders** page
+  (`AdminPartnerOrdersController`, `GET /api/admin/partner-orders`, `SystemAdmin` policy →
+  `GetAdminPartnerOrdersQuery`).
 - **Webhooks** — transactional outbox. `WebhookOutboxInterceptor` writes `WebhookDelivery` rows
   on status change; `WebhookSenderService` (a `BackgroundService`) drains them, signs with
   HMAC-SHA256 (`X-Webhook-Signature: sha256=<hex>`), and retries with backoff.

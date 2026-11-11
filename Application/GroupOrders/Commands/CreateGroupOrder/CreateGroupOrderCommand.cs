@@ -16,6 +16,12 @@ namespace Application.GroupOrders.Commands.CreateGroupOrder;
 /// Accepts a CreateGroupOrderDto (input) and returns CreateGroupOrderResultDto (output).
 /// Both types live in the DTOs folder — reusable, not tied to this command alone.
 /// </summary>
+/// <param name="ViaPartnerApi">
+/// Set only by <c>PartnerOrdersController</c>: stamps every created order with
+/// <c>Order.IsPartnerApiOrder</c>. Deliberately on the command, not the DTO, so a web
+/// client can't mark its own orders as API orders through the request body.
+/// </param>
 public sealed record CreateGroupOrderCommand(
-    CreateGroupOrderDto Dto
+    CreateGroupOrderDto Dto,
+    bool ViaPartnerApi = false
 ) : IRequest<CreateGroupOrderResultDto>;

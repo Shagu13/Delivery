@@ -809,6 +809,9 @@ namespace Persistence.Migrations
                     b.Property<bool>("IsFragile")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsPartnerApiOrder")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsWalkIn")
                         .HasColumnType("bit");
 
@@ -964,6 +967,9 @@ namespace Persistence.Migrations
                     b.HasIndex("WarehouseId");
 
                     b.HasIndex("WeightPriceTierId");
+
+                    b.HasIndex("IsPartnerApiOrder", "CreatedAt")
+                        .HasFilter("[IsPartnerApiOrder] = 1");
 
                     b.HasIndex("RecipientCity", "RecipientDistrict");
 

@@ -56,3 +56,27 @@ public sealed record PartnerOrderListDto(
     int PageSize,
     IReadOnlyList<PartnerOrderSummaryDto> Items
 );
+
+/// <summary>
+/// One Partner-API order on the system-admin "Partner Orders" page. Admin-facing, so it
+/// carries the internal <see cref="OrderStatus"/> (not the public partner status) and the
+/// partner (customer) it belongs to. No courier salary / company revenue.
+/// </summary>
+public sealed record AdminPartnerOrderDto(
+    Guid Id,
+    string TrackingNumber,
+    string? ExternalReference,
+    Guid? CustomerId,
+    string PartnerName,
+    OrderStatus Status,
+    string RecipientName,
+    string RecipientPhone,
+    string RecipientCity,
+    string RecipientDistrict,
+    PaymentStatus ProductPaymentStatus,
+    ServicePayer WhoPaysForCompanyService,
+    decimal? AmountToCollectForPackage,
+    decimal CompanyServicePrice,
+    DateTime CreatedAt,
+    DateTime? DeliveredAt
+);

@@ -49,6 +49,9 @@ public sealed class CreateGroupOrderCommandHandler
             _context, _trackingGen, customer, dto.Orders, cancellationToken, dto.PickUpDistrict,
             allowClientPriceOverride: false, pickUpCityName: dto.PickUpCity);
 
+        if (request.ViaPartnerApi)
+            foreach (var order in built) order.IsPartnerApiOrder = true;
+
         // ── Split: Return orders become standalone; Send/Exchange go into a GroupOrder ──
         var standaloneReturns = new List<Order>();
         var batchOrders       = new List<Order>();
