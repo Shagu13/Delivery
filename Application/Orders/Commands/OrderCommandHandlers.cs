@@ -1,5 +1,6 @@
 using Application.Common.Exceptions;
 using Application.Common.Interfaces;
+using Application.Couriers;
 using Application.Finance;
 using Application.Settlements;
 using Domain.Enums;
@@ -100,10 +101,12 @@ public sealed class AssignCourierToOrderCommandHandler : IRequestHandler<AssignC
         order.PostponeComment = null;
         order.PostponedAt = null;
 
-        // Auto-fill this courier's standard rate (Tbilisi couriers only — see
-        // Courier.DefaultSalary doc comment). When null, the order's CourierSalary stays
-        // untouched and the Packages page's missing-salary flow prompts the admin to set one.
-        if (courier.DefaultSalary is decimal defaultSalary)
+        // Auto-fill this courier's salary for the recipient's zone (capital / city / district —
+        // see CourierSalaryResolver). When null, the order's CourierSalary stays untouched and
+        // the Packages page's missing-salary flow prompts the admin to set one.
+        var salaryResolver = await CourierSalaryResolver.LoadAsync(
+            _context, new[] { order.RecipientDistrict }, cancellationToken);
+        if (salaryResolver.SalaryFor(courier, order.RecipientCity, order.RecipientDistrict) is decimal defaultSalary)
         {
             order.CourierSalary = defaultSalary;
             order.CompanyRevenue = order.CompanyServicePrice - defaultSalary;
@@ -205,6 +208,10 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
 
         var now = CustomTime.Now;
 
+        // Zone districts for every order in one load — never per order inside the loop.
+        var salaryResolver = await CourierSalaryResolver.LoadAsync(
+            _context, orders.Select(o => o.RecipientDistrict), cancellationToken);
+
         foreach (var order in orders)
         {
             if (order.OrderType == OrderType.Return)
@@ -239,8 +246,8 @@ public sealed class BulkAssignCourierToOrdersCommandHandler
             order.PostponeComment = null;
             order.PostponedAt = null;
 
-            // Auto-fill this courier's standard rate — mirrors AssignCourierToOrderCommandHandler.
-            if (courier.DefaultSalary is decimal defaultSalary)
+            // Auto-fill this courier's zone salary — mirrors AssignCourierToOrderCommandHandler.
+            if (salaryResolver.SalaryFor(courier, order.RecipientCity, order.RecipientDistrict) is decimal defaultSalary)
             {
                 order.CourierSalary = defaultSalary;
                 order.CompanyRevenue = order.CompanyServicePrice - defaultSalary;
@@ -1096,8 +1103,8 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
 
         // Set/refresh the courier salary atomically with the delivery and recompute
         // CompanyRevenue, mirroring SetCourierSalaryCommand, so the settlement is complete.
-        // An explicit admin value always wins; otherwise fall back to the courier's standard
-        // rate (Tbilisi only — see Courier.DefaultSalary) when the order has none yet, mirroring
+        // An explicit admin value always wins; otherwise fall back to the courier's salary for
+        // the recipient's zone (see CourierSalaryResolver) when the order has none yet, mirroring
         // AssignCourierToOrderCommandHandler.
         if (request.Salary is decimal salary)
         {
@@ -1111,10 +1118,13 @@ public sealed class AdminMarkOrderDeliveredCommandHandler : IRequestHandler<Admi
         }
         else if (order.CourierSalary is null && courierIdForSalary is Guid cid)
         {
-            var defaultSalary = await _context.Couriers
-                .Where(c => c.Id == cid)
-                .Select(c => c.DefaultSalary)
-                .FirstOrDefaultAsync(cancellationToken);
+            var salaryCourier = await _context.Couriers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == cid, cancellationToken);
+            var salaryResolver = await CourierSalaryResolver.LoadAsync(
+                _context, new[] { order.RecipientDistrict }, cancellationToken);
+            decimal? defaultSalary = salaryCourier is null ? null
+                : salaryResolver.SalaryFor(salaryCourier, order.RecipientCity, order.RecipientDistrict);
 
             if (defaultSalary is decimal ds)
             {

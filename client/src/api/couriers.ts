@@ -7,8 +7,10 @@ export interface CreateCourierRequest {
     assignedDistrict: string;
     username: string;
     password: string;
-    /** Standard per-order delivery salary — only allowed when assignedCity is Tbilisi. */
-    defaultSalary?: number | null;
+    /** Per-zone delivery salaries (see utils/courierSalary.ts); null = no auto-fill for that zone. */
+    capitalSalary?: number | null;
+    citySalary?: number | null;
+    districtSalary?: number | null;
 }
 
 export interface CreateCourierResponse {
@@ -33,8 +35,10 @@ export interface Courier {
     idNumber: string;
     isDeleted: boolean;
     dateDeleted: string | null;
-    /** Standard per-order delivery salary — only set for Tbilisi couriers; null elsewhere. */
-    defaultSalary: number | null;
+    /** Per-zone delivery salaries — auto-applied on assign/deliver by the recipient's zone (utils/courierSalary.ts). */
+    capitalSalary: number | null;
+    citySalary: number | null;
+    districtSalary: number | null;
     /** Settlement date basis this courier defaults to — regional (non-Tbilisi/Rustavi) couriers: 'Assigned'. */
     defaultDateBasis: CourierDateBasis;
 }
@@ -288,8 +292,10 @@ export interface UpdateCourierRequest {
     newPassword?: string;
     phoneNumber: string;
     idNumber: string;
-    /** Standard per-order delivery salary — only allowed when the courier is assigned to Tbilisi. */
-    defaultSalary?: number | null;
+    /** Per-zone delivery salaries; each is replaced as sent — null clears that zone. */
+    capitalSalary?: number | null;
+    citySalary?: number | null;
+    districtSalary?: number | null;
 }
 
 export async function updateCourier(

@@ -38,7 +38,9 @@ public sealed class CouriersController : BaseController
                 AssignedDistrict: request.AssignedDistrict,
                 Username: request.Username,
                 Password: request.Password,
-                DefaultSalary: request.DefaultSalary
+                CapitalSalary: request.CapitalSalary,
+                CitySalary: request.CitySalary,
+                DistrictSalary: request.DistrictSalary
             )
         );
 
@@ -75,7 +77,7 @@ public sealed class CouriersController : BaseController
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCourierRequest request, CancellationToken ct)
     {
         var newPassword = string.IsNullOrWhiteSpace(request.NewPassword) ? null : request.NewPassword;
-        await Sender.Send(new UpdateCourierCommand(id, request.FirstName, request.LastName, request.Username, newPassword, request.PhoneNumber, request.IdNumber, request.DefaultSalary), ct);
+        await Sender.Send(new UpdateCourierCommand(id, request.FirstName, request.LastName, request.Username, newPassword, request.PhoneNumber, request.IdNumber, request.CapitalSalary, request.CitySalary, request.DistrictSalary), ct);
         return NoContent();
     }
 

@@ -9,6 +9,7 @@ import { EditCourierSalaryModal } from './EditCourierSalaryModal';
 import { AddPackageModal } from './AddPackageModal';
 import { AdminMonthlyStats } from './AdminMonthlyStats';
 import type { CreateCourierResponse, Courier, CourierOrder, CourierDayDelivery, CourierDayPickup } from '../../api/couriers';
+import type { CourierZoneSalaries } from '../../hooks/useEditCourier';
 import { fetchGroupOrders, fetchAdminOverviewStats,
     fetchPickupDay, fetchCustomerUnattached, attachOrdersToGroup, mergeGroupOrders, moveOrderToGroup,
     groupAndAcceptStandalone, groupAndWarehouseStandalone, bulkAssignCourierToGroupOrders } from '../../api/adminGroupOrders';
@@ -253,10 +254,10 @@ export function AdminDashboard() {
     goTo('couriers');
   };
 
-  const handleCourierUpdated = (courierId: string, newFirstName: string, newLastName: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => {
+  const handleCourierUpdated = (courierId: string, newFirstName: string, newLastName: string, newUsername: string, newPhone: string, newIdNumber: string, salaries: CourierZoneSalaries) => {
     queryClient.setQueryData(['admin', 'couriers'], (prev?: Courier[]) => (prev ?? []).map(c =>
       c.courierId === courierId
-        ? { ...c, firstName: newFirstName, lastName: newLastName, fullName: `${newFirstName} ${newLastName}`, username: newUsername, phoneNumber: newPhone, idNumber: newIdNumber, defaultSalary: newDefaultSalary }
+        ? { ...c, firstName: newFirstName, lastName: newLastName, fullName: `${newFirstName} ${newLastName}`, username: newUsername, phoneNumber: newPhone, idNumber: newIdNumber, ...salaries }
         : c
     ));
     setEditCourier(null);
@@ -764,7 +765,7 @@ export function AdminDashboard() {
         courier={editCourier}
         token={token ?? ''}
         onClose={() => setEditCourier(null)}
-        onUpdated={(id, firstName, lastName, username, phone, idNumber, defaultSalary) => { handleCourierUpdated(id, firstName, lastName, username, phone, idNumber, defaultSalary); }}
+        onUpdated={(id, firstName, lastName, username, phone, idNumber, salaries) => { handleCourierUpdated(id, firstName, lastName, username, phone, idNumber, salaries); }}
       />
 
       {toast && (
@@ -3401,11 +3402,15 @@ function AllCouriersList({
             <span style={{ fontFamily: 'Courier New, monospace', fontSize: '0.78rem', color: 'var(--color-text-subtle)' }}>
               {courier.phoneNumber}
             </span>
-            {courier.defaultSalary != null && (
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', border: '1px solid rgba(196,127,23,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
-                {t.courierDefaultSalary} ₾{courier.defaultSalary.toFixed(2)}
+            {([
+              [t.courierCapitalSalary,  courier.capitalSalary],
+              [t.courierCitySalary,     courier.citySalary],
+              [t.courierDistrictSalary, courier.districtSalary],
+            ] as const).map(([label, salary]) => salary != null && (
+              <span key={label} style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-accent)', background: 'var(--color-accent-dim)', border: '1px solid rgba(196,127,23,0.25)', borderRadius: 100, padding: '2px 9px', whiteSpace: 'nowrap' }}>
+                {label} ₾{salary.toFixed(2)}
               </span>
-            )}
+            ))}
             <span className={`status-badge ${!courier.isDeleted ? 'status-badge--delivered' : 'status-badge--cancelled'}`}>
               {!courier.isDeleted ? t.courierStatusActive : t.courierStatusDeleted}
             </span>

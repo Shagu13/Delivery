@@ -28,18 +28,11 @@ public sealed class CreateCourierCommandValidator : AbstractValidator<CreateCour
             .MinimumLength(8)
             .MaximumLength(100);
 
-        RuleFor(x => x.Dto.DefaultSalary)
-            .GreaterThanOrEqualTo(0)
-            .When(x => x.Dto.DefaultSalary.HasValue)
-            .WithMessage("Default salary must be a non-negative value.");
-
-        // Only couriers in eligible cities get a standard per-order rate — other cities are
-        // priced manually per order (see Courier.DefaultSalary doc comment).
-        RuleFor(x => x.Dto.AssignedCity)
-            .Must(Application.Couriers.CourierSalaryEligibility.IsEligible)
-            .When(x => x.Dto.DefaultSalary.HasValue)
-            .WithMessage("Default salary can only be set for couriers assigned to " +
-                string.Join(" or ", Application.Couriers.CourierSalaryEligibility.EligibleCities) + ".")
-            .OverridePropertyName("DefaultSalary");
+        RuleFor(x => x.Dto.CapitalSalary).GreaterThanOrEqualTo(0).When(x => x.Dto.CapitalSalary.HasValue)
+            .WithMessage("Salary must be a non-negative value.").OverridePropertyName("CapitalSalary");
+        RuleFor(x => x.Dto.CitySalary).GreaterThanOrEqualTo(0).When(x => x.Dto.CitySalary.HasValue)
+            .WithMessage("Salary must be a non-negative value.").OverridePropertyName("CitySalary");
+        RuleFor(x => x.Dto.DistrictSalary).GreaterThanOrEqualTo(0).When(x => x.Dto.DistrictSalary.HasValue)
+            .WithMessage("Salary must be a non-negative value.").OverridePropertyName("DistrictSalary");
     }
 }

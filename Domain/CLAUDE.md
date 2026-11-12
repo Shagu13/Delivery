@@ -29,7 +29,7 @@ Domain/
 ├── GroupOrders.cs              # GroupOrder — a batch of packages from one sender
 ├── Customer.cs                 # sender/business account, negotiated pricing, TenantId
 ├── CustomerSpecialPrice.cs     # per-customer, per-district price exception (on top of Customer's capital/city/district tiers)
-├── Couriers.cs                 # Courier — assigned city/district, DefaultSalary, soft-deleted
+├── Couriers.cs                 # Courier — assigned city/district, Capital/City/DistrictSalary (per-zone), soft-deleted
 ├── Warehouse.cs
 ├── TrackingEvent.cs            # public tracking timeline rows
 │

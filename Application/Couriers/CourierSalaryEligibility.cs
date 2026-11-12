@@ -1,8 +1,9 @@
 namespace Application.Couriers;
 
 /// <summary>
-/// Cities whose couriers get a standard per-order rate (<see cref="Domain.Courier.DefaultSalary"/>);
-/// couriers assigned elsewhere are priced manually per order.
+/// The metro cities (Tbilisi, Rustavi) whose couriers settle by delivery date — see
+/// <see cref="CourierDateBasisPolicy"/>. No longer gates salary: every courier can carry
+/// per-zone salaries (<see cref="CourierSalaryResolver"/>).
 /// </summary>
 public static class CourierSalaryEligibility
 {

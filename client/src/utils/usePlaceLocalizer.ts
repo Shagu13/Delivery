@@ -21,12 +21,8 @@ function loadEntries(): Promise<AllDistrictEntry[]> {
 
 interface NamePair { en: string; geo?: string }
 
-/**
- * Returns `locCity` / `locDistrict` helpers that translate a stored city/district name into
- * the active language. Unknown names (not in the city list) are returned unchanged.
- */
-export function usePlaceLocalizer() {
-    const { lang } = useLanguage();
+/** The flat active city/district list, fetched once per page load and shared by every caller. */
+export function useAllDistrictEntries(): AllDistrictEntry[] {
     const [entries, setEntries] = useState<AllDistrictEntry[]>(_cache ?? []);
 
     useEffect(() => {
@@ -35,6 +31,17 @@ export function usePlaceLocalizer() {
         loadEntries().then(e => { if (alive) setEntries(e); });
         return () => { alive = false; };
     }, []);
+
+    return entries;
+}
+
+/**
+ * Returns `locCity` / `locDistrict` helpers that translate a stored city/district name into
+ * the active language. Unknown names (not in the city list) are returned unchanged.
+ */
+export function usePlaceLocalizer() {
+    const { lang } = useLanguage();
+    const entries = useAllDistrictEntries();
 
     const { cityMap, districtMap } = useMemo(() => {
         const cityMap = new Map<string, NamePair>();

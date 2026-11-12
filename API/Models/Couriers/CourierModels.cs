@@ -10,7 +10,9 @@ public sealed record CreateCourierRequest(
     string AssignedDistrict,
     string Username,
     string Password,
-    decimal? DefaultSalary = null
+    decimal? CapitalSalary = null,
+    decimal? CitySalary = null,
+    decimal? DistrictSalary = null
 );
 
 /// <summary>HTTP response body — returns the new courier's domain ID.</summary>
@@ -28,7 +30,9 @@ public sealed record UpdateCourierRequest(
     string?  NewPassword,
     string   PhoneNumber,
     string   IdNumber,
-    decimal? DefaultSalary = null
+    decimal? CapitalSalary = null,
+    decimal? CitySalary = null,
+    decimal? DistrictSalary = null
 );
 
 /// <summary>HTTP request body for PATCH /api/couriers/{id}/active (admin only).</summary>

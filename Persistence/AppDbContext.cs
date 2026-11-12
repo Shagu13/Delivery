@@ -70,7 +70,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
             e.Property(c => c.PhoneNumber).HasMaxLength(20).IsRequired();
             e.Property(c => c.AssignedCity).HasMaxLength(100).IsRequired();
             e.Property(c => c.AssignedDistrict).HasMaxLength(100).IsRequired();
-            e.Property(c => c.DefaultSalary).HasColumnType("decimal(18,2)");
+            e.Property(c => c.CapitalSalary).HasColumnType("decimal(18,2)");
+            e.Property(c => c.CitySalary).HasColumnType("decimal(18,2)");
+            e.Property(c => c.DistrictSalary).HasColumnType("decimal(18,2)");
         });
 
         // ── Customer ─────────────────────────────────────────────────────────

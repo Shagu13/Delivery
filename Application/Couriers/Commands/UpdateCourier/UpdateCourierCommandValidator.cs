@@ -22,9 +22,11 @@ public sealed class UpdateCourierCommandValidator : AbstractValidator<UpdateCour
             .MaximumLength(100)
             .When(x => !string.IsNullOrWhiteSpace(x.NewPassword));
 
-        RuleFor(x => x.DefaultSalary)
-            .GreaterThanOrEqualTo(0)
-            .When(x => x.DefaultSalary.HasValue)
-            .WithMessage("Default salary must be a non-negative value.");
+        RuleFor(x => x.CapitalSalary).GreaterThanOrEqualTo(0).When(x => x.CapitalSalary.HasValue)
+            .WithMessage("Salary must be a non-negative value.");
+        RuleFor(x => x.CitySalary).GreaterThanOrEqualTo(0).When(x => x.CitySalary.HasValue)
+            .WithMessage("Salary must be a non-negative value.");
+        RuleFor(x => x.DistrictSalary).GreaterThanOrEqualTo(0).When(x => x.DistrictSalary.HasValue)
+            .WithMessage("Salary must be a non-negative value.");
     }
 }

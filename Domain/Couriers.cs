@@ -16,14 +16,21 @@ namespace Domain
         /// <summary>Null = active courier. Non-null = soft-deleted; the value is the deletion timestamp.</summary>
         public DateTime? DateDeleted { get; set; }
 
-        /// <summary>
-        /// Standard per-order delivery salary for this courier — auto-applied to
-        /// <see cref="Order.CourierSalary"/> when they're assigned a Send/Exchange delivery from
-        /// the Packages page. Only settable when <see cref="AssignedCity"/> is an eligible city
-        /// (see Application.Couriers.CourierSalaryEligibility — Tbilisi, Rustavi); null means
-        /// the admin must set a price manually per order (couriers elsewhere use varying rates).
-        /// </summary>
-        public decimal? DefaultSalary { get; set; }
+        // ── Per-zone delivery salary (admin-set) ─────────────────────────────────
+        // Auto-applied to Order.CourierSalary when this courier is assigned (or admin-delivers) a
+        // Send/Exchange order, picked by the recipient district's zone flags — the same
+        // IsCapitalTerritory / IsCityTerritory split customer pricing uses. Resolved only through
+        // Application.Couriers.CourierSalaryResolver. Null for the order's zone (or an unknown
+        // district) means no auto-fill: the admin sets the salary on that order by hand.
+
+        /// <summary>Salary per delivery to a capital (Tbilisi) district — <c>District.IsCapitalTerritory</c>.</summary>
+        public decimal? CapitalSalary { get; set; }
+
+        /// <summary>Salary per delivery to a non-capital city centre — <c>District.IsCityTerritory</c>.</summary>
+        public decimal? CitySalary { get; set; }
+
+        /// <summary>Salary per delivery to a village / rural district (neither flag set).</summary>
+        public decimal? DistrictSalary { get; set; }
 
         // Identity link
         public required string ApplicationUserId { get; set; }

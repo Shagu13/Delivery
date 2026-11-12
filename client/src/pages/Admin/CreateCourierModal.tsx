@@ -4,7 +4,8 @@ import type { CreateCourierResponse } from '../../api/couriers';
 import { FormField } from '../../components/ui/FormField';
 import { PasswordRequirements } from '../../components/ui/PasswordRequirements';
 import { CityDistrictPicker } from '../../components/ui/CityDistrictPicker';
-import { isDefaultSalaryEligibleCity } from '../../hooks/useEditCourier';
+import { CourierZoneSalaryFields } from './CourierZoneSalaryFields';
+import { parseZoneSalary, validateZoneSalaries } from '../../utils/courierSalary';
 import { firstPasswordError } from '../../utils/passwordRules';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/useLanguage';
@@ -19,12 +20,12 @@ interface Props {
 interface FormData {
   firstName: string; lastName: string; idNumber: string; phoneNumber: string;
   assignedCity: string; assignedDistrict: string; username: string; password: string;
-  defaultSalary: string;
+  capitalSalary: string; citySalary: string; districtSalary: string;
 }
 
 type FieldErrors = Partial<Record<keyof FormData, string>>;
 
-const EMPTY: FormData = { firstName: '', lastName: '', idNumber: '', phoneNumber: '', assignedCity: '', assignedDistrict: '', username: '', password: '', defaultSalary: '' };
+const EMPTY: FormData = { firstName: '', lastName: '', idNumber: '', phoneNumber: '', assignedCity: '', assignedDistrict: '', username: '', password: '', capitalSalary: '', citySalary: '', districtSalary: '' };
 
 // Translates backend validation errors into friendly, localized field messages.
 // The API returns two kinds of keys: FluentValidation property names ("Dto.Username")
@@ -90,12 +91,7 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
     }, [open]);
 
   const handleChange = useCallback((field: keyof FormData, value: string) => {
-    setForm(prev => ({
-      ...prev,
-      [field]: value,
-      // Leaving an eligible city drops any entered default salary — it's not applicable elsewhere.
-      ...(field === 'assignedCity' && !isDefaultSalaryEligibleCity(value) ? { defaultSalary: '' } : {}),
-    }));
+    setForm(prev => ({ ...prev, [field]: value }));
     setErrors(prev => { const next = { ...prev }; delete next[field]; return next; });
   }, []);
 
@@ -109,10 +105,7 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
     if (!form.assignedDistrict.trim()) e.assignedDistrict = t.errDistrictRequired;
     if (!form.username.trim())        e.username        = t.errUsernameRequired;
     else if (!/^[a-zA-Z0-9_.-]+$/.test(form.username)) e.username = t.errUsernameChars;
-    if (isDefaultSalaryEligibleCity(form.assignedCity) && form.defaultSalary.trim() !== '') {
-      const v = parseFloat(form.defaultSalary);
-      if (isNaN(v) || v < 0) e.defaultSalary = t.errDefaultSalaryInvalid;
-    }
+    Object.assign(e, validateZoneSalaries(form, t.errDefaultSalaryInvalid));
     if (!form.password)               e.password        = t.errPasswordRequired;
     else {
       // Mirror ASP.NET Identity's full password policy so every unmet rule surfaces
@@ -136,8 +129,9 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
         idNumber: form.idNumber.trim(), phoneNumber: form.phoneNumber.trim(),
         assignedCity: form.assignedCity.trim(), assignedDistrict: form.assignedDistrict.trim(),
         username: form.username.trim(), password: form.password,
-        defaultSalary: isDefaultSalaryEligibleCity(form.assignedCity) && form.defaultSalary.trim() !== ''
-          ? parseFloat(form.defaultSalary) : null,
+        capitalSalary:  parseZoneSalary(form.capitalSalary),
+        citySalary:     parseZoneSalary(form.citySalary),
+        districtSalary: parseZoneSalary(form.districtSalary),
       }, token);
       onCreated(result);
     } catch (err) {
@@ -209,23 +203,7 @@ export function CreateCourierModal({ open, onClose, onCreated }: Props) {
               cityError={errors.assignedCity}
               districtError={errors.assignedDistrict}
             />
-            {isDefaultSalaryEligibleCity(form.assignedCity) && (
-              <div>
-                <FormField
-                  label={t.courierDefaultSalary}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.defaultSalary}
-                  onChange={e => handleChange('defaultSalary', e.target.value)}
-                  error={errors.defaultSalary}
-                  placeholder={t.phDefaultSalary}
-                />
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-subtle)', marginTop: 4, display: 'block' }}>
-                  {t.courierDefaultSalaryHint}
-                </span>
-              </div>
-            )}
+            <CourierZoneSalaryFields values={form} errors={errors} onChange={handleChange} />
           </fieldset>
 
           <fieldset className="modal__fieldset">

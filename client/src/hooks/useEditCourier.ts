@@ -1,45 +1,42 @@
 import { useState, useCallback } from 'react';
 import { updateCourier, CourierApiError } from '../api/couriers';
 import type { Courier } from '../api/couriers';
+import { parseZoneSalary, validateZoneSalaries, type ZoneSalaryForm } from '../utils/courierSalary';
 
-export interface EditCourierForm {
+export interface EditCourierForm extends ZoneSalaryForm {
     firstName:     string;
     lastName:      string;
     username:      string;
     newPassword:   string;
     phoneNumber:   string;
     idNumber:      string;
-    defaultSalary: string;
 }
 
 type FieldErrors = Partial<Record<keyof EditCourierForm, string>>;
 
-// Cities whose couriers get a standard per-order rate — see Courier.DefaultSalary doc comment.
-// Mirrors Application.Couriers.CourierSalaryEligibility on the backend.
-export const DEFAULT_SALARY_ELIGIBLE_CITIES = ['Tbilisi', 'Rustavi'];
+/** The courier's per-zone salaries as saved — passed back to the caller to patch its cached roster. */
+export type CourierZoneSalaries = Pick<Courier, 'capitalSalary' | 'citySalary' | 'districtSalary'>;
 
-export const isDefaultSalaryEligibleCity = (city: string) =>
-    DEFAULT_SALARY_ELIGIBLE_CITIES.some(c => c.toLowerCase() === city.trim().toLowerCase());
-
-export const isDefaultSalaryEligibleCourier = (courier: Courier | null) =>
-    !!courier && isDefaultSalaryEligibleCity(courier.assignedCity);
+const salaryText = (v: number | null | undefined) => (v != null ? String(v) : '');
 
 function initialForm(courier: Courier | null): EditCourierForm {
     return {
-        firstName:     courier?.firstName   ?? '',
-        lastName:      courier?.lastName    ?? '',
-        username:      courier?.username    ?? '',
-        newPassword:   '',
-        phoneNumber:   courier?.phoneNumber ?? '',
-        idNumber:      courier?.idNumber    ?? '',
-        defaultSalary: courier?.defaultSalary != null ? String(courier.defaultSalary) : '',
+        firstName:      courier?.firstName   ?? '',
+        lastName:       courier?.lastName    ?? '',
+        username:       courier?.username    ?? '',
+        newPassword:    '',
+        phoneNumber:    courier?.phoneNumber ?? '',
+        idNumber:       courier?.idNumber    ?? '',
+        capitalSalary:  salaryText(courier?.capitalSalary),
+        citySalary:     salaryText(courier?.citySalary),
+        districtSalary: salaryText(courier?.districtSalary),
     };
 }
 
 export function useEditCourier(
     courier: Courier | null,
     token: string,
-    onUpdated: (courierId: string, newFirstName: string, newLastName: string, newUsername: string, newPhone: string, newIdNumber: string, newDefaultSalary: number | null) => void,
+    onUpdated: (courierId: string, newFirstName: string, newLastName: string, newUsername: string, newPhone: string, newIdNumber: string, salaries: CourierZoneSalaries) => void,
 ) {
     // Key the entire form state off the courier's ID so React re-initializes
     // whenever a different courier is selected — no useEffect needed.
@@ -81,10 +78,7 @@ export function useEditCourier(
         if (!form.idNumber.trim()) {
             e.idNumber = 'ID number is required.';
         }
-        if (isDefaultSalaryEligibleCourier(courier) && form.defaultSalary.trim() !== '') {
-            const v = parseFloat(form.defaultSalary);
-            if (isNaN(v) || v < 0) e.defaultSalary = 'Enter a valid non-negative amount.';
-        }
+        Object.assign(e, validateZoneSalaries(form, 'Enter a valid non-negative amount.'));
         return e;
     };
 
@@ -102,8 +96,11 @@ export function useEditCourier(
 
         setSubmitting(true);
         try {
-            const defaultSalary = isDefaultSalaryEligibleCourier(courier) && form.defaultSalary.trim() !== ''
-                ? parseFloat(form.defaultSalary) : null;
+            const salaries: CourierZoneSalaries = {
+                capitalSalary:  parseZoneSalary(form.capitalSalary),
+                citySalary:     parseZoneSalary(form.citySalary),
+                districtSalary: parseZoneSalary(form.districtSalary),
+            };
             await updateCourier(
                 courier.courierId,
                 {
@@ -113,12 +110,12 @@ export function useEditCourier(
                     newPassword: form.newPassword || undefined,
                     phoneNumber: form.phoneNumber.trim(),
                     idNumber:    form.idNumber.trim(),
-                    defaultSalary,
+                    ...salaries,
                 },
                 token,
             );
             setSuccess(true);
-            onUpdated(courier.courierId, form.firstName.trim(), form.lastName.trim(), form.username.trim(), form.phoneNumber.trim(), form.idNumber.trim(), defaultSalary);
+            onUpdated(courier.courierId, form.firstName.trim(), form.lastName.trim(), form.username.trim(), form.phoneNumber.trim(), form.idNumber.trim(), salaries);
         } catch (err) {
             if (err instanceof CourierApiError && err.errors) {
                 const mapped: FieldErrors = {};

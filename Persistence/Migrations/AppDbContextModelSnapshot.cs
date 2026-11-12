@@ -187,10 +187,16 @@ namespace Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<decimal?>("CapitalSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("CitySalary")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("DateDeleted")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal?>("DefaultSalary")
+                    b.Property<decimal?>("DistrictSalary")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("FirstName")

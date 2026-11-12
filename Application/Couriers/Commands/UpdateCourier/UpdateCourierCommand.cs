@@ -16,9 +16,11 @@ public sealed record UpdateCourierCommand(
     string?  NewPassword,
     string   PhoneNumber,
     string   IdNumber,
-    /// <summary>Standard per-order salary — only allowed for couriers in an eligible city
-    /// (see <see cref="Application.Couriers.CourierSalaryEligibility"/>); null clears it.</summary>
-    decimal? DefaultSalary = null
+    /// <summary>Per-zone delivery salaries (see <see cref="Application.Couriers.CourierSalaryResolver"/>);
+    /// each is replaced as sent — null clears that zone.</summary>
+    decimal? CapitalSalary = null,
+    decimal? CitySalary = null,
+    decimal? DistrictSalary = null
 ) : IRequest;
 
 public sealed class UpdateCourierCommandHandler : IRequestHandler<UpdateCourierCommand>
@@ -70,19 +72,10 @@ public sealed class UpdateCourierCommandHandler : IRequestHandler<UpdateCourierC
         courier.PhoneNumber = request.PhoneNumber.Trim();
         courier.IdNumber    = request.IdNumber.Trim();
 
-        // Only couriers in an eligible city get a standard per-order rate (see
-        // Courier.DefaultSalary doc comment).
-        if (request.DefaultSalary is decimal salary)
-        {
-            if (salary < 0)
-                throw new ValidationException(new[] {
-                    new ValidationFailure("DefaultSalary", "Default salary must be a non-negative value.")
-                });
-            if (!Application.Couriers.CourierSalaryEligibility.IsEligible(courier.AssignedCity))
-                throw new ConflictException("Default salary can only be set for couriers assigned to " +
-                    string.Join(" or ", Application.Couriers.CourierSalaryEligibility.EligibleCities) + ".");
-        }
-        courier.DefaultSalary = request.DefaultSalary;
+        // Per-zone salaries — non-negative is enforced by UpdateCourierCommandValidator.
+        courier.CapitalSalary  = request.CapitalSalary;
+        courier.CitySalary     = request.CitySalary;
+        courier.DistrictSalary = request.DistrictSalary;
 
         await _context.SaveChangesAsync(cancellationToken);
     }

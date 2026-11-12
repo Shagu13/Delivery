@@ -279,9 +279,12 @@ const en = {
   courierTerritorySection: 'Assigned Territory',
   courierCredSection:      'Login Credentials',
   courierSubmit:           'Create Courier',
-  courierDefaultSalary:     'Default Salary',
-  courierDefaultSalaryHint: 'Auto-applied to this courier’s deliveries when assigned from the Packages page. Only available for Tbilisi.',
+  courierDefaultSalary:     'Salary',
+  courierDefaultSalaryHint: 'Auto-applied by the recipient’s zone when this courier is assigned. Leave a zone empty to set that salary by hand on each order.',
   phDefaultSalary:          'e.g. 15.00',
+  courierCapitalSalary:     'Capital',
+  courierCitySalary:        'City',
+  courierDistrictSalary:    'District',
   errDefaultSalaryInvalid:  'Enter a valid non-negative amount.',
 
   // ── Customer modal ────────────────────────────────────────────────────────
@@ -2762,9 +2765,12 @@ const ka: typeof en = {
   courierTerritorySection: 'მინიჭებული ტერიტორია',
   courierCredSection:      'შესვლის მონაცემები',
   courierSubmit:           'კურიერის შექმნა',
-  courierDefaultSalary:     'სტანდარტული ხელფასი',
-  courierDefaultSalaryHint: 'ავტომატურად გამოიყენება ამ კურიერის მიტანებზე Packages გვერდიდან მინიჭებისას. ხელმისაწვდომია მხოლოდ თბილისისთვის.',
+  courierDefaultSalary:     'ხელფასი',
+  courierDefaultSalaryHint: 'კურიერის მინიჭებისას ავტომატურად გამოიყენება მიმღების ზონის მიხედვით. ცარიელი ზონისთვის ხელფასი თითოეულ შეკვეთაზე ხელით შეიყვანეთ.',
   phDefaultSalary:          'მაგ. 15.00',
+  courierCapitalSalary:     'დედაქალაქი',
+  courierCitySalary:        'ქალაქი',
+  courierDistrictSalary:    'რაიონი',
   errDefaultSalaryInvalid:  'შეიყვანეთ სწორი, არაუარყოფითი თანხა.',
 
   // ── Customer modal ────────────────────────────────────────────────────────

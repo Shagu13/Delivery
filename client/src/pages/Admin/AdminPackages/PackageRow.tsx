@@ -5,6 +5,7 @@ import { useLanguage } from '../../../contexts/useLanguage';
 import { recipientDisplayName } from '../../../utils/recipientName';
 import { recipientFeePortion } from '../../../utils/orderFinanceOutstanding';
 import { printParcelLabels } from '../../../utils/printLabel';
+import { useCourierZoneSalary } from '../../../utils/courierSalary';
 import { PhoneActions } from '../../../components/ui/PhoneActions';
 import type { AdminGroupOrder, AdminOrder } from '../../../api/adminGroupOrders';
 import type { Courier } from '../../../api/couriers';
@@ -43,6 +44,7 @@ export function PackageRow({
   patchOrder: (orderId: string, patch: (o: AdminOrder) => AdminOrder) => void;
 }) {
   const { t, lang } = useLanguage();
+  const zoneSalaryFor = useCourierZoneSalary();
   const selectable = canManage && rowSelectable(toOrderItem(o, go, null));
   const isChecked = selected.has(o.id);
   const courierName = o.courierId ? (courierNameById.get(o.courierId) ?? null) : null;
@@ -172,13 +174,13 @@ export function PackageRow({
               // Mirrors AdminOrdersPage's doAssign optimistic patch — instant row update
               // instead of waiting on reload()'s full list refetch for a single-row assign.
               const assignedCourier = couriers.find(c => c.courierId === courierId);
-              const defaultSalary = assignedCourier?.defaultSalary ?? null;
+              const zoneSalary = zoneSalaryFor(assignedCourier, o);
               patchOrder(o.id, ord => ({
                 ...ord,
                 courierId,
                 status: newStatus as AdminOrder['status'],
-                ...(ord.orderType !== 'Return' && defaultSalary != null
-                  ? { courierSalary: defaultSalary, companyRevenue: ord.companyServicePrice - defaultSalary }
+                ...(ord.orderType !== 'Return' && zoneSalary != null
+                  ? { courierSalary: zoneSalary, companyRevenue: ord.companyServicePrice - zoneSalary }
                   : {}),
               }));
             }}

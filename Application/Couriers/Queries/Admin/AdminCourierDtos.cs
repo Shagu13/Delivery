@@ -17,7 +17,9 @@ public sealed record CourierRosterDto(
     string    IdNumber,
     bool      IsDeleted,
     DateTime? DateDeleted,
-    decimal?  DefaultSalary,
+    decimal?  CapitalSalary,
+    decimal?  CitySalary,
+    decimal?  DistrictSalary,
     string    DefaultDateBasis);
 
 /// <summary>One row of <c>GET /api/couriers/{id}/orders</c> — every order ever assigned to a courier.</summary>

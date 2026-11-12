@@ -311,6 +311,11 @@ should still portal to `document.body` (`createPortal`, as `ViewOrderModal`/`Edi
   customer/Partner-API order and ignores the submitted number (see
   [Application/CLAUDE.md §5](../Application/CLAUDE.md#5-shared-policies--reuse-never-re-derive)).
   `EditOrderModal.tsx` feeds admin-only commands, where the submitted price is still trusted.
+- **Courier zone salary** — `utils/courierSalary.ts` (`useCourierZoneSalary`) mirrors
+  `Application/Couriers/CourierSalaryResolver` so both last-mile pages can predict the backend's
+  salary auto-fill (missing-salary gate + optimistic patch after assign/deliver). It reads the
+  shared all-districts list (`useAllDistrictEntries` in `utils/usePlaceLocalizer.ts`). Change the
+  two together; never read a single courier salary field directly in a page.
 - **"Terminal status" sets are re-encoded ~7 times on the client** with no shared constant,
   and mirror a backend set that also has no constant (see
   [Application/CLAUDE.md §5](../Application/CLAUDE.md)). Named copies: `utils/groupOrderUtils.ts`

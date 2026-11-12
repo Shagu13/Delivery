@@ -36,7 +36,9 @@ public sealed class GetCourierRosterQueryHandler
                 c.IdNumber,
                 IsDeleted = c.DateDeleted != null,
                 c.DateDeleted,
-                c.DefaultSalary,
+                c.CapitalSalary,
+                c.CitySalary,
+                c.DistrictSalary,
             })
             .ToListAsync(cancellationToken);
 
@@ -45,7 +47,7 @@ public sealed class GetCourierRosterQueryHandler
         return couriers.Select(c => new CourierRosterDto(
                 c.Id, c.FirstName, c.LastName, c.FullName, c.Username,
                 c.AssignedCity, c.AssignedDistrict, c.PhoneNumber, c.IdNumber,
-                c.IsDeleted, c.DateDeleted, c.DefaultSalary,
+                c.IsDeleted, c.DateDeleted, c.CapitalSalary, c.CitySalary, c.DistrictSalary,
                 CourierDateBasisPolicy.DefaultFor(c.AssignedCity).ToString()))
             .ToList();
     }

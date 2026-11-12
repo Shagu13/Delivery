@@ -18,6 +18,7 @@ import { OrderReasonNote } from './OrderReasonNote';
 import { printParcelLabels, type ParcelLabelData } from '../../utils/printLabel';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { resolveDateWindow } from '../../utils/dateWindow';
+import { useCourierZoneSalary } from '../../utils/courierSalary';
 import { DateRangeNav } from '../../components/ui/DateRangeNav';
 import { DebouncedSearchBox } from '../../components/ui/DebouncedSearchBox';
 import { PhoneActions } from '../../components/ui/PhoneActions';
@@ -369,6 +370,8 @@ const MIN_SEARCH_CHARS = 2;
 export default function AdminOrdersPage({ token: tokenProp, canManage = true, canSeeRevenue = true }: { token: string; canManage?: boolean; canSeeRevenue?: boolean }) {
   const { token: authToken } = useAuth();
   const { t, lang } = useLanguage();
+  // Courier's salary for an order's recipient zone — mirrors the backend auto-fill (CourierSalaryResolver).
+  const zoneSalaryFor = useCourierZoneSalary();
   const token = tokenProp || authToken || '';
   // Tenant co-admins get a read-only Delivery page (canManage=false). Operators manage
   // fully (canManage=true) but never see company revenue/margin: canSeeRevenue=false hides
@@ -785,25 +788,22 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
     return picked;
   }, [selected, findOrder, bulkMode]);
 
-  // Orders the admin must manually price because no applicable courier default rate covers
-  // them (mirrors the backend's auto-fill in AssignCourierToOrderCommandHandler /
-  // AdminMarkOrderDeliveredCommandHandler — a Tbilisi courier's DefaultSalary is applied
-  // automatically, so those orders don't need this gate). The "applicable" courier is
-  // mode-dependent: assigning always (re)targets the newly chosen bulkCourierId, while
-  // delivering never changes an existing assignee — only orders still missing one pick up
-  // bulkCourierId.
+  // Orders the admin must manually price because the applicable courier has no salary for the
+  // order's recipient zone (mirrors the backend's auto-fill in AssignCourierToOrderCommandHandler /
+  // AdminMarkOrderDeliveredCommandHandler via CourierSalaryResolver — orders it covers don't need
+  // this gate). The "applicable" courier is mode-dependent: assigning always (re)targets the newly
+  // chosen bulkCourierId, while delivering never changes an existing assignee — only orders still
+  // missing one pick up bulkCourierId.
   const missingSalaryOrders = useMemo(() => {
-    const bulkCourierDefault = couriers.find(c => c.courierId === bulkCourierId)?.defaultSalary ?? null;
+    const bulkCourier = couriers.find(c => c.courierId === bulkCourierId);
     return actionPool.filter(o => {
       if (o.courierSalary != null) return false;
-      const ownerDefault = bulkMode === 'assign'
-        ? bulkCourierDefault
-        : o.courierId
-          ? (couriers.find(c => c.courierId === o.courierId)?.defaultSalary ?? null)
-          : bulkCourierDefault;
-      return ownerDefault == null;
+      const owner = bulkMode === 'assign' || !o.courierId
+        ? bulkCourier
+        : couriers.find(c => c.courierId === o.courierId);
+      return zoneSalaryFor(owner, o) == null;
     });
-  }, [actionPool, couriers, bulkCourierId, bulkMode]);
+  }, [actionPool, couriers, bulkCourierId, bulkMode, zoneSalaryFor]);
 
   // Orders with no company service price set (0 / null) — must be priced before
   // assigning or delivering, mirroring the salary requirement.
@@ -864,16 +864,18 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       const assignedCourierId = bulkCourierId;
       const assignedCourier = couriers.find(c => c.courierId === assignedCourierId);
       const courierName = assignedCourier?.fullName ?? null;
-      const defaultSalary = assignedCourier?.defaultSalary ?? null;
-      patchOrders(succeededIds, o => ({
-        ...o,
-        courierId: assignedCourierId,
-        courierFullName: courierName ?? o.courierFullName,
-        status: o.orderType === 'Return' ? 'CourierAssignedToPickUp' : 'CourierAssignedToDeliver',
-        ...(o.orderType !== 'Return' && defaultSalary != null
-          ? { courierSalary: defaultSalary, companyRevenue: o.companyServicePrice - defaultSalary }
-          : {}),
-      }), assignTab === 'pending' ? () => true : undefined);
+      patchOrders(succeededIds, o => {
+        const zoneSalary = zoneSalaryFor(assignedCourier, o);
+        return {
+          ...o,
+          courierId: assignedCourierId,
+          courierFullName: courierName ?? o.courierFullName,
+          status: o.orderType === 'Return' ? 'CourierAssignedToPickUp' : 'CourierAssignedToDeliver',
+          ...(o.orderType !== 'Return' && zoneSalary != null
+            ? { courierSalary: zoneSalary, companyRevenue: o.companyServicePrice - zoneSalary }
+            : {}),
+        };
+      }, assignTab === 'pending' ? () => true : undefined);
     }
     setBulkAssigning(false);
     // Clear the selection after assigning — otherwise these orders stay ticked and get
@@ -947,12 +949,10 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
       const nowIso = new Date().toISOString();
       patchOrders(succeededIds, o => {
         // Mirrors the backend's fallback: an order without a salary yet picks up its
-        // (existing or newly-assigned) courier's default rate.
+        // (existing or newly-assigned) courier's salary for the recipient's zone.
         const ownerDefault = o.courierSalary != null
           ? null
-          : (o.courierId
-              ? couriers.find(c => c.courierId === o.courierId)?.defaultSalary
-              : bulkCourier?.defaultSalary) ?? null;
+          : zoneSalaryFor(o.courierId ? couriers.find(c => c.courierId === o.courierId) : bulkCourier, o);
         return {
           ...o,
           status: 'DeliveredToRecipient',
@@ -1190,14 +1190,14 @@ export default function AdminOrdersPage({ token: tokenProp, canManage = true, ca
               // Mirrors doAssign's bulk optimistic patch below — instant row update instead of
               // waiting on onChanged()'s reload for a single-row (re)assignment.
               const assignedCourier = couriers.find(c => c.courierId === courierId);
-              const defaultSalary = assignedCourier?.defaultSalary ?? null;
+              const zoneSalary = zoneSalaryFor(assignedCourier, order);
               patchOrders([order.id], o => ({
                 ...o,
                 courierId,
                 courierFullName: assignedCourier?.fullName ?? o.courierFullName,
                 status: newStatus,
-                ...(o.orderType !== 'Return' && defaultSalary != null
-                  ? { courierSalary: defaultSalary, companyRevenue: o.companyServicePrice - defaultSalary }
+                ...(o.orderType !== 'Return' && zoneSalary != null
+                  ? { courierSalary: zoneSalary, companyRevenue: o.companyServicePrice - zoneSalary }
                   : {}),
               }), assignTab === 'pending' ? () => true : undefined);
             }}
