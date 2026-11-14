@@ -296,11 +296,14 @@ export async function fetchCourierOrderFinanceAdmin(
     courierId: string, token: string, date?: string, basis?: CourierDateBasis,
     /** "All Unpaid": every order of any date with salary or cash still open; date / basis are ignored server-side. */
     unsettled = false,
+    /** "All Unpaid by Assign Date": the same unpaid set, limited to orders assigned on/before this yyyy-MM-dd day. */
+    assignedUpTo?: string,
 ): Promise<OrderFinanceLine[]> {
     const params = new URLSearchParams({ courierId });
     if (date) params.set('date', date);
     if (basis) params.set('basis', basis);
     if (unsettled) params.set('unsettled', 'true');
+    if (assignedUpTo) params.set('assignedUpTo', assignedUpTo);
     const res = await fetch(`/api/orderfinance/courier-lines?${params}`, {
         headers: authHeaders(token), cache: 'no-store',
     });

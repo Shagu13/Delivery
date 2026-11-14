@@ -111,9 +111,10 @@ public sealed class GetSettlementInvoiceDataQueryHandler
                 TrackingNumber:       o.TrackingNumber,
                 RecipientName:        o.RecipientName,
                 RecipientPhone:       o.RecipientPhone,
-                RecipientCity:        o.RecipientCity,
-                RecipientDistrict:    o.RecipientDistrict,
-                RecipientAddress:     o.RecipientAddress,
+                // Returns: where the courier collected the parcel, not the sender's own address.
+                RecipientCity:        SettlementAddress.Of(o).City,
+                RecipientDistrict:    SettlementAddress.Of(o).District,
+                RecipientAddress:     SettlementAddress.Of(o).Address,
                 OrderType:            o.OrderType.ToString(),
                 Status:               o.Status.ToString(),
                 ProductPaymentStatus: o.ProductPaymentStatus.ToString(),

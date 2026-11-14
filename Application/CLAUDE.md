@@ -150,6 +150,11 @@ just before `ToListAsync`: ~45 columns instead of whole Order + GroupOrder + 2×
 an `OrderFinance` member it calls starts reading must be added to `LineFields`**, or it silently reads its default —
 `OrderFinanceLinesProjectionTests` compares the two paths with every field populated.
 
+**Return orders show their pickup address on finance rows.** A Return's `Recipient*` fields are the sender/business it
+goes back to; `CustomerSettlements/SettlementAddress.Of(o)` swaps in `ReturnPickup*` (where the courier collected it) for
+the finance lines (`ToDto` → screens + `FinanceExcelBuilder`), the settlement invoice (`GetSettlementInvoiceDataQuery`)
+and payment receipts. Use it for any new settlement row that shows an address.
+
 **"Settle net" (both admin settlement screens).** `SettleCustomerNetCommand` (customer: ticked COD payouts + ticked
 service fees) and `SettleCourierNetCommand` (courier: ticked COD hand-overs + ticked salaries) apply both flows in one
 load and one `SaveChanges`, so a rejected amount in either flow records nothing. They reuse the single-flow handlers'

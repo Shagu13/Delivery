@@ -158,7 +158,10 @@ public sealed record GetCourierOrderFinanceLinesQuery(
     CourierDateBasis? Basis = null,
     // Admin "All Unpaid": every order of this courier, of ANY date, with salary or cash still open
     // (OrderFinance.IsCourierUnsettled). Ignores Date / Basis / IncludePostponed.
-    bool              OnlyUnsettled = false
+    bool              OnlyUnsettled = false,
+    // Admin "All Unpaid by Assign Date": with OnlyUnsettled, keep only orders assigned to the courier on or
+    // before this Georgian day (Order.AssignedToCourierAt). Orders with no assignment stamp are left out.
+    DateOnly?         AssignedUpTo  = null
 ) : IRequest<IReadOnlyList<OrderFinanceLineDto>>;
 
 public sealed class GetCourierOrderFinanceLinesQueryHandler
@@ -173,11 +176,19 @@ public sealed class GetCourierOrderFinanceLinesQueryHandler
         if (request.OnlyUnsettled)
         {
             // SQL narrows to a superset (so a courier with years of history stays cheap), the exact rule decides.
-            var candidates = await OrderFinanceQueries.CourierUnsettledCandidates(
-                    OrderFinanceQueries.Base(_context).Where(o => o.CourierId == request.CourierId))
-                .OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt)
-                .LineFields()
-                .ToListAsync(ct);
+            IQueryable<Order> unsettled = OrderFinanceQueries.CourierUnsettledCandidates(
+                OrderFinanceQueries.Base(_context).Where(o => o.CourierId == request.CourierId));
+            if (request.AssignedUpTo is DateOnly upTo)
+            {
+                DateTime end = upTo.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+                unsettled = unsettled.Where(o => o.AssignedToCourierAt != null && o.AssignedToCourierAt < end)
+                                     .OrderByDescending(o => o.AssignedToCourierAt);
+            }
+            else
+            {
+                unsettled = unsettled.OrderByDescending(o => o.DeliveredAt ?? o.DeliveredToWarehouseAt ?? o.CancelledAt);
+            }
+            var candidates = await unsettled.LineFields().ToListAsync(ct);
             return candidates.Where(OrderFinance.IsCourierUnsettled).Select(OrderFinanceQueries.ToDto).ToList();
         }
 
@@ -499,6 +510,9 @@ internal static class OrderFinanceQueries
             RecipientCity                            = o.RecipientCity,
             RecipientDistrict                        = o.RecipientDistrict,
             RecipientAddress                         = o.RecipientAddress,
+            ReturnPickupCity                         = o.ReturnPickupCity,
+            ReturnPickupDistrict                     = o.ReturnPickupDistrict,
+            ReturnPickupAddress                      = o.ReturnPickupAddress,
             Description                              = o.Description,
             OrderType                                = o.OrderType,
             Status                                   = o.Status,
@@ -571,14 +585,16 @@ internal static class OrderFinanceQueries
         bool     isReturn   = o.GroupOrderId is null;
         Customer? customer  = o.GroupOrder?.Customer ?? o.Customer;
         Guid     customerId = o.GroupOrder?.CustomerId ?? o.CustomerId ?? Guid.Empty;
+        // Returns show where the courier collected the parcel, not the sender's own address.
+        SettlementAddress.Location location = SettlementAddress.Of(o);
 
         return new OrderFinanceLineDto(
             OrderId:                      o.Id,
             TrackingNumber:               o.TrackingNumber,
             RecipientName:                o.RecipientName,
-            RecipientCity:                o.RecipientCity,
-            RecipientDistrict:            o.RecipientDistrict,
-            RecipientAddress:             o.RecipientAddress,
+            RecipientCity:                location.City,
+            RecipientDistrict:            location.District,
+            RecipientAddress:             location.Address,
             RecipientPhone:               o.RecipientPhone,
             OrderType:                    o.OrderType.ToString(),
             Status:                       o.Status.ToString(),

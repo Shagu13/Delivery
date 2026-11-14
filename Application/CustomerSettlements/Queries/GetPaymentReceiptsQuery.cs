@@ -109,6 +109,10 @@ internal static class PaymentReceiptQueries
         return query.Where(p => p.PaidAt >= start && p.PaidAt < end);
     }
 
+    // "address, district, city" — for a Return that is where the courier collected the parcel.
+    private static string JoinAddress(SettlementAddress.Location l) =>
+        string.Join(", ", new[] { l.Address, l.District, l.City }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
     public static PaymentReceiptDto ToDto(PaymentReceipt p) => new(
         Id:          p.Id,
         IsService:   p.IsService,
@@ -121,10 +125,7 @@ internal static class PaymentReceiptQueries
             OrderId:          a.OrderId,
             TrackingNumber:   a.Order?.TrackingNumber ?? string.Empty,
             RecipientName:    a.Order?.RecipientName ?? string.Empty,
-            RecipientAddress: a.Order is null
-                ? string.Empty
-                : string.Join(", ", new[] { a.Order.RecipientAddress, a.Order.RecipientDistrict, a.Order.RecipientCity }
-                    .Where(s => !string.IsNullOrWhiteSpace(s))),
+            RecipientAddress: a.Order is null ? string.Empty : JoinAddress(SettlementAddress.Of(a.Order)),
             DeliveredAt:      (a.Order?.DeliveredAt ?? a.Order?.DeliveredToWarehouseAt)?.ToString("o"),
             CourierName:      a.Order?.Courier is null ? null : $"{a.Order.Courier.FirstName} {a.Order.Courier.LastName}",
             Amount:           a.Amount

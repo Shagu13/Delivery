@@ -159,4 +159,44 @@ public sealed class CourierUnsettledTests
 
         Assert.Single(lines);
     }
+
+    // "All Unpaid by Assign Date": the same unpaid set, cut off at the end of the picked assignment day.
+    [Fact]
+    public async Task AssignedUpTo_KeepsUnpaidOrdersAssignedOnOrBeforeThatDay_Only()
+    {
+        string db = $"unsettled-assigned-{Guid.NewGuid()}";
+        Guid courier = Guid.NewGuid();
+        DateTime cutoff = new(2026, 11, 10);
+        Guid onCutoffLateId, beforeId;
+
+        using (AppDbContext ctx = Ctx(db))
+        {
+            Order onCutoffLate = Make(courier, ServicePayer.Sender, cash: 0m, salary: 4m, CustomTime.Now);
+            onCutoffLate.AssignedToCourierAt = cutoff.AddHours(23).AddMinutes(59);          // last minute of the 10th — in
+            Order before = Make(courier, ServicePayer.Sender, cash: 0m, salary: 4m, CustomTime.Now);
+            before.AssignedToCourierAt = cutoff.AddDays(-3);                                 // the 7th — in
+            Order after = Make(courier, ServicePayer.Sender, cash: 0m, salary: 4m, CustomTime.Now);
+            after.AssignedToCourierAt = cutoff.AddDays(1);                                   // the 11th — out
+            Order paidBefore = Make(courier, ServicePayer.Sender, cash: 0m, salary: 4m, CustomTime.Now);
+            paidBefore.AssignedToCourierAt     = cutoff.AddDays(-1);                         // settled — out
+            paidBefore.CourierSalaryPaidAmount = 4m;
+            Order openBefore = Make(courier, ServicePayer.Sender, cash: 0m, salary: 4m, deliveredAt: null);
+            openBefore.AssignedToCourierAt = cutoff.AddDays(-1);                             // not delivered — out
+            Order noStamp = Make(courier, ServicePayer.Sender, cash: 0m, salary: 4m, CustomTime.Now);
+            noStamp.AssignedToCourierAt = null;                                              // no assignment date — out
+
+            ctx.Orders.AddRange(onCutoffLate, before, after, paidBefore, openBefore, noStamp);
+            await ctx.SaveChangesAsync();
+            onCutoffLateId = onCutoffLate.Id;
+            beforeId       = before.Id;
+        }
+
+        using AppDbContext read = Ctx(db);
+        var lines = await new GetCourierOrderFinanceLinesQueryHandler(read).Handle(
+            new GetCourierOrderFinanceLinesQuery(courier, Date: null, OnlyUnsettled: true,
+                AssignedUpTo: DateOnly.FromDateTime(cutoff)),
+            CancellationToken.None);
+
+        Assert.Equal(new[] { onCutoffLateId, beforeId }, lines.Select(l => l.OrderId));   // newest assignment first
+    }
 }

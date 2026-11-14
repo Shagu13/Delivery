@@ -136,6 +136,10 @@ The settlement modal's date row has two quick buttons: **Today** (the day view, 
 of the courier, of any date, with salary or cash still open (`OrderFinance.IsCourierUnsettled`, SQL-prefiltered by
 `OrderFinanceQueries.CourierUnsettledCandidates` — keep the two in step). It ignores date and basis, so those controls are
 dimmed/hidden, and the table gains a Delivered column. The pay bars and Settle net work unchanged on that list.
+**All Unpaid** carries a red count badge (the length of that same list, fetched on open and after every pay/salary edit).
+A third button, **All Unpaid by Assign Date** (`assignedUpTo=<date>` → `GetCourierOrderFinanceLinesQuery.AssignedUpTo`), is the
+same unpaid set limited to orders whose `AssignedToCourierAt` is on/before the picked day: it starts at today and the date
+arrows/input move the cutoff. The modal's `view` state (`'day' | 'unpaid' | 'unpaidAssigned'`) drives all three.
 
 **Every modal is border-resizable.** `components/ui/AutoResizeDialogs` is mounted once in `AppLayout`; it watches the DOM
 for `[role="dialog"][aria-modal="true"]` and gives each centred, non-full-screen one two drag strips on its left/right

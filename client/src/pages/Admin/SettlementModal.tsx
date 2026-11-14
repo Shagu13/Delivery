@@ -12,6 +12,7 @@ import { setCourierSalary } from '../../api/orders';
 import { useLanguage } from '../../contexts/useLanguage';
 import { recipientDisplayName } from '../../utils/recipientName';
 import { round2, isCourierLegComplete } from '../../utils/orderFinanceOutstanding';
+import { georgianToday, toDateKey } from '../../utils/georgianTime';
 import { AllocCell, FlowBar, amountOf, buildFlow, toggle, setAmt, toggleAll, usePersistentSel } from './FinanceAllocation';
 
 const isSettled = isCourierLegComplete;
@@ -35,8 +36,12 @@ interface Props {
     defaultBasis?: CourierDateBasis;
 }
 
+/** Which list the modal shows — see the `view` state. */
+type SettlementView = 'day' | 'unpaid' | 'unpaidAssigned';
+
+// The Georgian calendar day — a UTC day would still be "yesterday" between 00:00 and 04:00 in Tbilisi.
 function todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+    return toDateKey(georgianToday());
 }
 
 function stepDay(iso: string, delta: number): string {
@@ -60,8 +65,13 @@ export function SettlementModal({
     const { t } = useLanguage();
     const [date,    setDate]    = useState(initialDate ?? todayIso());
     const [basis,   setBasis]   = useState<CourierDateBasis>(defaultBasis);
-    // false = the day view (date picker, "Today"); true = "All Unpaid": every order of any date still open for this courier.
-    const [unpaid,  setUnpaid]  = useState(false);
+    // 'day' = the day view (date picker, "Today"); 'unpaid' = "All Unpaid": every order of any date still open for
+    // this courier; 'unpaidAssigned' = "All Unpaid by Assign Date": that same set, assigned on/before the picked date.
+    const [view,    setView]    = useState<SettlementView>('day');
+    const unpaid      = view !== 'day';               // either unpaid list — same table shape
+    const byAssignCut = view === 'unpaidAssigned';    // the date picker is the assignment cutoff
+    // Red badge on "All Unpaid": how many orders that list holds, whatever view is open.
+    const [unpaidCount, setUnpaidCount] = useState<number | null>(null);
     const [lines,   setLines]   = useState<OrderFinanceLine[]>([]);
     const [loading, setLoading] = useState(false);
     const [busy,    setBusy]    = useState(false);
@@ -75,12 +85,14 @@ export function SettlementModal({
     // `silent` refreshes the line data in place without flipping the full-screen spinner —
     // used after a per-order pay toggle so the table stays mounted and the modal keeps its
     // scroll position instead of collapsing to a spinner and jumping back to the top.
-    const load = useCallback(async (d: string, b: CourierDateBasis, silent = false, allUnpaid = false) => {
+    const load = useCallback(async (d: string, b: CourierDateBasis, silent = false, v: SettlementView = 'day') => {
         if (!silent) setLoading(true);
         setError(null);
         try {
-            const data = await fetchCourierOrderFinanceAdmin(courierId, token, d, b, allUnpaid);
+            const data = await fetchCourierOrderFinanceAdmin(
+                courierId, token, d, b, v === 'unpaid', v === 'unpaidAssigned' ? d : undefined);
             setLines(data);
+            if (v === 'unpaid') setUnpaidCount(data.length);   // the badge's list is already on screen
         } catch (err) {
             setError(err instanceof OrderFinanceApiError ? err.message : 'Failed to load orders.');
             if (!silent) setLines([]);
@@ -89,13 +101,26 @@ export function SettlementModal({
         }
     }, [courierId, token]);
 
+    // Count for the "All Unpaid" badge — the same server list, so it can never disagree with it.
+    // Refreshed on open and after every payment / salary edit; a failure just hides the badge.
+    const refreshUnpaidCount = useCallback(async () => {
+        try {
+            const data = await fetchCourierOrderFinanceAdmin(courierId, token, undefined, undefined, true);
+            setUnpaidCount(data.length);
+        } catch {
+            setUnpaidCount(null);
+        }
+    }, [courierId, token]);
+
     useEffect(() => {
         if (open) {
             const start = initialDate ?? todayIso();
             setDate(start);
             setBasis(defaultBasis);
-            setUnpaid(false);
+            setView('day');
+            setUnpaidCount(null);
             load(start, defaultBasis);
+            refreshUnpaidCount();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
@@ -115,7 +140,8 @@ export function SettlementModal({
         setError(null);
         try {
             await setCourierSalary(token, orderId, round2(n));
-            await load(date, basis, true, unpaid);
+            await load(date, basis, true, view);
+            if (view !== 'unpaid') refreshUnpaidCount();
             onCreated();
             return true;
         } catch (err) {
@@ -124,11 +150,16 @@ export function SettlementModal({
         }
     };
 
-    const handleDateChange =(d: string) => { setDate(d); load(d, basis); };
+    // In "All Unpaid by Assign Date" the date is the cutoff, so moving it reloads that view; otherwise the day view.
+    const handleDateChange =(d: string) => { setDate(d); load(d, basis, false, view); };
     const handleBasisChange = (b: CourierDateBasis) => { if (b === basis) return; setBasis(b); load(date, b); };
-    // "Today" returns to the day view on the current day (the default); "All Unpaid" ignores the date and basis entirely.
-    const showToday = () => { const d = todayIso(); setUnpaid(false); setDate(d); load(d, basis); };
-    const showAllUnpaid = () => { setUnpaid(true); load(date, basis, false, true); };
+    // "Today" returns to the day view on the current day (the default); "All Unpaid" ignores the date and basis entirely;
+    // "All Unpaid by Assign Date" starts at today as the cutoff, and the arrows / date input move it back.
+    const showToday = () => { const d = todayIso(); setView('day'); setDate(d); load(d, basis); };
+    const showAllUnpaid = () => { setView('unpaid'); load(date, basis, false, 'unpaid'); };
+    const showUnpaidByAssigned = () => {
+        const d = todayIso(); setView('unpaidAssigned'); setDate(d); load(d, basis, false, 'unpaidAssigned');
+    };
     const byAssigned = !unpaid && basis === 'Assigned';
 
     const salaryFlow = buildFlow(lines, selSalary, salaryOut, o => o.courierSalaryPaidAmount ?? 0);
@@ -152,7 +183,8 @@ export function SettlementModal({
         setError(null);
         try {
             await payCourierOrders(courierId, flow, allocations, token);
-            await load(date, basis, true, unpaid);   // silent — keep the table mounted & scroll position intact
+            await load(date, basis, true, view);   // silent — keep the table mounted & scroll position intact
+            if (view !== 'unpaid') refreshUnpaidCount();
             onCreated();
         } catch (err) {
             setError(err instanceof OrderFinanceApiError ? err.message : t.ofinErrAction);
@@ -182,7 +214,8 @@ export function SettlementModal({
         setError(null);
         try {
             await settleCourierNet(courierId, salaryAllocs, codAllocs, token);
-            await load(date, basis, true, unpaid);   // silent — keep the table mounted & scroll position intact
+            await load(date, basis, true, view);   // silent — keep the table mounted & scroll position intact
+            if (view !== 'unpaid') refreshUnpaidCount();
             onCreated();
         } catch (err) {
             setError(err instanceof OrderFinanceApiError ? err.message : t.ofinErrAction);
@@ -257,28 +290,39 @@ export function SettlementModal({
                         <legend className="modal__legend">{t.stlmDateLegend}</legend>
                         <div className="stl-date-nav">
                             <button type="button" className="stl-date-arrow"
-                                onClick={() => handleDateChange(stepDay(date, -1))} disabled={unpaid} aria-label="Previous day">
+                                onClick={() => handleDateChange(stepDay(date, -1))} disabled={view === 'unpaid'} aria-label="Previous day">
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                     <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </button>
-                            <input type="date" value={date} max={todayIso()} disabled={unpaid}
+                            <input type="date" value={date} max={todayIso()} disabled={view === 'unpaid'}
                                 onChange={e => handleDateChange(e.target.value)} className="settlement-date-input" />
                             <button type="button" className="stl-date-arrow"
                                 onClick={() => handleDateChange(stepDay(date, 1))}
-                                disabled={unpaid || date >= todayIso()} aria-label="Next day">
+                                disabled={view === 'unpaid' || date >= todayIso()} aria-label="Next day">
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                                     <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </button>
-                            {/* Day view (default, "Today") vs every still-unpaid order of this courier on any date */}
+                            {/* Day view (default, "Today") vs every still-unpaid order of this courier on any date
+                                (red badge = how many) vs the unpaid ones assigned on/before the picked date */}
                             <div className="stl-date-quick" role="group">
                                 <button type="button" aria-pressed={!unpaid && date === todayIso()}
                                     className={`stl-basis__btn${!unpaid && date === todayIso() ? ' stl-basis__btn--on' : ''}`}
                                     onClick={showToday}>{t.stlmToday}</button>
-                                <button type="button" aria-pressed={unpaid}
-                                    className={`stl-basis__btn${unpaid ? ' stl-basis__btn--on' : ''}`}
-                                    onClick={showAllUnpaid}>{t.stlmAllUnpaid}</button>
+                                <button type="button" aria-pressed={view === 'unpaid'}
+                                    className={`stl-basis__btn stl-basis__btn--badged${view === 'unpaid' ? ' stl-basis__btn--on' : ''}`}
+                                    onClick={showAllUnpaid}>
+                                    {t.stlmAllUnpaid}
+                                    {unpaidCount !== null && unpaidCount > 0 && (
+                                        <span className="stl-unpaid-badge" aria-label={t.stlmUnpaidCountAria(unpaidCount)}>
+                                            {unpaidCount > 99 ? '99+' : unpaidCount}
+                                        </span>
+                                    )}
+                                </button>
+                                <button type="button" aria-pressed={byAssignCut}
+                                    className={`stl-basis__btn${byAssignCut ? ' stl-basis__btn--on' : ''}`}
+                                    onClick={showUnpaidByAssigned}>{t.stlmAllUnpaidByAssigned}</button>
                             </div>
                         </div>
                         {/* Which date the day's orders are grouped by — defaults per courier (regional → assigned).
@@ -371,7 +415,8 @@ export function SettlementModal({
                             {lines.length > 0 ? (
                                 <fieldset className="modal__fieldset">
                                     <legend className="modal__legend">
-                                        {unpaid ? t.stlmUnpaidOrders(lines.length)
+                                        {byAssignCut ? t.stlmUnpaidAssignedOrders(lines.length, date)
+                                            : unpaid ? t.stlmUnpaidOrders(lines.length)
                                             : byAssigned ? t.stlmAssignedOrders(lines.length, delivered) : t.stlmDeliveredOrders(delivered)}
                                     </legend>
                                     {/* Settle net: pays the ticked salary AND ticked COD hand-over orders together, atomically */}
@@ -484,7 +529,7 @@ export function SettlementModal({
                                 </fieldset>
                             ) : (
                                 <p style={{ textAlign: 'center', color: 'var(--color-text-subtle)', fontSize: '0.875rem', padding: '8px 0' }}>
-                                    {unpaid ? t.stlmNoUnpaidOrders : byAssigned ? t.stlmNoAssignedOrders(date) : t.stlmNoOrders(date)}
+                                    {byAssignCut ? t.stlmNoUnpaidAssignedOrders(date) : unpaid ? t.stlmNoUnpaidOrders : byAssigned ? t.stlmNoAssignedOrders(date) : t.stlmNoOrders(date)}
                                 </p>
                             )}
                         </>
@@ -533,6 +578,8 @@ export function SettlementModal({
                 .stl-basis__label { font-size:0.72rem;color:var(--color-text-subtle);margin-right:2px; }
                 .stl-basis__btn { padding:6px 12px;min-height:34px;background:var(--color-bg-3);border:1px solid var(--color-border);border-radius:100px;font-family:var(--font-body);font-size:0.78rem;font-weight:600;color:var(--color-text-muted);cursor:pointer;transition:background var(--transition),color var(--transition),border-color var(--transition); }
                 .stl-basis__btn--on { background:var(--color-accent);border-color:var(--color-accent);color:#fff; }
+                .stl-basis__btn--badged { position:relative; }
+                .stl-unpaid-badge { position:absolute;top:-7px;right:-7px;min-width:18px;height:18px;padding:0 5px;border-radius:100px;background:var(--color-error);color:#fff;font-size:0.66rem;font-weight:800;line-height:18px;text-align:center;box-shadow:0 0 0 2px var(--color-bg-2);pointer-events:none; }
                 .settlement-orders-table { font-size:0.8rem; }
                 .settlement-orders-table th { font-size:0.62rem; }
 
